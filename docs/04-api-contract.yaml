@@ -1,0 +1,114 @@
+﻿openapi: 3.0.3
+info:
+  title: My-AI API
+  version: 0.1.0
+  description: |
+    V1 最小接口契约（单用户、单知识库基线）
+servers:
+  - url: http://localhost:8080
+
+tags:
+  - name: ingest
+  - name: knowledge
+  - name: qa
+
+paths:
+  /api/v1/documents/upload:
+    post:
+      tags: [ingest]
+      summary: 上传文档并触发入库
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                kbId:
+                  type: string
+                  description: 知识库 ID（V1 可选，默认 default）
+      responses:
+        '200':
+          description: 上传成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UploadResponse'
+
+  /api/v1/knowledge-bases:
+    get:
+      tags: [knowledge]
+      summary: 查询知识库列表
+      responses:
+        '200':
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/KnowledgeBase'
+
+  /api/v1/qa/ask:
+    post:
+      tags: [qa]
+      summary: 文档问答
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AskRequest'
+      responses:
+        '200':
+          description: 问答成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AskResponse'
+
+components:
+  schemas:
+    UploadResponse:
+      type: object
+      properties:
+        documentId:
+          type: string
+        status:
+          type: string
+          example: ACCEPTED
+
+    KnowledgeBase:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+
+    AskRequest:
+      type: object
+      required: [question]
+      properties:
+        question:
+          type: string
+        kbId:
+          type: string
+          default: default
+        topK:
+          type: integer
+          default: 5
+
+    AskResponse:
+      type: object
+      properties:
+        answer:
+          type: string
+        references:
+          type: array
+          items:
+            type: string
