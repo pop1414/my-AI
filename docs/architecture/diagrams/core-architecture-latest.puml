@@ -1,0 +1,150 @@
+﻿@startuml
+!define RECTANGLE class
+
+title 智能文档问答助手 - 核心架构图 (Latest / Clean Layout)
+
+' 布局与样式
+left to right direction
+skinparam linetype ortho
+skinparam backgroundColor #FFFFFF
+skinparam componentStyle rectangle
+skinparam shadowing false
+skinparam defaultTextAlignment center
+skinparam ArrowColor #374151
+skinparam nodesep 45
+skinparam ranksep 55
+skinparam rectangle {
+  BorderColor #4B5563
+  FontColor #111827
+  RoundCorner 8
+}
+skinparam package {
+  BorderColor #1F2937
+  FontColor #111827
+}
+skinparam database {
+  BorderColor #4B5563
+  BackgroundColor #EEF2FF
+}
+skinparam cloud {
+  BorderColor #4B5563
+  BackgroundColor #FCE7F3
+}
+skinparam queue {
+  BorderColor #4B5563
+  BackgroundColor #FEF3C7
+}
+
+package "横切治理层" #F8FAFC {
+  rectangle "接入治理中间件\nTenant/Auth/RateLimit" as accessGov
+  rectangle "服务治理中间件\nResilience/Tracing/Audit" as serviceGov
+}
+
+package "接入层 (API)" #E0F2FE {
+  rectangle "Upload API\n(文档上传)" as uploadApi
+  rectangle "Knowledge API\n(知识库管理)" as kbApi
+  rectangle "QA API\n(问答请求)" as qaApi
+  rectangle "SSE/WebSocket API\n(流式回答)" as streamApi
+}
+
+package "应用服务层 (UseCase/Service)" #ECFDF3 {
+  queue "Ingest Queue\n(异步入库任务)" as ingestQueue
+  rectangle "IngestService\n解析 -> 清洗 -> 分块 -> 向量化 -> 入库" as ingestSvc
+  rectangle "KnowledgeService\n租户/知识库/文档元数据管理" as kbSvc
+  rectangle "RagService\n查询重写 -> 检索 -> 重排 -> 生成" as ragSvc
+}
+
+package "Spring AI 抽象与编排层" #FFF7ED {
+  rectangle "DocumentReader & Splitter" as docEtl
+  rectangle "EmbeddingModel" as embeddingModel
+  rectangle "VectorStore" as vectorStore
+  rectangle "ChatClient & Prompt" as chatClient
+  rectangle "ChatModel" as chatModel
+}
+
+package "基础设施适配层 (Adapter)" #FDF2F8 {
+  rectangle "Embedding Adapter\n(OpenAI/智谱/Ollama)" as embAdapter
+  rectangle "Vector Adapter\n(Milvus/PGVector/Redis)" as vectorAdapter
+  rectangle "LLM Adapter\n(OpenAI/智谱/通义/Ollama)" as llmAdapter
+  rectangle "Meta Repository Adapter" as metaRepo
+  rectangle "Object Storage Adapter\n(MinIO/S3)" as objectAdapter
+}
+
+package "外部模型服务" #FCE7F3 {
+  cloud "Embedding APIs\n(OpenAI/智谱/Ollama)" as embCloud
+  cloud "LLM APIs\n(OpenAI/智谱/通义/Ollama)" as llmCloud
+}
+
+package "数据存储层" #EEF2FF {
+  database "Vector DB\n(Milvus/PGVector/Redis)" as vectorDb
+  database "MySQL\n(租户/知识库/文档元数据)" as mysql
+  database "MinIO / S3\n(原始文档)" as objectStore
+}
+
+' ---------- 位置辅助（隐藏线） ----------
+uploadApi -[hidden]down-> kbApi
+kbApi -[hidden]down-> qaApi
+qaApi -[hidden]down-> streamApi
+
+ingestQueue -[hidden]down-> ingestSvc
+ingestSvc -[hidden]down-> kbSvc
+kbSvc -[hidden]down-> ragSvc
+
+docEtl -[hidden]down-> embeddingModel
+embeddingModel -[hidden]down-> vectorStore
+vectorStore -[hidden]down-> chatClient
+chatClient -[hidden]down-> chatModel
+
+embAdapter -[hidden]down-> vectorAdapter
+vectorAdapter -[hidden]down-> llmAdapter
+llmAdapter -[hidden]down-> metaRepo
+metaRepo -[hidden]down-> objectAdapter
+
+embCloud -[hidden]down-> llmCloud
+vectorDb -[hidden]down-> mysql
+mysql -[hidden]down-> objectStore
+
+' ---------- 主链路 ----------
+' 接入 -> 应用
+uploadApi --> ingestQueue : 提交入库任务
+ingestQueue --> ingestSvc : 异步执行
+kbApi --> kbSvc
+qaApi --> ragSvc
+streamApi --> ragSvc
+
+' 应用 -> Spring AI 抽象
+ingestSvc --> docEtl : 文档解析/分块
+ingestSvc --> embeddingModel : 生成向量
+ingestSvc --> vectorStore : Upsert 索引
+kbSvc --> vectorStore : 删除/重建索引
+ragSvc --> vectorStore : TopK 检索
+ragSvc --> chatClient : 构建 Prompt
+chatClient ..> chatModel : 调用模型
+
+' 应用 -> 适配器
+ingestSvc --> metaRepo : 写元数据
+ingestSvc --> objectAdapter : 存原文
+kbSvc --> metaRepo : CRUD
+ragSvc --> metaRepo : 读配置
+
+' 抽象 -> 适配
+embeddingModel ..> embAdapter : SPI
+vectorStore ..> vectorAdapter : SPI
+chatModel ..> llmAdapter : SPI
+
+' 适配 -> 外部 / 存储
+embAdapter --> embCloud : HTTP API
+llmAdapter --> llmCloud : HTTP API
+vectorAdapter --> vectorDb
+metaRepo --> mysql
+objectAdapter --> objectStore
+
+' 横切治理（压缩为两组，减少杂线）
+accessGov ..> uploadApi
+accessGov ..> kbApi
+accessGov ..> qaApi
+serviceGov ..> ingestSvc
+serviceGov ..> ragSvc
+serviceGov ..> llmAdapter
+
+@enduml
