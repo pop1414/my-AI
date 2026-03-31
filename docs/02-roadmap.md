@@ -12,7 +12,7 @@
 - 单用户
 - TXT/PDF 入库
 - 固定 OpenAI
-- 固定向量库（Redis/本地）
+- 固定向量库（PostgreSQL + PGVector）
 - 基础 RAG 问答
 
 ### 验收条件

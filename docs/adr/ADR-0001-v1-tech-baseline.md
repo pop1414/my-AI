@@ -34,3 +34,4 @@
 ## 后续动作
 - 在 V1 完成后新增 ADR：Provider 插件化与会话记忆策略
 - 新增 ADR-0002：明确 V1 具体模型与向量存储落地选择
+- 新增 ADR-0003：V1 向量存储基线调整为 PostgreSQL + PGVector

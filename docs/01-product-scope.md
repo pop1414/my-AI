@@ -15,7 +15,7 @@
 - 文档分块、向量化、向量入库
 - 基于 RAG 的问答接口
 - 固定使用一个 LLM Provider（OpenAI）
-- 固定使用一个向量存储（Redis 或本地向量库）
+- 固定使用一个向量存储（PostgreSQL + PGVector）
 
 ### Out of Scope（本版本不做）
 - 多租户隔离
