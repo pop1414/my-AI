@@ -1,0 +1,37 @@
+spring:
+  application:
+    name: my-AI
+  datasource:
+    url: ${PGVECTOR_DATASOURCE_URL:jdbc:postgresql://localhost:5432/myai}
+    username: ${PGVECTOR_DATASOURCE_USERNAME:admin}
+    password: ${PGVECTOR_DATASOURCE_PASSWORD:admin}
+  ai:
+    openai:
+      # 通过环境变量注入，避免把密钥写入仓库
+      api-key: ${OPENAI_API_KEY:}
+      chat:
+        options:
+          # 先给默认值，后续可按成本/效果调整
+          model: ${OPENAI_CHAT_MODEL:gpt-4o-mini}
+      embedding:
+        options:
+          model: ${OPENAI_EMBEDDING_MODEL:text-embedding-3-small}
+    vectorstore:
+      pgvector:
+        # Spring AI 启动时会自动在 PG 中创建 vector 插件和相关的数据表
+        initialize-schema: true
+        # 自动校验表结构
+        schema-validation: true
+        schema-name: public
+        # 存储向量的表名
+        table-name: vector_store
+        # 推荐的高性能向量索引类型
+        index-type: HNSW
+        # 计算相似度的方式（余弦相似度）
+        distance-type: COSINE_DISTANCE
+        # 向量维度，OpenAI的 text-embedding-3-small 默认为 1536
+        dimensions: ${OPENAI_EMBEDDING_DIMENSIONS:1536}
+        # 批量插入最大值：一次最多往数据库存 1 万条文本向量
+        max-document-batch-size: 10000
+        # 是否删除旧表
+        remove-existing-vector-store-table: false
