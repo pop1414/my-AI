@@ -13,6 +13,13 @@ package io.github.spike.myai.ingest.application.command;
  * @param filename 原始文件名（可为空，取决于客户端上传行为）
  * @param fileSize 文件大小（字节）
  * @param kbId 知识库 ID（可为空，默认值由应用服务解析）
+ * @param fileHash 文件内容哈希（SHA-256 十六进制），用于上传受理幂等
  */
-public record AcceptUploadCommand(String filename, long fileSize, String kbId) {
+public record AcceptUploadCommand(String filename, long fileSize, String kbId, String fileHash) {
+
+    public AcceptUploadCommand {
+        if (fileHash == null || fileHash.isBlank()) {
+            throw new IllegalArgumentException("fileHash must not be blank");
+        }
+    }
 }

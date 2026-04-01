@@ -29,6 +29,7 @@ public class JdbcDocumentRepository implements DocumentRepository {
             CREATE TABLE IF NOT EXISTS ingest_documents (
                 document_id VARCHAR(64) PRIMARY KEY,
                 kb_id VARCHAR(128) NOT NULL,
+                file_hash VARCHAR(64),
                 filename VARCHAR(512),
                 file_size BIGINT NOT NULL,
                 status VARCHAR(32) NOT NULL,
@@ -37,12 +38,22 @@ public class JdbcDocumentRepository implements DocumentRepository {
                 updated_at TIMESTAMPTZ NOT NULL
             );
             """;
+    private static final String ADD_FILE_HASH_COLUMN_SQL = """
+            ALTER TABLE ingest_documents
+            ADD COLUMN IF NOT EXISTS file_hash VARCHAR(64)
+            """;
+    private static final String CREATE_UNIQUE_INDEX_SQL = """
+            CREATE UNIQUE INDEX IF NOT EXISTS uk_ingest_documents_kb_file_hash
+            ON ingest_documents (kb_id, file_hash)
+            WHERE file_hash IS NOT NULL
+            """;
     private static final String UPSERT_SQL = """
             INSERT INTO ingest_documents
-              (document_id, kb_id, filename, file_size, status, failure_reason, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+              (document_id, kb_id, file_hash, filename, file_size, status, failure_reason, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT (document_id) DO UPDATE SET
               kb_id = EXCLUDED.kb_id,
+              file_hash = EXCLUDED.file_hash,
               filename = EXCLUDED.filename,
               file_size = EXCLUDED.file_size,
               status = EXCLUDED.status,
@@ -51,15 +62,23 @@ public class JdbcDocumentRepository implements DocumentRepository {
               updated_at = EXCLUDED.updated_at
             """;
     private static final String FIND_BY_ID_SQL = """
-            SELECT document_id, kb_id, filename, file_size, status, failure_reason, created_at, updated_at
+            SELECT document_id, kb_id, file_hash, filename, file_size, status, failure_reason, created_at, updated_at
             FROM ingest_documents
             WHERE document_id = ?
+            """;
+    private static final String FIND_BY_KB_ID_AND_FILE_HASH_SQL = """
+            SELECT document_id, kb_id, file_hash, filename, file_size, status, failure_reason, created_at, updated_at
+            FROM ingest_documents
+            WHERE kb_id = ? AND file_hash = ?
+            ORDER BY created_at DESC
+            LIMIT 1
             """;
 
     // 结果映射器
     private static final RowMapper<Document> DOCUMENT_ROW_MAPPER = (rs, rowNum) -> new Document(
             new DocumentId(rs.getString("document_id")),
             rs.getString("kb_id"),
+            rs.getString("file_hash"),
             rs.getString("filename"),
             rs.getLong("file_size"),
             UploadStatus.valueOf(rs.getString("status")),
@@ -72,6 +91,8 @@ public class JdbcDocumentRepository implements DocumentRepository {
     public JdbcDocumentRepository(JdbcTemplate jdbcTemplate) {
         this.jdbcTemplate = jdbcTemplate;
         this.jdbcTemplate.execute(INIT_SQL);
+        this.jdbcTemplate.execute(ADD_FILE_HASH_COLUMN_SQL);
+        this.jdbcTemplate.execute(CREATE_UNIQUE_INDEX_SQL);
     }
 
     /**
@@ -85,6 +106,7 @@ public class JdbcDocumentRepository implements DocumentRepository {
                 UPSERT_SQL,
                 document.documentId().value(),
                 document.kbId(),
+                document.fileHash(),
                 document.filename(),
                 document.fileSize(),
                 document.status().name(),
@@ -102,6 +124,13 @@ public class JdbcDocumentRepository implements DocumentRepository {
     @Override
     public Optional<Document> findById(DocumentId documentId) {
         return jdbcTemplate.query(FIND_BY_ID_SQL, DOCUMENT_ROW_MAPPER, documentId.value()).stream().findFirst();
+    }
+
+    @Override
+    public Optional<Document> findByKbIdAndFileHash(String kbId, String fileHash) {
+        return jdbcTemplate.query(FIND_BY_KB_ID_AND_FILE_HASH_SQL, DOCUMENT_ROW_MAPPER, kbId, fileHash)
+                .stream()
+                .findFirst();
     }
 
     private static Instant toInstant(Timestamp timestamp) {

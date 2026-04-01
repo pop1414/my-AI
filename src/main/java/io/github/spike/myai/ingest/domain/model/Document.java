@@ -7,7 +7,8 @@ import java.time.Instant;
  *
  * <p>该对象表示一条“文档入库任务”的核心业务状态，包含：
  * <ul>
- *     <li>文档标识、知识库、文件信息</li>
+ *     <li>文档资产标识、知识库、文件信息</li>
+ *     <li>文件哈希（用于上传幂等判断）</li>
  *     <li>处理状态与失败原因</li>
  *     <li>创建时间与更新时间</li>
  * </ul>
@@ -21,6 +22,7 @@ import java.time.Instant;
 public record Document(
         DocumentId documentId,
         String kbId,
+        String fileHash,
         String filename,
         long fileSize,
         UploadStatus status,
@@ -54,6 +56,7 @@ public record Document(
      *
      * @param documentId 文档唯一标识
      * @param kbId 知识库 ID
+     * @param fileHash 文件内容哈希（SHA-256）
      * @param filename 原始文件名
      * @param fileSize 文件大小（字节）
      * @param now 当前时间
@@ -62,10 +65,14 @@ public record Document(
     public static Document uploaded(
             DocumentId documentId,
             String kbId,
+            String fileHash,
             String filename,
             long fileSize,
             Instant now) {
-        return new Document(documentId, kbId, filename, fileSize, UploadStatus.UPLOADED, null, now, now);
+        if (fileHash == null || fileHash.isBlank()) {
+            throw new IllegalArgumentException("fileHash must not be blank");
+        }
+        return new Document(documentId, kbId, fileHash, filename, fileSize, UploadStatus.UPLOADED, null, now, now);
     }
 
     /**
@@ -102,6 +109,6 @@ public record Document(
     // Record是不可变对象，不能修改原有对象的字端，修改状态必须返回“新的Document实例”
     // 传入的参数就是可能会变动的参数：状态，失败原因，更新时间
     private Document withStatus(UploadStatus newStatus, String newFailureReason, Instant at) {
-        return new Document(documentId, kbId, filename, fileSize, newStatus, newFailureReason, createdAt, at);
+        return new Document(documentId, kbId, fileHash, filename, fileSize, newStatus, newFailureReason, createdAt, at);
     }
 }

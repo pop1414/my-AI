@@ -9,6 +9,11 @@ import io.github.spike.myai.ingest.application.result.DocumentStatusResult;
 import io.github.spike.myai.ingest.domain.model.UploadTicket;
 import io.github.spike.myai.ingest.interfaces.rest.dto.DocumentStatusResponse;
 import io.github.spike.myai.ingest.interfaces.rest.dto.UploadResponse;
+import java.io.IOException;
+import java.io.InputStream;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.HexFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -80,8 +85,9 @@ public class DocumentIngestController {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "file must not be empty");
         }
 
+        String fileHash = calculateFileHash(file);
         // 将 HTTP 参数转换为应用层命令对象，隔离接口协议与用例编排。
-        AcceptUploadCommand command = new AcceptUploadCommand(file.getOriginalFilename(), file.getSize(), kbId);
+        AcceptUploadCommand command = new AcceptUploadCommand(file.getOriginalFilename(), file.getSize(), kbId, fileHash);
 
         UploadTicket uploadTicket = acceptUploadUseCase.handle(command);
         // 将领域返回对象映射为对外响应 DTO，避免领域对象直接暴露给 API 使用方。
@@ -97,7 +103,7 @@ public class DocumentIngestController {
      *     <li>响应：DocumentStatusResponse（documentId, status）</li>
      * </ul>
      *
-     * @param documentId 文档 ID
+     * @param documentId 文档资产 ID
      * @return 状态查询结果
      */
     @GetMapping(value = "/{documentId}/status", produces = MediaType.APPLICATION_JSON_VALUE)
@@ -108,6 +114,27 @@ public class DocumentIngestController {
             return new DocumentStatusResponse(result.documentId().value(), result.status().name());
         } catch (DocumentNotFoundException ex) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, ex.getMessage(), ex);
+        }
+    }
+
+    /**
+     * 计算上传文件的 SHA-256 哈希。
+     */
+    private static String calculateFileHash(MultipartFile file) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            try (InputStream inputStream = file.getInputStream()) {
+                byte[] buffer = new byte[8192];
+                int bytesRead;
+                while ((bytesRead = inputStream.read(buffer)) != -1) {
+                    digest.update(buffer, 0, bytesRead);
+                }
+            }
+            return HexFormat.of().formatHex(digest.digest());
+        } catch (IOException ex) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "failed to read upload file", ex);
+        } catch (NoSuchAlgorithmException ex) {
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "sha-256 not available", ex);
         }
     }
 }

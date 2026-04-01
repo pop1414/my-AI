@@ -65,21 +65,38 @@ public class AcceptUploadApplicationService implements AcceptUploadUseCase {
     @Override
     public UploadTicket handle(AcceptUploadCommand command) {
         String resolvedKbId = resolveKbId(command.kbId());
+        String fileHash = command.fileHash();
+        // 通过Hash检查正在处理的文件，是否已经存在在数据库中
+        Document existingDocument =
+                documentRepository.findByKbIdAndFileHash(resolvedKbId, fileHash).orElse(null);
+        // 已经存在，就不新分配DocumentId了，以免发生冲突
+        // 直接返回存在的文件信息
+        if (existingDocument != null) {
+            log.info(
+                    "Duplicate upload accepted with existing document. documentId={}, kbId={}, filename={}, fileHash={}",
+                    existingDocument.documentId().value(),
+                    resolvedKbId,
+                    command.filename(),
+                    fileHash);
+            return new UploadTicket(existingDocument.documentId(), UploadStatus.ACCEPTED);
+        }
+
         DocumentId documentId = documentIdGenerator.nextId();
         Instant now = Instant.now();
 
-        // 先持久化一条 UPLADED 状态文档，后续异步链路可基于该记录推进状态机。
+        // 先持久化一条 UPLOADED 状态文档，后续异步链路可基于该记录推进状态机。
         Document document =
-                Document.uploaded(documentId, resolvedKbId, command.filename(), command.fileSize(), now);
+                Document.uploaded(documentId, resolvedKbId, fileHash, command.filename(), command.fileSize(), now);
         documentRepository.save(document);
 
         // 记录关键链路日志，便于后续定位上传请求是否进入应用层。
         log.info(
-                "Accepted upload request. documentId={}, kbId={}, filename={}, fileSize={}",
+                "Accepted upload request. documentId={}, kbId={}, filename={}, fileSize={}, fileHash={}",
                 documentId.value(),
                 resolvedKbId,
                 command.filename(),
-                command.fileSize());
+                command.fileSize(),
+                fileHash);
         // 对外接口返回语义保持 ACCEPTED，表示“请求已受理”。
         return new UploadTicket(documentId, UploadStatus.ACCEPTED);
     }

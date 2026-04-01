@@ -26,4 +26,13 @@ public interface DocumentRepository {
      * @return 查询结果，未命中时返回空
      */
     Optional<Document> findById(DocumentId documentId);
+
+    /**
+     * 按知识库和文件哈希查询文档，用于上传受理幂等。
+     *
+     * @param kbId 知识库 ID
+     * @param fileHash 文件内容哈希（SHA-256 十六进制）
+     * @return 查询结果，未命中时返回空
+     */
+    Optional<Document> findByKbIdAndFileHash(String kbId, String fileHash);
 }
