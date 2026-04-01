@@ -1,11 +1,18 @@
 package io.github.spike.myai.ingest.interfaces.rest;
 
 import io.github.spike.myai.ingest.application.command.AcceptUploadCommand;
+import io.github.spike.myai.ingest.application.exception.DocumentNotFoundException;
+import io.github.spike.myai.ingest.application.query.GetDocumentStatusQuery;
 import io.github.spike.myai.ingest.application.usecase.AcceptUploadUseCase;
+import io.github.spike.myai.ingest.application.usecase.GetDocumentStatusUseCase;
+import io.github.spike.myai.ingest.application.result.DocumentStatusResult;
 import io.github.spike.myai.ingest.domain.model.UploadTicket;
+import io.github.spike.myai.ingest.interfaces.rest.dto.DocumentStatusResponse;
 import io.github.spike.myai.ingest.interfaces.rest.dto.UploadResponse;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -34,9 +41,16 @@ public class DocumentIngestController {
      * 上传受理用例。控制器只依赖用例接口，不依赖具体实现，符合依赖倒置原则。
      */
     private final AcceptUploadUseCase acceptUploadUseCase;
+    /**
+     * 文档状态查询用例。
+     */
+    private final GetDocumentStatusUseCase getDocumentStatusUseCase;
 
-    public DocumentIngestController(AcceptUploadUseCase acceptUploadUseCase) {
+    public DocumentIngestController(
+            AcceptUploadUseCase acceptUploadUseCase,
+            GetDocumentStatusUseCase getDocumentStatusUseCase) {
         this.acceptUploadUseCase = acceptUploadUseCase;
+        this.getDocumentStatusUseCase = getDocumentStatusUseCase;
     }
 
     /**
@@ -72,5 +86,28 @@ public class DocumentIngestController {
         UploadTicket uploadTicket = acceptUploadUseCase.handle(command);
         // 将领域返回对象映射为对外响应 DTO，避免领域对象直接暴露给 API 使用方。
         return new UploadResponse(uploadTicket.documentId().value(), uploadTicket.status().name());
+    }
+
+    /**
+     * 查询文档当前处理状态。
+     *
+     * <p>接口契约：
+     * <ul>
+     *     <li>路径：GET /api/v1/documents/{documentId}/status</li>
+     *     <li>响应：DocumentStatusResponse（documentId, status）</li>
+     * </ul>
+     *
+     * @param documentId 文档 ID
+     * @return 状态查询结果
+     */
+    @GetMapping(value = "/{documentId}/status", produces = MediaType.APPLICATION_JSON_VALUE)
+    public DocumentStatusResponse getStatus(@PathVariable("documentId") String documentId) {
+        try {
+            DocumentStatusResult result =
+                    getDocumentStatusUseCase.handle(new GetDocumentStatusQuery(documentId));
+            return new DocumentStatusResponse(result.documentId().value(), result.status().name());
+        } catch (DocumentNotFoundException ex) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, ex.getMessage(), ex);
+        }
     }
 }
