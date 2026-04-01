@@ -33,6 +33,7 @@ class GetDocumentStatusApplicationServiceTest {
         Document document = new Document(
                 documentId,
                 "kb-1",
+                "hash-100",
                 "a.txt",
                 128,
                 UploadStatus.INDEXED,
