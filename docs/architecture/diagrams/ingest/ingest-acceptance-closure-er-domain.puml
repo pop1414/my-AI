@@ -1,0 +1,70 @@
+@startuml
+title 受理闭环 ER / 领域模型图（数据结构对齐）
+
+skinparam shadowing false
+skinparam linetype ortho
+
+package "Domain Model" {
+  class Document {
+    +documentId: DocumentId
+    +kbId: String
+    +filename: String
+    +fileSize: long
+    +status: UploadStatus
+    +failureReason: String?
+    +createdAt: Instant
+    +updatedAt: Instant
+  }
+
+  class DocumentId {
+    +value: String
+  }
+
+  enum UploadStatus {
+    ACCEPTED
+    UPLADED
+    INGESTING
+    INDEXED
+    FAILED
+  }
+
+  interface DocumentRepository {
+    +save(document)
+    +findById(documentId)
+  }
+
+  Document *-- DocumentId
+  Document --> UploadStatus
+  DocumentRepository ..> Document
+}
+
+package "Relational Model (PostgreSQL)" {
+  entity "ingest_documents" as ingest_documents {
+    * document_id : varchar(64) <<PK>>
+    --
+    * kb_id : varchar(128)
+    filename : varchar(512)
+    * file_size : bigint
+    * status : varchar(32)
+    failure_reason : text
+    * created_at : timestamptz
+    * updated_at : timestamptz
+  }
+}
+
+class "JdbcDocumentRepository\n(Adapter)" as JdbcRepo
+DocumentRepository <|.. JdbcRepo
+JdbcRepo --> ingest_documents : SQL(UPSERT/SELECT)
+
+note right of Document
+领域对象表达业务语义与规则
+不直接依赖 SQL 实现细节
+end note
+
+note right of ingest_documents
+关系表负责持久化与查询效率
+字段与 Document 聚合一一对应
+end note
+
+@enduml
+

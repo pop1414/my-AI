@@ -1,0 +1,16 @@
+@startuml
+title 文档任务状态机（内部状态）
+
+[*] --> UPLOADED : 受理时落库成功
+
+UPLOADED --> INGESTING : Worker 开始处理（可选下一阶段）
+INGESTING --> INDEXED : 解析+分块+向量入库成功（可选下一阶段）
+INGESTING --> FAILED : 任一步骤失败（可选下一阶段）
+
+note right of UPLOADED
+接口返回 ACCEPTED 是“对外响应语义”
+UPLOADED 是“内部持久化状态”
+两者关注点不同，不冲突
+end note
+@enduml
+

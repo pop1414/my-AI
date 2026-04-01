@@ -1,0 +1,46 @@
+@startuml
+title 受理闭环时序（当前已实现）
+
+actor Client
+participant "DocumentIngestController" as C
+participant "AcceptUploadUseCase\n(ApplicationService)" as A
+participant "DocumentIdGenerator\n(Port)" as G
+participant "DocumentRepository\n(Port)" as R
+participant "JdbcDocumentRepository" as J
+database "PostgreSQL" as PG
+
+== 上传受理 ==
+Client -> C : POST /api/v1/documents/upload(file,kbId)
+alt file 为空
+  C --> Client : 400 Bad Request
+else file 合法
+  C -> A : handle(AcceptUploadCommand)
+  A -> G : nextId()
+  G --> A : DocumentId
+  A -> R : save(Document{status=UPLOADED})
+  R -> J : save(...)
+  J -> PG : UPSERT ingest_documents
+  PG --> J : OK
+  J --> R : OK
+  R --> A : OK
+  A --> C : UploadTicket(documentId, ACCEPTED)
+  C --> Client : 200 {documentId,status=ACCEPTED}
+end
+
+== 状态查询 ==
+Client -> C : GET /api/v1/documents/{id}/status
+C -> R : findById(id)（通过 Status UseCase）
+R -> J : findById(...)
+J -> PG : SELECT ...
+PG --> J : row / empty
+alt 找到
+  J --> R : Document(status)
+  R --> C : DocumentStatusResult
+  C --> Client : 200 {documentId,status}
+else 未找到
+  J --> R : empty
+  R --> C : throw DocumentNotFoundException
+  C --> Client : 404 Not Found
+end
+@enduml
+

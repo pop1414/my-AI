@@ -1,0 +1,38 @@
+@startuml
+title 受理闭环用例图（功能边界）
+
+left to right direction
+skinparam shadowing false
+skinparam packageStyle rectangle
+
+actor "客户端/前端" as Client
+actor "运维/开发者" as Ops
+
+rectangle "Ingest Acceptance Closure" {
+  usecase "上传文档并受理\nPOST /api/v1/documents/upload" as UC_Accept
+  usecase "查询文档当前状态\nGET /api/v1/documents/{id}/status" as UC_Status
+  usecase "查询失败（文档不存在）\n返回 404" as UC_StatusNotFound
+}
+
+Client --> UC_Accept
+Client --> UC_Status
+Ops --> UC_Status
+
+UC_StatusNotFound ..> UC_Status : <<extend>>
+
+note right of UC_Accept
+  用例目标：
+  1) 校验上传请求
+  2) 受理并生成 documentId
+  3) 落库初始状态 UPLADED
+  4) 返回 ACCEPTED
+end note
+
+note right of UC_Status
+  用例目标：
+  1) 按 documentId 查询状态
+  2) 返回当前状态
+  3) 未命中时返回 404
+end note
+
+@enduml

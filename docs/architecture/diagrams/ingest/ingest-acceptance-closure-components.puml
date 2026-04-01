@@ -1,0 +1,61 @@
+@startuml
+title 受理闭环 / 可追踪化（DDD-Lite 组件图）
+
+skinparam componentStyle rectangle
+skinparam shadowing false
+skinparam linetype ortho
+
+legend left
+[M] 必须组件
+[O] 可选组件（后续增强）
+endlegend
+
+actor "客户端/前端" as Client
+
+package "Interfaces [M]" {
+  component "DocumentIngestController [M]\nPOST /documents/upload\nGET /documents/{id}/status" as Controller
+}
+
+package "Application [M]" {
+  component "AcceptUploadUseCase [M]" as AcceptUC
+  component "GetDocumentStatusUseCase [M]" as StatusUC
+}
+
+package "Domain [M]" {
+  component "Document 聚合 [M]\n(DocumentId, UploadStatus...)" as DocumentAgg
+  component "DocumentRepository Port [M]" as RepoPort
+  component "DocumentIdGenerator Port [M]" as IdPort
+}
+
+package "Infrastructure" {
+  component "JdbcDocumentRepository [M]" as JdbcRepo
+  component "UuidDocumentIdGenerator [M]" as UuidGen
+  component "IngestWorker [O]" as Worker
+  component "QueuePublisher [O]" as Publisher
+}
+
+database "PostgreSQL [M]\n(ingest_documents + vector tables)" as PG
+queue "Message Queue [O]" as MQ
+cloud "Embedding/LLM [O]" as LLM
+
+Client --> Controller : HTTP 请求
+Controller --> AcceptUC : 受理上传
+Controller --> StatusUC : 查询状态
+
+AcceptUC --> IdPort : 生成 DocumentId
+AcceptUC --> RepoPort : save(Document:UPLOADED)
+StatusUC --> RepoPort : findById(documentId)
+
+RepoPort <|.. JdbcRepo
+IdPort <|.. UuidGen
+
+JdbcRepo --> PG : SQL 读写
+
+AcceptUC ..> Publisher : 发布异步任务（可选）
+Publisher ..> MQ : enqueue（可选）
+MQ ..> Worker : consume（可选）
+Worker ..> PG : 更新状态/写向量（可选）
+Worker ..> LLM : Embedding/Chat（可选）
+
+@enduml
+
