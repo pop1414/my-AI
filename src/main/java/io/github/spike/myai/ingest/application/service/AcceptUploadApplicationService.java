@@ -2,10 +2,13 @@ package io.github.spike.myai.ingest.application.service;
 
 import io.github.spike.myai.ingest.application.command.AcceptUploadCommand;
 import io.github.spike.myai.ingest.application.usecase.AcceptUploadUseCase;
+import io.github.spike.myai.ingest.domain.model.Document;
 import io.github.spike.myai.ingest.domain.model.DocumentId;
 import io.github.spike.myai.ingest.domain.model.UploadStatus;
 import io.github.spike.myai.ingest.domain.model.UploadTicket;
 import io.github.spike.myai.ingest.domain.port.DocumentIdGenerator;
+import io.github.spike.myai.ingest.domain.port.DocumentRepository;
+import java.time.Instant;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -17,7 +20,8 @@ import org.springframework.stereotype.Service;
  * <ul>
  *     <li>处理用例级输入（如 kbId 默认值解析）。</li>
  *     <li>调用领域端口（DocumentIdGenerator）获取领域对象。</li>
- *     <li>生成并返回领域结果（UploadTicket）。</li>
+ *     <li>创建文档聚合并落库，保证上传受理可追踪。</li>
+ *     <li>生成并返回接口语义结果（UploadTicket）。</li>
  * </ul>
  *
  * <p>注意：
@@ -40,9 +44,16 @@ public class AcceptUploadApplicationService implements AcceptUploadUseCase {
      * 实际实现由基础设施层提供并由 Spring 自动注入。
      */
     private final DocumentIdGenerator documentIdGenerator;
+    /**
+     * 文档仓储端口：用于持久化文档元数据状态。
+     */
+    private final DocumentRepository documentRepository;
 
-    public AcceptUploadApplicationService(DocumentIdGenerator documentIdGenerator) {
+    public AcceptUploadApplicationService(
+            DocumentIdGenerator documentIdGenerator,
+            DocumentRepository documentRepository) {
         this.documentIdGenerator = documentIdGenerator;
+        this.documentRepository = documentRepository;
     }
 
     /**
@@ -55,6 +66,13 @@ public class AcceptUploadApplicationService implements AcceptUploadUseCase {
     public UploadTicket handle(AcceptUploadCommand command) {
         String resolvedKbId = resolveKbId(command.kbId());
         DocumentId documentId = documentIdGenerator.nextId();
+        Instant now = Instant.now();
+
+        // 先持久化一条 UPLADED 状态文档，后续异步链路可基于该记录推进状态机。
+        Document document =
+                Document.uploaded(documentId, resolvedKbId, command.filename(), command.fileSize(), now);
+        documentRepository.save(document);
+
         // 记录关键链路日志，便于后续定位上传请求是否进入应用层。
         log.info(
                 "Accepted upload request. documentId={}, kbId={}, filename={}, fileSize={}",
@@ -62,6 +80,7 @@ public class AcceptUploadApplicationService implements AcceptUploadUseCase {
                 resolvedKbId,
                 command.filename(),
                 command.fileSize());
+        // 对外接口返回语义保持 ACCEPTED，表示“请求已受理”。
         return new UploadTicket(documentId, UploadStatus.ACCEPTED);
     }
 
