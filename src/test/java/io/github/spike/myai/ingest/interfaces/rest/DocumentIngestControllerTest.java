@@ -4,12 +4,17 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import io.github.spike.myai.ingest.application.command.AcceptUploadCommand;
+import io.github.spike.myai.ingest.application.exception.DocumentNotFoundException;
+import io.github.spike.myai.ingest.application.query.GetDocumentStatusQuery;
+import io.github.spike.myai.ingest.application.result.DocumentStatusResult;
 import io.github.spike.myai.ingest.application.usecase.AcceptUploadUseCase;
+import io.github.spike.myai.ingest.application.usecase.GetDocumentStatusUseCase;
 import io.github.spike.myai.ingest.domain.model.DocumentId;
 import io.github.spike.myai.ingest.domain.model.UploadStatus;
 import io.github.spike.myai.ingest.domain.model.UploadTicket;
@@ -36,12 +41,14 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 class DocumentIngestControllerTest {
 
     private AcceptUploadUseCase acceptUploadUseCase;
+    private GetDocumentStatusUseCase getDocumentStatusUseCase;
     private MockMvc mockMvc;
 
     @BeforeEach
     void setUp() {
         this.acceptUploadUseCase = Mockito.mock(AcceptUploadUseCase.class);
-        DocumentIngestController controller = new DocumentIngestController(acceptUploadUseCase);
+        this.getDocumentStatusUseCase = Mockito.mock(GetDocumentStatusUseCase.class);
+        DocumentIngestController controller = new DocumentIngestController(acceptUploadUseCase, getDocumentStatusUseCase);
         this.mockMvc = MockMvcBuilders.standaloneSetup(controller).build();
     }
 
@@ -77,5 +84,31 @@ class DocumentIngestControllerTest {
                 .andExpect(status().isBadRequest());
 
         verify(acceptUploadUseCase, never()).handle(any(AcceptUploadCommand.class));
+    }
+
+    @Test
+    @DisplayName("状态查询命中时，应返回 200 和当前状态")
+    void getStatus_shouldReturnStatus_whenDocumentExists() throws Exception {
+        when(getDocumentStatusUseCase.handle(any(GetDocumentStatusQuery.class)))
+                .thenReturn(new DocumentStatusResult(new DocumentId("doc-200"), UploadStatus.UPLOADED));
+
+        mockMvc.perform(get("/api/v1/documents/{documentId}/status", "doc-200"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.documentId").value("doc-200"))
+                .andExpect(jsonPath("$.status").value("UPLOADED"));
+
+        ArgumentCaptor<GetDocumentStatusQuery> captor = ArgumentCaptor.forClass(GetDocumentStatusQuery.class);
+        verify(getDocumentStatusUseCase).handle(captor.capture());
+        org.junit.jupiter.api.Assertions.assertEquals("doc-200", captor.getValue().documentId());
+    }
+
+    @Test
+    @DisplayName("状态查询未命中时，应返回 404")
+    void getStatus_shouldReturnNotFound_whenDocumentMissing() throws Exception {
+        when(getDocumentStatusUseCase.handle(any(GetDocumentStatusQuery.class)))
+                .thenThrow(new DocumentNotFoundException("document not found: doc-missing"));
+
+        mockMvc.perform(get("/api/v1/documents/{documentId}/status", "doc-missing"))
+                .andExpect(status().isNotFound());
     }
 }
