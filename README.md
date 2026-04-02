@@ -18,7 +18,7 @@
   - worker 抢占成功后触发处理用例
   - 支持状态推进到 `INDEXED` / `FAILED`
 - 处理主链路（V1 最小实现）：
-  - 源文件读取 -> 文本解析 -> 分块 -> 向量写入（PGVector）-> 状态收口
+  - 源文件读取 -> Tika 解析 + 文本清洗 -> 分块 -> 向量写入（PGVector）-> 状态收口
 - 分块策略：
   - 结构优先 + 长度兜底
   - 参数：`chunk=500`、`overlap=100`
@@ -70,6 +70,8 @@
 - `PGVECTOR_DATASOURCE_PASSWORD`（默认 `admin`）
 - `INGEST_WORKER_ENABLED`（默认 `false`）
 - `INGEST_WORKER_POLL_DELAY_MS`（默认 `5000`）
+- `INGEST_PARSER_MAX_TEXT_LENGTH`（默认 `2000000`）
+- `INGEST_PARSER_PARSE_EMBEDDED_RESOURCE`（默认 `false`）
 - `INGEST_STORAGE_ROOT_DIR`（默认 `data/ingest`）
 - `INGEST_CHUNK_SIZE`（默认 `500`）
 - `INGEST_CHUNK_OVERLAP`（默认 `100`）
@@ -115,7 +117,7 @@ Linux/macOS:
 ## 7. 当前边界与注意事项
 
 - worker 默认关闭，需要显式开启 `INGEST_WORKER_ENABLED=true`
-- V1 解析器当前主要支持文本类文件；PDF/Word 专业解析仍待增强
+- 解析已升级为 Tika 基线能力；扫描版 PDF 的 OCR 与复杂版式提取仍待增强
 - 瞬时错误重试（3 次指数退避）尚未完整实现
 - reprocess “先删旧向量再重建”流程尚待落地
 
@@ -123,4 +125,3 @@ Linux/macOS:
 
 - `V1`：完成 ingest 最小闭环与可追踪处理
 - `V2`：增强解析能力、重试机制、reprocess 与更完整的检索问答链路
-
