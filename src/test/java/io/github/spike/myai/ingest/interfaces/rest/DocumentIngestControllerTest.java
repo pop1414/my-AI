@@ -18,6 +18,7 @@ import io.github.spike.myai.ingest.application.usecase.GetDocumentStatusUseCase;
 import io.github.spike.myai.ingest.domain.model.DocumentId;
 import io.github.spike.myai.ingest.domain.model.UploadStatus;
 import io.github.spike.myai.ingest.domain.model.UploadTicket;
+import io.github.spike.myai.ingest.domain.port.DocumentSourceStorage;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -42,13 +43,16 @@ class DocumentIngestControllerTest {
 
     private AcceptUploadUseCase acceptUploadUseCase;
     private GetDocumentStatusUseCase getDocumentStatusUseCase;
+    private DocumentSourceStorage documentSourceStorage;
     private MockMvc mockMvc;
 
     @BeforeEach
     void setUp() {
         this.acceptUploadUseCase = Mockito.mock(AcceptUploadUseCase.class);
         this.getDocumentStatusUseCase = Mockito.mock(GetDocumentStatusUseCase.class);
-        DocumentIngestController controller = new DocumentIngestController(acceptUploadUseCase, getDocumentStatusUseCase);
+        this.documentSourceStorage = Mockito.mock(DocumentSourceStorage.class);
+        DocumentIngestController controller =
+                new DocumentIngestController(acceptUploadUseCase, getDocumentStatusUseCase, documentSourceStorage);
         this.mockMvc = MockMvcBuilders.standaloneSetup(controller).build();
     }
 
@@ -75,6 +79,7 @@ class DocumentIngestControllerTest {
         org.junit.jupiter.api.Assertions.assertEquals(
                 "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824",
                 captured.fileHash());
+        verify(documentSourceStorage).save(any(DocumentId.class), any(String.class), any(byte[].class));
     }
 
     @Test
@@ -87,6 +92,7 @@ class DocumentIngestControllerTest {
                 .andExpect(status().isBadRequest());
 
         verify(acceptUploadUseCase, never()).handle(any(AcceptUploadCommand.class));
+        verify(documentSourceStorage, never()).save(any(DocumentId.class), any(String.class), any(byte[].class));
     }
 
     @Test
