@@ -35,3 +35,11 @@ spring:
         max-document-batch-size: 10000
         # 是否删除旧表
         remove-existing-vector-store-table: false
+
+myai:
+  ingest:
+    worker:
+      # 在处理链路完整实现前默认关闭，避免误把 UPLADED 推进到 INGESTING
+      enabled: ${INGEST_WORKER_ENABLED:false}
+      # Worker 轮询间隔（毫秒）
+      poll-delay-ms: ${INGEST_WORKER_POLL_DELAY_MS:5000}
