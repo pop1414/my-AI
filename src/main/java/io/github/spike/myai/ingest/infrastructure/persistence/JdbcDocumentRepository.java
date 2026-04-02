@@ -73,6 +73,18 @@ public class JdbcDocumentRepository implements DocumentRepository {
             ORDER BY created_at DESC
             LIMIT 1
             """;
+    private static final String FIND_OLDEST_BY_STATUS_SQL = """
+            SELECT document_id, kb_id, file_hash, filename, file_size, status, failure_reason, created_at, updated_at
+            FROM ingest_documents
+            WHERE status = ?
+            ORDER BY created_at ASC
+            LIMIT 1
+            """;
+    private static final String COMPARE_AND_SET_STATUS_SQL = """
+            UPDATE ingest_documents
+            SET status = ?, failure_reason = ?, updated_at = ?
+            WHERE document_id = ? AND status = ?
+            """;
 
     // 结果映射器
     private static final RowMapper<Document> DOCUMENT_ROW_MAPPER = (rs, rowNum) -> new Document(
@@ -131,6 +143,30 @@ public class JdbcDocumentRepository implements DocumentRepository {
         return jdbcTemplate.query(FIND_BY_KB_ID_AND_FILE_HASH_SQL, DOCUMENT_ROW_MAPPER, kbId, fileHash)
                 .stream()
                 .findFirst();
+    }
+
+    @Override
+    public Optional<Document> findOldestByStatus(UploadStatus status) {
+        return jdbcTemplate.query(FIND_OLDEST_BY_STATUS_SQL, DOCUMENT_ROW_MAPPER, status.name())
+                .stream()
+                .findFirst();
+    }
+
+    @Override
+    public boolean compareAndSetStatus(
+            DocumentId documentId,
+            UploadStatus expectedStatus,
+            UploadStatus targetStatus,
+            String failureReason,
+            Instant updatedAt) {
+        int updatedRows = jdbcTemplate.update(
+                COMPARE_AND_SET_STATUS_SQL,
+                targetStatus.name(),
+                failureReason,
+                Timestamp.from(updatedAt),
+                documentId.value(),
+                expectedStatus.name());
+        return updatedRows == 1;
     }
 
     private static Instant toInstant(Timestamp timestamp) {
