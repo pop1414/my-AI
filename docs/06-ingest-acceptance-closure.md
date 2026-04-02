@@ -62,8 +62,9 @@
 3. Application 按 `kbId + fileHash` 查询是否已存在资产记录
 4. 若已存在：直接返回已存在的 `documentId + ACCEPTED`
 5. 若不存在：生成新 `DocumentId`，创建 `Document(UPLOADED)` 并通过 `DocumentRepository` 落库
-6. 客户端调用 `GET /api/v1/documents/{id}/status`
-7. Application 通过 Repository 查询并返回当前状态；未命中返回 404
+6. Controller 按 `documentId` 持久化原始源文件（供后续处理链路读取）
+7. 客户端调用 `GET /api/v1/documents/{id}/status`
+8. Application 通过 Repository 查询并返回当前状态；未命中返回 404
 
 ## 6. 后续扩展建议
 下一阶段可在此闭环上增加真正处理链路：
