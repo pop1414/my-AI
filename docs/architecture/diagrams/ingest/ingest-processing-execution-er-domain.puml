@@ -1,0 +1,86 @@
+@startuml
+title Ingest 处理执行 ER / 领域模型图
+
+skinparam shadowing false
+skinparam linetype ortho
+
+package "Domain" {
+  class Document {
+    +documentId: DocumentId
+    +kbId: String
+    +filename: String
+    +fileSize: long
+    +status: UploadStatus
+    +failureReason: String?
+    +createdAt: Instant
+    +updatedAt: Instant
+  }
+
+  class DocumentChunk {
+    +documentId: DocumentId
+    +chunkIndex: int
+    +content: String
+    +contentHash: String
+  }
+
+  class DocumentId {
+    +value: String
+  }
+
+  enum UploadStatus {
+    UPLOADED
+    INGESTING
+    INDEXED
+    FAILED
+  }
+
+  Document *-- DocumentId
+  Document --> UploadStatus
+  Document "1" o-- "*" DocumentChunk
+}
+
+package "PostgreSQL" {
+  entity "ingest_documents" as T_DOC {
+    * document_id : varchar(64) <<PK>>
+    --
+    * kb_id : varchar(128)
+    * file_hash : varchar(64)
+    filename : varchar(512)
+    * file_size : bigint
+    * status : varchar(32)
+    retry_count : int
+    failure_reason : text
+    * created_at : timestamptz
+    * updated_at : timestamptz
+    --
+    UNIQUE (kb_id, file_hash)
+  }
+
+  entity "vector_store" as T_VEC {
+    * id : uuid <<PK>>
+    --
+    content : text
+    metadata : jsonb
+    embedding : vector(1536)
+  }
+}
+
+T_DOC ||--o{ T_VEC : "metadata.documentId"
+
+note right of T_VEC
+metadata 最小建议字段：
+- documentId
+- kbId
+- chunkIndex
+- splitVersion
+- sourceFile
+- contentHash
+end note
+
+note bottom of T_VEC
+id 建议使用确定性生成：
+hash(documentId, chunkIndex, splitVersion)
+用于保证 chunk upsert 幂等
+end note
+
+@enduml

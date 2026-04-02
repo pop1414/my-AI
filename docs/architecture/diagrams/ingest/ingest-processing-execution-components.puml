@@ -1,0 +1,64 @@
+@startuml
+title Ingest 处理执行组件图（DDD-Lite）
+
+skinparam componentStyle rectangle
+skinparam shadowing false
+skinparam linetype ortho
+
+actor "客户端/前端" as Client
+
+package "Interfaces" {
+  component "DocumentIngestController\n/upload + /status" as Controller
+}
+
+package "Application" {
+  component "AcceptUploadUseCase" as AcceptUC
+  component "GetDocumentStatusUseCase" as StatusUC
+  component "ProcessDocumentUseCase\n(待实现)" as ProcessUC
+}
+
+package "Domain" {
+  component "Document 聚合\n状态机" as DocumentAgg
+  component "DocumentRepository Port" as DocRepoPort
+  component "DocumentIdGenerator Port" as IdPort
+  component "Chunker Port\n(待实现)" as ChunkerPort
+  component "Embedding Port\n(待实现)" as EmbPort
+  component "VectorStore Port\n(待实现)" as VecPort
+}
+
+package "Infrastructure" {
+  component "JdbcDocumentRepository" as JdbcRepo
+  component "UuidDocumentIdGenerator" as UuidGen
+  component "InProcessWorker\n(待实现)" as Worker
+  component "Text/PDF Parser Adapter\n(待实现)" as ParserAdapter
+  component "OpenAI Embedding Adapter\n(待实现)" as EmbAdapter
+  component "PGVector Adapter\n(待实现)" as PgVectorAdapter
+}
+
+database "PostgreSQL\ningest_documents + vector_store" as PG
+
+Client --> Controller
+Controller --> AcceptUC
+Controller --> StatusUC
+
+AcceptUC --> IdPort
+AcceptUC --> DocRepoPort
+StatusUC --> DocRepoPort
+
+Worker --> ProcessUC
+ProcessUC --> DocRepoPort
+ProcessUC --> ChunkerPort
+ProcessUC --> EmbPort
+ProcessUC --> VecPort
+
+DocRepoPort <|.. JdbcRepo
+IdPort <|.. UuidGen
+ChunkerPort <|.. ParserAdapter
+EmbPort <|.. EmbAdapter
+VecPort <|.. PgVectorAdapter
+
+JdbcRepo --> PG
+PgVectorAdapter --> PG
+
+@enduml
+

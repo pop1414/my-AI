@@ -1,0 +1,68 @@
+@startuml
+title Ingest 处理执行时序图（草案）
+
+actor Client
+participant "DocumentIngestController" as C
+participant "AcceptUploadUseCase" as A
+participant "DocumentRepository" as R
+database "PostgreSQL" as PG
+participant "InProcessWorker\n(待实现)" as W
+participant "ProcessDocumentUseCase\n(待实现)" as P
+participant "Parser/Splitter\n(待实现)" as S
+participant "Embedding Adapter\n(待实现)" as E
+participant "PGVector Adapter\n(待实现)" as V
+
+== 受理阶段 ==
+Client -> C : POST /documents/upload
+C -> A : handle(command)
+A -> R : 幂等检查(fileHash / kbId)
+alt 已存在进行中任务
+  R --> A : existing documentId
+  A --> C : UploadTicket(ACCEPTED, existingId)
+  C --> Client : 200 {existingId, ACCEPTED}
+else 新任务
+  A -> R : save(Document{UPLOADED})
+  R -> PG : UPSERT ingest_documents
+  PG --> R : OK
+  A --> C : UploadTicket(ACCEPTED)
+  C --> Client : 200 {documentId, ACCEPTED}
+end
+
+== 处理执行阶段 ==
+W -> P : process(documentId)
+P -> R : findById(documentId)
+R -> PG : SELECT ingest_documents
+PG --> R : Document{UPLOADED}
+P -> R : CAS更新 UPLOADED->INGESTING
+R -> PG : UPDATE ... WHERE status=UPLOADED
+alt 抢占失败（已被其它worker处理）
+  R --> P : 0 rows updated
+  P --> W : no-op / skip
+else 抢占成功
+  R --> P : 1 row updated
+end
+P -> S : parse + split
+S --> P : chunks
+
+loop each chunk
+  P -> E : embed(chunk)
+  E --> P : vector
+  P -> V : upsert(chunkId, vector, metadata)\nchunkId=hash(documentId, chunkIndex, splitVersion)
+  V -> PG : UPSERT vector_store
+  PG --> V : OK
+end
+
+P -> R : save(Document{INDEXED})
+R -> PG : UPDATE status=INDEXED
+
+alt 出现瞬时错误（429/5xx/网络波动）
+  loop retry <= 3
+    P -> E : retry embed/upsert
+  end
+  alt 重试仍失败
+    P -> R : save(Document{FAILED, reason})
+    R -> PG : UPDATE status=FAILED
+  end
+end
+
+@enduml

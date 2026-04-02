@@ -1,0 +1,20 @@
+@startuml
+title Ingest 文档处理状态机（执行阶段）
+
+[*] --> UPLOADED : 受理落库
+
+UPLOADED --> INGESTING : worker 启动处理
+INGESTING --> INDEXED : 处理成功
+INGESTING --> FAILED : 非瞬时错误 / 重试耗尽
+
+note right of INGESTING
+允许瞬时错误重试（最多3次）
+重试成功后仍进入 INDEXED
+end note
+
+FAILED --> INGESTING : 人工 reprocess（可选）
+
+INDEXED --> INGESTING : 重建索引（幂等重处理，可选）
+
+@enduml
+

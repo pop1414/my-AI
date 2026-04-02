@@ -1,0 +1,33 @@
+@startuml
+title Ingest 处理执行用例图（功能边界）
+
+left to right direction
+skinparam shadowing false
+skinparam packageStyle rectangle
+
+actor "客户端/前端" as Client
+actor "处理 Worker" as Worker
+actor "运维/开发者" as Ops
+
+rectangle "Ingest Processing Execution" {
+  usecase "受理上传\nPOST /documents/upload" as UC_Accept
+  usecase "查询处理状态\nGET /documents/{id}/status" as UC_Status
+  usecase "执行文档处理\n(解析->分块->向量化->入库)" as UC_Process
+  usecase "更新处理状态\n(INGESTING/INDEXED/FAILED)" as UC_UpdateStatus
+  usecase "失败重试\n(瞬时错误最多3次)" as UC_Retry
+  usecase "人工重处理\nPOST /documents/{id}/reprocess\n(可选)" as UC_Reprocess
+}
+
+Client --> UC_Accept
+Client --> UC_Status
+Worker --> UC_Process
+Worker --> UC_UpdateStatus
+Worker --> UC_Retry
+Ops --> UC_Reprocess
+
+UC_Process .> UC_UpdateStatus : <<include>>
+UC_Retry ..> UC_Process : <<extend>>
+UC_Reprocess ..> UC_Process : <<extend>>
+
+@enduml
+
