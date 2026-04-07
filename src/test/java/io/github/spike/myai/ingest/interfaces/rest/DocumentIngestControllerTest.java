@@ -11,9 +11,13 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import io.github.spike.myai.ingest.application.command.AcceptUploadCommand;
 import io.github.spike.myai.ingest.application.exception.DocumentNotFoundException;
+import io.github.spike.myai.ingest.application.query.GetDocumentChunksPreviewQuery;
 import io.github.spike.myai.ingest.application.query.GetDocumentStatusQuery;
+import io.github.spike.myai.ingest.application.result.DocumentChunkPreviewItemResult;
+import io.github.spike.myai.ingest.application.result.DocumentChunksPreviewResult;
 import io.github.spike.myai.ingest.application.result.DocumentStatusResult;
 import io.github.spike.myai.ingest.application.usecase.AcceptUploadUseCase;
+import io.github.spike.myai.ingest.application.usecase.GetDocumentChunksPreviewUseCase;
 import io.github.spike.myai.ingest.application.usecase.GetDocumentStatusUseCase;
 import io.github.spike.myai.ingest.domain.model.DocumentId;
 import io.github.spike.myai.ingest.domain.model.UploadStatus;
@@ -43,6 +47,7 @@ class DocumentIngestControllerTest {
 
     private AcceptUploadUseCase acceptUploadUseCase;
     private GetDocumentStatusUseCase getDocumentStatusUseCase;
+    private GetDocumentChunksPreviewUseCase getDocumentChunksPreviewUseCase;
     private DocumentSourceStorage documentSourceStorage;
     private MockMvc mockMvc;
 
@@ -50,9 +55,14 @@ class DocumentIngestControllerTest {
     void setUp() {
         this.acceptUploadUseCase = Mockito.mock(AcceptUploadUseCase.class);
         this.getDocumentStatusUseCase = Mockito.mock(GetDocumentStatusUseCase.class);
+        this.getDocumentChunksPreviewUseCase = Mockito.mock(GetDocumentChunksPreviewUseCase.class);
         this.documentSourceStorage = Mockito.mock(DocumentSourceStorage.class);
         DocumentIngestController controller =
-                new DocumentIngestController(acceptUploadUseCase, getDocumentStatusUseCase, documentSourceStorage);
+                new DocumentIngestController(
+                        acceptUploadUseCase,
+                        getDocumentStatusUseCase,
+                        getDocumentChunksPreviewUseCase,
+                        documentSourceStorage);
         this.mockMvc = MockMvcBuilders.standaloneSetup(controller).build();
     }
 
@@ -119,5 +129,53 @@ class DocumentIngestControllerTest {
 
         mockMvc.perform(get("/api/v1/documents/{documentId}/status", "doc-missing"))
                 .andExpect(status().isNotFound());
+    }
+
+    @Test
+    @DisplayName("分块预览命中时，应返回 200 与分块列表")
+    void getChunksPreview_shouldReturnPreview_whenFound() throws Exception {
+        when(getDocumentChunksPreviewUseCase.handle(any(GetDocumentChunksPreviewQuery.class)))
+                .thenReturn(new DocumentChunksPreviewResult(
+                        new DocumentId("doc-300"),
+                        1,
+                        java.util.List.of(new DocumentChunkPreviewItemResult(
+                                0,
+                                "这是预览文本",
+                                "demo.txt",
+                                "hash-chunk-1",
+                                "v1"))));
+
+        mockMvc.perform(get("/api/v1/documents/{documentId}/chunks/preview", "doc-300")
+                        .param("limit", "10")
+                        .param("previewChars", "120"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.documentId").value("doc-300"))
+                .andExpect(jsonPath("$.chunkCount").value(1))
+                .andExpect(jsonPath("$.chunks[0].chunkIndex").value(0))
+                .andExpect(jsonPath("$.chunks[0].contentPreview").value("这是预览文本"))
+                .andExpect(jsonPath("$.chunks[0].sourceFile").value("demo.txt"))
+                .andExpect(jsonPath("$.chunks[0].contentHash").value("hash-chunk-1"))
+                .andExpect(jsonPath("$.chunks[0].splitVersion").value("v1"));
+    }
+
+    @Test
+    @DisplayName("分块预览文档不存在时，应返回 404")
+    void getChunksPreview_shouldReturnNotFound_whenDocumentMissing() throws Exception {
+        when(getDocumentChunksPreviewUseCase.handle(any(GetDocumentChunksPreviewQuery.class)))
+                .thenThrow(new DocumentNotFoundException("document not found: doc-missing"));
+
+        mockMvc.perform(get("/api/v1/documents/{documentId}/chunks/preview", "doc-missing"))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    @DisplayName("分块预览参数非法时，应返回 400")
+    void getChunksPreview_shouldReturnBadRequest_whenInvalidParam() throws Exception {
+        when(getDocumentChunksPreviewUseCase.handle(any(GetDocumentChunksPreviewQuery.class)))
+                .thenThrow(new IllegalArgumentException("limit must be between 1 and 200"));
+
+        mockMvc.perform(get("/api/v1/documents/{documentId}/chunks/preview", "doc-400")
+                        .param("limit", "0"))
+                .andExpect(status().isBadRequest());
     }
 }
