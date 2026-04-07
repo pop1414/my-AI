@@ -109,7 +109,15 @@ Linux/macOS:
 
 - `GET /api/v1/documents/{documentId}/status`
 
-### 6.3 重处理（草案）
+### 6.3 分块预览（调试）
+
+- `GET /api/v1/documents/{documentId}/chunks/preview`
+- 可选参数：
+  - `limit`（默认 20，范围 1~200）
+  - `previewChars`（默认 200，范围 20~2000）
+- 用途：验证“向量化前分块文本”是否符合预期
+
+### 6.4 重处理（草案）
 
 - `POST /api/v1/documents/{documentId}/reprocess`
 - 当前仍处于草案阶段（接口契约已预留，代码未完整实现）

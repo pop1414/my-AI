@@ -65,11 +65,13 @@
 - 建议：
   - 使用确定性 chunk 标识（如 `documentId + chunkIndex + splitVersion`）
   - 向量写入使用 upsert
+- 当前实现进度（2026-04-02）：已落地基础能力。当前实现使用确定性 `chunkId`（`hash(documentId, chunkIndex, splitVersion)`），并采用“先按 chunkId 删除再写入”策略，达到与 upsert 等价的幂等效果。
 
 ### 5.4 状态更新阶段
 - 风险：状态乱序写入（例如已 INDEXED 又被写回 INGESTING）
 - 要求：状态只允许按合法路径前进
 - 建议：状态更新带前置条件，拒绝非法回退
+- 当前实现进度（2026-04-02）：已落地基础能力。`INGESTING -> INDEXED/FAILED` 均采用带前置状态的 CAS 更新。
 
 ### 5.5 重处理（reprocess）阶段
 - 风险：重复重建造成“旧向量 + 新向量”叠加污染
@@ -99,7 +101,10 @@
 2. `GET /api/v1/documents/{documentId}/status`
 说明：查询文档处理状态
 
-3. `POST /api/v1/documents/{documentId}/reprocess`（可选）
+3. `GET /api/v1/documents/{documentId}/chunks/preview`（调试）
+说明：查询向量化前分块预览，便于验证解析/清洗/分块结果
+
+4. `POST /api/v1/documents/{documentId}/reprocess`（可选）
 说明：人工触发重处理（建议 V1 后段再加）
 
 ## 8. 验收口径（DoD）

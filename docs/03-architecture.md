@@ -9,6 +9,12 @@
 - 受理闭环用例图：`docs/architecture/diagrams/ingest/ingest-acceptance-closure-usecase.puml`
 - 受理闭环 ER/领域模型图：`docs/architecture/diagrams/ingest/ingest-acceptance-closure-er-domain.puml`
 - 受理闭环说明文档：`docs/06-ingest-acceptance-closure.md`
+- 处理执行用例图：`docs/architecture/diagrams/ingest/ingest-processing-execution-usecase.puml`
+- 处理执行组件图：`docs/architecture/diagrams/ingest/ingest-processing-execution-components.puml`
+- 处理执行时序图：`docs/architecture/diagrams/ingest/ingest-processing-execution-sequence.puml`
+- 处理执行状态机：`docs/architecture/diagrams/ingest/ingest-processing-execution-state.puml`
+- 处理执行 ER/领域模型图：`docs/architecture/diagrams/ingest/ingest-processing-execution-er-domain.puml`
+- 处理执行说明文档：`docs/07-ingest-processing-execution.md`
 
 ## 2. 分层设计
 - 接入层：Upload/Knowledge/QA/SSE API
@@ -46,3 +52,10 @@
 - 内部状态落库为 `UPLOADED`（表示任务已可追踪）
 - 通过 `GET /api/v1/documents/{id}/status` 查询任务状态
 - 该阶段重点是“可追踪闭环”，非完整入库处理链路
+
+## 8. 处理执行设计补充（草案）
+- 处理模式：异步 worker（单进程）
+- 状态推进：`UPLOADED -> INGESTING -> INDEXED/FAILED`
+- 分块参数初值：`chunk=500`, `overlap=100`
+- 失败策略：瞬时错误最多 3 次重试
+- 幂等目标：同一 `documentId` 重复处理最终一致
