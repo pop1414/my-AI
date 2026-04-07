@@ -61,6 +61,10 @@ public class DocumentIngestController {
      * 文档分块预览查询用例。
      */
     private final GetDocumentChunksPreviewUseCase getDocumentChunksPreviewUseCase;
+    /**
+     * 文档源文件存储端口。
+     */
+    private final DocumentSourceStorage documentSourceStorage;
 
     public DocumentIngestController(
             AcceptUploadUseCase acceptUploadUseCase,
@@ -105,6 +109,13 @@ public class DocumentIngestController {
         AcceptUploadCommand command = new AcceptUploadCommand(file.getOriginalFilename(), file.getSize(), kbId, fileHash);
 
         UploadTicket uploadTicket = acceptUploadUseCase.handle(command);
+        try {
+            // 受理成功后立即持久化源文件，供异步处理链路（解析/分块/向量化）读取。
+            // 当命中幂等复用既有 documentId 时，这里会走存储端口的幂等写入（存在则不覆盖）。
+            documentSourceStorage.save(uploadTicket.documentId(), file.getOriginalFilename(), file.getBytes());
+        } catch (IOException ex) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "failed to read upload file", ex);
+        }
         // 将领域返回对象映射为对外响应 DTO，避免领域对象直接暴露给 API 使用方。
         return new UploadResponse(uploadTicket.documentId().value(), uploadTicket.status().name());
     }
