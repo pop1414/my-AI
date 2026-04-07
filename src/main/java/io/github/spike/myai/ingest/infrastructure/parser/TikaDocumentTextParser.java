@@ -1,6 +1,7 @@
 package io.github.spike.myai.ingest.infrastructure.parser;
 
 import io.github.spike.myai.ingest.domain.port.DocumentTextParser;
+import io.github.spike.myai.ingest.infrastructure.config.IngestProperties;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import org.apache.tika.exception.TikaException;
@@ -12,7 +13,6 @@ import org.apache.tika.parser.ParseContext;
 import org.apache.tika.parser.Parser;
 import org.apache.tika.parser.pdf.PDFParserConfig;
 import org.apache.tika.sax.BodyContentHandler;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.xml.sax.SAXException;
 
@@ -30,11 +30,10 @@ public class TikaDocumentTextParser implements DocumentTextParser {
 
     public TikaDocumentTextParser(
             TextCleaningService textCleaningService,
-            @Value("${myai.ingest.parser.max-text-length:2000000}") int maxTextLength,
-            @Value("${myai.ingest.parser.parse-embedded-resource:false}") boolean parseEmbeddedResource) {
+            IngestProperties ingestProperties) {
         this.textCleaningService = textCleaningService;
-        this.maxTextLength = maxTextLength;
-        this.parseEmbeddedResource = parseEmbeddedResource;
+        this.maxTextLength = ingestProperties.getParser().getMaxTextLength();
+        this.parseEmbeddedResource = ingestProperties.getParser().isParseEmbeddedResource();
     }
 
     @Override
@@ -85,4 +84,3 @@ public class TikaDocumentTextParser implements DocumentTextParser {
         }
     }
 }
-

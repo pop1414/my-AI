@@ -1,11 +1,11 @@
 package io.github.spike.myai.ingest.infrastructure.chunking;
 
 import io.github.spike.myai.ingest.domain.port.DocumentChunker;
+import io.github.spike.myai.ingest.infrastructure.config.IngestProperties;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 /**
@@ -17,11 +17,9 @@ public class StructuredFallbackDocumentChunker implements DocumentChunker {
     private final int chunkSize;
     private final int overlapSize;
 
-    public StructuredFallbackDocumentChunker(
-            @Value("${myai.ingest.chunk.chunk-size:500}") int chunkSize,
-            @Value("${myai.ingest.chunk.overlap-size:100}") int overlapSize) {
-        this.chunkSize = chunkSize;
-        this.overlapSize = overlapSize;
+    public StructuredFallbackDocumentChunker(IngestProperties ingestProperties) {
+        this.chunkSize = ingestProperties.getChunk().getChunkSize();
+        this.overlapSize = ingestProperties.getChunk().getOverlapSize();
     }
 
     @Override
