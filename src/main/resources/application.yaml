@@ -38,6 +38,18 @@ spring:
 
 myai:
   ingest:
+    parser:
+      # Tika 解析最大文本长度，防止异常文档输出过长文本导致内存风险
+      max-text-length: ${INGEST_PARSER_MAX_TEXT_LENGTH:2000000}
+      # 是否允许解析嵌入资源（默认关闭，避免图片/附件污染正文）
+      parse-embedded-resource: ${INGEST_PARSER_PARSE_EMBEDDED_RESOURCE:false}
+    storage:
+      # 上传源文件本地落盘目录（可替换为对象存储适配器）
+      root-dir: ${INGEST_STORAGE_ROOT_DIR:data/ingest}
+    chunk:
+      # 文本分块参数（结构优先 + 长度兜底）
+      chunk-size: ${INGEST_CHUNK_SIZE:500}
+      overlap-size: ${INGEST_CHUNK_OVERLAP:100}
     worker:
       # 在处理链路完整实现前默认关闭，避免误把 UPLADED 推进到 INGESTING
       enabled: ${INGEST_WORKER_ENABLED:false}
