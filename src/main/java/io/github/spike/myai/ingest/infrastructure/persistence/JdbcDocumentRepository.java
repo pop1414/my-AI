@@ -102,6 +102,7 @@ public class JdbcDocumentRepository implements DocumentRepository {
 
     public JdbcDocumentRepository(JdbcTemplate jdbcTemplate) {
         this.jdbcTemplate = jdbcTemplate;
+        // 兼容“新库初始化 + 老库平滑升级”两种启动场景。
         this.jdbcTemplate.execute(INIT_SQL);
         this.jdbcTemplate.execute(ADD_FILE_HASH_COLUMN_SQL);
         this.jdbcTemplate.execute(CREATE_UNIQUE_INDEX_SQL);
@@ -147,6 +148,7 @@ public class JdbcDocumentRepository implements DocumentRepository {
 
     @Override
     public Optional<Document> findOldestByStatus(UploadStatus status) {
+        // 固定按 created_at 升序取 1 条，保证处理顺序尽量稳定、可预期。
         return jdbcTemplate.query(FIND_OLDEST_BY_STATUS_SQL, DOCUMENT_ROW_MAPPER, status.name())
                 .stream()
                 .findFirst();
@@ -159,6 +161,8 @@ public class JdbcDocumentRepository implements DocumentRepository {
             UploadStatus targetStatus,
             String failureReason,
             Instant updatedAt) {
+        // CAS 核心：where 子句里带 expectedStatus，只有状态匹配才更新成功。
+        // 在并发场景下可避免后写覆盖先写导致的状态回退。
         int updatedRows = jdbcTemplate.update(
                 COMPARE_AND_SET_STATUS_SQL,
                 targetStatus.name(),

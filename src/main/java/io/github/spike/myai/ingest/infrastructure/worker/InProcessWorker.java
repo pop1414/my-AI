@@ -1,6 +1,7 @@
 package io.github.spike.myai.ingest.infrastructure.worker;
 
 import io.github.spike.myai.ingest.application.usecase.ClaimNextUploadedDocumentUseCase;
+import io.github.spike.myai.ingest.application.usecase.ProcessDocumentUseCase;
 import io.github.spike.myai.ingest.domain.model.DocumentId;
 import java.util.Optional;
 import org.slf4j.Logger;
@@ -15,8 +16,8 @@ import org.springframework.stereotype.Component;
  * <p>说明：
  * <ul>
  *     <li>默认关闭（myai.ingest.worker.enabled=false）。</li>
- *     <li>当前阶段仅执行“候选挑选 + CAS 抢占”。</li>
- *     <li>真正处理链路（解析/分块/向量化）将在下一阶段接入。</li>
+ *     <li>执行“候选挑选 + CAS 抢占 + 处理用例调用”。</li>
+ *     <li>处理失败将由处理用例推进到 FAILED 状态。</li>
  * </ul>
  */
 @Component
@@ -26,9 +27,13 @@ public class InProcessWorker {
     private static final Logger log = LoggerFactory.getLogger(InProcessWorker.class);
 
     private final ClaimNextUploadedDocumentUseCase claimNextUploadedDocumentUseCase;
+    private final ProcessDocumentUseCase processDocumentUseCase;
 
-    public InProcessWorker(ClaimNextUploadedDocumentUseCase claimNextUploadedDocumentUseCase) {
+    public InProcessWorker(
+            ClaimNextUploadedDocumentUseCase claimNextUploadedDocumentUseCase,
+            ProcessDocumentUseCase processDocumentUseCase) {
         this.claimNextUploadedDocumentUseCase = claimNextUploadedDocumentUseCase;
+        this.processDocumentUseCase = processDocumentUseCase;
     }
 
     /**
@@ -36,12 +41,14 @@ public class InProcessWorker {
      */
     @Scheduled(fixedDelayString = "${myai.ingest.worker.poll-delay-ms:5000}")
     public void pollAndClaim() {
+        // 每轮只处理一个 documentId，避免单轮任务过重影响系统抖动。
         Optional<DocumentId> claimedDocumentId = claimNextUploadedDocumentUseCase.handle();
         if (claimedDocumentId.isPresent()) {
             log.info(
                     "InProcessWorker claimed document for processing pipeline. documentId={}",
                     claimedDocumentId.get().value());
+            // 抢占成功后立即进入处理链路；处理结果由用例内部推进状态。
+            processDocumentUseCase.handle(claimedDocumentId.get());
         }
     }
 }
-

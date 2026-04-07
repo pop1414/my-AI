@@ -29,11 +29,14 @@ public class ClaimNextUploadedDocumentApplicationService implements ClaimNextUpl
 
     @Override
     public Optional<DocumentId> handle() {
+        // 始终取最早的 UPLOADED，尽量保持处理顺序稳定。
         Optional<Document> candidate = documentRepository.findOldestByStatus(UploadStatus.UPLOADED);
         if (candidate.isEmpty()) {
             return Optional.empty();
         }
         Document document = candidate.get();
+        // CAS 抢占：只有当前状态仍为 UPLOADED 才能推进到 INGESTING。
+        // 若并发下被其它 worker 先一步更新，本次抢占会返回 false。
         boolean claimed = documentRepository.compareAndSetStatus(
                 document.documentId(),
                 UploadStatus.UPLOADED,
@@ -48,4 +51,3 @@ public class ClaimNextUploadedDocumentApplicationService implements ClaimNextUpl
         return Optional.of(document.documentId());
     }
 }
-
