@@ -2,11 +2,18 @@ package io.github.spike.myai.ingest.interfaces.rest;
 
 import io.github.spike.myai.ingest.application.command.AcceptUploadCommand;
 import io.github.spike.myai.ingest.application.exception.DocumentNotFoundException;
+import io.github.spike.myai.ingest.application.query.GetDocumentChunksPreviewQuery;
 import io.github.spike.myai.ingest.application.query.GetDocumentStatusQuery;
+import io.github.spike.myai.ingest.application.result.DocumentChunkPreviewItemResult;
+import io.github.spike.myai.ingest.application.result.DocumentChunksPreviewResult;
 import io.github.spike.myai.ingest.application.usecase.AcceptUploadUseCase;
+import io.github.spike.myai.ingest.application.usecase.GetDocumentChunksPreviewUseCase;
 import io.github.spike.myai.ingest.application.usecase.GetDocumentStatusUseCase;
 import io.github.spike.myai.ingest.application.result.DocumentStatusResult;
 import io.github.spike.myai.ingest.domain.model.UploadTicket;
+import io.github.spike.myai.ingest.domain.port.DocumentSourceStorage;
+import io.github.spike.myai.ingest.interfaces.rest.dto.DocumentChunkPreviewItemResponse;
+import io.github.spike.myai.ingest.interfaces.rest.dto.DocumentChunksPreviewResponse;
 import io.github.spike.myai.ingest.interfaces.rest.dto.DocumentStatusResponse;
 import io.github.spike.myai.ingest.interfaces.rest.dto.UploadResponse;
 import java.io.IOException;
@@ -50,12 +57,20 @@ public class DocumentIngestController {
      * 文档状态查询用例。
      */
     private final GetDocumentStatusUseCase getDocumentStatusUseCase;
+    /**
+     * 文档分块预览查询用例。
+     */
+    private final GetDocumentChunksPreviewUseCase getDocumentChunksPreviewUseCase;
 
     public DocumentIngestController(
             AcceptUploadUseCase acceptUploadUseCase,
-            GetDocumentStatusUseCase getDocumentStatusUseCase) {
+            GetDocumentStatusUseCase getDocumentStatusUseCase,
+            GetDocumentChunksPreviewUseCase getDocumentChunksPreviewUseCase,
+            DocumentSourceStorage documentSourceStorage) {
         this.acceptUploadUseCase = acceptUploadUseCase;
         this.getDocumentStatusUseCase = getDocumentStatusUseCase;
+        this.getDocumentChunksPreviewUseCase = getDocumentChunksPreviewUseCase;
+        this.documentSourceStorage = documentSourceStorage;
     }
 
     /**
@@ -115,6 +130,49 @@ public class DocumentIngestController {
         } catch (DocumentNotFoundException ex) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, ex.getMessage(), ex);
         }
+    }
+
+    /**
+     * 查询文档分块预览（调试接口）。
+     *
+     * <p>接口契约：
+     * <ul>
+     *     <li>路径：GET /api/v1/documents/{documentId}/chunks/preview</li>
+     *     <li>参数：limit（可选，默认20，最大200）</li>
+     *     <li>参数：previewChars（可选，默认200，范围20~2000）</li>
+     * </ul>
+     *
+     * @param documentId 文档资产 ID
+     * @param limit 最大返回条数
+     * @param previewChars 每个分块的预览字符数
+     * @return 分块预览结果
+     */
+    @GetMapping(value = "/{documentId}/chunks/preview", produces = MediaType.APPLICATION_JSON_VALUE)
+    public DocumentChunksPreviewResponse getChunksPreview(
+            @PathVariable("documentId") String documentId,
+            @RequestParam(value = "limit", defaultValue = "20") int limit,
+            @RequestParam(value = "previewChars", defaultValue = "200") int previewChars) {
+        try {
+            DocumentChunksPreviewResult result = getDocumentChunksPreviewUseCase.handle(
+                    new GetDocumentChunksPreviewQuery(documentId, limit, previewChars));
+            return new DocumentChunksPreviewResponse(
+                    result.documentId().value(),
+                    result.chunkCount(),
+                    result.chunks().stream().map(DocumentIngestController::toChunkPreviewResponse).toList());
+        } catch (DocumentNotFoundException ex) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, ex.getMessage(), ex);
+        } catch (IllegalArgumentException ex) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, ex.getMessage(), ex);
+        }
+    }
+
+    private static DocumentChunkPreviewItemResponse toChunkPreviewResponse(DocumentChunkPreviewItemResult item) {
+        return new DocumentChunkPreviewItemResponse(
+                item.chunkIndex(),
+                item.contentPreview(),
+                item.sourceFile(),
+                item.contentHash(),
+                item.splitVersion());
     }
 
     /**
