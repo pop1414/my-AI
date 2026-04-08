@@ -1,0 +1,46 @@
+﻿:root {
+  font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+  color: #0f172a;
+  background-color: #f3f5f7;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}
+
+.console-root {
+  min-height: 100vh;
+}
+
+.console-logo {
+  color: #e2e8f0;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  height: 64px;
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.console-header {
+  background: #ffffff;
+  padding: 12px 24px;
+  border-bottom: 1px solid #e5e7eb;
+  height: auto;
+  line-height: normal;
+}
+
+.console-content {
+  padding: 20px 24px;
+}
