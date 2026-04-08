@@ -10,6 +10,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.HexFormat;
+import java.util.UUID;
 import org.springframework.ai.document.Document.Builder;
 import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.stereotype.Component;
@@ -59,8 +60,9 @@ public class PgVectorDocumentVectorIndexer implements DocumentVectorIndexer {
     }
 
     private static String deterministicChunkId(String documentId, int chunkIndex, String splitVersion) {
-        // 组合键经过 hash 后长度固定，便于作为向量文档主键使用。
-        return sha256(documentId + "|" + chunkIndex + "|" + splitVersion);
+        // PGVector 默认按 UUID 处理文档主键，这里生成“确定性 UUID”保证幂等与兼容。
+        String seed = documentId + "|" + chunkIndex + "|" + splitVersion;
+        return UUID.nameUUIDFromBytes(seed.getBytes(StandardCharsets.UTF_8)).toString();
     }
 
     private static String sha256(String value) {
