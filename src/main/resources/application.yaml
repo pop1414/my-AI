@@ -6,16 +6,15 @@ spring:
     username: ${PGVECTOR_DATASOURCE_USERNAME:admin}
     password: ${PGVECTOR_DATASOURCE_PASSWORD:admin}
   ai:
-    openai:
+    dashscope:
       # 通过环境变量注入，避免把密钥写入仓库
-      api-key: ${OPENAI_API_KEY:}
+      api-key: REDACTED
       chat:
         options:
-          # 先给默认值，后续可按成本/效果调整
-          model: ${OPENAI_CHAT_MODEL:gpt-4o-mini}
+          model: ${DASHSCOPE_CHAT_MODEL:qwen-plus}
       embedding:
         options:
-          model: ${OPENAI_EMBEDDING_MODEL:text-embedding-3-small}
+          model: ${DASHSCOPE_EMBEDDING_MODEL:text-embedding-v4}
     vectorstore:
       pgvector:
         # Spring AI 启动时会自动在 PG 中创建 vector 插件和相关的数据表
@@ -29,8 +28,8 @@ spring:
         index-type: HNSW
         # 计算相似度的方式（余弦相似度）
         distance-type: COSINE_DISTANCE
-        # 向量维度，OpenAI的 text-embedding-3-small 默认为 1536
-        dimensions: ${OPENAI_EMBEDDING_DIMENSIONS:1536}
+        # 向量维度需与 embedding 模型输出一致（可按模型调整）
+        dimensions: ${DASHSCOPE_EMBEDDING_DIMENSIONS:1024}
         # 批量插入最大值：一次最多往数据库存 1 万条文本向量
         max-document-batch-size: 10000
         # 是否删除旧表
@@ -52,6 +51,6 @@ myai:
       overlap-size: ${INGEST_CHUNK_OVERLAP:100}
     worker:
       # 单进程异步 worker 开关
-      enabled: ${INGEST_WORKER_ENABLED:false}
+      enabled: ${INGEST_WORKER_ENABLED:true}
       # Worker 轮询间隔（毫秒）
       poll-delay-ms: ${INGEST_WORKER_POLL_DELAY_MS:5000}

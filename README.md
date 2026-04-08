@@ -34,8 +34,9 @@
 ## 2. 技术栈
 
 - Java 21
-- Spring Boot 4.0.5
-- Spring AI 2.0.0-M3
+- Spring Boot 3.5.8
+- Spring AI 1.1.2
+- Spring AI Alibaba 1.1.2.x（DashScope + Agent Framework）
 - PostgreSQL + PGVector
 - Maven Wrapper（`mvnw` / `mvnw.cmd`）
 
@@ -68,15 +69,18 @@
 
 - 安装 JDK 21
 - 启动 PostgreSQL（并可用 PGVector）
-- 准备 OpenAI API Key（用于 embedding）
+- 准备 DashScope API Key（用于 embedding / chat）
 
 ### 5.2 环境变量（常用）
 
-- `OPENAI_API_KEY`
+- `DASHSCOPE_API_KEY`
+- `DASHSCOPE_CHAT_MODEL`（默认 `qwen-plus`）
+- `DASHSCOPE_EMBEDDING_MODEL`（默认 `text-embedding-v4`）
+- `DASHSCOPE_EMBEDDING_DIMENSIONS`（默认 `1024`，需与模型维度一致）
 - `PGVECTOR_DATASOURCE_URL`（默认 `jdbc:postgresql://localhost:5432/myai`）
 - `PGVECTOR_DATASOURCE_USERNAME`（默认 `admin`）
 - `PGVECTOR_DATASOURCE_PASSWORD`（默认 `admin`）
-- `INGEST_WORKER_ENABLED`（默认 `false`）
+- `INGEST_WORKER_ENABLED`（默认 `true`）
 - `INGEST_WORKER_POLL_DELAY_MS`（默认 `5000`）
 - `INGEST_PARSER_MAX_TEXT_LENGTH`（默认 `2000000`）
 - `INGEST_PARSER_PARSE_EMBEDDED_RESOURCE`（默认 `false`）
@@ -140,7 +144,7 @@ Linux/macOS:
 
 ## 7. 当前边界与注意事项
 
-- worker 默认关闭，需要显式开启 `INGEST_WORKER_ENABLED=true`
+- worker 默认开启；如需关闭可显式设置 `INGEST_WORKER_ENABLED=false`
 - 解析已升级为 Tika 基线能力；扫描版 PDF 的 OCR 与复杂版式提取仍待增强
 - 瞬时错误重试（3 次指数退避）尚未完整实现
 - reprocess “先删旧向量再重建”流程尚待落地
@@ -149,3 +153,25 @@ Linux/macOS:
 
 - `V1`：完成 ingest 最小闭环与可追踪处理
 - `V2`：增强解析能力、重试机制、reprocess 与更完整的检索问答链路
+
+## 9. 前端控制台（web）
+
+- 前端工程根目录：`web/`
+- 技术栈：React + TypeScript + Vite + React Router + TanStack Query + Ant Design + zod
+- 当前页面范围：
+  - `ingest/upload`
+  - `ingest/status`
+  - `ingest/chunks-preview`
+  - `knowledge/qa/reprocess`（草案占位页）
+
+启动方式：
+
+```bash
+cd web
+npm install
+npm run dev
+```
+
+联调默认通过 Vite 代理：
+- `/api/** -> http://localhost:8080`
+- 可通过 `web/.env.example` 的 `VITE_PROXY_TARGET` 覆盖
