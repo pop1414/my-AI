@@ -1,16 +1,16 @@
 @startuml
-title 受理闭环 / 可追踪化（DDD-Lite 组件图）
+title 受理闭环 / 可追踪化（DDD-Lite 组件图，当前实现）
 
 skinparam componentStyle rectangle
 skinparam shadowing false
 skinparam linetype ortho
 
 legend left
-[M] 必须组件
-[O] 可选组件（后续增强）
+[M] 当前闭环必须组件
 endlegend
 
 actor "客户端/前端" as Client
+actor "运维/开发者" as Ops
 
 package "Interfaces [M]" {
   component "DocumentIngestController [M]\nPOST /documents/upload\nGET /documents/{id}/status" as Controller
@@ -22,40 +22,47 @@ package "Application [M]" {
 }
 
 package "Domain [M]" {
-  component "Document 聚合 [M]\n(DocumentId, UploadStatus...)" as DocumentAgg
+  component "Document 聚合 [M]\n(DocumentId, kbId, fileHash, status...)" as DocumentAgg
   component "DocumentRepository Port [M]" as RepoPort
   component "DocumentIdGenerator Port [M]" as IdPort
+  component "DocumentSourceStorage Port [M]" as SourceStoragePort
 }
 
-package "Infrastructure" {
+package "Infrastructure [M]" {
   component "JdbcDocumentRepository [M]" as JdbcRepo
   component "UuidDocumentIdGenerator [M]" as UuidGen
-  component "IngestWorker [O]" as Worker
-  component "QueuePublisher [O]" as Publisher
+  component "LocalDocumentSourceStorage [M]" as LocalStorage
 }
 
-database "PostgreSQL [M]\n(ingest_documents + vector tables)" as PG
-queue "Message Queue [O]" as MQ
-cloud "Embedding/LLM [O]" as LLM
+database "PostgreSQL [M]\n(ingest_documents)" as PG
+collections "Local FS [M]\n{root}/{documentId}/{filename}" as FS
 
-Client --> Controller : HTTP 请求
+Client --> Controller : 上传/查询
+Ops --> Controller : 状态排障查询
+
 Controller --> AcceptUC : 受理上传
 Controller --> StatusUC : 查询状态
+Controller --> SourceStoragePort : 保存源文件（幂等）
 
+AcceptUC --> RepoPort : 幂等查重 + 落库
 AcceptUC --> IdPort : 生成 DocumentId
-AcceptUC --> RepoPort : save(Document:UPLOADED)
-StatusUC --> RepoPort : findById(documentId)
+StatusUC --> RepoPort : 按 documentId 查询
 
 RepoPort <|.. JdbcRepo
 IdPort <|.. UuidGen
+SourceStoragePort <|.. LocalStorage
 
-JdbcRepo --> PG : SQL 读写
+JdbcRepo --> PG : SQL (SELECT/UPSERT/CAS)
+LocalStorage --> FS : 文件写入/读取
 
-AcceptUC ..> Publisher : 发布异步任务（可选）
-Publisher ..> MQ : enqueue（可选）
-MQ ..> Worker : consume（可选）
-Worker ..> PG : 更新状态/写向量（可选）
-Worker ..> LLM : Embedding/Chat（可选）
+note right of AcceptUC
+同一 kbId + fileHash 重复上传时
+复用既有 documentId，不重复创建记录
+end note
+
+note right of Controller
+ACCEPTED 是对外响应语义；
+UPLOADED 是内部持久化状态。
+end note
 
 @enduml
-

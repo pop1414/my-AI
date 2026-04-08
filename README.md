@@ -3,7 +3,7 @@
 `my-AI` 是一个基于 Spring Boot + Spring AI 的文档入库与检索基线项目。  
 当前阶段重点在 `ingest`（文档受理与处理）链路，目标是把“上传 -> 可追踪 -> 可索引”跑通，并为后续 RAG 问答能力打基础。
 
-## 1. 当前能力（截至 2026-04-02）
+## 1. 当前能力（截至 2026-04-07）
 
 - 上传受理：`POST /api/v1/documents/upload`
   - 返回 `documentId + ACCEPTED`
@@ -22,6 +22,14 @@
 - 分块策略：
   - 结构优先 + 长度兜底
   - 参数：`chunk=500`、`overlap=100`
+- 已实现 API（`ingest`）：
+  - `POST /api/v1/documents/upload`
+  - `GET /api/v1/documents/{documentId}/status`
+  - `GET /api/v1/documents/{documentId}/chunks/preview`
+- 规划中 API（未实现）：
+  - `GET /api/v1/knowledge-bases`
+  - `POST /api/v1/qa/ask`
+  - `POST /api/v1/documents/{documentId}/reprocess`
 
 ## 2. 技术栈
 
@@ -94,6 +102,14 @@ Linux/macOS:
 
 ```bash
 .\mvnw.cmd test
+```
+
+说明：
+- `MyAiApplicationTests` 会拉起完整 Spring 上下文，依赖本地 PostgreSQL（默认 `localhost:5432`）。
+- 若仅验证当前已完成的 ingest 模块单测，可执行：
+
+```bash
+.\mvnw.cmd "-Dtest=!MyAiApplicationTests" test
 ```
 
 ## 6. API 摘要

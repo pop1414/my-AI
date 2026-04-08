@@ -1,5 +1,5 @@
 @startuml
-title Ingest 处理执行 ER / 领域模型图
+title Ingest 处理执行 ER / 领域模型图（当前实现）
 
 skinparam shadowing false
 skinparam linetype ortho
@@ -8,6 +8,7 @@ package "Domain" {
   class Document {
     +documentId: DocumentId
     +kbId: String
+    +fileHash: String?
     +filename: String
     +fileSize: long
     +status: UploadStatus
@@ -16,11 +17,12 @@ package "Domain" {
     +updatedAt: Instant
   }
 
-  class DocumentChunk {
-    +documentId: DocumentId
+  class DocumentChunkPreview {
     +chunkIndex: int
     +content: String
+    +sourceFile: String
     +contentHash: String
+    +splitVersion: String
   }
 
   class DocumentId {
@@ -28,6 +30,7 @@ package "Domain" {
   }
 
   enum UploadStatus {
+    ACCEPTED
     UPLOADED
     INGESTING
     INDEXED
@@ -36,7 +39,6 @@ package "Domain" {
 
   Document *-- DocumentId
   Document --> UploadStatus
-  Document "1" o-- "*" DocumentChunk
 }
 
 package "PostgreSQL" {
@@ -44,43 +46,51 @@ package "PostgreSQL" {
     * document_id : varchar(64) <<PK>>
     --
     * kb_id : varchar(128)
-    * file_hash : varchar(64)
+    file_hash : varchar(64)
     filename : varchar(512)
     * file_size : bigint
     * status : varchar(32)
-    retry_count : int
     failure_reason : text
     * created_at : timestamptz
     * updated_at : timestamptz
     --
-    UNIQUE (kb_id, file_hash)
+    UNIQUE INDEX uk_ingest_documents_kb_file_hash
+    (kb_id, file_hash) WHERE file_hash IS NOT NULL
   }
 
   entity "vector_store" as T_VEC {
-    * id : uuid <<PK>>
+    * id : text <<PK>>
     --
     content : text
-    metadata : jsonb
+    metadata : json/jsonb
     embedding : vector(1536)
   }
 }
 
-T_DOC ||--o{ T_VEC : "metadata.documentId"
+package "File Storage" {
+  entity "local_source_file" as T_SRC {
+    * path : string <<PK>>
+    * content : bytes
+  }
+}
+
+T_DOC ||--o{ T_VEC : metadata.documentId
+T_DOC ||--o{ T_SRC : {root}/{documentId}/{filename}
 
 note right of T_VEC
-metadata 最小建议字段：
+metadata 最小字段：
 - documentId
 - kbId
 - chunkIndex
-- splitVersion
 - sourceFile
 - contentHash
+- splitVersion
 end note
 
 note bottom of T_VEC
-id 建议使用确定性生成：
+id 使用确定性 chunkId：
 hash(documentId, chunkIndex, splitVersion)
-用于保证 chunk upsert 幂等
+写入策略为 delete + add，满足幂等目标。
 end note
 
 @enduml

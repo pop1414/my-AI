@@ -1,46 +1,73 @@
 @startuml
-title 受理闭环时序（当前已实现）
+title 受理闭环时序（当前实现）
 
 actor Client
 participant "DocumentIngestController" as C
 participant "AcceptUploadUseCase\n(ApplicationService)" as A
+participant "GetDocumentStatusUseCase\n(ApplicationService)" as S
 participant "DocumentIdGenerator\n(Port)" as G
 participant "DocumentRepository\n(Port)" as R
+participant "DocumentSourceStorage\n(Port)" as SS
 participant "JdbcDocumentRepository" as J
+participant "LocalDocumentSourceStorage" as LSS
 database "PostgreSQL" as PG
+collections "Local FS" as FS
 
 == 上传受理 ==
 Client -> C : POST /api/v1/documents/upload(file,kbId)
 alt file 为空
   C --> Client : 400 Bad Request
 else file 合法
+  C -> C : calculateFileHash(file)
   C -> A : handle(AcceptUploadCommand)
-  A -> G : nextId()
-  G --> A : DocumentId
-  A -> R : save(Document{status=UPLOADED})
-  R -> J : save(...)
-  J -> PG : UPSERT ingest_documents
-  PG --> J : OK
-  J --> R : OK
-  R --> A : OK
-  A --> C : UploadTicket(documentId, ACCEPTED)
+  A -> R : findByKbIdAndFileHash(kbId,fileHash)
+  R -> J : SELECT by kbId + fileHash
+  J -> PG : SELECT ... LIMIT 1
+  PG --> J : row / empty
+  J --> R : existing / empty
+
+  alt 命中已存在文档
+    R --> A : existing Document
+    A --> C : UploadTicket(existingId, ACCEPTED)
+  else 新文档
+    A -> G : nextId()
+    G --> A : DocumentId
+    A -> R : save(Document{status=UPLOADED})
+    R -> J : UPSERT ingest_documents
+    J -> PG : UPSERT
+    PG --> J : OK
+    J --> R : OK
+    R --> A : OK
+    A --> C : UploadTicket(newId, ACCEPTED)
+  end
+
+  C -> SS : save(documentId, filename, bytes)
+  SS -> LSS : save(...)
+  LSS -> FS : create if not exists
+  FS --> LSS : OK
+  LSS --> SS : OK
+  SS --> C : OK
   C --> Client : 200 {documentId,status=ACCEPTED}
 end
 
 == 状态查询 ==
 Client -> C : GET /api/v1/documents/{id}/status
-C -> R : findById(id)（通过 Status UseCase）
-R -> J : findById(...)
+C -> S : handle(GetDocumentStatusQuery)
+S -> R : findById(id)
+R -> J : SELECT by document_id
 J -> PG : SELECT ...
 PG --> J : row / empty
+
 alt 找到
   J --> R : Document(status)
-  R --> C : DocumentStatusResult
+  R --> S : Document
+  S --> C : DocumentStatusResult
   C --> Client : 200 {documentId,status}
 else 未找到
   J --> R : empty
-  R --> C : throw DocumentNotFoundException
+  R --> S : empty
+  S --> C : throw DocumentNotFoundException
   C --> Client : 404 Not Found
 end
-@enduml
 
+@enduml

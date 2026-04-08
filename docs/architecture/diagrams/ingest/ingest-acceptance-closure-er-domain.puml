@@ -1,5 +1,5 @@
 @startuml
-title 受理闭环 ER / 领域模型图（数据结构对齐）
+title 受理闭环 ER / 领域模型图（当前实现）
 
 skinparam shadowing false
 skinparam linetype ortho
@@ -8,6 +8,7 @@ package "Domain Model" {
   class Document {
     +documentId: DocumentId
     +kbId: String
+    +fileHash: String?
     +filename: String
     +fileSize: long
     +status: UploadStatus
@@ -22,7 +23,7 @@ package "Domain Model" {
 
   enum UploadStatus {
     ACCEPTED
-    UPLADED
+    UPLOADED
     INGESTING
     INDEXED
     FAILED
@@ -31,6 +32,9 @@ package "Domain Model" {
   interface DocumentRepository {
     +save(document)
     +findById(documentId)
+    +findByKbIdAndFileHash(kbId, fileHash)
+    +findOldestByStatus(status)
+    +compareAndSetStatus(documentId, expected, target, reason, updatedAt)
   }
 
   Document *-- DocumentId
@@ -43,28 +47,41 @@ package "Relational Model (PostgreSQL)" {
     * document_id : varchar(64) <<PK>>
     --
     * kb_id : varchar(128)
+    file_hash : varchar(64)
     filename : varchar(512)
     * file_size : bigint
     * status : varchar(32)
     failure_reason : text
     * created_at : timestamptz
     * updated_at : timestamptz
+    --
+    UNIQUE INDEX uk_ingest_documents_kb_file_hash
+    (kb_id, file_hash) WHERE file_hash IS NOT NULL
+  }
+}
+
+package "File Storage (Local FS)" {
+  entity "{root}/{documentId}/{filename}" as source_file {
+    * path : string
+    * content : bytes
   }
 }
 
 class "JdbcDocumentRepository\n(Adapter)" as JdbcRepo
+class "LocalDocumentSourceStorage\n(Adapter)" as LocalStorage
+
 DocumentRepository <|.. JdbcRepo
-JdbcRepo --> ingest_documents : SQL(UPSERT/SELECT)
+JdbcRepo --> ingest_documents : SQL (UPSERT/SELECT/CAS)
+LocalStorage --> source_file : save/load
 
 note right of Document
-领域对象表达业务语义与规则
-不直接依赖 SQL 实现细节
+领域对象表达业务语义与规则，
+不直接依赖 SQL 与文件系统细节。
 end note
 
-note right of ingest_documents
-关系表负责持久化与查询效率
-字段与 Document 聚合一一对应
+note right of source_file
+源文件保存策略：已存在则不覆盖，
+保证首份受理内容稳定。
 end note
 
 @enduml
-

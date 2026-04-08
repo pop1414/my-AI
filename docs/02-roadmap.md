@@ -1,4 +1,23 @@
-﻿# 版本路线图（Roadmap）
+# 版本路线图（Roadmap）
+
+## 当前进度快照（截至 2026-04-07）
+
+### 已完成
+- `ingest` 受理闭环：上传受理、状态查询、`kbId + fileHash` 幂等
+- `ingest` 处理执行：`UPLOADED -> INGESTING -> INDEXED/FAILED`
+- 单进程异步 worker（可配置开关）
+- 解析/清洗/分块/向量写入主链路（Tika + 结构优先分块 + PGVector）
+- 分块预览调试接口：`GET /api/v1/documents/{documentId}/chunks/preview`
+
+### 进行中
+- 本地端到端环境收敛（PostgreSQL/PGVector、OpenAI Key、运行脚本与联调手册）
+
+### 未开始（V1 后半段 / V2）
+- `GET /api/v1/knowledge-bases`
+- `POST /api/v1/qa/ask`
+- `POST /api/v1/documents/{documentId}/reprocess`
+- 瞬时错误重试（指数退避 + jitter）
+- OCR 与复杂版式增强
 
 ## 版本策略
 - 优先小步快跑，每个版本只承载 3-5 个核心目标

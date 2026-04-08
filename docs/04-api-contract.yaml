@@ -17,6 +17,7 @@ paths:
     post:
       tags: [ingest]
       summary: 上传文档并触发入库
+      x-stage: implemented
       requestBody:
         required: true
         content:
@@ -43,6 +44,7 @@ paths:
     get:
       tags: [ingest]
       summary: 查询文档处理状态
+      x-stage: implemented
       parameters:
         - name: documentId
           in: path
@@ -68,6 +70,7 @@ paths:
     get:
       tags: [ingest]
       summary: 查询文档分块预览（调试）
+      x-stage: implemented
       description: |
         用于验证“向量化前分块内容”是否符合预期。
       parameters:
@@ -118,7 +121,10 @@ paths:
   /api/v1/knowledge-bases:
     get:
       tags: [knowledge]
-      summary: 查询知识库列表
+      summary: 查询知识库列表（草案）
+      description: |
+        该接口当前仅保留契约草案，代码尚未实现。
+      x-stage: draft
       responses:
         '200':
           description: 查询成功
@@ -132,7 +138,10 @@ paths:
   /api/v1/qa/ask:
     post:
       tags: [qa]
-      summary: 文档问答
+      summary: 文档问答（草案）
+      description: |
+        该接口当前仅保留契约草案，代码尚未实现。
+      x-stage: draft
       requestBody:
         required: true
         content:

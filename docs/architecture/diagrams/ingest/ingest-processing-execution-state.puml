@@ -1,20 +1,25 @@
 @startuml
-title Ingest 文档处理状态机（执行阶段）
+title Ingest 文档处理状态机（执行阶段，当前实现）
 
-[*] --> UPLOADED : 受理落库
+[*] --> UPLOADED : 上传受理落库
+UPLOADED --> INGESTING : ClaimNextUploaded + CAS 抢占成功
+INGESTING --> INDEXED : ProcessDocument 成功 + CAS 收口
+INGESTING --> FAILED : ProcessDocument 异常 + CAS 收口
 
-UPLOADED --> INGESTING : worker 启动处理
-INGESTING --> INDEXED : 处理成功
-INGESTING --> FAILED : 非瞬时错误 / 重试耗尽
-
-note right of INGESTING
-允许瞬时错误重试（最多3次）
-重试成功后仍进入 INDEXED
+note right of UPLOADED
+可被 worker 按创建时间轮询抢占。
+CAS 失败说明该文档已被其它执行者处理。
 end note
 
-FAILED --> INGESTING : 人工 reprocess（可选）
+note right of INGESTING
+只有 INGESTING 状态允许执行处理链路，
+避免重复触发导致状态乱序覆盖。
+end note
 
-INDEXED --> INGESTING : 重建索引（幂等重处理，可选）
+note bottom
+当前未实现：
+- FAILED -> INGESTING（人工 reprocess）
+- INDEXED -> INGESTING（重建索引）
+end note
 
 @enduml
-

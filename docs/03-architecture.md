@@ -24,6 +24,12 @@
 - 数据层：MySQL / Vector DB / MinIO(S3)
 - 横切治理层：Tenant/Auth/RateLimit/Observability/Audit
 
+## 2.1 当前已实现子集（截至 2026-04-07）
+- 已实现：`ingest` 子域（上传受理、状态查询、分块预览、异步处理执行）
+- 已实现 API：`/api/v1/documents/upload`、`/api/v1/documents/{documentId}/status`、`/api/v1/documents/{documentId}/chunks/preview`
+- 规划中（未实现）：`/api/v1/knowledge-bases`、`/api/v1/qa/ask`、`/api/v1/documents/{documentId}/reprocess`
+- 说明：本文件第 2 章是目标架构蓝图，不等于当前全部实现
+
 ## 3. 核心链路
 ### 文档入库链路
 上传 -> 入库队列 -> 解析分块 -> 向量化 -> 写入向量库 -> 写元数据 -> 原文存储
