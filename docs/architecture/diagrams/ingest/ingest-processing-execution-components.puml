@@ -42,7 +42,7 @@ package "Infrastructure" {
 
 database "PostgreSQL\ningest_documents + vector_store" as PG
 collections "Local FS\n{root}/{documentId}/{filename}" as FS
-cloud "Embedding API\n(OpenAI via Spring AI)" as EmbAPI
+cloud "Embedding API\n(DashScope via Spring AI Alibaba)" as EmbAPI
 
 Client --> Controller : HTTP API
 

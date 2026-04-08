@@ -1,6 +1,6 @@
 # 版本路线图（Roadmap）
 
-## 当前进度快照（截至 2026-04-07）
+## 当前进度快照（截至 2026-04-08）
 
 ### 已完成
 - `ingest` 受理闭环：上传受理、状态查询、`kbId + fileHash` 幂等
@@ -10,7 +10,7 @@
 - 分块预览调试接口：`GET /api/v1/documents/{documentId}/chunks/preview`
 
 ### 进行中
-- 本地端到端环境收敛（PostgreSQL/PGVector、OpenAI Key、运行脚本与联调手册）
+- 本地端到端环境收敛（PostgreSQL/PGVector、DashScope Key、运行脚本与联调手册）
 
 ### 未开始（V1 后半段 / V2）
 - `GET /api/v1/knowledge-bases`
@@ -30,7 +30,7 @@
 ### 关键能力
 - 单用户
 - TXT/PDF 入库
-- 固定 OpenAI
+- 固定 DashScope（Spring AI Alibaba）
 - 固定向量库（PostgreSQL + PGVector）
 - 基础 RAG 问答
 

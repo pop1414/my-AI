@@ -60,8 +60,8 @@
 - 受理闭环：`docs/06-ingest-acceptance-closure.md`
 - 处理执行：`docs/07-ingest-processing-execution.md`
 - ADR：
-  - `docs/adr/ADR-0003-v1-openai-pgvector.md`
-  - `docs/adr/ADR-0004-v1-ingest-processing-strategy.md`
+  - `docs/adr/ADR-0003-v1-dashscope-pgvector.md`（V1 基线：DashScope + PGVector）
+  - `docs/adr/ADR-0004-v1-ingest-processing-strategy.md`（状态：Accepted）
 
 ## 5. 快速开始
 

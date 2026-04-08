@@ -14,7 +14,7 @@
 - 支持 TXT/PDF 文档上传与解析
 - 文档分块、向量化、向量入库
 - 基于 RAG 的问答接口
-- 固定使用一个 LLM Provider（OpenAI）
+- 固定使用一个 LLM Provider（当前为 DashScope）
 - 固定使用一个向量存储（PostgreSQL + PGVector）
 
 ### Out of Scope（本版本不做）
