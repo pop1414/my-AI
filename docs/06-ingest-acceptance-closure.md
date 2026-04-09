@@ -13,7 +13,7 @@
 - 文档资产定义：存在于某个 `kbId` 下的某份文件内容（可由 `kbId + fileHash` 唯一刻画）。
 - 语义规则：
   - 同一 `kbId` 下内容不变（`fileHash` 不变）时，`documentId` 保持稳定。
-  - reprocess 只重建处理结果，不更换 `documentId`。
+  - reprocess 只重建处理结果，不更换 `documentId`；默认 `splitVersion++` 用于区分处理版本。
 
 ## 2. 组件清单（必须 / 可选）
 ### 必须组件（M）

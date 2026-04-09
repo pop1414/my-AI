@@ -15,8 +15,8 @@
 ### 未开始（V1 后半段 / V2）
 - `GET /api/v1/knowledge-bases`
 - `POST /api/v1/qa/ask`
-- `POST /api/v1/documents/{documentId}/reprocess`
-- 瞬时错误重试（指数退避 + jitter）
+- `POST /api/v1/documents/{documentId}/reprocess`（支持 `splitVersion++`）
+- 瞬时错误重试（指数退避 + jitter，区分 `is_transient`）
 - OCR 与复杂版式增强
 
 ## 版本策略

@@ -18,7 +18,7 @@
 - 处理模式：异步 worker（单进程）
 - 分块参数：`chunk=500`, `overlap=100`
 - 元数据最小集：`documentId`, `kbId`, `chunkIndex`, `sourceFile`, `contentHash`
-- 失败策略：瞬时错误重试 3 次，指数退避
+- 失败策略：瞬时错误重试 3 次，指数退避（1s/2s/4s + jitter）
 - 幂等策略：同一 `documentId` 重复处理最终一致
 - 状态可见性：V1 先不做百分比，保留阶段状态
 
@@ -58,6 +58,7 @@
 - 要求：只有一个执行者能成功进入 `INGESTING`
 - 建议：条件更新（Compare-And-Set），例如按当前状态为 `UPLOADED` 才允许更新
 - 当前实现进度（2026-04-02）：已落地。仓储层已提供 `CAS` 状态更新接口，单进程 worker 已接入并在抢占成功后触发处理用例。
+ - 轮询建议（重试友好）：仅抢占 `next_retry_at <= now()` 且 `retry_count < retry_max` 的任务。
 
 ### 5.3 Chunk 向量写入阶段
 - 风险：任务重试导致重复写入向量
@@ -76,7 +77,19 @@
 ### 5.5 重处理（reprocess）阶段
 - 风险：重复重建造成“旧向量 + 新向量”叠加污染
 - 要求：重处理可重复执行，最终结果一致
-- 建议：先按 `documentId` 删除旧向量，再写新向量；或使用 `splitVersion` 做版本隔离
+- 建议：默认 `splitVersion++`，先清理旧 `splitVersion` 向量，再写新向量（避免误删正在写入的新版本）
+- 注意：若删除成功但写入失败，必须将状态准确置为 `FAILED` 并保留错误日志，避免“隐形丢失”
+
+### 5.6 瞬时错误判定（RetryPolicy）
+- 判定原则：区分瞬时错误与永久错误，减少无意义重试
+- 需要重试（`is_transient=true`）：
+  - 网络抖动/超时/连接中断
+  - 429 / 5xx
+  - 数据库连接池耗尽、短暂 IO 异常
+- 不重试（`is_transient=false`）：
+  - 402 欠费、403 无权限
+  - 文件格式不支持、解析失败（非瞬时）
+  - 参数校验类错误
 
 ## 6. 标准设计图套餐（5 张必选）
 ### 6.1 用例图（功能边界）
@@ -101,17 +114,21 @@
 2. `GET /api/v1/documents/{documentId}/status`
 说明：查询文档处理状态
 
-3. `GET /api/v1/documents/{documentId}/chunks/preview`（调试）
+3. `GET /api/v1/documents/{documentId}/chunks/preview`（调试/审计）
 说明：查询向量化前分块预览，便于验证解析/清洗/分块结果
+建议参数：`limit`、`offset`、`previewChars`
+返回字段建议：`chunkIndex`、`contentLength`、`contentPreview`、`truncated`、`sourceFile`、`sourceHint`、`splitVersion`、`contentHash`
 
-4. `POST /api/v1/documents/{documentId}/reprocess`（可选）
-说明：人工触发重处理（建议 V1 后段再加）
+4. `POST /api/v1/documents/{documentId}/reprocess`
+说明：人工触发重处理（允许状态：`FAILED/INDEXED`，`INGESTING` 返回 409）
 
 ## 8. 验收口径（DoD）
 - 上传后可观察到状态从 `UPLOADED` 进入 `INGESTING`
 - 成功文档状态进入 `INDEXED`，可用于后续检索
 - 失败文档状态为 `FAILED`，可查看失败原因
 - 重复触发处理不会造成向量重复污染
+- 瞬时错误在重试次数内可自动恢复，超过次数后进入 `FAILED`
+- reprocess 失败时保留错误日志与新 `splitVersion` 记录
 
 ## 9. 风险与回滚
 - 风险：分块参数不合理导致召回质量差
