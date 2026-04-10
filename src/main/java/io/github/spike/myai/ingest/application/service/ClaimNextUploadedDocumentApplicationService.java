@@ -29,8 +29,8 @@ public class ClaimNextUploadedDocumentApplicationService implements ClaimNextUpl
 
     @Override
     public Optional<DocumentId> handle() {
-        // 始终取最早的 UPLOADED，尽量保持处理顺序稳定。
-        Optional<Document> candidate = documentRepository.findOldestByStatus(UploadStatus.UPLOADED);
+        // 始终取最早可处理的 UPLOADED，尽量保持处理顺序稳定。
+        Optional<Document> candidate = documentRepository.findOldestReadyForProcessing(Instant.now());
         if (candidate.isEmpty()) {
             return Optional.empty();
         }
