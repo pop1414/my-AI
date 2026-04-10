@@ -8,7 +8,7 @@ spring:
   ai:
     dashscope:
       # 通过环境变量注入，避免把密钥写入仓库
-      api-key: REDACTED
+      api-key: ${DASHSCOPE_API_KEY:}
       chat:
         options:
           model: ${DASHSCOPE_CHAT_MODEL:qwen-plus}
