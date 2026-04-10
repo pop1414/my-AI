@@ -6,6 +6,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 import io.github.spike.myai.ingest.domain.model.Document;
+import io.github.spike.myai.ingest.domain.model.DocumentChunk;
 import io.github.spike.myai.ingest.domain.model.DocumentId;
 import io.github.spike.myai.ingest.domain.model.UploadStatus;
 import java.time.Instant;
@@ -16,6 +17,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 import org.springframework.ai.vectorstore.VectorStore;
+import org.springframework.jdbc.core.JdbcTemplate;
 
 /**
  * PgVectorDocumentVectorIndexer 单元测试。
@@ -26,7 +28,8 @@ class PgVectorDocumentVectorIndexerTest {
     @DisplayName("index 生成的 chunkId 应是可解析的稳定 UUID")
     void index_shouldGenerateDeterministicUuidChunkIds() {
         VectorStore vectorStore = Mockito.mock(VectorStore.class);
-        PgVectorDocumentVectorIndexer indexer = new PgVectorDocumentVectorIndexer(vectorStore);
+        JdbcTemplate jdbcTemplate = Mockito.mock(JdbcTemplate.class);
+        PgVectorDocumentVectorIndexer indexer = new PgVectorDocumentVectorIndexer(vectorStore, jdbcTemplate);
 
         Document document = new Document(
                 new DocumentId("7c01e0fd-a83c-4e4e-8334-722708c72b62"),
@@ -36,9 +39,18 @@ class PgVectorDocumentVectorIndexerTest {
                 123L,
                 UploadStatus.INGESTING,
                 null,
+                0,
+                3,
+                null,
+                null,
+                null,
+                null,
+                0,
+                null,
+                "v1",
                 Instant.now(),
                 Instant.now());
-        List<String> chunks = List.of("chunk-a", "chunk-b");
+        List<DocumentChunk> chunks = List.of(new DocumentChunk("chunk-a", null), new DocumentChunk("chunk-b", null));
 
         indexer.index(document, chunks);
         indexer.index(document, chunks);

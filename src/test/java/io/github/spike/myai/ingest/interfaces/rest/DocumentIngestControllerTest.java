@@ -6,6 +6,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -19,6 +20,7 @@ import io.github.spike.myai.ingest.application.result.DocumentStatusResult;
 import io.github.spike.myai.ingest.application.usecase.AcceptUploadUseCase;
 import io.github.spike.myai.ingest.application.usecase.GetDocumentChunksPreviewUseCase;
 import io.github.spike.myai.ingest.application.usecase.GetDocumentStatusUseCase;
+import io.github.spike.myai.ingest.application.usecase.ReprocessDocumentUseCase;
 import io.github.spike.myai.ingest.domain.model.DocumentId;
 import io.github.spike.myai.ingest.domain.model.UploadStatus;
 import io.github.spike.myai.ingest.domain.model.UploadTicket;
@@ -48,6 +50,7 @@ class DocumentIngestControllerTest {
     private AcceptUploadUseCase acceptUploadUseCase;
     private GetDocumentStatusUseCase getDocumentStatusUseCase;
     private GetDocumentChunksPreviewUseCase getDocumentChunksPreviewUseCase;
+    private ReprocessDocumentUseCase reprocessDocumentUseCase;
     private DocumentSourceStorage documentSourceStorage;
     private MockMvc mockMvc;
 
@@ -56,12 +59,14 @@ class DocumentIngestControllerTest {
         this.acceptUploadUseCase = Mockito.mock(AcceptUploadUseCase.class);
         this.getDocumentStatusUseCase = Mockito.mock(GetDocumentStatusUseCase.class);
         this.getDocumentChunksPreviewUseCase = Mockito.mock(GetDocumentChunksPreviewUseCase.class);
+        this.reprocessDocumentUseCase = Mockito.mock(ReprocessDocumentUseCase.class);
         this.documentSourceStorage = Mockito.mock(DocumentSourceStorage.class);
         DocumentIngestController controller =
                 new DocumentIngestController(
                         acceptUploadUseCase,
                         getDocumentStatusUseCase,
                         getDocumentChunksPreviewUseCase,
+                        reprocessDocumentUseCase,
                         documentSourceStorage);
         this.mockMvc = MockMvcBuilders.standaloneSetup(controller).build();
     }
@@ -138,20 +143,30 @@ class DocumentIngestControllerTest {
                 .thenReturn(new DocumentChunksPreviewResult(
                         new DocumentId("doc-300"),
                         1,
+                        4,
+                        10,
+                        0,
+                        120,
                         java.util.List.of(new DocumentChunkPreviewItemResult(
                                 0,
+                                200,
                                 "这是预览文本",
+                                false,
                                 "demo.txt",
                                 "hash-chunk-1",
-                                "v1"))));
+                                "v1",
+                                "{\"heading\":\"Intro\"}"))));
 
         mockMvc.perform(get("/api/v1/documents/{documentId}/chunks/preview", "doc-300")
                         .param("limit", "10")
+                        .param("offset", "0")
                         .param("previewChars", "120"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.documentId").value("doc-300"))
                 .andExpect(jsonPath("$.chunkCount").value(1))
+                .andExpect(jsonPath("$.totalChunks").value(4))
                 .andExpect(jsonPath("$.chunks[0].chunkIndex").value(0))
+                .andExpect(jsonPath("$.chunks[0].contentLength").value(200))
                 .andExpect(jsonPath("$.chunks[0].contentPreview").value("这是预览文本"))
                 .andExpect(jsonPath("$.chunks[0].sourceFile").value("demo.txt"))
                 .andExpect(jsonPath("$.chunks[0].contentHash").value("hash-chunk-1"))
@@ -177,5 +192,17 @@ class DocumentIngestControllerTest {
         mockMvc.perform(get("/api/v1/documents/{documentId}/chunks/preview", "doc-400")
                         .param("limit", "0"))
                 .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @DisplayName("重处理触发成功时，应返回 200")
+    void reprocess_shouldReturnAccepted_whenAllowed() throws Exception {
+        when(reprocessDocumentUseCase.handle(any()))
+                .thenReturn(new DocumentStatusResult(new DocumentId("doc-900"), UploadStatus.UPLOADED));
+
+        mockMvc.perform(post("/api/v1/documents/{documentId}/reprocess", "doc-900"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.documentId").value("doc-900"))
+                .andExpect(jsonPath("$.status").value("UPLOADED"));
     }
 }

@@ -43,22 +43,35 @@ class GetDocumentChunksPreviewApplicationServiceTest {
                 200L,
                 UploadStatus.INDEXED,
                 null,
+                0,
+                3,
+                null,
+                null,
+                null,
+                null,
+                0,
+                null,
+                "v1",
                 Instant.now(),
                 Instant.now());
         when(documentRepository.findById(documentId)).thenReturn(Optional.of(doc));
-        when(chunkPreviewRepository.findByDocumentId(eq(documentId), eq(10)))
+        when(chunkPreviewRepository.countByDocumentId(eq(documentId), eq("v1"))).thenReturn(1);
+        when(chunkPreviewRepository.findByDocumentId(eq(documentId), eq("v1"), eq(10), eq(0)))
                 .thenReturn(List.of(new DocumentChunkPreview(
                         0,
                         "0123456789abcdefghijklmnopqrstuvwxyz",
+                        36,
                         "sample.txt",
                         "hash-c-1",
-                        "v1")));
+                        "v1",
+                        "{\"heading\":\"Intro\"}")));
 
         DocumentChunksPreviewResult result =
-                service.handle(new GetDocumentChunksPreviewQuery("doc-500", 10, 20));
+                service.handle(new GetDocumentChunksPreviewQuery("doc-500", 10, 0, 20));
 
         assertEquals("doc-500", result.documentId().value());
         assertEquals(1, result.chunkCount());
+        assertEquals(1, result.totalChunks());
         assertEquals("0123456789abcdefghij...", result.chunks().getFirst().contentPreview());
     }
 
@@ -73,6 +86,6 @@ class GetDocumentChunksPreviewApplicationServiceTest {
 
         assertThrows(
                 DocumentNotFoundException.class,
-                () -> service.handle(new GetDocumentChunksPreviewQuery("doc-missing", 10, 100)));
+                () -> service.handle(new GetDocumentChunksPreviewQuery("doc-missing", 10, 0, 100)));
     }
 }

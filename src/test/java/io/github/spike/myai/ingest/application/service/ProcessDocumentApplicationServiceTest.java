@@ -8,6 +8,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.github.spike.myai.ingest.domain.model.Document;
+import io.github.spike.myai.ingest.domain.model.DocumentChunk;
 import io.github.spike.myai.ingest.domain.model.DocumentId;
 import io.github.spike.myai.ingest.domain.model.UploadStatus;
 import io.github.spike.myai.ingest.domain.port.DocumentChunker;
@@ -36,7 +37,13 @@ class ProcessDocumentApplicationServiceTest {
         DocumentChunker chunker = Mockito.mock(DocumentChunker.class);
         DocumentVectorIndexer vectorIndexer = Mockito.mock(DocumentVectorIndexer.class);
         ProcessDocumentApplicationService service =
-                new ProcessDocumentApplicationService(repository, sourceStorage, parser, chunker, vectorIndexer);
+                new ProcessDocumentApplicationService(
+                        repository,
+                        sourceStorage,
+                        parser,
+                        chunker,
+                        vectorIndexer,
+                        new RetryPolicy());
 
         DocumentId documentId = new DocumentId("doc-proc-1");
         Document ingesting = new Document(
@@ -47,27 +54,31 @@ class ProcessDocumentApplicationServiceTest {
                 100,
                 UploadStatus.INGESTING,
                 null,
+                0,
+                3,
+                null,
+                null,
+                null,
+                null,
+                0,
+                null,
+                "v1",
                 Instant.now(),
                 Instant.now());
         when(repository.findById(documentId)).thenReturn(Optional.of(ingesting));
         when(sourceStorage.load(documentId, "a.txt")).thenReturn(Optional.of("hello world".getBytes()));
         when(parser.parse(eq("a.txt"), any(byte[].class))).thenReturn("hello world");
-        when(chunker.chunk("hello world")).thenReturn(List.of("hello world"));
-        when(repository.compareAndSetStatus(
-                        eq(documentId),
-                        eq(UploadStatus.INGESTING),
-                        eq(UploadStatus.INDEXED),
-                        eq(null),
-                        any(Instant.class)))
+        when(chunker.chunk("hello world")).thenReturn(List.of(new DocumentChunk("hello world", null)));
+        when(repository.markIndexed(eq(documentId), eq(UploadStatus.INGESTING), any(Instant.class)))
                 .thenReturn(true);
 
         service.handle(documentId);
 
-        verify(vectorIndexer, times(1)).index(eq(ingesting), eq(List.of("hello world")));
+        verify(vectorIndexer, times(1)).index(eq(ingesting), eq(List.of(new DocumentChunk("hello world", null))));
         verify(repository, times(1))
-                .compareAndSetStatus(eq(documentId), eq(UploadStatus.INGESTING), eq(UploadStatus.INDEXED), eq(null), any(Instant.class));
+                .markIndexed(eq(documentId), eq(UploadStatus.INGESTING), any(Instant.class));
         verify(repository, never())
-                .compareAndSetStatus(eq(documentId), eq(UploadStatus.INGESTING), eq(UploadStatus.FAILED), any(), any(Instant.class));
+                .markFailed(eq(documentId), eq(UploadStatus.INGESTING), any(), any(), any(), any(), any(Instant.class));
     }
 
     @Test
@@ -79,7 +90,13 @@ class ProcessDocumentApplicationServiceTest {
         DocumentChunker chunker = Mockito.mock(DocumentChunker.class);
         DocumentVectorIndexer vectorIndexer = Mockito.mock(DocumentVectorIndexer.class);
         ProcessDocumentApplicationService service =
-                new ProcessDocumentApplicationService(repository, sourceStorage, parser, chunker, vectorIndexer);
+                new ProcessDocumentApplicationService(
+                        repository,
+                        sourceStorage,
+                        parser,
+                        chunker,
+                        vectorIndexer,
+                        new RetryPolicy());
 
         DocumentId documentId = new DocumentId("doc-proc-2");
         Document ingesting = new Document(
@@ -90,6 +107,15 @@ class ProcessDocumentApplicationServiceTest {
                 100,
                 UploadStatus.INGESTING,
                 null,
+                0,
+                3,
+                null,
+                null,
+                null,
+                null,
+                0,
+                null,
+                "v1",
                 Instant.now(),
                 Instant.now());
         when(repository.findById(documentId)).thenReturn(Optional.of(ingesting));
@@ -98,8 +124,7 @@ class ProcessDocumentApplicationServiceTest {
         service.handle(documentId);
 
         verify(repository, times(1))
-                .compareAndSetStatus(eq(documentId), eq(UploadStatus.INGESTING), eq(UploadStatus.FAILED), any(String.class), any(Instant.class));
+                .markFailed(eq(documentId), eq(UploadStatus.INGESTING), any(String.class), any(), any(), any(), any(Instant.class));
         verify(vectorIndexer, never()).index(any(Document.class), any(List.class));
     }
 }
-

@@ -38,6 +38,15 @@ class GetDocumentStatusApplicationServiceTest {
                 128,
                 UploadStatus.INDEXED,
                 null,
+                0,
+                3,
+                null,
+                null,
+                null,
+                null,
+                0,
+                null,
+                "v1",
                 Instant.now(),
                 Instant.now());
         when(repository.findById(documentId)).thenReturn(Optional.of(document));

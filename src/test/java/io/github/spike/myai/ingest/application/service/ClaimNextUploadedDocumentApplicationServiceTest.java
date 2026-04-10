@@ -28,13 +28,13 @@ class ClaimNextUploadedDocumentApplicationServiceTest {
     @DisplayName("无 UPLOADED 候选时，应返回空")
     void handle_shouldReturnEmpty_whenNoUploadedDocument() {
         DocumentRepository repository = Mockito.mock(DocumentRepository.class);
-        when(repository.findOldestByStatus(UploadStatus.UPLOADED)).thenReturn(Optional.empty());
+        when(repository.findOldestReadyForProcessing(any(Instant.class))).thenReturn(Optional.empty());
         ClaimNextUploadedDocumentApplicationService service = new ClaimNextUploadedDocumentApplicationService(repository);
 
         Optional<DocumentId> result = service.handle();
 
         assertTrue(result.isEmpty());
-        verify(repository, times(1)).findOldestByStatus(UploadStatus.UPLOADED);
+        verify(repository, times(1)).findOldestReadyForProcessing(any(Instant.class));
         verify(repository, never()).compareAndSetStatus(any(), any(), any(), any(), any());
     }
 
@@ -50,9 +50,18 @@ class ClaimNextUploadedDocumentApplicationServiceTest {
                 10L,
                 UploadStatus.UPLOADED,
                 null,
+                0,
+                3,
+                null,
+                null,
+                null,
+                null,
+                0,
+                null,
+                "v1",
                 Instant.now(),
                 Instant.now());
-        when(repository.findOldestByStatus(UploadStatus.UPLOADED)).thenReturn(Optional.of(uploaded));
+        when(repository.findOldestReadyForProcessing(any(Instant.class))).thenReturn(Optional.of(uploaded));
         when(repository.compareAndSetStatus(
                         eq(uploaded.documentId()),
                         eq(UploadStatus.UPLOADED),
@@ -66,7 +75,7 @@ class ClaimNextUploadedDocumentApplicationServiceTest {
 
         assertTrue(result.isPresent());
         assertEquals("doc-claim-1", result.get().value());
-        verify(repository, times(1)).findOldestByStatus(UploadStatus.UPLOADED);
+        verify(repository, times(1)).findOldestReadyForProcessing(any(Instant.class));
         verify(repository, times(1))
                 .compareAndSetStatus(eq(uploaded.documentId()), eq(UploadStatus.UPLOADED), eq(UploadStatus.INGESTING), eq(null), any(Instant.class));
     }
@@ -83,9 +92,18 @@ class ClaimNextUploadedDocumentApplicationServiceTest {
                 10L,
                 UploadStatus.UPLOADED,
                 null,
+                0,
+                3,
+                null,
+                null,
+                null,
+                null,
+                0,
+                null,
+                "v1",
                 Instant.now(),
                 Instant.now());
-        when(repository.findOldestByStatus(UploadStatus.UPLOADED)).thenReturn(Optional.of(uploaded));
+        when(repository.findOldestReadyForProcessing(any(Instant.class))).thenReturn(Optional.of(uploaded));
         when(repository.compareAndSetStatus(
                         eq(uploaded.documentId()),
                         eq(UploadStatus.UPLOADED),
@@ -102,4 +120,3 @@ class ClaimNextUploadedDocumentApplicationServiceTest {
                 .compareAndSetStatus(eq(uploaded.documentId()), eq(UploadStatus.UPLOADED), eq(UploadStatus.INGESTING), eq(null), any(Instant.class));
     }
 }
-

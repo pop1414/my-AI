@@ -94,6 +94,15 @@ class AcceptUploadApplicationServiceTest {
                 88L,
                 UploadStatus.UPLOADED,
                 null,
+                0,
+                3,
+                null,
+                null,
+                null,
+                null,
+                0,
+                null,
+                "v1",
                 Instant.now(),
                 Instant.now());
         when(repository.findByKbIdAndFileHash(eq("kb-dup"), eq("hash-dup")))
