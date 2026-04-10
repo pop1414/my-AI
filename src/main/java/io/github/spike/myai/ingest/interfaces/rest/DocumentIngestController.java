@@ -1,6 +1,7 @@
 package io.github.spike.myai.ingest.interfaces.rest;
 
 import io.github.spike.myai.ingest.application.command.AcceptUploadCommand;
+import io.github.spike.myai.ingest.application.command.ReprocessDocumentCommand;
 import io.github.spike.myai.ingest.application.exception.DocumentNotFoundException;
 import io.github.spike.myai.ingest.application.query.GetDocumentChunksPreviewQuery;
 import io.github.spike.myai.ingest.application.query.GetDocumentStatusQuery;
@@ -9,6 +10,7 @@ import io.github.spike.myai.ingest.application.result.DocumentChunksPreviewResul
 import io.github.spike.myai.ingest.application.usecase.AcceptUploadUseCase;
 import io.github.spike.myai.ingest.application.usecase.GetDocumentChunksPreviewUseCase;
 import io.github.spike.myai.ingest.application.usecase.GetDocumentStatusUseCase;
+import io.github.spike.myai.ingest.application.usecase.ReprocessDocumentUseCase;
 import io.github.spike.myai.ingest.application.result.DocumentStatusResult;
 import io.github.spike.myai.ingest.domain.model.UploadTicket;
 import io.github.spike.myai.ingest.domain.port.DocumentSourceStorage;
@@ -62,6 +64,10 @@ public class DocumentIngestController {
      */
     private final GetDocumentChunksPreviewUseCase getDocumentChunksPreviewUseCase;
     /**
+     * 文档重处理用例。
+     */
+    private final ReprocessDocumentUseCase reprocessDocumentUseCase;
+    /**
      * 文档源文件存储端口。
      */
     private final DocumentSourceStorage documentSourceStorage;
@@ -70,15 +76,18 @@ public class DocumentIngestController {
             AcceptUploadUseCase acceptUploadUseCase,
             GetDocumentStatusUseCase getDocumentStatusUseCase,
             GetDocumentChunksPreviewUseCase getDocumentChunksPreviewUseCase,
+            ReprocessDocumentUseCase reprocessDocumentUseCase,
             DocumentSourceStorage documentSourceStorage) {
         this.acceptUploadUseCase = acceptUploadUseCase;
         this.getDocumentStatusUseCase = getDocumentStatusUseCase;
         this.getDocumentChunksPreviewUseCase = getDocumentChunksPreviewUseCase;
+        this.reprocessDocumentUseCase = reprocessDocumentUseCase;
         this.documentSourceStorage = documentSourceStorage;
     }
 
     /**
      * 上传文档并受理入库请求。
+     * 接收客户端的上传文件并将其转化为内部命令以开始入库流程。
      *
      * <p>接口契约：
      * <ul>
@@ -99,21 +108,25 @@ public class DocumentIngestController {
             @RequestParam(value = "kbId", required = false) String kbId) {
 
         // 这一步是接口安全阀，如果检验失败，就阻止进入业务层，提前返回消息，告诉前端（用户）
+        // 校验上传的文件内容是否为空，为空则直接抛异常拦截。
         if (file.isEmpty()) {
             // 输入校验失败时，直接返回 400，避免无效请求进入应用层。
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "file must not be empty");
         }
 
+        // 计算上传文件的内容哈希（SHA-256），用于后续判断是否重复文件或者走秒传逻辑。
         String fileHash = calculateFileHash(file);
         // 将 HTTP 参数转换为应用层命令对象，隔离接口协议与用例编排。
         AcceptUploadCommand command = new AcceptUploadCommand(file.getOriginalFilename(), file.getSize(), kbId, fileHash);
 
+        // 调用应用层的处理逻辑处理上传命令。
         UploadTicket uploadTicket = acceptUploadUseCase.handle(command);
         try {
             // 受理成功后立即持久化源文件，供异步处理链路（解析/分块/向量化）读取。
             // 当命中幂等复用既有 documentId 时，这里会走存储端口的幂等写入（存在则不覆盖）。
             documentSourceStorage.save(uploadTicket.documentId(), file.getOriginalFilename(), file.getBytes());
         } catch (IOException ex) {
+            // IO 异常处理，抛出 BAD_REQUEST 返回前端。
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "failed to read upload file", ex);
         }
         // 将领域返回对象映射为对外响应 DTO，避免领域对象直接暴露给 API 使用方。
@@ -122,6 +135,7 @@ public class DocumentIngestController {
 
     /**
      * 查询文档当前处理状态。
+     * 供前端轮询或者回调触发查询当前文档的分析入库状态（比如提取进度，是否完成了向量化等）。
      *
      * <p>接口契约：
      * <ul>
@@ -135,21 +149,25 @@ public class DocumentIngestController {
     @GetMapping(value = "/{documentId}/status", produces = MediaType.APPLICATION_JSON_VALUE)
     public DocumentStatusResponse getStatus(@PathVariable("documentId") String documentId) {
         try {
+            // 委派给应用层服务进行状态查询逻辑。
             DocumentStatusResult result =
                     getDocumentStatusUseCase.handle(new GetDocumentStatusQuery(documentId));
             return new DocumentStatusResponse(result.documentId().value(), result.status().name());
         } catch (DocumentNotFoundException ex) {
+            // 捕获未找到文档异常，向前端转化为 404 NOT FOUND 状态码。
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, ex.getMessage(), ex);
         }
     }
 
     /**
      * 查询文档分块预览（调试接口）。
+     * 在处理文档提取完成后，用此接口可以查看知识库如何将文档文本进行切片（Chunk）分割的详细内容。
      *
      * <p>接口契约：
      * <ul>
      *     <li>路径：GET /api/v1/documents/{documentId}/chunks/preview</li>
      *     <li>参数：limit（可选，默认20，最大200）</li>
+     *     <li>参数：offset（可选，默认0）</li>
      *     <li>参数：previewChars（可选，默认200，范围20~2000）</li>
      * </ul>
      *
@@ -162,32 +180,75 @@ public class DocumentIngestController {
     public DocumentChunksPreviewResponse getChunksPreview(
             @PathVariable("documentId") String documentId,
             @RequestParam(value = "limit", defaultValue = "20") int limit,
+            @RequestParam(value = "offset", defaultValue = "0") int offset,
             @RequestParam(value = "previewChars", defaultValue = "200") int previewChars) {
         try {
+            // 统一由应用层校验 limit/offset/previewChars 的范围，控制器只负责参数转发。
             DocumentChunksPreviewResult result = getDocumentChunksPreviewUseCase.handle(
-                    new GetDocumentChunksPreviewQuery(documentId, limit, previewChars));
+                    new GetDocumentChunksPreviewQuery(documentId, limit, offset, previewChars));
             return new DocumentChunksPreviewResponse(
                     result.documentId().value(),
                     result.chunkCount(),
+                    result.totalChunks(),
+                    result.limit(),
+                    result.offset(),
+                    result.previewChars(),
                     result.chunks().stream().map(DocumentIngestController::toChunkPreviewResponse).toList());
         } catch (DocumentNotFoundException ex) {
+            // 如果文档不存在则返回 404。
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, ex.getMessage(), ex);
         } catch (IllegalArgumentException ex) {
+            // 如果请求参数不合法（如 offset 过大，limit 超过最大限制等）则返回 400。
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, ex.getMessage(), ex);
         }
     }
 
+    /**
+     * 将业务层返回的分块预览领域对象（Result）映射到 REST API 返回对象（Response）。
+     */
     private static DocumentChunkPreviewItemResponse toChunkPreviewResponse(DocumentChunkPreviewItemResult item) {
+        // DTO 映射：保持对外结构稳定，内部字段可演进。
         return new DocumentChunkPreviewItemResponse(
                 item.chunkIndex(),
+                item.contentLength(),
                 item.contentPreview(),
+                item.truncated(),
                 item.sourceFile(),
                 item.contentHash(),
-                item.splitVersion());
+                item.splitVersion(),
+                item.sourceHint());
+    }
+
+    /**
+     * 触发文档重处理。
+     * 对于处于失败状态或需要重新切片的文档，调用此接口重新触发整套入库解析流程。
+     *
+     * <p>接口契约：
+     * <ul>
+     *     <li>路径：POST /api/v1/documents/{documentId}/reprocess</li>
+     * </ul>
+     */
+    @PostMapping(value = "/{documentId}/reprocess", produces = MediaType.APPLICATION_JSON_VALUE)
+    public DocumentStatusResponse reprocess(@PathVariable("documentId") String documentId) {
+        try {
+            // 重处理只修改状态并进入队列，不在接口层做同步向量重建。
+            DocumentStatusResult result = reprocessDocumentUseCase.handle(new ReprocessDocumentCommand(documentId));
+            return new DocumentStatusResponse(result.documentId().value(), result.status().name());
+        } catch (DocumentNotFoundException ex) {
+            // 如果找不到该文档标识，返回 404
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, ex.getMessage(), ex);
+        } catch (IllegalArgumentException ex) {
+            // 参数或者基础校验失败返回 400
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, ex.getMessage(), ex);
+        } catch (IllegalStateException ex) {
+            // 比如正在处理中的文档不可以重处理，这种属于当前状态非法（冲突），返回 409 CONFLICT
+            throw new ResponseStatusException(HttpStatus.CONFLICT, ex.getMessage(), ex);
+        }
     }
 
     /**
      * 计算上传文件的 SHA-256 哈希。
+     * 多次读取利用 java.security.MessageDigest 计算分块哈希值。
      */
     private static String calculateFileHash(MultipartFile file) {
         try {
