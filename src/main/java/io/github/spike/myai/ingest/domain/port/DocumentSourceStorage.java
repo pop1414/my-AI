@@ -31,5 +31,11 @@ public interface DocumentSourceStorage {
      * @return 原始文件字节，未命中时返回空
      */
     Optional<byte[]> load(DocumentId documentId, String filename);
-}
 
+    /**
+     * 删除文档资产对应的全部源文件。
+     *
+     * @param documentId 文档资产 ID
+     */
+    void deleteByDocumentId(DocumentId documentId);
+}

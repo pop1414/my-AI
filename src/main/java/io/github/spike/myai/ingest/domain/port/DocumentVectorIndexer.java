@@ -27,4 +27,11 @@ public interface DocumentVectorIndexer {
      * @param splitVersion 分块版本
      */
     void deleteByDocumentIdAndSplitVersion(DocumentId documentId, String splitVersion);
+
+    /**
+     * 删除指定文档的全部向量（所有 splitVersion）。
+     *
+     * @param documentId 文档资产 ID
+     */
+    void deleteByDocumentId(DocumentId documentId);
 }

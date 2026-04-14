@@ -148,4 +148,33 @@ public interface DocumentRepository {
             UploadStatus expectedStatus,
             String newSplitVersion,
             Instant requestedAt);
+
+    /**
+     * 将文档状态推进为 DELETING。
+     *
+     * @param documentId 文档资产 ID
+     * @param expectedStatus 期望状态（UPLOADED/FAILED/INDEXED）
+     * @param updatedAt 更新时间
+     * @return 更新是否成功
+     */
+    boolean markDeleting(DocumentId documentId, UploadStatus expectedStatus, Instant updatedAt);
+
+    /**
+     * 将文档状态推进为 DELETED。
+     *
+     * @param documentId 文档资产 ID
+     * @param updatedAt 更新时间
+     * @return 更新是否成功
+     */
+    boolean markDeleted(DocumentId documentId, Instant updatedAt);
+
+    /**
+     * 删除流程失败时回滚 DELETING 状态到原状态。
+     *
+     * @param documentId 文档资产 ID
+     * @param rollbackStatus 回滚目标状态（进入删除前状态）
+     * @param updatedAt 更新时间
+     * @return 更新是否成功
+     */
+    boolean rollbackDeleting(DocumentId documentId, UploadStatus rollbackStatus, Instant updatedAt);
 }
