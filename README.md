@@ -9,9 +9,11 @@
   - 返回 `documentId + ACCEPTED`
   - `documentId` 语义为“文档资产 ID”（不是一次性任务 ID）
 - 状态查询：`GET /api/v1/documents/{documentId}/status`
+  - 删除成功后仍可查询，状态返回 `DELETED`（不返回 `404`）
 - 受理幂等：
   - 基于 `kbId + fileHash(SHA-256)` 查重
-  - 重复上传复用既有 `documentId`
+  - 重复上传复用既有 `documentId`（仅限未删除资产）
+  - 已 `DELETED` 后允许同 `kbId + fileHash` 重新上传（生成新 `documentId`）
 - 任务抢占幂等：
   - `UPLOADED -> INGESTING` 采用 CAS（Compare-And-Set）更新
 - 异步处理（单进程 worker）：
