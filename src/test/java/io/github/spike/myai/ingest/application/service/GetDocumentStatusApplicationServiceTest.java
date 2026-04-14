@@ -69,4 +69,36 @@ class GetDocumentStatusApplicationServiceTest {
                 DocumentNotFoundException.class,
                 () -> service.handle(new GetDocumentStatusQuery("doc-missing")));
     }
+
+    @Test
+    @DisplayName("已删除文档查询时，应返回 DELETED")
+    void handle_shouldReturnDeleted_whenDeleted() {
+        DocumentRepository repository = Mockito.mock(DocumentRepository.class);
+        GetDocumentStatusApplicationService service = new GetDocumentStatusApplicationService(repository);
+        DocumentId documentId = new DocumentId("doc-deleted");
+        Document document = new Document(
+                documentId,
+                "kb-1",
+                "hash-del",
+                "del.txt",
+                128,
+                UploadStatus.DELETED,
+                null,
+                0,
+                3,
+                null,
+                null,
+                null,
+                null,
+                0,
+                null,
+                "v1",
+                Instant.now(),
+                Instant.now());
+        when(repository.findById(documentId)).thenReturn(Optional.of(document));
+
+        DocumentStatusResult result = service.handle(new GetDocumentStatusQuery("doc-deleted"));
+
+        assertEquals(UploadStatus.DELETED, result.status());
+    }
 }

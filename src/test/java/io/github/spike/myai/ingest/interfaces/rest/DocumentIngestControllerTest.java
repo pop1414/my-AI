@@ -4,6 +4,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -11,6 +12,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import io.github.spike.myai.ingest.application.command.AcceptUploadCommand;
+import io.github.spike.myai.ingest.application.exception.DocumentDeleteConflictException;
+import io.github.spike.myai.ingest.application.exception.DocumentDeleteFailedException;
 import io.github.spike.myai.ingest.application.exception.DocumentNotFoundException;
 import io.github.spike.myai.ingest.application.query.GetDocumentChunksPreviewQuery;
 import io.github.spike.myai.ingest.application.query.GetDocumentStatusQuery;
@@ -18,6 +21,7 @@ import io.github.spike.myai.ingest.application.result.DocumentChunkPreviewItemRe
 import io.github.spike.myai.ingest.application.result.DocumentChunksPreviewResult;
 import io.github.spike.myai.ingest.application.result.DocumentStatusResult;
 import io.github.spike.myai.ingest.application.usecase.AcceptUploadUseCase;
+import io.github.spike.myai.ingest.application.usecase.DeleteDocumentUseCase;
 import io.github.spike.myai.ingest.application.usecase.GetDocumentChunksPreviewUseCase;
 import io.github.spike.myai.ingest.application.usecase.GetDocumentStatusUseCase;
 import io.github.spike.myai.ingest.application.usecase.ReprocessDocumentUseCase;
@@ -51,6 +55,7 @@ class DocumentIngestControllerTest {
     private GetDocumentStatusUseCase getDocumentStatusUseCase;
     private GetDocumentChunksPreviewUseCase getDocumentChunksPreviewUseCase;
     private ReprocessDocumentUseCase reprocessDocumentUseCase;
+    private DeleteDocumentUseCase deleteDocumentUseCase;
     private DocumentSourceStorage documentSourceStorage;
     private MockMvc mockMvc;
 
@@ -60,6 +65,7 @@ class DocumentIngestControllerTest {
         this.getDocumentStatusUseCase = Mockito.mock(GetDocumentStatusUseCase.class);
         this.getDocumentChunksPreviewUseCase = Mockito.mock(GetDocumentChunksPreviewUseCase.class);
         this.reprocessDocumentUseCase = Mockito.mock(ReprocessDocumentUseCase.class);
+        this.deleteDocumentUseCase = Mockito.mock(DeleteDocumentUseCase.class);
         this.documentSourceStorage = Mockito.mock(DocumentSourceStorage.class);
         DocumentIngestController controller =
                 new DocumentIngestController(
@@ -67,6 +73,7 @@ class DocumentIngestControllerTest {
                         getDocumentStatusUseCase,
                         getDocumentChunksPreviewUseCase,
                         reprocessDocumentUseCase,
+                        deleteDocumentUseCase,
                         documentSourceStorage);
         this.mockMvc = MockMvcBuilders.standaloneSetup(controller).build();
     }
@@ -204,5 +211,45 @@ class DocumentIngestControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.documentId").value("doc-900"))
                 .andExpect(jsonPath("$.status").value("UPLOADED"));
+    }
+
+    @Test
+    @DisplayName("删除文档成功时应返回 204")
+    void delete_shouldReturnNoContent_whenSuccess() throws Exception {
+        mockMvc.perform(delete("/api/v1/documents/{documentId}", "doc-del-1"))
+                .andExpect(status().isNoContent());
+    }
+
+    @Test
+    @DisplayName("删除文档不存在时应返回 404")
+    void delete_shouldReturnNotFound_whenMissing() throws Exception {
+        Mockito.doThrow(new DocumentNotFoundException("document not found: doc-missing"))
+                .when(deleteDocumentUseCase)
+                .handle(any());
+
+        mockMvc.perform(delete("/api/v1/documents/{documentId}", "doc-missing"))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    @DisplayName("删除文档状态冲突时应返回 409")
+    void delete_shouldReturnConflict_whenConflict() throws Exception {
+        Mockito.doThrow(new DocumentDeleteConflictException("conflict"))
+                .when(deleteDocumentUseCase)
+                .handle(any());
+
+        mockMvc.perform(delete("/api/v1/documents/{documentId}", "doc-ingesting"))
+                .andExpect(status().isConflict());
+    }
+
+    @Test
+    @DisplayName("删除执行失败时应返回 500")
+    void delete_shouldReturnInternalServerError_whenDeleteFailed() throws Exception {
+        Mockito.doThrow(new DocumentDeleteFailedException("failed to delete document asset", new RuntimeException()))
+                .when(deleteDocumentUseCase)
+                .handle(any());
+
+        mockMvc.perform(delete("/api/v1/documents/{documentId}", "doc-del-failed"))
+                .andExpect(status().isInternalServerError());
     }
 }

@@ -2,6 +2,8 @@ package io.github.spike.myai.ingest.infrastructure.vector;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
@@ -67,5 +69,19 @@ class PgVectorDocumentVectorIndexerTest {
         for (String chunkId : firstRound) {
             assertDoesNotThrow(() -> UUID.fromString(chunkId), "chunkId 必须是合法 UUID");
         }
+    }
+
+    @Test
+    @DisplayName("deleteByDocumentId 应删除文档全部版本向量")
+    void deleteByDocumentId_shouldDeleteAllVersions() {
+        VectorStore vectorStore = Mockito.mock(VectorStore.class);
+        JdbcTemplate jdbcTemplate = Mockito.mock(JdbcTemplate.class);
+        PgVectorDocumentVectorIndexer indexer = new PgVectorDocumentVectorIndexer(vectorStore, jdbcTemplate);
+
+        indexer.deleteByDocumentId(new DocumentId("doc-del-vector"));
+
+        ArgumentCaptor<String> sqlCaptor = ArgumentCaptor.forClass(String.class);
+        verify(jdbcTemplate, times(1)).update(sqlCaptor.capture(), eq("doc-del-vector"));
+        assertTrue(sqlCaptor.getValue().contains("metadata->>'documentId' = ?"));
     }
 }
