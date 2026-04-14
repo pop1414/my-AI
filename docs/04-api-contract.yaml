@@ -51,10 +51,10 @@ paths:
           required: true
           schema:
             type: string
-          description: 文档资产 ID（同一 kbId + fileHash 下保持稳定）
+          description: 文档资产 ID（同一 kbId + fileHash 在未删除资产集合内保持稳定）
       responses:
         '200':
-          description: 查询成功
+          description: 查询成功（文档删除后返回 DELETED，不返回 404）
           content:
             application/json:
               schema:
@@ -171,7 +171,8 @@ paths:
       summary: 删除文档资产
       x-stage: implemented
       description: |
-        软删除文档资产，清理源文件与该 documentId 的全部向量版本。
+        软删除文档资产，清理源文件与该 documentId 的全部向量版本；
+        删除成功后可通过 status 接口查询到 DELETED。
       parameters:
         - name: documentId
           in: path
@@ -245,7 +246,7 @@ components:
       properties:
         documentId:
           type: string
-          description: 文档资产 ID（同一 kbId + fileHash 下保持稳定）
+          description: 文档资产 ID（同一 kbId + fileHash 在未删除资产集合内保持稳定）
         status:
           type: string
           example: ACCEPTED

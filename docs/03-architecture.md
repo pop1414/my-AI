@@ -9,6 +9,7 @@
 - 受理状态查询时序图：`docs/architecture/diagrams/ingest/acceptance/ingest-acceptance-status-sequence.puml`
 - Ingest 共享状态机：`docs/architecture/diagrams/ingest/shared/ingest-shared-state-machine.puml`
 - Ingest 共享 ER/领域模型图：`docs/architecture/diagrams/ingest/shared/ingest-shared-er-domain.puml`
+- Ingest 技术指导参考：`docs/reference/ingest-文档处理技术指导.md`（参考资料，非图谱资产）
 - 受理闭环说明文档：`docs/06-ingest-acceptance-closure.md`
 - 执行责任域边界图：`docs/architecture/diagrams/ingest/execution/ingest-execution-boundary.puml`
 - 执行 worker 时序图：`docs/architecture/diagrams/ingest/execution/ingest-execution-worker-process-sequence.puml`

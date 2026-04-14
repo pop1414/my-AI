@@ -52,7 +52,7 @@
 - 风险：用户重复点击、客户端超时重试
 - 要求：同一文件内容重复上传不应创建多条冲突任务
 - 建议：记录 `fileHash`，并在文档表建立约束（如 `kbId + fileHash` 维度）
-- 当前实现进度（2026-04-01）：已落地。上传受理链路已计算 `SHA-256 fileHash`，并在受理前执行 `kbId + fileHash` 查重；数据库已增加对应唯一索引保护。
+- 当前实现进度（2026-04-01）：已落地。上传受理链路已计算 `SHA-256 fileHash`，并在受理前执行 `kbId + fileHash` 查重；数据库已增加对应唯一索引保护（仅约束 `status <> 'DELETED'`）。
 
 ### 5.2 任务启动阶段（UPLOADED -> INGESTING）
 - 风险：多个 worker 同时抢到同一任务
@@ -99,6 +99,7 @@
   - 允许删除状态：`UPLOADED/FAILED/INDEXED`
   - 冲突状态：`INGESTING/DELETING` 返回 `409`
   - 幂等状态：`DELETED` 重复删除返回 `204`
+  - 状态查询：删除成功后 `GET status` 返回 `DELETED`（不返回 `404`）
 - 执行顺序：
   1. CAS：`current -> DELETING`
   2. 删除源文件目录（`{root}/{documentId}`）

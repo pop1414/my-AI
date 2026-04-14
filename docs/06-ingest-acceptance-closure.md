@@ -12,7 +12,8 @@
 - `documentId`：文档资产 ID，不是“一次性任务 ID”。
 - 文档资产定义：存在于某个 `kbId` 下的某份文件内容（可由 `kbId + fileHash` 唯一刻画）。
 - 语义规则：
-  - 同一 `kbId` 下内容不变（`fileHash` 不变）时，`documentId` 保持稳定。
+  - 同一 `kbId` 下内容不变（`fileHash` 不变）时，`documentId` 在未删除资产集合内保持稳定。
+  - 资产进入 `DELETED` 后，允许同 `kbId + fileHash` 重新上传并生成新 `documentId`。
   - reprocess 只重建处理结果，不更换 `documentId`；默认 `splitVersion++` 用于区分处理版本。
 
 ## 2. 组件清单（必须 / 可选）
@@ -78,7 +79,7 @@
 1. Controller 在接收上传文件时计算 `SHA-256`，作为 `fileHash`。  
 2. Application 在创建新任务前，先按 `kbId + fileHash` 查询是否已存在任务。  
 3. 若已存在，直接返回已有 `documentId + ACCEPTED`；若不存在，落库新任务（`UPLOADED`）。  
-4. PostgreSQL 在 `ingest_documents` 上增加唯一索引：`(kb_id, file_hash)`（`file_hash IS NOT NULL`）。
+4. PostgreSQL 在 `ingest_documents` 上增加唯一索引：`(kb_id, file_hash)`（仅约束 `status <> 'DELETED'` 且 `file_hash IS NOT NULL`）。
 
 该变更对“受理闭环与可追踪化”的影响：
 - 闭环主流程不变：仍然是“受理 -> 可查询状态”。

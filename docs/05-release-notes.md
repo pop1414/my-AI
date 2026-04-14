@@ -36,6 +36,8 @@
 - 上传幂等约束更新：`kbId + fileHash` 唯一索引仅约束未删除记录，支持删除后同 hash 重传
 - API 契约同步（2026-04-14）：`reprocess` 标记为 implemented，`chunks/preview` 增加 `offset` 与审计字段
 - 文档同步（2026-04-14）：README 与处理执行文档补充删除闭环说明，双套 ingest puml 更新
+- 文档收敛（2026-04-14）：删除闭环契约表述统一（`DELETED` 可查、`INGESTING/DELETING` 返回 `409`、重复删除 `204`、不存在 `404`）
+- UML 索引收敛（2026-04-14）：`文档处理.md` 迁移至 `docs/reference/ingest-文档处理技术指导.md`，图谱目录仅保留分层 puml 资产
 
 ### Fixed
 - 

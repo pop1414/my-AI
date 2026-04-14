@@ -36,6 +36,9 @@
 - `execution/*.puml`
 - `shared/*.puml`
 
+## 参考资料（非图谱资产）
+- `docs/reference/ingest-文档处理技术指导.md`
+
 ## 质量约束
 - 单时序图参与者不超过 7 个
 - 主消息不超过 25 条
