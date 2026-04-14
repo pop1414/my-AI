@@ -1,0 +1,47 @@
+@startuml
+title Execution 时序：Worker 抢占与处理（单用例）
+
+' Scope:
+' - worker 轮询、CAS 抢占、处理收口
+' Not in scope:
+' - reprocess、delete、preview 细节
+' See also:
+' - ./ingest-execution-reprocess-sequence.puml
+' - ../shared/ingest-shared-state-machine.puml
+
+participant "InProcessWorker" as W
+participant "ClaimNextUploadedDocumentUseCase" as CUC
+participant "ProcessDocumentUseCase" as PUC
+participant "DocumentRepository" as R
+participant "TextPipeline\n(parse+chunk)" as TP
+participant "DocumentVectorIndexer" as VI
+database "PostgreSQL" as PG
+
+loop poll
+  W -> CUC : handle()
+  CUC -> R : findOldestReadyForProcessing(now)
+  R -> PG : SELECT status=UPLOADED and retry window
+  PG --> R : row/empty
+  alt 无候选
+    CUC --> W : Optional.empty
+  else 有候选
+    CUC -> R : compareAndSetStatus(UPLOADED->INGESTING)
+    R -> PG : UPDATE ... WHERE status='UPLOADED'
+    alt 抢占失败
+      CUC --> W : Optional.empty
+    else 抢占成功
+      CUC --> W : documentId
+      W -> PUC : handle(documentId)
+      PUC -> R : findById(documentId)
+      PUC -> TP : parse + chunk
+      alt 处理异常
+        PUC -> R : markRetry(...) or markFailed(...)
+      else 处理成功
+        PUC -> VI : index(document, chunks)
+        PUC -> R : markIndexed(INGESTING)
+      end
+    end
+  end
+end
+
+@enduml

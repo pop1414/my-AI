@@ -1,0 +1,31 @@
+@startuml
+title Acceptance 时序：状态查询（单用例）
+
+' Scope:
+' - status 查询成功/未命中返回
+' Not in scope:
+' - 上传受理与异步处理细节
+' See also:
+' - ./ingest-acceptance-upload-sequence.puml
+' - ../shared/ingest-shared-state-machine.puml
+
+actor Client
+participant "DocumentIngestController" as C
+participant "GetDocumentStatusUseCase" as S
+participant "DocumentRepository" as R
+database "PostgreSQL" as PG
+
+Client -> C : GET /api/v1/documents/{id}/status
+C -> S : handle(query)
+S -> R : findById(documentId)
+R -> PG : SELECT ingest_documents by id
+PG --> R : row/empty
+alt 命中
+  S --> C : DocumentStatusResult
+  C --> Client : 200 {status}
+else 未命中
+  S --> C : throw DocumentNotFoundException
+  C --> Client : 404 Not Found
+end
+
+@enduml

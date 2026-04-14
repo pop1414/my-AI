@@ -27,21 +27,21 @@
 - `QueuePublisher` / 消息队列 / `IngestWorker`
 - Embedding/LLM 服务调用链路
 
-## 3. 标准设计图套餐（5 张必选）
-### 3.1 用例图（对齐功能边界）
-- `docs/architecture/diagrams/ingest/ingest-acceptance-closure-usecase.puml`
+## 3. 标准设计图套餐（分层后）
+### 3.1 责任域边界图（对齐功能边界与职责）
+- `docs/architecture/diagrams/ingest/acceptance/ingest-acceptance-boundary.puml`
 
-### 3.2 组件图 / 架构图（对齐模块分层与职责）
-- `docs/architecture/diagrams/ingest/ingest-acceptance-closure-components.puml`
+### 3.2 上传受理时序图（对齐主交互）
+- `docs/architecture/diagrams/ingest/acceptance/ingest-acceptance-upload-sequence.puml`
 
-### 3.3 时序图（对齐核心流程交互）
-- `docs/architecture/diagrams/ingest/ingest-acceptance-closure-sequence.puml`
+### 3.3 状态查询时序图（对齐查询交互）
+- `docs/architecture/diagrams/ingest/acceptance/ingest-acceptance-status-sequence.puml`
 
-### 3.4 状态机图（对齐状态流转规则）
-- `docs/architecture/diagrams/ingest/ingest-acceptance-closure-state.puml`
+### 3.4 共享状态机图（L2 权威）
+- `docs/architecture/diagrams/ingest/shared/ingest-shared-state-machine.puml`
 
-### 3.5 ER / 领域模型图（对齐数据结构）
-- `docs/architecture/diagrams/ingest/ingest-acceptance-closure-er-domain.puml`
+### 3.5 共享 ER / 领域模型图（L2 权威）
+- `docs/architecture/diagrams/ingest/shared/ingest-shared-er-domain.puml`
 
 ## 4. 关键通信原则（为什么这样通信）
 1. Controller 只依赖 UseCase，不直接访问数据库  

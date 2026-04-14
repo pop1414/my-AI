@@ -1,0 +1,35 @@
+@startuml
+title Execution 时序：分块预览查询（单用例）
+
+' Scope:
+' - chunks/preview 分页查询与结果组装
+' Not in scope:
+' - 文档处理与向量写入过程
+' See also:
+' - ./ingest-execution-worker-process-sequence.puml
+' - ../shared/ingest-shared-er-domain.puml
+
+actor Client
+participant "DocumentIngestController" as C
+participant "GetDocumentChunksPreviewUseCase" as U
+participant "DocumentRepository" as R
+participant "DocumentChunkPreviewRepository" as PR
+database "PostgreSQL" as PG
+
+Client -> C : GET /documents/{id}/chunks/preview
+C -> U : handle(documentId,limit,offset,previewChars)
+U -> R : findById(documentId)
+R -> PG : SELECT ingest_documents by id
+alt 文档不存在
+  U --> C : throw DocumentNotFoundException
+  C --> Client : 404 Not Found
+else 文档存在
+  U -> PR : countByDocumentId(documentId,splitVersion)
+  PR -> PG : COUNT vector_store by metadata
+  U -> PR : findByDocumentId(documentId,splitVersion,limit,offset)
+  PR -> PG : SELECT vector_store by metadata
+  U --> C : DocumentChunksPreviewResult
+  C --> Client : 200 preview json
+end
+
+@enduml

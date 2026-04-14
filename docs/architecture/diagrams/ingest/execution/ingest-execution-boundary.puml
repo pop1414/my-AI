@@ -1,0 +1,32 @@
+@startuml
+title Execution 责任域边界图（L1）
+
+' Scope:
+' - worker 执行、preview、reprocess、delete 的责任边界
+' Not in scope:
+' - upload 受理细节
+' See also:
+' - ./ingest-execution-worker-process-sequence.puml
+' - ./ingest-execution-delete-sequence.puml
+' - ../shared/ingest-shared-state-machine.puml
+
+left to right direction
+skinparam shadowing false
+skinparam packageStyle rectangle
+
+actor "Worker" as Worker
+actor "客户端/运维" as User
+
+rectangle "Execution Domain" {
+  usecase "Worker 抢占与处理\nUPLOADED -> INGESTING -> INDEXED/FAILED" as UC_Process
+  usecase "分块预览查询\nGET /documents/{id}/chunks/preview" as UC_Preview
+  usecase "人工重处理\nPOST /documents/{id}/reprocess" as UC_Reprocess
+  usecase "文档资产删除\nDELETE /documents/{id}" as UC_Delete
+}
+
+Worker --> UC_Process
+User --> UC_Preview
+User --> UC_Reprocess
+User --> UC_Delete
+
+@enduml

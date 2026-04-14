@@ -1,0 +1,42 @@
+@startuml
+title Acceptance 时序：上传受理（单用例）
+
+' Scope:
+' - upload 请求的受理、幂等、落库、源文件保存
+' Not in scope:
+' - 异步处理执行与状态推进
+' See also:
+' - ./ingest-acceptance-status-sequence.puml
+' - ../shared/ingest-shared-er-domain.puml
+
+actor Client
+participant "DocumentIngestController" as C
+participant "AcceptUploadUseCase" as A
+participant "DocumentRepository" as R
+participant "DocumentIdGenerator" as G
+participant "DocumentSourceStorage" as SS
+database "PostgreSQL" as PG
+
+Client -> C : POST /api/v1/documents/upload
+alt file 为空
+  C --> Client : 400 Bad Request
+else file 合法
+  C -> C : 计算 fileHash
+  C -> A : handle(command)
+  A -> R : findByKbIdAndFileHash(kbId,fileHash)
+  R -> PG : SELECT by kbId + fileHash
+  PG --> R : row/empty
+  alt 命中 existing
+    A --> C : UploadTicket(existingId, ACCEPTED)
+  else 新文档
+    A -> G : nextId()
+    G --> A : documentId
+    A -> R : save(Document{UPLOADED})
+    R -> PG : UPSERT ingest_documents
+    A --> C : UploadTicket(newId, ACCEPTED)
+  end
+  C -> SS : save(documentId, filename, bytes)
+  C --> Client : 200 ACCEPTED
+end
+
+@enduml

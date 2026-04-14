@@ -1,0 +1,46 @@
+@startuml
+title Ingest UML 总览图（L0 导航）
+
+' Scope:
+' - 展示 ingest 图谱分层与阅读入口
+' Not in scope:
+' - 不描述具体时序与字段
+' See also:
+' - ./acceptance/ingest-acceptance-boundary.puml
+' - ./execution/ingest-execution-boundary.puml
+' - ./shared/ingest-shared-state-machine.puml
+
+skinparam shadowing false
+skinparam packageStyle rectangle
+left to right direction
+
+package "L0 总览" as L0 {
+  rectangle "入口 API\nupload/status/preview/reprocess/delete" as API
+}
+
+package "L1 责任域" as L1 {
+  rectangle "Acceptance\n上传受理 + 状态查询" as ACC
+  rectangle "Execution\nworker/retry/preview/reprocess/delete" as EXE
+}
+
+package "L2 共享权威图" as L2 {
+  rectangle "State Machine\n唯一状态定义" as STM
+  rectangle "ER / Domain\n唯一结构定义" as ERD
+}
+
+API --> ACC : 受理与可追踪
+API --> EXE : 执行与运维动作
+ACC --> STM : 引用
+EXE --> STM : 引用
+ACC --> ERD : 引用
+EXE --> ERD : 引用
+
+note bottom
+推荐阅读顺序：
+1) 本图（L0）
+2) L1 责任域边界图
+3) L1 单用例时序图
+4) L2 共享权威图
+end note
+
+@enduml

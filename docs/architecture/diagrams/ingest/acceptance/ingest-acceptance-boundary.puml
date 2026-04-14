@@ -1,0 +1,36 @@
+@startuml
+title Acceptance 责任域边界图（L1）
+
+' Scope:
+' - 上传受理与状态查询的责任边界
+' Not in scope:
+' - worker 处理、reprocess、delete 内部执行细节
+' See also:
+' - ./ingest-acceptance-upload-sequence.puml
+' - ./ingest-acceptance-status-sequence.puml
+' - ../shared/ingest-shared-state-machine.puml
+
+left to right direction
+skinparam shadowing false
+skinparam packageStyle rectangle
+
+actor "客户端/前端" as Client
+
+rectangle "Acceptance Domain" {
+  usecase "上传受理\nPOST /documents/upload" as UC_Upload
+  usecase "状态查询\nGET /documents/{id}/status" as UC_Status
+}
+
+Client --> UC_Upload
+Client --> UC_Status
+
+note right of UC_Upload
+职责：受理、幂等、保存源文件
+不负责处理执行
+end note
+
+note right of UC_Status
+职责：返回可观测状态
+end note
+
+@enduml

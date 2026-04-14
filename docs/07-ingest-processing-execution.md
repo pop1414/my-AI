@@ -94,18 +94,27 @@
 ## 6. 标准设计图套餐（5 张必选）
 ### 6.1 用例图（功能边界）
 - `docs/architecture/diagrams/ingest/ingest-processing-execution-usecase.puml`
+## 6. 标准设计图套餐（分层后）
+### 6.1 责任域边界图（功能边界）
+- `docs/architecture/diagrams/ingest/execution/ingest-execution-boundary.puml`
 
-### 6.2 组件图（模块职责与依赖）
-- `docs/architecture/diagrams/ingest/ingest-processing-execution-components.puml`
+### 6.2 Worker 处理时序图（主处理链路）
+- `docs/architecture/diagrams/ingest/execution/ingest-execution-worker-process-sequence.puml`
 
-### 6.3 时序图（主流程交互）
-- `docs/architecture/diagrams/ingest/ingest-processing-execution-sequence.puml`
+### 6.3 分块预览时序图（调试/审计）
+- `docs/architecture/diagrams/ingest/execution/ingest-execution-chunks-preview-sequence.puml`
 
-### 6.4 状态机图（状态流转规则）
-- `docs/architecture/diagrams/ingest/ingest-processing-execution-state.puml`
+### 6.4 Reprocess 时序图（重处理路径）
+- `docs/architecture/diagrams/ingest/execution/ingest-execution-reprocess-sequence.puml`
 
-### 6.5 ER/领域模型图（数据结构）
-- `docs/architecture/diagrams/ingest/ingest-processing-execution-er-domain.puml`
+### 6.5 Delete 时序图（资产下线路径）
+- `docs/architecture/diagrams/ingest/execution/ingest-execution-delete-sequence.puml`
+
+### 6.6 共享状态机图（L2 权威）
+- `docs/architecture/diagrams/ingest/shared/ingest-shared-state-machine.puml`
+
+### 6.7 共享 ER/领域模型图（L2 权威）
+- `docs/architecture/diagrams/ingest/shared/ingest-shared-er-domain.puml`
 
 ## 7. 建议接口（实现前评审）
 1. `POST /api/v1/documents/upload`

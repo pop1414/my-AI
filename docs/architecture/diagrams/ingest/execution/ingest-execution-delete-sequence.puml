@@ -1,0 +1,49 @@
+@startuml
+title Execution 时序：文档资产删除（单用例）
+
+' Scope:
+' - delete 请求、状态推进、资源清理、回滚语义
+' Not in scope:
+' - 受理流程与 worker 处理细节
+' See also:
+' - ./ingest-execution-worker-process-sequence.puml
+' - ../shared/ingest-shared-state-machine.puml
+
+actor Client
+participant "DocumentIngestController" as C
+participant "DeleteDocumentUseCase" as U
+participant "DocumentRepository" as R
+participant "DocumentSourceStorage" as SS
+participant "DocumentVectorIndexer" as VI
+database "PostgreSQL" as PG
+
+Client -> C : DELETE /documents/{id}
+C -> U : handle(documentId)
+U -> R : findById(documentId)
+R -> PG : SELECT ingest_documents by id
+alt 文档不存在
+  U --> C : DocumentNotFoundException
+  C --> Client : 404
+else 状态冲突(INGESTING/DELETING)
+  U --> C : DocumentDeleteConflictException
+  C --> Client : 409
+else 已 DELETED
+  U --> C : success
+  C --> Client : 204
+else 可删状态
+  U -> R : markDeleting(current->DELETING)
+  R -> PG : UPDATE ... WHERE status=current
+  U -> SS : deleteByDocumentId(documentId)
+  U -> VI : deleteByDocumentId(documentId)
+  alt 清理成功
+    U -> R : markDeleted(DELETING->DELETED)
+    U --> C : success
+    C --> Client : 204
+  else 清理失败
+    U -> R : rollbackDeleting(DELETING->original)
+    U --> C : DocumentDeleteFailedException
+    C --> Client : 500
+  end
+end
+
+@enduml

@@ -1,5 +1,14 @@
 @startuml
-title Ingest 处理执行 ER / 领域模型图（当前实现）
+title Ingest 共享 ER / Domain（L2 权威图）
+
+' Scope:
+' - 唯一结构定义：Document、UploadStatus、核心持久化约束
+' Not in scope:
+' - 不重复描述各接口流程
+' See also:
+' - ../acceptance/ingest-acceptance-upload-sequence.puml
+' - ../execution/ingest-execution-worker-process-sequence.puml
+' - ../execution/ingest-execution-delete-sequence.puml
 
 skinparam shadowing false
 skinparam linetype ortho
@@ -8,21 +17,16 @@ package "Domain" {
   class Document {
     +documentId: DocumentId
     +kbId: String
-    +fileHash: String?
+    +fileHash: String
     +filename: String
     +fileSize: long
     +status: UploadStatus
-    +failureReason: String?
+    +retryCount: int
+    +retryMax: int
+    +nextRetryAt: Instant?
+    +splitVersion: String
     +createdAt: Instant
     +updatedAt: Instant
-  }
-
-  class DocumentChunkPreview {
-    +chunkIndex: int
-    +content: String
-    +sourceFile: String
-    +contentHash: String
-    +splitVersion: String
   }
 
   class DocumentId {
@@ -35,6 +39,8 @@ package "Domain" {
     INGESTING
     INDEXED
     FAILED
+    DELETING
+    DELETED
   }
 
   Document *-- DocumentId
@@ -44,53 +50,29 @@ package "Domain" {
 package "PostgreSQL" {
   entity "ingest_documents" as T_DOC {
     * document_id : varchar(64) <<PK>>
-    --
     * kb_id : varchar(128)
-    file_hash : varchar(64)
-    filename : varchar(512)
+    * file_hash : varchar(64)
+    * filename : varchar(512)
     * file_size : bigint
     * status : varchar(32)
-    failure_reason : text
+    retry_count : int
+    retry_max : int
+    next_retry_at : timestamptz
+    split_version : varchar(32)
     * created_at : timestamptz
     * updated_at : timestamptz
     --
     UNIQUE INDEX uk_ingest_documents_kb_file_hash
-    (kb_id, file_hash) WHERE file_hash IS NOT NULL
+    (kb_id, file_hash) WHERE file_hash IS NOT NULL AND status <> 'DELETED'
   }
 
   entity "vector_store" as T_VEC {
     * id : text <<PK>>
-    --
     content : text
     metadata : json/jsonb
-    embedding : vector(1536)
-  }
-}
-
-package "File Storage" {
-  entity "local_source_file" as T_SRC {
-    * path : string <<PK>>
-    * content : bytes
   }
 }
 
 T_DOC ||--o{ T_VEC : metadata.documentId
-T_DOC ||--o{ T_SRC : {root}/{documentId}/{filename}
-
-note right of T_VEC
-metadata 最小字段：
-- documentId
-- kbId
-- chunkIndex
-- sourceFile
-- contentHash
-- splitVersion
-end note
-
-note bottom of T_VEC
-id 使用确定性 chunkId：
-hash(documentId, chunkIndex, splitVersion)
-写入策略为 delete + add，满足幂等目标。
-end note
 
 @enduml

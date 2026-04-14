@@ -3,17 +3,18 @@
 ## 1. 架构图
 - 主架构图：`docs/architecture/diagrams/core-architecture-latest.puml`
 - 渲染图：`docs/architecture/diagrams/core-architecture-latest-_____Latest___Clean_Layout_.png`
-- 受理闭环组件图：`docs/architecture/diagrams/ingest/ingest-acceptance-closure-components.puml`
-- 受理闭环时序图：`docs/architecture/diagrams/ingest/ingest-acceptance-closure-sequence.puml`
-- 受理闭环状态机：`docs/architecture/diagrams/ingest/ingest-acceptance-closure-state.puml`
-- 受理闭环用例图：`docs/architecture/diagrams/ingest/ingest-acceptance-closure-usecase.puml`
-- 受理闭环 ER/领域模型图：`docs/architecture/diagrams/ingest/ingest-acceptance-closure-er-domain.puml`
+- Ingest 总览图：`docs/architecture/diagrams/ingest/ingest-overview-map.puml`
+- 受理责任域边界图：`docs/architecture/diagrams/ingest/acceptance/ingest-acceptance-boundary.puml`
+- 受理上传时序图：`docs/architecture/diagrams/ingest/acceptance/ingest-acceptance-upload-sequence.puml`
+- 受理状态查询时序图：`docs/architecture/diagrams/ingest/acceptance/ingest-acceptance-status-sequence.puml`
+- Ingest 共享状态机：`docs/architecture/diagrams/ingest/shared/ingest-shared-state-machine.puml`
+- Ingest 共享 ER/领域模型图：`docs/architecture/diagrams/ingest/shared/ingest-shared-er-domain.puml`
 - 受理闭环说明文档：`docs/06-ingest-acceptance-closure.md`
-- 处理执行用例图：`docs/architecture/diagrams/ingest/ingest-processing-execution-usecase.puml`
-- 处理执行组件图：`docs/architecture/diagrams/ingest/ingest-processing-execution-components.puml`
-- 处理执行时序图：`docs/architecture/diagrams/ingest/ingest-processing-execution-sequence.puml`
-- 处理执行状态机：`docs/architecture/diagrams/ingest/ingest-processing-execution-state.puml`
-- 处理执行 ER/领域模型图：`docs/architecture/diagrams/ingest/ingest-processing-execution-er-domain.puml`
+- 执行责任域边界图：`docs/architecture/diagrams/ingest/execution/ingest-execution-boundary.puml`
+- 执行 worker 时序图：`docs/architecture/diagrams/ingest/execution/ingest-execution-worker-process-sequence.puml`
+- 执行分块预览时序图：`docs/architecture/diagrams/ingest/execution/ingest-execution-chunks-preview-sequence.puml`
+- 执行重处理时序图：`docs/architecture/diagrams/ingest/execution/ingest-execution-reprocess-sequence.puml`
+- 执行删除时序图：`docs/architecture/diagrams/ingest/execution/ingest-execution-delete-sequence.puml`
 - 处理执行说明文档：`docs/07-ingest-processing-execution.md`
 
 ## 2. 分层设计

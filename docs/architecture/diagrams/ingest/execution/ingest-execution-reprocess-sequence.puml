@@ -1,0 +1,38 @@
+@startuml
+title Execution 时序：重处理（单用例）
+
+' Scope:
+' - reprocess 触发、版本推进、旧向量清理
+' Not in scope:
+' - worker 主处理流程细节
+' See also:
+' - ./ingest-execution-worker-process-sequence.puml
+' - ../shared/ingest-shared-state-machine.puml
+
+actor Client
+participant "DocumentIngestController" as C
+participant "ReprocessDocumentUseCase" as U
+participant "DocumentRepository" as R
+participant "DocumentVectorIndexer" as VI
+database "PostgreSQL" as PG
+
+Client -> C : POST /documents/{id}/reprocess
+C -> U : handle(documentId)
+U -> R : findById(documentId)
+R -> PG : SELECT ingest_documents by id
+alt 文档不存在
+  U --> C : DocumentNotFoundException
+  C --> Client : 404 Not Found
+else 状态冲突(INGESTING)
+  U --> C : IllegalStateException
+  C --> Client : 409 Conflict
+else 允许状态(FAILED/INDEXED)
+  U -> R : requestReprocess(status, splitVersion++)
+  R -> PG : UPDATE ... status='UPLOADED'
+  U -> VI : deleteByDocumentIdAndSplitVersion(documentId, oldVersion)
+  VI -> PG : DELETE vector_store by documentId + splitVersion
+  U --> C : DocumentStatusResult(UPLOADED)
+  C --> Client : 200 OK
+end
+
+@enduml
