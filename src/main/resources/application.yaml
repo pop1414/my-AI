@@ -1,4 +1,8 @@
 spring:
+  servlet:
+    multipart:
+      max-file-size: 50MB        # 单个文件的最大限制
+      max-request-size: 50MB     # 整个请求（包含其他表单字段）的最大限制:
   application:
     name: my-AI
   datasource:
