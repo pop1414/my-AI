@@ -1,17 +1,22 @@
 package io.github.spike.myai.ingest.interfaces.rest;
 
 import io.github.spike.myai.ingest.application.command.AcceptUploadCommand;
+import io.github.spike.myai.ingest.application.command.DeleteDocumentCommand;
 import io.github.spike.myai.ingest.application.command.ReprocessDocumentCommand;
+import io.github.spike.myai.ingest.application.exception.DocumentDeleteConflictException;
+import io.github.spike.myai.ingest.application.exception.DocumentDeleteFailedException;
 import io.github.spike.myai.ingest.application.exception.DocumentNotFoundException;
 import io.github.spike.myai.ingest.application.query.GetDocumentChunksPreviewQuery;
 import io.github.spike.myai.ingest.application.query.GetDocumentStatusQuery;
 import io.github.spike.myai.ingest.application.result.DocumentChunkPreviewItemResult;
 import io.github.spike.myai.ingest.application.result.DocumentChunksPreviewResult;
 import io.github.spike.myai.ingest.application.usecase.AcceptUploadUseCase;
+import io.github.spike.myai.ingest.application.usecase.DeleteDocumentUseCase;
 import io.github.spike.myai.ingest.application.usecase.GetDocumentChunksPreviewUseCase;
 import io.github.spike.myai.ingest.application.usecase.GetDocumentStatusUseCase;
 import io.github.spike.myai.ingest.application.usecase.ReprocessDocumentUseCase;
 import io.github.spike.myai.ingest.application.result.DocumentStatusResult;
+import org.springframework.http.ResponseEntity;
 import io.github.spike.myai.ingest.domain.model.UploadTicket;
 import io.github.spike.myai.ingest.domain.port.DocumentSourceStorage;
 import io.github.spike.myai.ingest.interfaces.rest.dto.DocumentChunkPreviewItemResponse;
@@ -25,6 +30,7 @@ import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -68,6 +74,10 @@ public class DocumentIngestController {
      */
     private final ReprocessDocumentUseCase reprocessDocumentUseCase;
     /**
+     * 文档删除用例。
+     */
+    private final DeleteDocumentUseCase deleteDocumentUseCase;
+    /**
      * 文档源文件存储端口。
      */
     private final DocumentSourceStorage documentSourceStorage;
@@ -77,11 +87,13 @@ public class DocumentIngestController {
             GetDocumentStatusUseCase getDocumentStatusUseCase,
             GetDocumentChunksPreviewUseCase getDocumentChunksPreviewUseCase,
             ReprocessDocumentUseCase reprocessDocumentUseCase,
+            DeleteDocumentUseCase deleteDocumentUseCase,
             DocumentSourceStorage documentSourceStorage) {
         this.acceptUploadUseCase = acceptUploadUseCase;
         this.getDocumentStatusUseCase = getDocumentStatusUseCase;
         this.getDocumentChunksPreviewUseCase = getDocumentChunksPreviewUseCase;
         this.reprocessDocumentUseCase = reprocessDocumentUseCase;
+        this.deleteDocumentUseCase = deleteDocumentUseCase;
         this.documentSourceStorage = documentSourceStorage;
     }
 
@@ -243,6 +255,31 @@ public class DocumentIngestController {
         } catch (IllegalStateException ex) {
             // 比如正在处理中的文档不可以重处理，这种属于当前状态非法（冲突），返回 409 CONFLICT
             throw new ResponseStatusException(HttpStatus.CONFLICT, ex.getMessage(), ex);
+        }
+    }
+
+    /**
+     * 删除文档资产（源文件 + 向量）。
+     *
+     * <p>接口契约：
+     * <ul>
+     *   <li>路径：DELETE /api/v1/documents/{documentId}</li>
+     *   <li>响应：204 No Content（删除成功或幂等删除）</li>
+     * </ul>
+     */
+    @DeleteMapping(value = "/{documentId}")
+    public ResponseEntity<Void> delete(@PathVariable("documentId") String documentId) {
+        try {
+            deleteDocumentUseCase.handle(new DeleteDocumentCommand(documentId));
+            return ResponseEntity.noContent().build();
+        } catch (DocumentNotFoundException ex) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, ex.getMessage(), ex);
+        } catch (DocumentDeleteConflictException ex) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, ex.getMessage(), ex);
+        } catch (DocumentDeleteFailedException ex) {
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, ex.getMessage(), ex);
+        } catch (IllegalArgumentException ex) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, ex.getMessage(), ex);
         }
     }
 
