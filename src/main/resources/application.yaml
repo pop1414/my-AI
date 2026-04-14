@@ -58,3 +58,12 @@ myai:
       enabled: ${INGEST_WORKER_ENABLED:true}
       # Worker 轮询间隔（毫秒）
       poll-delay-ms: ${INGEST_WORKER_POLL_DELAY_MS:5000}
+    schema-check:
+      # 启动时检查 ingest_documents 关键结构；不符合预期则拒绝启动
+      enabled: ${INGEST_SCHEMA_CHECK_ENABLED:true}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics

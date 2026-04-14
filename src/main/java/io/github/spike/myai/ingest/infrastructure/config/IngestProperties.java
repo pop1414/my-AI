@@ -15,6 +15,7 @@ public class IngestProperties {
     private final Storage storage = new Storage();
     private final Chunk chunk = new Chunk();
     private final Worker worker = new Worker();
+    private final SchemaCheck schemaCheck = new SchemaCheck();
 
     @Setter
     @Getter
@@ -44,6 +45,13 @@ public class IngestProperties {
     public static class Worker {
         private boolean enabled = false;
         private long pollDelayMs = 5000L;
+
+    }
+
+    @Setter
+    @Getter
+    public static class SchemaCheck {
+        private boolean enabled = true;
 
     }
 }
