@@ -161,7 +161,27 @@
 - 风险：重试策略不当导致重复写入
 - 回滚：保留受理闭环，关闭处理 worker 开关，保持系统可用
 
-## 10. 当前实现边界（2026-04-02）
+## 10. 观测与排障入口
+### 10.1 指标入口
+- Actuator Metrics：`GET /actuator/metrics`
+- 关键指标：
+  - `myai.ingest.process.success.total`
+  - `myai.ingest.process.failed.total`
+  - `myai.ingest.process.retry_scheduled.total`
+  - `myai.ingest.delete.conflict.total`
+  - `myai.ingest.delete.success.total`
+
+### 10.2 典型异常判读
+- `process.failed.total` 上升且 `process.retry_scheduled.total` 不上升：优先排查永久性错误（格式不支持、参数非法、权限/额度问题）。
+- `process.retry_scheduled.total` 持续上升：优先排查瞬时依赖波动（网络超时、5xx、连接池耗尽）。
+- `delete.conflict.total` 上升：说明删除请求与 `INGESTING/DELETING` 并发冲突较多，优先排查调用时机与重试策略。
+
+### 10.3 排障顺序建议
+1. 先看 `GET /actuator/health`，确认数据库与基础依赖可用。
+2. 再看 `GET /actuator/metrics/{metricName}`，确认异常类型属于失败、重试还是删除冲突。
+3. 最后结合应用日志中的 `documentId/status/retryCount` 定位到具体文档并复现。
+
+## 11. 当前实现边界（2026-04-14）
 - 已实现：
   - 上传受理幂等（`kbId + fileHash`）
   - 任务启动 `UPLOADED -> INGESTING` 的 CAS 抢占能力

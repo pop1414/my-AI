@@ -1,6 +1,6 @@
 # 版本路线图（Roadmap）
 
-## 当前进度快照（截至 2026-04-08）
+## 当前进度快照（截至 2026-04-14）
 
 ### 已完成
 - `ingest` 受理闭环：上传受理、状态查询、`kbId + fileHash` 幂等
@@ -8,15 +8,17 @@
 - 单进程异步 worker（可配置开关）
 - 解析/清洗/分块/向量写入主链路（Tika + 结构优先分块 + PGVector）
 - 分块预览调试接口：`GET /api/v1/documents/{documentId}/chunks/preview`
+- 重处理能力：`POST /api/v1/documents/{documentId}/reprocess`（`splitVersion++`）
+- 瞬时错误重试：指数退避 + jitter（区分 `is_transient`）
+- 资产删除闭环：`DELETE /api/v1/documents/{documentId}`（`DELETING -> DELETED`）
 
 ### 进行中
-- 本地端到端环境收敛（PostgreSQL/PGVector、DashScope Key、运行脚本与联调手册）
+- V1 收口：本地端到端环境收敛（PostgreSQL/PGVector、DashScope Key、运行脚本与联调手册）
+- ingest 启动结构自检与最小可观测能力补齐（Actuator + Micrometer）
 
 ### 未开始（V1 后半段 / V2）
 - `GET /api/v1/knowledge-bases`
 - `POST /api/v1/qa/ask`
-- `POST /api/v1/documents/{documentId}/reprocess`（支持 `splitVersion++`）
-- 瞬时错误重试（指数退避 + jitter，区分 `is_transient`）
 - OCR 与复杂版式增强
 
 ## 版本策略

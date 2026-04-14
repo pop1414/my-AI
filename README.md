@@ -90,6 +90,7 @@
 - `INGEST_STORAGE_ROOT_DIR`（默认 `data/ingest`）
 - `INGEST_CHUNK_SIZE`（默认 `500`）
 - `INGEST_CHUNK_OVERLAP`（默认 `100`）
+- `INGEST_SCHEMA_CHECK_ENABLED`（默认 `true`，启动时进行 ingest 表结构自检）
 
 ### 5.3 启动
 
@@ -99,10 +100,22 @@ Windows:
 .\mvnw.cmd spring-boot:run
 ```
 
+或使用一键脚本（先拉起 PG，再启动后端）：
+
+```bash
+.\infra\dev-up.ps1
+```
+
 Linux/macOS:
 
 ```bash
 ./mvnw spring-boot:run
+```
+
+或使用一键脚本：
+
+```bash
+./infra/dev-up.sh
 ```
 
 ### 5.4 测试
@@ -117,6 +130,53 @@ Linux/macOS:
 
 ```bash
 .\mvnw.cmd "-Dtest=!MyAiApplicationTests" test
+```
+
+### 5.5 V1 本地闭环演示（上传 -> INDEXED/FAILED -> 删除 -> DELETED）
+
+1) 启动服务后，上传一个本地文件并记录 `documentId`：
+
+Windows PowerShell:
+
+```powershell
+$upload = curl.exe -sS -X POST "http://localhost:8080/api/v1/documents/upload" -F "file=@D:/tmp/sample.txt" -F "kbId=default" | ConvertFrom-Json
+$docId = $upload.documentId
+$docId
+```
+
+Linux/macOS:
+
+```bash
+UPLOAD_JSON=$(curl -sS -X POST "http://localhost:8080/api/v1/documents/upload" -F "file=@/tmp/sample.txt" -F "kbId=default")
+echo "$UPLOAD_JSON"
+```
+
+2) 轮询状态：
+
+```bash
+curl -sS "http://localhost:8080/api/v1/documents/{documentId}/status"
+```
+
+3) 删除文档资产：
+
+```bash
+curl -i -X DELETE "http://localhost:8080/api/v1/documents/{documentId}"
+```
+
+4) 删除后再次查状态，预期返回 `DELETED`（不是 `404`）：
+
+```bash
+curl -sS "http://localhost:8080/api/v1/documents/{documentId}/status"
+```
+
+5) 查看 ingest 指标：
+
+```bash
+curl -sS "http://localhost:8080/actuator/metrics/myai.ingest.process.success.total"
+curl -sS "http://localhost:8080/actuator/metrics/myai.ingest.process.failed.total"
+curl -sS "http://localhost:8080/actuator/metrics/myai.ingest.process.retry_scheduled.total"
+curl -sS "http://localhost:8080/actuator/metrics/myai.ingest.delete.conflict.total"
+curl -sS "http://localhost:8080/actuator/metrics/myai.ingest.delete.success.total"
 ```
 
 ## 6. API 摘要
@@ -161,6 +221,7 @@ Linux/macOS:
 ## 7. 当前边界与注意事项
 
 - worker 默认开启；如需关闭可显式设置 `INGEST_WORKER_ENABLED=false`
+- 启动时默认执行 `ingest_documents` 结构自检；如需临时跳过可设置 `INGEST_SCHEMA_CHECK_ENABLED=false`
 - 解析已升级为 Tika 基线能力；扫描版 PDF 的 OCR 与复杂版式提取仍待增强
 - 状态枚举包含：`UPLOADED / INGESTING / INDEXED / FAILED / DELETING / DELETED`
 - 同一 `kbId + fileHash` 在 `DELETED` 后允许重新上传（生成新 documentId）

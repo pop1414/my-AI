@@ -13,6 +13,9 @@
 - 新增 Tika 文档解析实现与文本二次清洗服务（禁用嵌入资源提取）
 - 新增分块预览调试接口：`GET /api/v1/documents/{documentId}/chunks/preview`
 - 新增文档资产删除接口：`DELETE /api/v1/documents/{documentId}`（软删除，清理源文件与向量）
+- 新增本地启动脚本：`infra/dev-up.ps1`、`infra/dev-up.sh`（一键拉起 PGVector 与后端）
+- 新增 ingest 启动结构自检（`IngestSchemaVerifier`）：关键列/唯一索引不匹配时拒绝启动
+- 新增 ingest 核心指标计数：`myai.ingest.process.success.total`、`myai.ingest.process.failed.total`、`myai.ingest.process.retry_scheduled.total`、`myai.ingest.delete.conflict.total`、`myai.ingest.delete.success.total`
 
 ### Changed
 - ADR-0001 后续动作补充 ADR-0002 跟进项
@@ -38,6 +41,8 @@
 - 文档同步（2026-04-14）：README 与处理执行文档补充删除闭环说明，双套 ingest puml 更新
 - 文档收敛（2026-04-14）：删除闭环契约表述统一（`DELETED` 可查、`INGESTING/DELETING` 返回 `409`、重复删除 `204`、不存在 `404`）
 - UML 索引收敛（2026-04-14）：`文档处理.md` 迁移至 `docs/reference/ingest-文档处理技术指导.md`，图谱目录仅保留分层 puml 资产
+- 基础设施修正（2026-04-14）：`infra/docker-compose.yml` 的 PG 健康检查用户改为 `admin`，与默认配置对齐
+- 管理端点收敛（2026-04-14）：开放 `health/info/metrics` 以支持 ingest 最小可观测
 
 ### Fixed
 - 
