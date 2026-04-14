@@ -13,15 +13,22 @@ const documentStatusResponseSchema = z.object({
 
 const documentChunkPreviewItemSchema = z.object({
   chunkIndex: z.number().int(),
+  contentLength: z.number().int(),
   contentPreview: z.string(),
+  truncated: z.boolean(),
   sourceFile: z.string(),
   contentHash: z.string(),
   splitVersion: z.string(),
+  sourceHint: z.string().nullable().optional(),
 });
 
 const documentChunksPreviewResponseSchema = z.object({
   documentId: z.string().min(1),
   chunkCount: z.number().int(),
+  totalChunks: z.number().int(),
+  limit: z.number().int(),
+  offset: z.number().int(),
+  previewChars: z.number().int(),
   chunks: z.array(documentChunkPreviewItemSchema),
 });
 
@@ -51,10 +58,12 @@ export async function getDocumentStatus(documentId: string): Promise<DocumentSta
 export async function getDocumentChunksPreview(params: {
   documentId: string;
   limit: number;
+  offset: number;
   previewChars: number;
 }): Promise<DocumentChunksPreviewResponse> {
   const query = new URLSearchParams({
     limit: String(params.limit),
+    offset: String(params.offset),
     previewChars: String(params.previewChars),
   }).toString();
 
@@ -62,4 +71,14 @@ export async function getDocumentChunksPreview(params: {
     `/api/v1/documents/${encodeURIComponent(params.documentId)}/chunks/preview?${query}`,
   );
   return documentChunksPreviewResponseSchema.parse(response);
+}
+
+export async function reprocessDocument(documentId: string): Promise<DocumentStatusResponse> {
+  const response = await requestJson<unknown>(
+    `/api/v1/documents/${encodeURIComponent(documentId)}/reprocess`,
+    {
+      method: 'POST',
+    },
+  );
+  return documentStatusResponseSchema.parse(response);
 }

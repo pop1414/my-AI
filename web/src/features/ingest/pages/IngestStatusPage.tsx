@@ -1,6 +1,7 @@
 ﻿import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Button, Card, Form, Input, Space, Switch, Tag, Typography } from 'antd';
+import { useNavigate } from 'react-router-dom';
 import { z } from 'zod';
 import { getDocumentStatus } from '../../../shared/api/ingestApi';
 import { ApiErrorAlert } from '../../../shared/ui/ApiErrorAlert';
@@ -27,6 +28,7 @@ function statusColor(status?: string): string {
 }
 
 export function IngestStatusPage() {
+  const navigate = useNavigate();
   const [form] = Form.useForm<{ documentId: string }>();
   const [targetDocumentId, setTargetDocumentId] = useState<string>(() => localStorage.getItem('myai:lastDocumentId') ?? '');
   const [autoRefresh, setAutoRefresh] = useState(true);
@@ -58,7 +60,10 @@ export function IngestStatusPage() {
 
   return (
     <Space direction="vertical" size={16} style={{ width: '100%' }}>
-      <Card title="查询文档状态" extra={<Typography.Text type="secondary">GET /api/v1/documents/{'{documentId}'}/status</Typography.Text>}>
+      <Card
+        title="查询文档状态"
+        extra={<Typography.Text type="secondary">GET /api/v1/documents/{'{documentId}'}/status</Typography.Text>}
+      >
         <Form form={form} layout="inline" initialValues={{ documentId: targetDocumentId }} onFinish={onSubmit}>
           <Form.Item name="documentId" style={{ flex: 1, minWidth: 320 }}>
             <Input placeholder="输入 documentId" allowClear />
@@ -96,6 +101,17 @@ export function IngestStatusPage() {
           <p>
             <strong>status:</strong> <Tag color={statusColor(statusQuery.data.status)}>{statusQuery.data.status}</Tag>
           </p>
+          {(statusQuery.data.status === 'FAILED' || statusQuery.data.status === 'INDEXED') && (
+            <Button
+              type="default"
+              onClick={() => {
+                localStorage.setItem('myai:lastDocumentId', statusQuery.data!.documentId);
+                navigate('/ingest/reprocess');
+              }}
+            >
+              去重处理
+            </Button>
+          )}
         </Card>
       )}
     </Space>

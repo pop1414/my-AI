@@ -15,7 +15,8 @@
 - 文档上传：`/ingest/upload`
 - 状态查询：`/ingest/status`
 - 分块预览：`/ingest/chunks-preview`
-- 占位页（草案）：`/knowledge`、`/qa`、`/reprocess`
+- 文档重处理：`/ingest/reprocess`
+- 占位页（草案）：`/knowledge`、`/qa`
 
 ## 本地开发
 
@@ -24,7 +25,7 @@ npm install
 npm run dev
 ```
 
-默认访问地址：`http://localhost:5173`
+默认访问地址：`http://localhost:3000`
 
 ## 与后端联调
 

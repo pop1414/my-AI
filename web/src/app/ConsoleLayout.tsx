@@ -12,10 +12,10 @@ const menuItems: MenuItem[] = [
   { key: '/ingest/upload', icon: <UploadOutlined />, label: '文档上传' },
   { key: '/ingest/status', icon: <FileSyncOutlined />, label: '状态查询' },
   { key: '/ingest/chunks-preview', icon: <FileSearchOutlined />, label: '分块预览' },
+  { key: '/ingest/reprocess', icon: <FileSyncOutlined />, label: '重处理' },
   { type: 'divider' },
   { key: '/knowledge', icon: <FileTextOutlined />, label: '知识库（草案）' },
   { key: '/qa', icon: <SearchOutlined />, label: '问答（草案）' },
-  { key: '/reprocess', icon: <FileSyncOutlined />, label: '重处理（草案）' },
 ];
 
 function resolveTitle(pathname: string): string {
@@ -23,9 +23,9 @@ function resolveTitle(pathname: string): string {
     '/ingest/upload': '文档上传受理',
     '/ingest/status': '文档状态查询',
     '/ingest/chunks-preview': '文档分块预览',
+    '/ingest/reprocess': '文档重处理',
     '/knowledge': '知识库管理（草案）',
     '/qa': '问答控制台（草案）',
-    '/reprocess': '文档重处理（草案）',
   };
   return map[pathname] ?? 'Ingest 控制台';
 }
