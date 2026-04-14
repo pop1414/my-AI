@@ -1,4 +1,4 @@
-﻿import { FileSearchOutlined, FileSyncOutlined, FileTextOutlined, SearchOutlined, UploadOutlined } from '@ant-design/icons';
+﻿import { DeleteOutlined, FileSearchOutlined, FileSyncOutlined, FileTextOutlined, SearchOutlined, UploadOutlined } from '@ant-design/icons';
 import { Breadcrumb, Layout, Menu, Typography } from 'antd';
 import type { MenuProps } from 'antd';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
@@ -13,6 +13,7 @@ const menuItems: MenuItem[] = [
   { key: '/ingest/status', icon: <FileSyncOutlined />, label: '状态查询' },
   { key: '/ingest/chunks-preview', icon: <FileSearchOutlined />, label: '分块预览' },
   { key: '/ingest/reprocess', icon: <FileSyncOutlined />, label: '重处理' },
+  { key: '/ingest/delete', icon: <DeleteOutlined />, label: '删除文档' },
   { type: 'divider' },
   { key: '/knowledge', icon: <FileTextOutlined />, label: '知识库（草案）' },
   { key: '/qa', icon: <SearchOutlined />, label: '问答（草案）' },
@@ -24,6 +25,7 @@ function resolveTitle(pathname: string): string {
     '/ingest/status': '文档状态查询',
     '/ingest/chunks-preview': '文档分块预览',
     '/ingest/reprocess': '文档重处理',
+    '/ingest/delete': '删除文档资产',
     '/knowledge': '知识库管理（草案）',
     '/qa': '问答控制台（草案）',
   };

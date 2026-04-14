@@ -16,6 +16,7 @@
 - 状态查询：`/ingest/status`
 - 分块预览：`/ingest/chunks-preview`
 - 文档重处理：`/ingest/reprocess`
+- 文档删除：`/ingest/delete`
 - 占位页（草案）：`/knowledge`、`/qa`
 
 ## 本地开发

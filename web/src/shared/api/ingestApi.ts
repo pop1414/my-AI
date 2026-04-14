@@ -82,3 +82,9 @@ export async function reprocessDocument(documentId: string): Promise<DocumentSta
   );
   return documentStatusResponseSchema.parse(response);
 }
+
+export async function deleteDocument(documentId: string): Promise<void> {
+  await requestJson<unknown>(`/api/v1/documents/${encodeURIComponent(documentId)}`, {
+    method: 'DELETE',
+  });
+}

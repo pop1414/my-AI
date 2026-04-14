@@ -4,6 +4,7 @@ import { IngestUploadPage } from '../features/ingest/pages/IngestUploadPage';
 import { IngestStatusPage } from '../features/ingest/pages/IngestStatusPage';
 import { IngestChunksPreviewPage } from '../features/ingest/pages/IngestChunksPreviewPage';
 import { IngestReprocessPage } from '../features/ingest/pages/IngestReprocessPage';
+import { IngestDeletePage } from '../features/ingest/pages/IngestDeletePage';
 import { PlaceholderPage } from '../features/placeholder/pages/PlaceholderPage';
 
 export function AppRoutes() {
@@ -15,7 +16,9 @@ export function AppRoutes() {
         <Route path="ingest/status" element={<IngestStatusPage />} />
         <Route path="ingest/chunks-preview" element={<IngestChunksPreviewPage />} />
         <Route path="ingest/reprocess" element={<IngestReprocessPage />} />
+        <Route path="ingest/delete" element={<IngestDeletePage />} />
         <Route path="reprocess" element={<Navigate to="/ingest/reprocess" replace />} />
+        <Route path="delete" element={<Navigate to="/ingest/delete" replace />} />
         <Route
           path="knowledge"
           element={

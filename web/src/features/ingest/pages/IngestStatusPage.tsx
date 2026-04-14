@@ -10,7 +10,7 @@ const statusFormSchema = z.object({
   documentId: z.string().trim().min(1, 'documentId 不能为空'),
 });
 
-const terminalStatuses = new Set(['INDEXED', 'FAILED']);
+const terminalStatuses = new Set(['INDEXED', 'FAILED', 'DELETED']);
 
 function statusColor(status?: string): string {
   switch (status) {
@@ -22,6 +22,10 @@ function statusColor(status?: string): string {
       return 'success';
     case 'FAILED':
       return 'error';
+    case 'DELETING':
+      return 'warning';
+    case 'DELETED':
+      return 'default';
     default:
       return 'default';
   }
@@ -101,17 +105,31 @@ export function IngestStatusPage() {
           <p>
             <strong>status:</strong> <Tag color={statusColor(statusQuery.data.status)}>{statusQuery.data.status}</Tag>
           </p>
-          {(statusQuery.data.status === 'FAILED' || statusQuery.data.status === 'INDEXED') && (
-            <Button
-              type="default"
-              onClick={() => {
-                localStorage.setItem('myai:lastDocumentId', statusQuery.data!.documentId);
-                navigate('/ingest/reprocess');
-              }}
-            >
-              去重处理
-            </Button>
-          )}
+          <Space>
+            {(statusQuery.data.status === 'FAILED' || statusQuery.data.status === 'INDEXED') && (
+              <Button
+                type="default"
+                onClick={() => {
+                  localStorage.setItem('myai:lastDocumentId', statusQuery.data!.documentId);
+                  navigate('/ingest/reprocess');
+                }}
+              >
+                去重处理
+              </Button>
+            )}
+            {statusQuery.data.status !== 'DELETED' && statusQuery.data.status !== 'DELETING' && (
+              <Button
+                danger
+                type="default"
+                onClick={() => {
+                  localStorage.setItem('myai:lastDocumentId', statusQuery.data!.documentId);
+                  navigate('/ingest/delete');
+                }}
+              >
+                去删除
+              </Button>
+            )}
+          </Space>
         </Card>
       )}
     </Space>
