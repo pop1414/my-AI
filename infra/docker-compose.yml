@@ -12,7 +12,7 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U myai -d myai"]
+      test: ["CMD-SHELL", "pg_isready -U admin -d myai"]
       interval: 5s
       timeout: 3s
       retries: 20
