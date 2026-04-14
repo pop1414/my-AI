@@ -10,6 +10,8 @@ package io.github.spike.myai.ingest.domain.model;
  *     <li>INGESTING：正在执行解析、分块、向量化与入库。</li>
  *     <li>INDEXED：向量索引已完成，可进入问答检索。</li>
  *     <li>FAILED：处理失败，通常需要结合失败原因定位问题。</li>
+ *     <li>DELETING：文档资产删除中（正在清理源文件与向量数据）。</li>
+ *     <li>DELETED：文档资产已删除（保留元数据用于审计与状态可观测）。</li>
  * </ul>
  */
 public enum UploadStatus {
@@ -17,5 +19,7 @@ public enum UploadStatus {
     UPLOADED,
     INGESTING,
     INDEXED,
-    FAILED
+    FAILED,
+    DELETING,
+    DELETED
 }
