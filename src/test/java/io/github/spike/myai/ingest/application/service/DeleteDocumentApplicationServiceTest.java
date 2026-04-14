@@ -12,12 +12,14 @@ import io.github.spike.myai.ingest.application.command.DeleteDocumentCommand;
 import io.github.spike.myai.ingest.application.exception.DocumentDeleteConflictException;
 import io.github.spike.myai.ingest.application.exception.DocumentDeleteFailedException;
 import io.github.spike.myai.ingest.application.exception.DocumentNotFoundException;
+import io.github.spike.myai.ingest.application.monitoring.IngestMetrics;
 import io.github.spike.myai.ingest.domain.model.Document;
 import io.github.spike.myai.ingest.domain.model.DocumentId;
 import io.github.spike.myai.ingest.domain.model.UploadStatus;
 import io.github.spike.myai.ingest.domain.port.DocumentRepository;
 import io.github.spike.myai.ingest.domain.port.DocumentSourceStorage;
 import io.github.spike.myai.ingest.domain.port.DocumentVectorIndexer;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Instant;
 import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
@@ -35,8 +37,10 @@ class DeleteDocumentApplicationServiceTest {
         DocumentRepository repository = Mockito.mock(DocumentRepository.class);
         DocumentSourceStorage sourceStorage = Mockito.mock(DocumentSourceStorage.class);
         DocumentVectorIndexer vectorIndexer = Mockito.mock(DocumentVectorIndexer.class);
+        SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
         DeleteDocumentApplicationService service =
-                new DeleteDocumentApplicationService(repository, sourceStorage, vectorIndexer);
+                new DeleteDocumentApplicationService(
+                        repository, sourceStorage, vectorIndexer, new IngestMetrics(meterRegistry));
 
         DocumentId documentId = new DocumentId("doc-del-1");
         Document indexed = new Document(
@@ -68,6 +72,8 @@ class DeleteDocumentApplicationServiceTest {
         verify(vectorIndexer, times(1)).deleteByDocumentId(documentId);
         verify(repository, times(1)).markDeleted(eq(documentId), any(Instant.class));
         verify(repository, never()).rollbackDeleting(any(), any(), any());
+        org.junit.jupiter.api.Assertions.assertEquals(
+                1.0, meterRegistry.get("myai.ingest.delete.success.total").counter().count());
     }
 
     @Test
@@ -76,8 +82,10 @@ class DeleteDocumentApplicationServiceTest {
         DocumentRepository repository = Mockito.mock(DocumentRepository.class);
         DocumentSourceStorage sourceStorage = Mockito.mock(DocumentSourceStorage.class);
         DocumentVectorIndexer vectorIndexer = Mockito.mock(DocumentVectorIndexer.class);
+        SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
         DeleteDocumentApplicationService service =
-                new DeleteDocumentApplicationService(repository, sourceStorage, vectorIndexer);
+                new DeleteDocumentApplicationService(
+                        repository, sourceStorage, vectorIndexer, new IngestMetrics(meterRegistry));
         when(repository.findById(new DocumentId("doc-missing"))).thenReturn(Optional.empty());
 
         assertThrows(DocumentNotFoundException.class, () -> service.handle(new DeleteDocumentCommand("doc-missing")));
@@ -89,8 +97,10 @@ class DeleteDocumentApplicationServiceTest {
         DocumentRepository repository = Mockito.mock(DocumentRepository.class);
         DocumentSourceStorage sourceStorage = Mockito.mock(DocumentSourceStorage.class);
         DocumentVectorIndexer vectorIndexer = Mockito.mock(DocumentVectorIndexer.class);
+        SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
         DeleteDocumentApplicationService service =
-                new DeleteDocumentApplicationService(repository, sourceStorage, vectorIndexer);
+                new DeleteDocumentApplicationService(
+                        repository, sourceStorage, vectorIndexer, new IngestMetrics(meterRegistry));
 
         DocumentId documentId = new DocumentId("doc-del-2");
         Document ingesting = new Document(
@@ -116,6 +126,8 @@ class DeleteDocumentApplicationServiceTest {
 
         assertThrows(DocumentDeleteConflictException.class, () -> service.handle(new DeleteDocumentCommand("doc-del-2")));
         verify(repository, never()).markDeleting(any(), any(), any());
+        org.junit.jupiter.api.Assertions.assertEquals(
+                1.0, meterRegistry.get("myai.ingest.delete.conflict.total").counter().count());
     }
 
     @Test
@@ -124,8 +136,10 @@ class DeleteDocumentApplicationServiceTest {
         DocumentRepository repository = Mockito.mock(DocumentRepository.class);
         DocumentSourceStorage sourceStorage = Mockito.mock(DocumentSourceStorage.class);
         DocumentVectorIndexer vectorIndexer = Mockito.mock(DocumentVectorIndexer.class);
+        SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
         DeleteDocumentApplicationService service =
-                new DeleteDocumentApplicationService(repository, sourceStorage, vectorIndexer);
+                new DeleteDocumentApplicationService(
+                        repository, sourceStorage, vectorIndexer, new IngestMetrics(meterRegistry));
 
         DocumentId documentId = new DocumentId("doc-del-3");
         Document failed = new Document(

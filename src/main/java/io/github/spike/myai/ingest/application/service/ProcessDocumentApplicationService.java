@@ -1,5 +1,6 @@
 package io.github.spike.myai.ingest.application.service;
 
+import io.github.spike.myai.ingest.application.monitoring.IngestMetrics;
 import io.github.spike.myai.ingest.application.usecase.ProcessDocumentUseCase;
 import io.github.spike.myai.ingest.domain.model.Document;
 import io.github.spike.myai.ingest.domain.model.DocumentChunk;
@@ -43,31 +44,39 @@ public class ProcessDocumentApplicationService implements ProcessDocumentUseCase
      */
     private static final long JITTER_MILLIS = 300L;
 
-    private final DocumentRepository documentRepository;
-    private final DocumentSourceStorage sourceStorage;
-    private final DocumentTextParser documentTextParser;
-    private final DocumentChunker documentChunker;
-    private final DocumentVectorIndexer documentVectorIndexer;
-    private final RetryPolicy retryPolicy;
+    private final DocumentRepository documentRepository; // 文档元数据仓库
+    private final DocumentSourceStorage sourceStorage; // 源文件存储
+    private final DocumentTextParser documentTextParser; // 文本解析器
+    private final DocumentChunker documentChunker; // 文本分块器
+    private final DocumentVectorIndexer documentVectorIndexer; // 矢量索引器
+    private final RetryPolicy retryPolicy; // 重试策略判断器
+    private final IngestMetrics ingestMetrics; // 业务指标监控
 
+    /**
+     * 构造函数：注入处理流程所需的各项基础设施和策略组件。
+     */
     public ProcessDocumentApplicationService(
             DocumentRepository documentRepository,
             DocumentSourceStorage sourceStorage,
             DocumentTextParser documentTextParser,
             DocumentChunker documentChunker,
             DocumentVectorIndexer documentVectorIndexer,
-            RetryPolicy retryPolicy) {
+            RetryPolicy retryPolicy,
+            IngestMetrics ingestMetrics) {
         this.documentRepository = documentRepository;
         this.sourceStorage = sourceStorage;
         this.documentTextParser = documentTextParser;
         this.documentChunker = documentChunker;
         this.documentVectorIndexer = documentVectorIndexer;
         this.retryPolicy = retryPolicy;
+        this.ingestMetrics = ingestMetrics;
     }
 
     /**
      * 执行文档处理的核心逻辑。
      * 包括：读取文件、文本解析、内容切片、向量索引以及最后的状态更新。
+     *
+     * <p>该方法采用乐观锁（CAS）推进状态，确保同一时间只有一个处理流程能成功更新数据库。
      *
      * @param documentId 待处理的文档唯一标识 ID
      */
@@ -89,36 +98,43 @@ public class ProcessDocumentApplicationService implements ProcessDocumentUseCase
         }
 
         try {
-            // 1) 读取源文件（上传阶段已落盘）；不存在时进入 FAILED。
+            // 步骤 1: 从存储系统中调取原始文件字节数组。
             byte[] sourceBytes = sourceStorage
                     .load(documentId, document.filename())
                     .orElseThrow(() -> new IllegalStateException("source file not found"));
-            // 2) 解析为纯文本（V1 先支持文本类文件）。
+
+            // 步骤 2: 将不同格式的文件解析为纯文本字符串。
             String text = documentTextParser.parse(document.filename(), sourceBytes);
-            // 3) 分块（结构优先 + 长度兜底）。
+            // 步骤 3: 分块（结构优先 + 长度兜底）。
             List<DocumentChunk> chunks = documentChunker.chunk(text);
             if (chunks.isEmpty()) {
                 throw new IllegalStateException("no chunks generated");
             }
-            // 4) 向量写入（内部保证幂等写入语义）。
+
+            // 步骤 4: 调用 Embedding 模型并将生成的矢量存入向量数据库，以便后续语义搜索。
             documentVectorIndexer.index(document, chunks);
 
-            // 5) 状态收口：仅当当前仍是 INGESTING 时，才允许推进到 INDEXED。
-            // 若 CAS 失败，说明状态已被其它流程改变，此处不再强写。
+            // 步骤 5: 状态收口：仅当当前仍是 INGESTING 时，才允许推进到最终成功态 INDEXED。
+            // 使用 CAS 确保在处理期间文档没有被外部（如删除操作）修改。
             boolean updated = documentRepository.markIndexed(documentId, UploadStatus.INGESTING, Instant.now());
             if (!updated) {
                 log.warn("Status update to INDEXED skipped by CAS. documentId={}", documentId.value());
                 return;
             }
+            ingestMetrics.incrementProcessSuccess();
             log.info("Document processed successfully. documentId={}, chunks={}", documentId.value(), chunks.size());
         } catch (Exception ex) {
-            // 依据策略判断“是否瞬时错误”，决定进入重试还是直接失败。
+            // 异常处理逻辑：依据策略判断这次异常是“暂时的”还是“致命的”。
             RetryPolicy.RetryDecision decision = retryPolicy.decide(ex);
             Instant now = Instant.now();
+
+            // 如果判断为可重试错误且未超过最大重试次数
             if (decision.transientError() && document.retryCount() < document.retryMax()) {
                 int nextRetryCount = document.retryCount() + 1;
-                // 指数退避 + jitter，避免并发失败时集体同时重试。
+                // 计算下一次尝试的时间点，采用指数退避算法增加间隔。
                 Instant nextRetryAt = now.plus(computeBackoff(nextRetryCount));
+
+                // 将状态更新为待重试，并记录当前的错误代码和摘要。
                 boolean updated = documentRepository.markRetry(
                         documentId,
                         UploadStatus.INGESTING,
@@ -131,15 +147,18 @@ public class ProcessDocumentApplicationService implements ProcessDocumentUseCase
                 if (!updated) {
                     log.warn("Retry scheduling skipped by CAS. documentId={}", documentId.value());
                 } else {
+                    ingestMetrics.incrementRetryScheduled();
                     log.warn(
-                            "Document processing failed, scheduled retry. documentId={}, retryCount={}, nextRetryAt={}",
+                            "Document processing failed, scheduled retry. documentId={}, status={}, retryCount={}, nextRetryAt={}",
                             documentId.value(),
+                            UploadStatus.UPLOADED,
                             nextRetryCount,
                             nextRetryAt);
                 }
                 return;
             }
-            // 失败收口：统一截断失败原因后写入 FAILED，避免错误消息过长污染存储。
+
+            // 如果不可重试或已达上限，则标记为最终失败态 FAILED。
             String reason = trimFailureReason(decision.errorMessage());
             // 非瞬时错误或超过最大重试次数时，直接进入 FAILED 并保留错误信息。
             boolean updated = documentRepository.markFailed(
@@ -154,7 +173,14 @@ public class ProcessDocumentApplicationService implements ProcessDocumentUseCase
                 log.warn("Status update to FAILED skipped by CAS. documentId={}", documentId.value());
                 return;
             }
-            log.warn("Document processing failed. documentId={}, reason={}", documentId.value(), reason, ex);
+            ingestMetrics.incrementProcessFailed();
+            log.warn(
+                    "Document processing failed. documentId={}, status={}, retryCount={}, reason={}",
+                    documentId.value(),
+                    UploadStatus.FAILED,
+                    document.retryCount(),
+                    reason,
+                    ex);
         }
     }
 
@@ -191,3 +217,4 @@ public class ProcessDocumentApplicationService implements ProcessDocumentUseCase
         return Duration.ofMillis(exponential + jitter);
     }
 }
+

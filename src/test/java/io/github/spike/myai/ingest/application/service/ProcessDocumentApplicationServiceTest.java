@@ -7,6 +7,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import io.github.spike.myai.ingest.application.monitoring.IngestMetrics;
 import io.github.spike.myai.ingest.domain.model.Document;
 import io.github.spike.myai.ingest.domain.model.DocumentChunk;
 import io.github.spike.myai.ingest.domain.model.DocumentId;
@@ -16,6 +17,8 @@ import io.github.spike.myai.ingest.domain.port.DocumentRepository;
 import io.github.spike.myai.ingest.domain.port.DocumentSourceStorage;
 import io.github.spike.myai.ingest.domain.port.DocumentTextParser;
 import io.github.spike.myai.ingest.domain.port.DocumentVectorIndexer;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import java.net.SocketTimeoutException;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -36,6 +39,7 @@ class ProcessDocumentApplicationServiceTest {
         DocumentTextParser parser = Mockito.mock(DocumentTextParser.class);
         DocumentChunker chunker = Mockito.mock(DocumentChunker.class);
         DocumentVectorIndexer vectorIndexer = Mockito.mock(DocumentVectorIndexer.class);
+        SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
         ProcessDocumentApplicationService service =
                 new ProcessDocumentApplicationService(
                         repository,
@@ -43,7 +47,8 @@ class ProcessDocumentApplicationServiceTest {
                         parser,
                         chunker,
                         vectorIndexer,
-                        new RetryPolicy());
+                        new RetryPolicy(),
+                        new IngestMetrics(meterRegistry));
 
         DocumentId documentId = new DocumentId("doc-proc-1");
         Document ingesting = new Document(
@@ -79,6 +84,8 @@ class ProcessDocumentApplicationServiceTest {
                 .markIndexed(eq(documentId), eq(UploadStatus.INGESTING), any(Instant.class));
         verify(repository, never())
                 .markFailed(eq(documentId), eq(UploadStatus.INGESTING), any(), any(), any(), any(), any(Instant.class));
+        org.junit.jupiter.api.Assertions.assertEquals(
+                1.0, meterRegistry.get("myai.ingest.process.success.total").counter().count());
     }
 
     @Test
@@ -89,6 +96,7 @@ class ProcessDocumentApplicationServiceTest {
         DocumentTextParser parser = Mockito.mock(DocumentTextParser.class);
         DocumentChunker chunker = Mockito.mock(DocumentChunker.class);
         DocumentVectorIndexer vectorIndexer = Mockito.mock(DocumentVectorIndexer.class);
+        SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
         ProcessDocumentApplicationService service =
                 new ProcessDocumentApplicationService(
                         repository,
@@ -96,7 +104,8 @@ class ProcessDocumentApplicationServiceTest {
                         parser,
                         chunker,
                         vectorIndexer,
-                        new RetryPolicy());
+                        new RetryPolicy(),
+                        new IngestMetrics(meterRegistry));
 
         DocumentId documentId = new DocumentId("doc-proc-2");
         Document ingesting = new Document(
@@ -120,11 +129,91 @@ class ProcessDocumentApplicationServiceTest {
                 Instant.now());
         when(repository.findById(documentId)).thenReturn(Optional.of(ingesting));
         when(sourceStorage.load(documentId, "b.txt")).thenReturn(Optional.empty());
+        when(repository.markFailed(
+                        eq(documentId),
+                        eq(UploadStatus.INGESTING),
+                        any(String.class),
+                        any(),
+                        any(),
+                        any(),
+                        any(Instant.class)))
+                .thenReturn(true);
 
         service.handle(documentId);
 
         verify(repository, times(1))
                 .markFailed(eq(documentId), eq(UploadStatus.INGESTING), any(String.class), any(), any(), any(), any(Instant.class));
         verify(vectorIndexer, never()).index(any(Document.class), any(List.class));
+        org.junit.jupiter.api.Assertions.assertEquals(
+                1.0, meterRegistry.get("myai.ingest.process.failed.total").counter().count());
+    }
+
+    @Test
+    @DisplayName("瞬时错误时，应安排重试并增加重试计数指标")
+    void handle_shouldScheduleRetry_whenTransientError() {
+        DocumentRepository repository = Mockito.mock(DocumentRepository.class);
+        DocumentSourceStorage sourceStorage = Mockito.mock(DocumentSourceStorage.class);
+        DocumentTextParser parser = Mockito.mock(DocumentTextParser.class);
+        DocumentChunker chunker = Mockito.mock(DocumentChunker.class);
+        DocumentVectorIndexer vectorIndexer = Mockito.mock(DocumentVectorIndexer.class);
+        SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
+        ProcessDocumentApplicationService service =
+                new ProcessDocumentApplicationService(
+                        repository,
+                        sourceStorage,
+                        parser,
+                        chunker,
+                        vectorIndexer,
+                        new RetryPolicy(),
+                        new IngestMetrics(meterRegistry));
+
+        DocumentId documentId = new DocumentId("doc-proc-3");
+        Document ingesting = new Document(
+                documentId,
+                "kb-1",
+                "hash-3",
+                "c.txt",
+                100,
+                UploadStatus.INGESTING,
+                null,
+                0,
+                3,
+                null,
+                null,
+                null,
+                null,
+                0,
+                null,
+                "v1",
+                Instant.now(),
+                Instant.now());
+        when(repository.findById(documentId)).thenReturn(Optional.of(ingesting));
+        when(sourceStorage.load(documentId, "c.txt"))
+                .thenThrow(new RuntimeException(new SocketTimeoutException("timeout")));
+        when(repository.markRetry(
+                        eq(documentId),
+                        eq(UploadStatus.INGESTING),
+                        eq(1),
+                        any(Instant.class),
+                        any(String.class),
+                        any(String.class),
+                        any(Instant.class),
+                        any(Instant.class)))
+                .thenReturn(true);
+
+        service.handle(documentId);
+
+        verify(repository, times(1))
+                .markRetry(
+                        eq(documentId),
+                        eq(UploadStatus.INGESTING),
+                        eq(1),
+                        any(Instant.class),
+                        any(String.class),
+                        any(String.class),
+                        any(Instant.class),
+                        any(Instant.class));
+        org.junit.jupiter.api.Assertions.assertEquals(
+                1.0, meterRegistry.get("myai.ingest.process.retry_scheduled.total").counter().count());
     }
 }
