@@ -48,6 +48,10 @@ public class PgVectorDocumentVectorIndexer implements DocumentVectorIndexer {
             DELETE FROM vector_store
             WHERE metadata->>'documentId' = ? AND metadata->>'splitVersion' = ?
             """;
+    private static final String DELETE_BY_DOCUMENT_SQL = """
+            DELETE FROM vector_store
+            WHERE metadata->>'documentId' = ?
+            """;
 
     private final VectorStore vectorStore;
     /**
@@ -131,6 +135,12 @@ public class PgVectorDocumentVectorIndexer implements DocumentVectorIndexer {
     public void deleteByDocumentIdAndSplitVersion(DocumentId documentId, String splitVersion) {
         // 仅删除指定版本的向量，避免新版本写入被误删。
         jdbcTemplate.update(DELETE_BY_DOCUMENT_AND_VERSION_SQL, documentId.value(), splitVersion);
+    }
+
+    @Override
+    public void deleteByDocumentId(DocumentId documentId) {
+        // 删除指定文档的所有版本向量，用于文档资产下线。
+        jdbcTemplate.update(DELETE_BY_DOCUMENT_SQL, documentId.value());
     }
 
     /**

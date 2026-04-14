@@ -86,6 +86,9 @@ public class JdbcDocumentRepository implements DocumentRepository {
             ADD COLUMN IF NOT EXISTS reprocess_requested_at TIMESTAMPTZ,
             ADD COLUMN IF NOT EXISTS split_version VARCHAR(32) NOT NULL DEFAULT 'v1'
             """;
+    private static final String DROP_UNIQUE_INDEX_SQL = """
+            DROP INDEX IF EXISTS uk_ingest_documents_kb_file_hash
+            """;
 
     /**
      * 创建唯一索引。
@@ -94,7 +97,7 @@ public class JdbcDocumentRepository implements DocumentRepository {
     private static final String CREATE_UNIQUE_INDEX_SQL = """
             CREATE UNIQUE INDEX IF NOT EXISTS uk_ingest_documents_kb_file_hash
             ON ingest_documents (kb_id, file_hash)
-            WHERE file_hash IS NOT NULL
+            WHERE file_hash IS NOT NULL AND status <> 'DELETED'
             """;
 
     /**
@@ -153,7 +156,7 @@ public class JdbcDocumentRepository implements DocumentRepository {
                    reprocess_count, reprocess_requested_at, split_version,
                    created_at, updated_at
             FROM ingest_documents
-            WHERE kb_id = ? AND file_hash = ?
+            WHERE kb_id = ? AND file_hash = ? AND status <> 'DELETED'
             ORDER BY created_at DESC
             LIMIT 1
             """;
@@ -250,6 +253,24 @@ public class JdbcDocumentRepository implements DocumentRepository {
                 updated_at = ?
             WHERE document_id = ? AND status = ?
             """;
+    private static final String MARK_DELETING_SQL = """
+            UPDATE ingest_documents
+            SET status = 'DELETING',
+                updated_at = ?
+            WHERE document_id = ? AND status = ?
+            """;
+    private static final String MARK_DELETED_SQL = """
+            UPDATE ingest_documents
+            SET status = 'DELETED',
+                updated_at = ?
+            WHERE document_id = ? AND status = 'DELETING'
+            """;
+    private static final String ROLLBACK_DELETING_SQL = """
+            UPDATE ingest_documents
+            SET status = ?,
+                updated_at = ?
+            WHERE document_id = ? AND status = 'DELETING'
+            """;
 
     /**
      * JDBC 结果集映射器：将数据库行原始数据装配回 Document 领域对象实例。
@@ -286,6 +307,7 @@ public class JdbcDocumentRepository implements DocumentRepository {
         this.jdbcTemplate.execute(ADD_FILE_HASH_COLUMN_SQL);
         this.jdbcTemplate.execute(ADD_RETRY_COLUMNS_SQL);
         this.jdbcTemplate.execute(ADD_REPROCESS_COLUMNS_SQL);
+        this.jdbcTemplate.execute(DROP_UNIQUE_INDEX_SQL);
         this.jdbcTemplate.execute(CREATE_UNIQUE_INDEX_SQL);
     }
 
@@ -446,6 +468,35 @@ public class JdbcDocumentRepository implements DocumentRepository {
                 Timestamp.from(requestedAt),
                 documentId.value(),
                 expectedStatus.name());
+        return updatedRows == 1;
+    }
+
+    @Override
+    public boolean markDeleting(DocumentId documentId, UploadStatus expectedStatus, Instant updatedAt) {
+        int updatedRows = jdbcTemplate.update(
+                MARK_DELETING_SQL,
+                Timestamp.from(updatedAt),
+                documentId.value(),
+                expectedStatus.name());
+        return updatedRows == 1;
+    }
+
+    @Override
+    public boolean markDeleted(DocumentId documentId, Instant updatedAt) {
+        int updatedRows = jdbcTemplate.update(
+                MARK_DELETED_SQL,
+                Timestamp.from(updatedAt),
+                documentId.value());
+        return updatedRows == 1;
+    }
+
+    @Override
+    public boolean rollbackDeleting(DocumentId documentId, UploadStatus rollbackStatus, Instant updatedAt) {
+        int updatedRows = jdbcTemplate.update(
+                ROLLBACK_DELETING_SQL,
+                rollbackStatus.name(),
+                Timestamp.from(updatedAt),
+                documentId.value());
         return updatedRows == 1;
     }
 

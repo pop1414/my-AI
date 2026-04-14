@@ -8,6 +8,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.Optional;
+import java.util.stream.Stream;
 import org.springframework.stereotype.Component;
 
 /**
@@ -62,6 +63,32 @@ public class LocalDocumentSourceStorage implements DocumentSourceStorage {
             }
         } catch (IOException ex) {
             throw new IllegalStateException("failed to load source file", ex);
+        }
+    }
+
+    @Override
+    public void deleteByDocumentId(DocumentId documentId) {
+        Path documentDirectory = rootDirectory.resolve(documentId.value()).normalize();
+        Path normalizedRoot = rootDirectory.toAbsolutePath().normalize();
+        Path normalizedTarget = documentDirectory.toAbsolutePath().normalize();
+        // 防御性校验：确保删除目标始终在配置的 root 目录内。
+        if (!normalizedTarget.startsWith(normalizedRoot)) {
+            throw new IllegalStateException("invalid source directory path");
+        }
+        if (Files.notExists(normalizedTarget)) {
+            return;
+        }
+        try (Stream<Path> stream = Files.walk(normalizedTarget)) {
+            // 先删子文件再删目录，避免目录非空报错。
+            stream.sorted((a, b) -> b.getNameCount() - a.getNameCount()).forEach(path -> {
+                try {
+                    Files.deleteIfExists(path);
+                } catch (IOException ex) {
+                    throw new IllegalStateException("failed to delete source file", ex);
+                }
+            });
+        } catch (IOException ex) {
+            throw new IllegalStateException("failed to delete source directory", ex);
         }
     }
 
