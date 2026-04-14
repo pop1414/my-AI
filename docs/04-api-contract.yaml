@@ -1,4 +1,4 @@
-﻿openapi: 3.0.3
+openapi: 3.0.3
 info:
   title: My-AI API
   version: 0.1.0
@@ -89,6 +89,15 @@ paths:
             minimum: 1
             maximum: 200
           description: 最大返回分块数
+        - name: offset
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 0
+            minimum: 0
+            maximum: 100000
+          description: 分页偏移量
         - name: previewChars
           in: query
           required: false
@@ -113,6 +122,79 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
         '404':
           description: 文档不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/documents/{documentId}/reprocess:
+    post:
+      tags: [ingest]
+      summary: 手动触发文档重处理
+      x-stage: implemented
+      parameters:
+        - name: documentId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: 文档资产 ID（重处理不会改变该 ID）
+      responses:
+        '200':
+          description: 重处理已受理
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentStatusResponse'
+        '400':
+          description: 参数非法
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: 文档不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: 当前状态不允许重处理
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/documents/{documentId}:
+    delete:
+      tags: [ingest]
+      summary: 删除文档资产
+      x-stage: implemented
+      description: |
+        软删除文档资产，清理源文件与该 documentId 的全部向量版本。
+      parameters:
+        - name: documentId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: 删除成功（或已删除，幂等成功）
+        '404':
+          description: 文档不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: 文档状态冲突（INGESTING/DELETING）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: 删除执行失败
           content:
             application/json:
               schema:
@@ -156,35 +238,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/AskResponse'
 
-  /api/v1/documents/{documentId}/reprocess:
-    post:
-      tags: [ingest]
-      summary: 手动触发文档重处理（草案）
-      description: |
-        该接口用于处理执行阶段的重试与重建流程。
-        当前为设计草案，待方案评审通过后进入实现。
-      x-stage: draft
-      parameters:
-        - name: documentId
-          in: path
-          required: true
-          schema:
-            type: string
-          description: 文档资产 ID（重处理不会改变该 ID）
-      responses:
-        '202':
-          description: 已受理重处理请求
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/UploadResponse'
-        '404':
-          description: 文档不存在
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-
 components:
   schemas:
     UploadResponse:
@@ -214,6 +267,14 @@ components:
           type: string
         chunkCount:
           type: integer
+        totalChunks:
+          type: integer
+        limit:
+          type: integer
+        offset:
+          type: integer
+        previewChars:
+          type: integer
         chunks:
           type: array
           items:
@@ -224,13 +285,19 @@ components:
       properties:
         chunkIndex:
           type: integer
+        contentLength:
+          type: integer
         contentPreview:
           type: string
+        truncated:
+          type: boolean
         sourceFile:
           type: string
         contentHash:
           type: string
         splitVersion:
+          type: string
+        sourceHint:
           type: string
 
     ErrorResponse:

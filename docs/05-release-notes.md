@@ -12,6 +12,7 @@
 - 新增处理执行主链路最小实现：源文件存储、文本解析、结构优先分块、PGVector 向量写入
 - 新增 Tika 文档解析实现与文本二次清洗服务（禁用嵌入资源提取）
 - 新增分块预览调试接口：`GET /api/v1/documents/{documentId}/chunks/preview`
+- 新增文档资产删除接口：`DELETE /api/v1/documents/{documentId}`（软删除，清理源文件与向量）
 
 ### Changed
 - ADR-0001 后续动作补充 ADR-0002 跟进项
@@ -31,6 +32,10 @@
 - API 契约同步（2026-04-07）：`/api/v1/knowledge-bases`、`/api/v1/qa/ask` 明确标记为 `draft` 阶段
 - 文档与 ADR 收敛（2026-04-08）：V1 LLM Provider 表述统一为 DashScope（Spring AI Alibaba）
 - ADR 状态收敛（2026-04-08）：ADR-0004 从 `Proposed` 更新为 `Accepted`
+- ingest 状态机扩展：新增 `DELETING`、`DELETED` 状态
+- 上传幂等约束更新：`kbId + fileHash` 唯一索引仅约束未删除记录，支持删除后同 hash 重传
+- API 契约同步（2026-04-14）：`reprocess` 标记为 implemented，`chunks/preview` 增加 `offset` 与审计字段
+- 文档同步（2026-04-14）：README 与处理执行文档补充删除闭环说明，双套 ingest puml 更新
 
 ### Fixed
 - 

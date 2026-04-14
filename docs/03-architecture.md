@@ -25,10 +25,10 @@
 - 数据层：MySQL / Vector DB / MinIO(S3)
 - 横切治理层：Tenant/Auth/RateLimit/Observability/Audit
 
-## 2.1 当前已实现子集（截至 2026-04-07）
-- 已实现：`ingest` 子域（上传受理、状态查询、分块预览、异步处理执行）
-- 已实现 API：`/api/v1/documents/upload`、`/api/v1/documents/{documentId}/status`、`/api/v1/documents/{documentId}/chunks/preview`
-- 规划中（未实现）：`/api/v1/knowledge-bases`、`/api/v1/qa/ask`、`/api/v1/documents/{documentId}/reprocess`
+## 2.1 当前已实现子集（截至 2026-04-14）
+- 已实现：`ingest` 子域（上传受理、状态查询、分块预览、异步处理执行、重处理、资产删除）
+- 已实现 API：`/api/v1/documents/upload`、`/api/v1/documents/{documentId}/status`、`/api/v1/documents/{documentId}/chunks/preview`、`/api/v1/documents/{documentId}/reprocess`、`DELETE /api/v1/documents/{documentId}`
+- 规划中（未实现）：`/api/v1/knowledge-bases`、`/api/v1/qa/ask`
 - 说明：本文件第 2 章是目标架构蓝图，不等于当前全部实现
 
 ## 3. 核心链路
@@ -63,6 +63,7 @@
 ## 8. 处理执行设计补充（已采纳，部分能力待实现）
 - 处理模式：异步 worker（单进程）
 - 状态推进：`UPLOADED -> INGESTING -> INDEXED/FAILED`
+- 删除推进：`可删状态 -> DELETING -> DELETED`
 - 分块参数初值：`chunk=500`, `overlap=100`
-- 失败策略：瞬时错误最多 3 次重试（待实现）
+- 失败策略：瞬时错误最多 3 次重试（指数退避 + jitter）
 - 幂等目标：同一 `documentId` 重复处理最终一致

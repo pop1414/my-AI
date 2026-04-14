@@ -1,11 +1,12 @@
 # 文档处理执行设计（Ingest Processing Execution）
 
 ## 1. 目标与范围
-本阶段目标是在“受理闭环”基础上，打通真实处理链路：
+本阶段目标是在“受理闭环”基础上，打通真实处理链路与资产下线闭环：
 
 - 从 `UPLOADED` 推进到 `INGESTING`
 - 执行解析、分块、向量化、向量入库
 - 成功更新为 `INDEXED`，失败更新为 `FAILED`
+- 支持文档资产软删除：`可删状态 -> DELETING -> DELETED`
 
 ## 2. 非目标（本阶段暂不做）
 - 引入外部消息队列（Kafka/RabbitMQ）
@@ -91,9 +92,20 @@
   - 文件格式不支持、解析失败（非瞬时）
   - 参数校验类错误
 
-## 6. 标准设计图套餐（5 张必选）
-### 6.1 用例图（功能边界）
-- `docs/architecture/diagrams/ingest/ingest-processing-execution-usecase.puml`
+### 5.7 资产删除（delete）阶段
+- 风险：处理中任务与删除并发触发，导致状态乱序或资源半删
+- 要求：删除流程可重入、可观测，并避免误删其它文档数据
+- 规则：
+  - 允许删除状态：`UPLOADED/FAILED/INDEXED`
+  - 冲突状态：`INGESTING/DELETING` 返回 `409`
+  - 幂等状态：`DELETED` 重复删除返回 `204`
+- 执行顺序：
+  1. CAS：`current -> DELETING`
+  2. 删除源文件目录（`{root}/{documentId}`）
+  3. 删除该 `documentId` 的全部向量版本
+  4. CAS：`DELETING -> DELETED`
+- 失败回滚：清理失败时尝试 CAS 回滚到删除前状态，并返回 `500`
+
 ## 6. 标准设计图套餐（分层后）
 ### 6.1 责任域边界图（功能边界）
 - `docs/architecture/diagrams/ingest/execution/ingest-execution-boundary.puml`
@@ -131,6 +143,9 @@
 4. `POST /api/v1/documents/{documentId}/reprocess`
 说明：人工触发重处理（允许状态：`FAILED/INDEXED`，`INGESTING` 返回 409）
 
+5. `DELETE /api/v1/documents/{documentId}`
+说明：删除文档资产（源文件 + 全版本向量），成功后状态为 `DELETED`
+
 ## 8. 验收口径（DoD）
 - 上传后可观察到状态从 `UPLOADED` 进入 `INGESTING`
 - 成功文档状态进入 `INDEXED`，可用于后续检索
@@ -138,6 +153,7 @@
 - 重复触发处理不会造成向量重复污染
 - 瞬时错误在重试次数内可自动恢复，超过次数后进入 `FAILED`
 - reprocess 失败时保留错误日志与新 `splitVersion` 记录
+- 删除成功后状态可观测为 `DELETED`，重复删除仍幂等成功
 
 ## 9. 风险与回滚
 - 风险：分块参数不合理导致召回质量差
@@ -150,7 +166,8 @@
   - 任务启动 `UPLOADED -> INGESTING` 的 CAS 抢占能力
   - 单进程异步 worker（轮询 + 抢占 + 调用处理用例）
   - 处理主链路：源文件读取、Tika 文本解析（禁用嵌入资源）+ 二次清洗、分块、向量写入、状态推进到 `INDEXED/FAILED`
+  - 瞬时错误重试（3 次指数退避 + jitter）
+  - reprocess 接口与重建流程（含 `splitVersion++`）
+  - 删除接口与资产下线流程（`DELETING -> DELETED`）
 - 尚未实现：
-  - 瞬时错误 3 次重试（指数退避 + jitter）
-  - reprocess 接口与重建流程
   - OCR 场景与复杂排版优化（如扫描版 PDF、表格结构化提取）

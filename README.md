@@ -3,7 +3,7 @@
 `my-AI` 是一个基于 Spring Boot + Spring AI 的文档入库与检索基线项目。  
 当前阶段重点在 `ingest`（文档受理与处理）链路，目标是把“上传 -> 可追踪 -> 可索引”跑通，并为后续 RAG 问答能力打基础。
 
-## 1. 当前能力（截至 2026-04-07）
+## 1. 当前能力（截至 2026-04-14）
 
 - 上传受理：`POST /api/v1/documents/upload`
   - 返回 `documentId + ACCEPTED`
@@ -26,10 +26,11 @@
   - `POST /api/v1/documents/upload`
   - `GET /api/v1/documents/{documentId}/status`
   - `GET /api/v1/documents/{documentId}/chunks/preview`
+  - `POST /api/v1/documents/{documentId}/reprocess`
+  - `DELETE /api/v1/documents/{documentId}`
 - 规划中 API（未实现）：
   - `GET /api/v1/knowledge-bases`
   - `POST /api/v1/qa/ask`
-  - `POST /api/v1/documents/{documentId}/reprocess`
 
 ## 2. 技术栈
 
@@ -134,25 +135,38 @@ Linux/macOS:
 - `GET /api/v1/documents/{documentId}/chunks/preview`
 - 可选参数：
   - `limit`（默认 20，范围 1~200）
+  - `offset`（默认 0，范围 0~100000）
   - `previewChars`（默认 200，范围 20~2000）
 - 用途：验证“向量化前分块文本”是否符合预期
 
-### 6.4 重处理（草案）
+### 6.4 重处理
 
 - `POST /api/v1/documents/{documentId}/reprocess`
-- 当前仍处于草案阶段（接口契约已预留，代码未完整实现）
+- 允许状态：`FAILED` / `INDEXED`（`INGESTING` 返回 `409`）
+
+### 6.5 删除文档资产
+
+- `DELETE /api/v1/documents/{documentId}`
+- 删除行为：
+  - 删除源文件（`{root}/{documentId}`）
+  - 删除该 `documentId` 的全部向量版本
+  - 状态推进：`可删状态 -> DELETING -> DELETED`
+- 返回语义：
+  - 成功或重复删除：`204`
+  - 文档不存在：`404`
+  - `INGESTING/DELETING`：`409`
 
 ## 7. 当前边界与注意事项
 
 - worker 默认开启；如需关闭可显式设置 `INGEST_WORKER_ENABLED=false`
 - 解析已升级为 Tika 基线能力；扫描版 PDF 的 OCR 与复杂版式提取仍待增强
-- 瞬时错误重试（3 次指数退避）尚未完整实现
-- reprocess “先删旧向量再重建”流程尚待落地
+- 状态枚举包含：`UPLOADED / INGESTING / INDEXED / FAILED / DELETING / DELETED`
+- 同一 `kbId + fileHash` 在 `DELETED` 后允许重新上传（生成新 documentId）
 
 ## 8. 版本目标
 
 - `V1`：完成 ingest 最小闭环与可追踪处理
-- `V2`：增强解析能力、重试机制、reprocess 与更完整的检索问答链路
+- `V2`：增强解析能力与更完整的检索问答链路
 
 ## 9. 前端控制台（web）
 
