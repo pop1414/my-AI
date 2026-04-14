@@ -1,32 +1,14 @@
 @startuml
 title Ingest 共享状态机（L2 权威图）
-
-' Scope:
-' - 唯一状态与合法迁移定义
-' Not in scope:
-' - 不展开 API 细节与时序实现
-' See also:
-' - ../execution/ingest-execution-delete-sequence.puml
-' - ../execution/ingest-execution-reprocess-sequence.puml
-' - ../acceptance/ingest-acceptance-status-sequence.puml
-
 left to right direction
-hide empty description
-skinparam backgroundColor #FFFFFF
-skinparam shadowing false
-skinparam linetype ortho
-skinparam ArrowColor #2F3B4A
-skinparam state {
-  BackgroundColor #F9FAFB
-  BorderColor #4B5563
-  FontColor #111827
-}
-skinparam note {
-  BackgroundColor #FFFDEA
-  BorderColor #A3A3A3
-  FontColor #222222
-}
 
+' --- 基础样式配置 ---
+hide empty description
+skinparam linetype ortho
+skinparam nodesep 120
+skinparam ranksep 100
+
+' --- 定义状态 ---
 state UPLOADED
 state INGESTING
 state INDEXED
@@ -34,39 +16,44 @@ state FAILED
 state DELETING
 state DELETED
 
-[*] --> UPLOADED : 上传受理落库
+' --- 物理布局规约（关键：垂直对齐防止线条重叠） ---
+' 用隐藏线强制 FAILED 在 UPLOADED 上方，DELETING 在下侧
+FAILED -[hidden]-> UPLOADED
+UPLOADED -[hidden]-> DELETING
 
-' 布局锚点（不表达语义）
-UPLOADED -[hidden]up-> INGESTING
-INGESTING -[hidden]right-> INDEXED
-UPLOADED -[hidden]down-> FAILED
-UPLOADED -[hidden]right-> DELETING
-INDEXED -[hidden]down-> DELETING
-DELETING -[hidden]right-> DELETED
+' --- 1. 主流程（水平线） ---
+[*] --> UPLOADED
+UPLOADED -r-> INGESTING : Worker 抢占
+INGESTING -r-> INDEXED : 处理成功
 
-UPLOADED --> INGESTING : Worker 抢占（CAS）
-INGESTING --> INDEXED : 处理成功
-INGESTING --> FAILED : 处理失败
+' --- 2. 异常流程（向上导出） ---
+INGESTING -up-> FAILED : 处理失败
+FAILED -left-> UPLOADED : Reprocess 成功
 
-FAILED --> UPLOADED : Reprocess 成功
-INDEXED --> UPLOADED
+' --- 3. 删除流程（向下导出） ---
+UPLOADED -down-> DELETING : Delete
+FAILED -down-> DELETING : Delete
+INDEXED -down-> DELETING : Delete
 
-UPLOADED --> DELETING : Delete + CAS
-FAILED --> DELETING
-INDEXED --> DELETING
-DELETING --> DELETED : 源文件与向量清理成功
+' --- 4. 结果流转 ---
+DELETING -r-> DELETED : 成功
+' 通过单一汇聚点描述回滚，或者指定不同侧边进入，避免线粘在一起
+DELETING -up-> UPLOADED : 回滚
+DELETING -up-> INDEXED : 回滚
+DELETING -up-> FAILED : 回滚
 
-DELETING --> UPLOADED : 删除失败回滚
-DELETING --> FAILED
-DELETING --> INDEXED
-
+' --- 5. 标注信息 ---
 note top of INGESTING
-Delete/Reprocess 在 INGESTING 阶段返回 409
+  Delete/Reprocess 在
+  INGESTING 阶段返回 409
+end note
+
+note bottom of DELETING
+  删除失败：回滚到原状态
+  (UPLOADED / FAILED / INDEXED)
 end note
 
 note right of DELETED
-软删除终态（status 可观测）
-重复删除幂等返回 204
+  重复删除幂等返回 204
 end note
-
 @enduml
