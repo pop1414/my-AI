@@ -16,6 +16,8 @@
 - 新增本地启动脚本：`infra/dev-up.ps1`、`infra/dev-up.sh`（一键拉起 PGVector 与后端）
 - 新增 ingest 启动结构自检（`IngestSchemaVerifier`）：关键列/唯一索引不匹配时拒绝启动
 - 新增 ingest 核心指标计数：`myai.ingest.process.success.total`、`myai.ingest.process.failed.total`、`myai.ingest.process.retry_scheduled.total`、`myai.ingest.delete.conflict.total`、`myai.ingest.delete.success.total`
+- 新增知识库列表接口：`GET /api/v1/knowledge-bases`（`ingest_documents` 按 `INDEXED` 聚合）
+- 新增问答接口：`POST /api/v1/qa/ask`（同步返回，支持无命中兜底）
 
 ### Changed
 - ADR-0001 后续动作补充 ADR-0002 跟进项
@@ -43,6 +45,10 @@
 - UML 索引收敛（2026-04-14）：`文档处理.md` 迁移至 `docs/reference/ingest-文档处理技术指导.md`，图谱目录仅保留分层 puml 资产
 - 基础设施修正（2026-04-14）：`infra/docker-compose.yml` 的 PG 健康检查用户改为 `admin`，与默认配置对齐
 - 管理端点收敛（2026-04-14）：开放 `health/info/metrics` 以支持 ingest 最小可观测
+- API 契约同步（2026-04-14）：`knowledge-bases` 与 `qa/ask` 从 draft 更新为 implemented
+- 问答引用结构升级（2026-04-14）：`AskResponse.references` 从 `string[]` 升级为 chunk 级对象数组（`documentId/chunkIndex/contentPreview`）
+- SSE 策略收敛（2026-04-14）：仅文档预留后续流式版本，不新增接口端点
+- DDD 边界重构（2026-04-14）：`knowledge` / `qa` 从 `ingest` 拆分为独立子域包结构，`ingest` 收敛为文档资产生命周期职责
 
 ### Fixed
 - 

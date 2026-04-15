@@ -1,0 +1,33 @@
+@startuml
+title QA 时序：同步问答（单用例）
+
+' Scope:
+' - 问题校验、向量检索、kb 过滤、同步回答返回
+' Not in scope:
+' - SSE 流式返回与答案质量优化
+' See also:
+' - ./qa-boundary.puml
+' - ../knowledge/knowledge-list-sequence.puml
+
+actor Client
+participant "QaController" as C
+participant "AskQuestionUseCase" as U
+participant "ChunkRetrievalPort" as RP
+participant "AnswerGenerationPort" as GP
+
+Client -> C : POST /qa/ask
+C -> U : handle(question, kbId, topK)
+U -> RP : similaritySearch(question, retrievalTopK)
+RP --> U : retrieved chunks
+U -> U : filter by kbId and limit topK
+alt no matched chunks
+  U --> C : fallback answer + []
+  C --> Client : 200
+else matched chunks
+  U -> GP : generateAnswer(prompt with chunk context)
+  GP --> U : answer text
+  U --> C : answer + structured references
+  C --> Client : 200
+end
+
+@enduml

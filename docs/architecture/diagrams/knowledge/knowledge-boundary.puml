@@ -1,0 +1,24 @@
+@startuml
+title Knowledge 责任域边界图（L1）
+
+' Scope:
+' - knowledge-bases 列表与统计口径
+' Not in scope:
+' - 文档入库处理与问答生成
+' See also:
+' - ./knowledge-list-sequence.puml
+' - ../ingest/shared/ingest-shared-er-domain.puml
+
+left to right direction
+skinparam shadowing false
+skinparam packageStyle rectangle
+
+actor "客户端" as User
+
+rectangle "Knowledge Domain" {
+  usecase "知识库列表\nGET /api/v1/knowledge-bases" as UC_KbList
+}
+
+User --> UC_KbList
+
+@enduml

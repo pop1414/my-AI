@@ -17,6 +17,11 @@
 - 执行重处理时序图：`docs/architecture/diagrams/ingest/execution/ingest-execution-reprocess-sequence.puml`
 - 执行删除时序图：`docs/architecture/diagrams/ingest/execution/ingest-execution-delete-sequence.puml`
 - 处理执行说明文档：`docs/07-ingest-processing-execution.md`
+- Knowledge 责任域边界图：`docs/architecture/diagrams/knowledge/knowledge-boundary.puml`
+- Knowledge 列表时序图：`docs/architecture/diagrams/knowledge/knowledge-list-sequence.puml`
+- QA 责任域边界图：`docs/architecture/diagrams/qa/qa-boundary.puml`
+- QA 问答时序图：`docs/architecture/diagrams/qa/qa-ask-sequence.puml`
+- 子域关系图（实现视角）：`docs/architecture/diagrams/ingest-knowledge-qa-relations.puml`
 
 ## 2. 分层设计
 - 接入层：Upload/Knowledge/QA/SSE API
@@ -28,8 +33,9 @@
 
 ## 2.1 当前已实现子集（截至 2026-04-14）
 - 已实现：`ingest` 子域（上传受理、状态查询、分块预览、异步处理执行、重处理、资产删除）
-- 已实现 API：`/api/v1/documents/upload`、`/api/v1/documents/{documentId}/status`、`/api/v1/documents/{documentId}/chunks/preview`、`/api/v1/documents/{documentId}/reprocess`、`DELETE /api/v1/documents/{documentId}`
-- 规划中（未实现）：`/api/v1/knowledge-bases`、`/api/v1/qa/ask`
+- 已实现：`knowledge` 子域（知识库列表与 INDEXED 统计）
+- 已实现：`qa` 子域（同步问答、结构化引用、无命中兜底）
+- 已实现 API：`/api/v1/documents/upload`、`/api/v1/documents/{documentId}/status`、`/api/v1/documents/{documentId}/chunks/preview`、`/api/v1/documents/{documentId}/reprocess`、`DELETE /api/v1/documents/{documentId}`、`GET /api/v1/knowledge-bases`、`POST /api/v1/qa/ask`
 - 说明：本文件第 2 章是目标架构蓝图，不等于当前全部实现
 
 ## 3. 核心链路

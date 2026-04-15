@@ -1,7 +1,7 @@
 # my-AI
 
 `my-AI` 是一个基于 Spring Boot + Spring AI 的文档入库与检索基线项目。  
-当前阶段重点在 `ingest`（文档受理与处理）链路，目标是把“上传 -> 可追踪 -> 可索引”跑通，并为后续 RAG 问答能力打基础。
+当前阶段已按 DDD-Lite 拆分为 `ingest / knowledge / qa` 三个子域，目标是把“上传 -> 可追踪 -> 可索引 -> 可问答”最小闭环跑通。
 
 ## 1. 当前能力（截至 2026-04-14）
 
@@ -30,9 +30,11 @@
   - `GET /api/v1/documents/{documentId}/chunks/preview`
   - `POST /api/v1/documents/{documentId}/reprocess`
   - `DELETE /api/v1/documents/{documentId}`
-- 规划中 API（未实现）：
-  - `GET /api/v1/knowledge-bases`
-  - `POST /api/v1/qa/ask`
+- 已实现 API（knowledge / qa）：
+  - `GET /api/v1/knowledge-bases`（仅统计 `INDEXED`）
+  - `POST /api/v1/qa/ask`（同步返回）
+  - 无命中场景：`200 + 兜底回答 + 空 references`
+  - `references` 结构：`documentId/chunkIndex/contentPreview`
 
 ## 2. 技术栈
 
@@ -43,17 +45,21 @@
 - PostgreSQL + PGVector
 - Maven Wrapper（`mvnw` / `mvnw.cmd`）
 
-## 3. 架构分层（ingest）
+## 3. 架构分层（DDD-Lite）
 
-- `interfaces`：REST 控制器与 DTO
-- `application`：用例接口与应用服务编排
-- `domain`：领域模型与 Port 抽象
-- `infrastructure`：JDBC 仓储、worker、解析/分块/向量适配实现
+- `ingest`：文档资产入库生命周期（受理/处理/重处理/删除）
+- `knowledge`：知识库目录与统计视图（只读聚合）
+- `qa`：检索与回答生成编排（同步问答）
+- 各子域统一采用 `interfaces / application / domain / infrastructure` 四层结构
 
 关键目录：
 
 - `src/main/java/io/github/spike/myai/ingest`
+- `src/main/java/io/github/spike/myai/knowledge`
+- `src/main/java/io/github/spike/myai/qa`
 - `src/test/java/io/github/spike/myai/ingest`
+- `src/test/java/io/github/spike/myai/knowledge`
+- `src/test/java/io/github/spike/myai/qa`
 - `docs/`（设计文档、ADR、图纸）
 
 ## 4. 文档入口
@@ -217,6 +223,31 @@ curl -sS "http://localhost:8080/actuator/metrics/myai.ingest.delete.success.tota
   - 成功或重复删除：`204`
   - 文档不存在：`404`
   - `INGESTING/DELETING`：`409`
+
+### 6.6 查询知识库列表
+
+- `GET /api/v1/knowledge-bases`
+- 返回字段：
+  - `id`
+  - `name`（V1 与 `id` 一致）
+  - `indexedDocumentCount`（统计口径：`status=INDEXED`）
+
+### 6.7 文档问答（同步）
+
+- `POST /api/v1/qa/ask`
+- 请求字段：
+  - `question`：必填非空
+  - `kbId`：可选，默认 `default`
+  - `topK`：可选，默认 `5`，范围 `1~20`
+- 返回字段：
+  - `answer`
+  - `references`（chunk 级对象数组）
+    - `documentId`
+    - `chunkIndex`
+    - `contentPreview`
+- 说明：
+  - 当前仅支持同步返回
+  - SSE 仅文档预留，暂不开放接口
 
 ## 7. 当前边界与注意事项
 

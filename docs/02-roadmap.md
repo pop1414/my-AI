@@ -15,10 +15,10 @@
 ### 进行中
 - V1 收口：本地端到端环境收敛（PostgreSQL/PGVector、DashScope Key、运行脚本与联调手册）
 - ingest 启动结构自检与最小可观测能力补齐（Actuator + Micrometer）
+- M2 问答链路收口：同步问答能力与结构化引用（SSE 仅文档预留）
+- DDD 边界收敛：knowledge / qa 从 ingest 中拆分为独立子域（包级）
 
 ### 未开始（V1 后半段 / V2）
-- `GET /api/v1/knowledge-bases`
-- `POST /api/v1/qa/ask`
 - OCR 与复杂版式增强
 
 ## 版本策略
@@ -34,7 +34,7 @@
 - TXT/PDF 入库
 - 固定 DashScope（Spring AI Alibaba）
 - 固定向量库（PostgreSQL + PGVector）
-- 基础 RAG 问答
+- 基础 RAG 问答（同步返回版）
 
 ### 验收条件
 - 端到端流程可演示

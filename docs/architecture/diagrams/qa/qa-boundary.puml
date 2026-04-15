@@ -1,0 +1,24 @@
+@startuml
+title QA 责任域边界图（L1）
+
+' Scope:
+' - 问答参数校验、检索编排、回答生成、引用输出
+' Not in scope:
+' - 文档上传受理与处理状态机
+' See also:
+' - ./qa-ask-sequence.puml
+' - ../ingest/shared/ingest-shared-er-domain.puml
+
+left to right direction
+skinparam shadowing false
+skinparam packageStyle rectangle
+
+actor "客户端" as User
+
+rectangle "QA Domain" {
+  usecase "同步问答\nPOST /api/v1/qa/ask" as UC_QaAsk
+}
+
+User --> UC_QaAsk
+
+@enduml

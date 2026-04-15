@@ -204,10 +204,11 @@ paths:
   /api/v1/knowledge-bases:
     get:
       tags: [knowledge]
-      summary: 查询知识库列表（草案）
+      summary: 查询知识库列表
       description: |
-        该接口当前仅保留契约草案，代码尚未实现。
-      x-stage: draft
+        归属 knowledge 子域；
+        基于 ingest_documents 聚合已索引文档数量，统计口径固定为 status=INDEXED。
+      x-stage: implemented
       responses:
         '200':
           description: 查询成功
@@ -221,10 +222,12 @@ paths:
   /api/v1/qa/ask:
     post:
       tags: [qa]
-      summary: 文档问答（草案）
+      summary: 文档问答（同步返回）
       description: |
-        该接口当前仅保留契约草案，代码尚未实现。
-      x-stage: draft
+        归属 qa 子域；
+        V1 先提供同步一次性返回能力；
+        SSE 流式版本仅做文档预留，暂不开放新接口。
+      x-stage: implemented
       requestBody:
         required: true
         content:
@@ -238,6 +241,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/AskResponse'
+        '400':
+          description: 参数非法（question 为空或 topK 越界）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
 components:
   schemas:
@@ -316,6 +325,10 @@ components:
           type: string
         name:
           type: string
+        indexedDocumentCount:
+          type: integer
+          format: int64
+          description: 已索引文档数量（status=INDEXED）
 
     AskRequest:
       type: object
@@ -329,6 +342,8 @@ components:
         topK:
           type: integer
           default: 5
+          minimum: 1
+          maximum: 20
 
     AskResponse:
       type: object
@@ -338,4 +353,14 @@ components:
         references:
           type: array
           items:
-            type: string
+            $ref: '#/components/schemas/AskReference'
+
+    AskReference:
+      type: object
+      properties:
+        documentId:
+          type: string
+        chunkIndex:
+          type: integer
+        contentPreview:
+          type: string
