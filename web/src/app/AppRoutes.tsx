@@ -1,12 +1,40 @@
-﻿import { Navigate, Route, Routes } from "react-router-dom";
+﻿import { lazy } from "react";
+import { Navigate, Route, Routes } from "react-router-dom";
 import { ConsoleLayout } from "./ConsoleLayout";
-import { IngestUploadPage } from "../features/ingest/pages/IngestUploadPage";
-import { IngestStatusPage } from "../features/ingest/pages/IngestStatusPage";
-import { IngestChunksPreviewPage } from "../features/ingest/pages/IngestChunksPreviewPage";
-import { IngestReprocessPage } from "../features/ingest/pages/IngestReprocessPage";
-import { IngestDeletePage } from "../features/ingest/pages/IngestDeletePage";
-import { KnowledgePage } from "../features/knowledge/pages/KnowledgePage";
-import { QaPage } from "../features/qa/pages/QaPage";
+
+const IngestUploadPage = lazy(() =>
+	import("../features/ingest/pages/IngestUploadPage").then((m) => ({
+		default: m.IngestUploadPage,
+	})),
+);
+const IngestStatusPage = lazy(() =>
+	import("../features/ingest/pages/IngestStatusPage").then((m) => ({
+		default: m.IngestStatusPage,
+	})),
+);
+const IngestChunksPreviewPage = lazy(() =>
+	import("../features/ingest/pages/IngestChunksPreviewPage").then((m) => ({
+		default: m.IngestChunksPreviewPage,
+	})),
+);
+const IngestReprocessPage = lazy(() =>
+	import("../features/ingest/pages/IngestReprocessPage").then((m) => ({
+		default: m.IngestReprocessPage,
+	})),
+);
+const IngestDeletePage = lazy(() =>
+	import("../features/ingest/pages/IngestDeletePage").then((m) => ({
+		default: m.IngestDeletePage,
+	})),
+);
+const KnowledgePage = lazy(() =>
+	import("../features/knowledge/pages/KnowledgePage").then((m) => ({
+		default: m.KnowledgePage,
+	})),
+);
+const QaPage = lazy(() =>
+	import("../features/qa/pages/QaPage").then((m) => ({ default: m.QaPage })),
+);
 
 export function AppRoutes() {
 	return (

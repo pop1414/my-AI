@@ -1,4 +1,5 @@
-﻿import {
+﻿import { Suspense } from "react";
+import {
 	DeleteOutlined,
 	FileSearchOutlined,
 	FileSyncOutlined,
@@ -6,7 +7,7 @@
 	SearchOutlined,
 	UploadOutlined,
 } from "@ant-design/icons";
-import { Breadcrumb, Layout, Menu, Typography } from "antd";
+import { Breadcrumb, Layout, Menu, Spin, Typography } from "antd";
 import type { MenuProps } from "antd";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 
@@ -78,7 +79,22 @@ export function ConsoleLayout() {
 						]}
 						style={{ marginBottom: 16 }}
 					/>
-					<Outlet />
+					<Suspense
+						fallback={
+							<div
+								style={{
+									display: "flex",
+									justifyContent: "center",
+									alignItems: "center",
+									minHeight: 300,
+								}}
+							>
+								<Spin size="large" />
+							</div>
+						}
+					>
+						<Outlet />
+					</Suspense>
 				</Content>
 			</Layout>
 		</Layout>
