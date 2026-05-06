@@ -3,6 +3,35 @@
 `my-AI` 是一个基于 Spring Boot + Spring AI 的文档入库与检索基线项目。  
 当前阶段已按 DDD-Lite 拆分为 `ingest / knowledge / qa` 三个子域，目标是把“上传 -> 可追踪 -> 可索引 -> 可问答”最小闭环跑通。
 
+## 0. 项目入口
+
+如果你是隔了一段时间重新接手这个项目，建议先看下面这些入口：
+
+- 项目文档总导航：[docs/README.md](./docs/README.md)
+- 产品范围：[docs/01-product-scope.md](./docs/01-product-scope.md)
+- 路线图：[docs/02-roadmap.md](./docs/02-roadmap.md)
+- 架构总览：[docs/03-architecture.md](./docs/03-architecture.md)
+- API 契约：[docs/04-api-contract.yaml](./docs/04-api-contract.yaml)
+- V1 收口计划：[docs/runbooks/v1-closure-plan.md](./docs/runbooks/v1-closure-plan.md)
+- 文档工作流：[docs/runbooks/my-ai-document-workflow.md](./docs/runbooks/my-ai-document-workflow.md)
+- Git 工作流：[docs/runbooks/my-ai-git-workflow.md](./docs/runbooks/my-ai-git-workflow.md)
+- 学习沉淀入口：[docs/learning/README.md](./docs/learning/README.md)
+- 课程交付入口：[deliverables/course/README.md](./deliverables/course/README.md)
+
+## 0.1 文档分层
+
+仓库内文档采用三层结构：
+
+- `docs/`：工程真源层，描述当前系统事实
+- `docs/learning/`：学习沉淀层，记录原理理解、踩坑、复盘与面试表达
+- `deliverables/course/`：课程交付层，从工程文档整理导出，不作为系统事实真源
+
+规则：
+
+- 当前系统事实以 `docs/` 为准
+- 历史变化通过 ADR、Roadmap、Release Notes 留痕
+- 课程材料与长期工程文档分开维护，但课程内容主要整理自工程真源
+
 ## 1. 当前能力（截至 2026-04-14）
 
 - 上传受理：`POST /api/v1/documents/upload`
