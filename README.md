@@ -32,38 +32,46 @@
 - 历史变化通过 ADR、Roadmap、Release Notes 留痕
 - 课程材料与长期工程文档分开维护，但课程内容主要整理自工程真源
 
-## 1. 当前能力（截至 2026-04-14）
+## 1. 当前能力（截至 2026-05-06）
 
 - 上传受理：`POST /api/v1/documents/upload`
-  - 返回 `documentId + ACCEPTED`
-  - `documentId` 语义为“文档资产 ID”（不是一次性任务 ID）
+    - 返回 `documentId + ACCEPTED`
+    - `documentId` 语义为“文档资产 ID”（不是一次性任务 ID）
 - 状态查询：`GET /api/v1/documents/{documentId}/status`
-  - 删除成功后仍可查询，状态返回 `DELETED`（不返回 `404`）
+    - 删除成功后仍可查询，状态返回 `DELETED`（不返回 `404`）
 - 受理幂等：
-  - 基于 `kbId + fileHash(SHA-256)` 查重
-  - 重复上传复用既有 `documentId`（仅限未删除资产）
-  - 已 `DELETED` 后允许同 `kbId + fileHash` 重新上传（生成新 `documentId`）
+    - 基于 `kbId + fileHash(SHA-256)` 查重
+    - 重复上传复用既有 `documentId`（仅限未删除资产）
+    - 已 `DELETED` 后允许同 `kbId + fileHash` 重新上传（生成新 `documentId`）
 - 任务抢占幂等：
-  - `UPLOADED -> INGESTING` 采用 CAS（Compare-And-Set）更新
+    - `UPLOADED -> INGESTING` 采用 CAS（Compare-And-Set）更新
 - 异步处理（单进程 worker）：
-  - worker 抢占成功后触发处理用例
-  - 支持状态推进到 `INDEXED` / `FAILED`
+    - worker 抢占成功后触发处理用例
+    - 支持状态推进到 `INDEXED` / `FAILED`
 - 处理主链路（V1 最小实现）：
-  - 源文件读取 -> Tika 解析 + 文本清洗 -> 分块 -> 向量写入（PGVector）-> 状态收口
+    - 源文件读取 -> Tika 解析 + 文本清洗 -> 分块 -> 向量写入（PGVector）-> 状态收口
 - 分块策略：
-  - 结构优先 + 长度兜底
-  - 参数：`chunk=500`、`overlap=100`
+    - 结构优先 + 长度兜底
+    - 参数：`chunk=500`、`overlap=100`
 - 已实现 API（`ingest`）：
-  - `POST /api/v1/documents/upload`
-  - `GET /api/v1/documents/{documentId}/status`
-  - `GET /api/v1/documents/{documentId}/chunks/preview`
-  - `POST /api/v1/documents/{documentId}/reprocess`
-  - `DELETE /api/v1/documents/{documentId}`
+    - `POST /api/v1/documents/upload`
+    - `GET /api/v1/documents/{documentId}/status`
+    - `GET /api/v1/documents/{documentId}/chunks/preview`
+    - `POST /api/v1/documents/{documentId}/reprocess`
+    - `DELETE /api/v1/documents/{documentId}`
 - 已实现 API（knowledge / qa）：
-  - `GET /api/v1/knowledge-bases`（仅统计 `INDEXED`）
-  - `POST /api/v1/qa/ask`（同步返回）
-  - 无命中场景：`200 + 兜底回答 + 空 references`
-  - `references` 结构：`documentId/chunkIndex/contentPreview`
+    - `GET /api/v1/knowledge-bases`（仅统计 `INDEXED`）
+    - `POST /api/v1/qa/ask`（同步返回）
+    - 无命中场景：`200 + 兜底回答 + 空 references`
+    - `references` 结构：`documentId/chunkIndex/contentPreview`
+
+- 前端控制台（`web/`，截至 2026-05-06）：
+    - React 19 + TypeScript 6 + Vite 8 + Ant Design 6
+    - 7 个功能页面，按路由懒加载代码拆分
+    - 知识库统计列表 + 单轮问答（answer + references）
+    - 上传 → 状态查询 → 分块预览 → 重处理 → 删除 完整链路
+    - TanStack Query 自动轮询 + 终态检测
+    - Zod 运行时接口校验
 
 ## 2. 技术栈
 
@@ -98,8 +106,8 @@
 - 受理闭环：`docs/06-ingest-acceptance-closure.md`
 - 处理执行：`docs/07-ingest-processing-execution.md`
 - ADR：
-  - `docs/adr/ADR-0003-v1-dashscope-pgvector.md`（V1 基线：DashScope + PGVector）
-  - `docs/adr/ADR-0004-v1-ingest-processing-strategy.md`（状态：Accepted）
+    - `docs/adr/ADR-0003-v1-dashscope-pgvector.md`（V1 基线：DashScope + PGVector）
+    - `docs/adr/ADR-0004-v1-ingest-processing-strategy.md`（状态：Accepted）
 
 ## 5. 快速开始
 
@@ -160,6 +168,7 @@ Linux/macOS:
 ```
 
 说明：
+
 - `MyAiApplicationTests` 会拉起完整 Spring 上下文，依赖本地 PostgreSQL（默认 `localhost:5432`）。
 - 若仅验证当前已完成的 ingest 模块单测，可执行：
 
@@ -167,16 +176,32 @@ Linux/macOS:
 .\mvnw.cmd "-Dtest=!MyAiApplicationTests" test
 ```
 
-### 5.5 V1 本地闭环演示（上传 -> INDEXED/FAILED -> 删除 -> DELETED）
+### 5.5 V1 本地闭环演示
 
-1) 启动服务后，上传一个本地文件并记录 `documentId`：
+完整闭环：上传 → 入库 → 知识库统计 → 问答，可通过前端控制台或 curl 完成。
 
-Windows PowerShell:
+**前端方式**（推荐）：
+
+```bash
+cd web
+npm install
+npm run dev
+```
+
+访问 `http://localhost:3000`，按左侧菜单依次操作：
+
+1. 文档上传 → 拖入文件提交
+2. 状态查询 → 等待文档到达 `INDEXED`
+3. 知识库 → 查看 `indexedDocumentCount`，点击"去问答"
+4. 问答 → 输入问题，查看 `answer` 与引用分块
+
+**curl 方式**：
+
+1. 上传文档：
 
 ```powershell
 $upload = curl.exe -sS -X POST "http://localhost:8080/api/v1/documents/upload" -F "file=@D:/tmp/sample.txt" -F "kbId=default" | ConvertFrom-Json
 $docId = $upload.documentId
-$docId
 ```
 
 Linux/macOS:
@@ -186,25 +211,39 @@ UPLOAD_JSON=$(curl -sS -X POST "http://localhost:8080/api/v1/documents/upload" -
 echo "$UPLOAD_JSON"
 ```
 
-2) 轮询状态：
+2. 轮询状态直到 INDEXED：
 
 ```bash
 curl -sS "http://localhost:8080/api/v1/documents/{documentId}/status"
 ```
 
-3) 删除文档资产：
+3. 查看知识库统计：
+
+```bash
+curl -sS "http://localhost:8080/api/v1/knowledge-bases"
+```
+
+4. 单轮问答：
+
+```bash
+curl -sS -X POST "http://localhost:8080/api/v1/qa/ask" \
+  -H "Content-Type: application/json" \
+  -d '{"question":"文档主要内容是什么？","kbId":"default","topK":5}'
+```
+
+5. 删除文档资产（可选）：
 
 ```bash
 curl -i -X DELETE "http://localhost:8080/api/v1/documents/{documentId}"
 ```
 
-4) 删除后再次查状态，预期返回 `DELETED`（不是 `404`）：
+4. 删除后再次查状态，预期返回 `DELETED`（不是 `404`）：
 
 ```bash
 curl -sS "http://localhost:8080/api/v1/documents/{documentId}/status"
 ```
 
-5) 查看 ingest 指标：
+5. 查看 ingest 指标：
 
 ```bash
 curl -sS "http://localhost:8080/actuator/metrics/myai.ingest.process.success.total"
@@ -220,8 +259,8 @@ curl -sS "http://localhost:8080/actuator/metrics/myai.ingest.delete.success.tota
 
 - `POST /api/v1/documents/upload`
 - `multipart/form-data`
-  - `file`：必填
-  - `kbId`：可选，默认 `default`
+    - `file`：必填
+    - `kbId`：可选，默认 `default`
 
 ### 6.2 查询状态
 
@@ -231,9 +270,9 @@ curl -sS "http://localhost:8080/actuator/metrics/myai.ingest.delete.success.tota
 
 - `GET /api/v1/documents/{documentId}/chunks/preview`
 - 可选参数：
-  - `limit`（默认 20，范围 1~200）
-  - `offset`（默认 0，范围 0~100000）
-  - `previewChars`（默认 200，范围 20~2000）
+    - `limit`（默认 20，范围 1~200）
+    - `offset`（默认 0，范围 0~100000）
+    - `previewChars`（默认 200，范围 20~2000）
 - 用途：验证“向量化前分块文本”是否符合预期
 
 ### 6.4 重处理
@@ -245,38 +284,38 @@ curl -sS "http://localhost:8080/actuator/metrics/myai.ingest.delete.success.tota
 
 - `DELETE /api/v1/documents/{documentId}`
 - 删除行为：
-  - 删除源文件（`{root}/{documentId}`）
-  - 删除该 `documentId` 的全部向量版本
-  - 状态推进：`可删状态 -> DELETING -> DELETED`
+    - 删除源文件（`{root}/{documentId}`）
+    - 删除该 `documentId` 的全部向量版本
+    - 状态推进：`可删状态 -> DELETING -> DELETED`
 - 返回语义：
-  - 成功或重复删除：`204`
-  - 文档不存在：`404`
-  - `INGESTING/DELETING`：`409`
+    - 成功或重复删除：`204`
+    - 文档不存在：`404`
+    - `INGESTING/DELETING`：`409`
 
 ### 6.6 查询知识库列表
 
 - `GET /api/v1/knowledge-bases`
 - 返回字段：
-  - `id`
-  - `name`（V1 与 `id` 一致）
-  - `indexedDocumentCount`（统计口径：`status=INDEXED`）
+    - `id`
+    - `name`（V1 与 `id` 一致）
+    - `indexedDocumentCount`（统计口径：`status=INDEXED`）
 
 ### 6.7 文档问答（同步）
 
 - `POST /api/v1/qa/ask`
 - 请求字段：
-  - `question`：必填非空
-  - `kbId`：可选，默认 `default`
-  - `topK`：可选，默认 `5`，范围 `1~20`
+    - `question`：必填非空
+    - `kbId`：可选，默认 `default`
+    - `topK`：可选，默认 `5`，范围 `1~20`
 - 返回字段：
-  - `answer`
-  - `references`（chunk 级对象数组）
-    - `documentId`
-    - `chunkIndex`
-    - `contentPreview`
+    - `answer`
+    - `references`（chunk 级对象数组）
+        - `documentId`
+        - `chunkIndex`
+        - `contentPreview`
 - 说明：
-  - 当前仅支持同步返回
-  - SSE 仅文档预留，暂不开放接口
+    - 当前仅支持同步返回
+    - SSE 仅文档预留，暂不开放接口
 
 ## 7. 当前边界与注意事项
 
@@ -296,10 +335,10 @@ curl -sS "http://localhost:8080/actuator/metrics/myai.ingest.delete.success.tota
 - 前端工程根目录：`web/`
 - 技术栈：React + TypeScript + Vite + React Router + TanStack Query + Ant Design + zod
 - 当前页面范围：
-  - `ingest/upload`
-  - `ingest/status`
-  - `ingest/chunks-preview`
-  - `knowledge/qa/reprocess`（草案占位页）
+    - `ingest/upload`
+    - `ingest/status`
+    - `ingest/chunks-preview`
+    - `knowledge/qa/reprocess`（草案占位页）
 
 启动方式：
 
@@ -310,5 +349,6 @@ npm run dev
 ```
 
 联调默认通过 Vite 代理：
+
 - `/api/** -> http://localhost:8080`
 - 可通过 `web/.env.example` 的 `VITE_PROXY_TARGET` 覆盖

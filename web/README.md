@@ -12,12 +12,29 @@
 
 ## 当前页面范围
 
+### Ingest 链（v1 实现）
+
 - 文档上传：`/ingest/upload`
 - 状态查询：`/ingest/status`
 - 分块预览：`/ingest/chunks-preview`
 - 文档重处理：`/ingest/reprocess`
 - 文档删除：`/ingest/delete`
-- 占位页（草案）：`/knowledge`、`/qa`
+
+### Knowledge 与 QA（v1 实现）
+
+- 知识库列表：`/knowledge`
+    - 展示 `id / name / indexedDocumentCount`
+    - 空态提示、加载骨架、错误提示
+    - 行点击或"去问答"按钮跳转至 QA 页
+- 单轮文档问答：`/qa`
+    - 字段：`kbId`、`question`、`topK`
+    - 展示 `answer` + `references` 表格
+    - 无命中兜底提示
+    - 从知识库页携带 `kbId` 跳入
+
+### 草案（预留）
+
+- 暂无，后续版本扩展
 
 ## 本地开发
 
