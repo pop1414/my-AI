@@ -2,6 +2,11 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 import { ConsoleLayout } from "./ConsoleLayout";
 
+const IngestListPage = lazy(() =>
+	import("../features/ingest/pages/IngestListPage").then((m) => ({
+		default: m.IngestListPage,
+	})),
+);
 const IngestUploadPage = lazy(() =>
 	import("../features/ingest/pages/IngestUploadPage").then((m) => ({
 		default: m.IngestUploadPage,
@@ -40,10 +45,8 @@ export function AppRoutes() {
 	return (
 		<Routes>
 			<Route path="/" element={<ConsoleLayout />}>
-				<Route
-					index
-					element={<Navigate to="/ingest/upload" replace />}
-				/>
+				<Route index element={<Navigate to="/ingest/list" replace />} />
+				<Route path="ingest/list" element={<IngestListPage />} />
 				<Route path="ingest/upload" element={<IngestUploadPage />} />
 				<Route path="ingest/status" element={<IngestStatusPage />} />
 				<Route
@@ -67,7 +70,7 @@ export function AppRoutes() {
 				<Route path="qa" element={<QaPage />} />
 				<Route
 					path="*"
-					element={<Navigate to="/ingest/upload" replace />}
+					element={<Navigate to="/ingest/list" replace />}
 				/>
 			</Route>
 		</Routes>

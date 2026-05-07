@@ -17,6 +17,7 @@ const { Title, Text } = Typography;
 type MenuItem = Required<MenuProps>["items"][number];
 
 const menuItems: MenuItem[] = [
+	{ key: "/ingest/list", icon: <FileTextOutlined />, label: "文档列表" },
 	{ key: "/ingest/upload", icon: <UploadOutlined />, label: "文档上传" },
 	{ key: "/ingest/status", icon: <FileSyncOutlined />, label: "状态查询" },
 	{
@@ -33,6 +34,7 @@ const menuItems: MenuItem[] = [
 
 function resolveTitle(pathname: string): string {
 	const map: Record<string, string> = {
+		"/ingest/list": "文档列表与管理台",
 		"/ingest/upload": "文档上传受理",
 		"/ingest/status": "文档状态查询",
 		"/ingest/chunks-preview": "文档分块预览",
