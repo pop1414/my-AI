@@ -1,6 +1,10 @@
 ﻿# 发布说明（Release Notes）
 
 ## [Unreleased]
+
+---
+
+## [1.0.0] - 2026-05-07
 ### Added
 - ADR-0003：明确 V1 落地基线为 DashScope + PostgreSQL(PGVector)
 - 新增受理闭环设计文档：`docs/06-ingest-acceptance-closure.md`
@@ -59,6 +63,10 @@
 
 ### Removed
 - 
+
+### Notes
+- V1 版本归档完成，冻结范围覆盖 ingest / knowledge / qa 最小完整闭环
+- 对应里程碑 tag：`v1.0.0`
 
 ---
 

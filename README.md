@@ -13,6 +13,7 @@
 - 架构总览：[docs/03-architecture.md](./docs/03-architecture.md)
 - API 契约：[docs/04-api-contract.yaml](./docs/04-api-contract.yaml)
 - V1 收口计划：[docs/runbooks/v1-closure-plan.md](./docs/runbooks/v1-closure-plan.md)
+- V1 版本归档：[docs/runbooks/v1-release-archive.md](./docs/runbooks/v1-release-archive.md)
 - 文档工作流：[docs/runbooks/my-ai-document-workflow.md](./docs/runbooks/my-ai-document-workflow.md)
 - Git 工作流：[docs/runbooks/my-ai-git-workflow.md](./docs/runbooks/my-ai-git-workflow.md)
 - 学习沉淀入口：[docs/learning/README.md](./docs/learning/README.md)
@@ -32,7 +33,7 @@
 - 历史变化通过 ADR、Roadmap、Release Notes 留痕
 - 课程材料与长期工程文档分开维护，但课程内容主要整理自工程真源
 
-## 1. 当前能力（截至 2026-05-06）
+## 1. 当前能力（截至 2026-05-07）
 
 - 上传受理：`POST /api/v1/documents/upload`
     - 返回 `documentId + ACCEPTED`
@@ -327,7 +328,8 @@ curl -sS "http://localhost:8080/actuator/metrics/myai.ingest.delete.success.tota
 
 ## 8. 版本目标
 
-- `V1`：完成 ingest / knowledge / qa 最小完整闭环与前端控制台演示链路
+- `V1.0.0`：已于 `2026-05-07` 完成版本归档，形成 ingest / knowledge / qa 最小完整闭环与前端控制台演示链路
+- `V1.1`：规划补齐用户/权限、文档列表与更完整的知识库管理体验
 - `V2`：增强解析能力与更完整的检索问答链路
 
 ## 9. 前端控制台（web）

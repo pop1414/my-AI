@@ -50,6 +50,13 @@
   - [docs/07-ingest-processing-execution.md](../../docs/07-ingest-processing-execution.md)
 - 版本变化与里程碑：
   - [docs/05-release-notes.md](../../docs/05-release-notes.md)
+  - [docs/runbooks/v1-release-archive.md](../../docs/runbooks/v1-release-archive.md)
+
+其中 `docs/runbooks/v1-release-archive.md` 可作为课程包装时的固定版本边界来源，用来说明：
+
+- 当前提交材料对应哪个正式版本
+- V1 已经稳定交付了哪些能力
+- 哪些内容属于 V1 之后的演进方向
 
 ## 5. 交付规则
 
