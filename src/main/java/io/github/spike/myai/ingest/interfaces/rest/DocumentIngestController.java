@@ -8,12 +8,16 @@ import io.github.spike.myai.ingest.application.exception.DocumentDeleteFailedExc
 import io.github.spike.myai.ingest.application.exception.DocumentNotFoundException;
 import io.github.spike.myai.ingest.application.query.GetDocumentChunksPreviewQuery;
 import io.github.spike.myai.ingest.application.query.GetDocumentStatusQuery;
+import io.github.spike.myai.ingest.application.query.ListDocumentsQuery;
 import io.github.spike.myai.ingest.application.result.DocumentChunkPreviewItemResult;
 import io.github.spike.myai.ingest.application.result.DocumentChunksPreviewResult;
+import io.github.spike.myai.ingest.application.result.DocumentListItemResult;
+import io.github.spike.myai.ingest.application.result.DocumentListPageResult;
 import io.github.spike.myai.ingest.application.usecase.AcceptUploadUseCase;
 import io.github.spike.myai.ingest.application.usecase.DeleteDocumentUseCase;
 import io.github.spike.myai.ingest.application.usecase.GetDocumentChunksPreviewUseCase;
 import io.github.spike.myai.ingest.application.usecase.GetDocumentStatusUseCase;
+import io.github.spike.myai.ingest.application.usecase.ListDocumentsUseCase;
 import io.github.spike.myai.ingest.application.usecase.ReprocessDocumentUseCase;
 import io.github.spike.myai.ingest.application.result.DocumentStatusResult;
 import org.springframework.http.ResponseEntity;
@@ -21,6 +25,8 @@ import io.github.spike.myai.ingest.domain.model.UploadTicket;
 import io.github.spike.myai.ingest.domain.port.DocumentSourceStorage;
 import io.github.spike.myai.ingest.interfaces.rest.dto.DocumentChunkPreviewItemResponse;
 import io.github.spike.myai.ingest.interfaces.rest.dto.DocumentChunksPreviewResponse;
+import io.github.spike.myai.ingest.interfaces.rest.dto.DocumentListItemResponse;
+import io.github.spike.myai.ingest.interfaces.rest.dto.DocumentListPageResponse;
 import io.github.spike.myai.ingest.interfaces.rest.dto.DocumentStatusResponse;
 import io.github.spike.myai.ingest.interfaces.rest.dto.UploadResponse;
 import io.github.spike.myai.knowledge.application.exception.KnowledgeBaseInactiveException;
@@ -67,6 +73,10 @@ public class DocumentIngestController {
      */
     private final AcceptUploadUseCase acceptUploadUseCase;
     /**
+     * 文档列表查询用例。
+     */
+    private final ListDocumentsUseCase listDocumentsUseCase;
+    /**
      * 文档状态查询用例。
      */
     private final GetDocumentStatusUseCase getDocumentStatusUseCase;
@@ -94,6 +104,7 @@ public class DocumentIngestController {
      * 符合依赖倒置原则（DIP），便于单元测试时注入 Mock。
      *
      * @param acceptUploadUseCase            上传受理用例
+     * @param listDocumentsUseCase           文档列表查询用例
      * @param getDocumentStatusUseCase       文档状态查询用例
      * @param getDocumentChunksPreviewUseCase 文档分块预览用例
      * @param reprocessDocumentUseCase       文档重处理用例
@@ -102,17 +113,52 @@ public class DocumentIngestController {
      */
     public DocumentIngestController(
             AcceptUploadUseCase acceptUploadUseCase,
+            ListDocumentsUseCase listDocumentsUseCase,
             GetDocumentStatusUseCase getDocumentStatusUseCase,
             GetDocumentChunksPreviewUseCase getDocumentChunksPreviewUseCase,
             ReprocessDocumentUseCase reprocessDocumentUseCase,
             DeleteDocumentUseCase deleteDocumentUseCase,
             DocumentSourceStorage documentSourceStorage) {
         this.acceptUploadUseCase = acceptUploadUseCase;
+        this.listDocumentsUseCase = listDocumentsUseCase;
         this.getDocumentStatusUseCase = getDocumentStatusUseCase;
         this.getDocumentChunksPreviewUseCase = getDocumentChunksPreviewUseCase;
         this.reprocessDocumentUseCase = reprocessDocumentUseCase;
         this.deleteDocumentUseCase = deleteDocumentUseCase;
         this.documentSourceStorage = documentSourceStorage;
+    }
+
+    /**
+     * 查询文档分页列表。
+     *
+     * <p>接口契约：
+     * <ul>
+     *     <li>路径：GET /api/v1/documents</li>
+     *     <li>参数：kbId（可选，精确匹配）</li>
+     *     <li>参数：status（可选，默认排除 DELETED）</li>
+     *     <li>参数：filename（可选，模糊匹配）</li>
+     *     <li>参数：limit（可选，默认20，范围1~100）</li>
+     *     <li>参数：offset（可选，默认0，必须大于等于0）</li>
+     * </ul>
+     */
+    @GetMapping(value = {"", "/"}, produces = MediaType.APPLICATION_JSON_VALUE)
+    public DocumentListPageResponse listDocuments(
+            @RequestParam(value = "kbId", required = false) String kbId,
+            @RequestParam(value = "status", required = false) String status,
+            @RequestParam(value = "filename", required = false) String filename,
+            @RequestParam(value = "limit", defaultValue = "20") int limit,
+            @RequestParam(value = "offset", defaultValue = "0") int offset) {
+        try {
+            DocumentListPageResult result = listDocumentsUseCase.handle(
+                    new ListDocumentsQuery(kbId, status, filename, limit, offset));
+            return new DocumentListPageResponse(
+                    result.items().stream().map(DocumentIngestController::toDocumentListItemResponse).toList(),
+                    result.total(),
+                    result.limit(),
+                    result.offset());
+        } catch (IllegalArgumentException ex) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, ex.getMessage(), ex);
+        }
     }
 
     /**
@@ -255,6 +301,18 @@ public class DocumentIngestController {
                 item.contentHash(),
                 item.splitVersion(),
                 item.sourceHint());
+    }
+
+    private static DocumentListItemResponse toDocumentListItemResponse(DocumentListItemResult item) {
+        return new DocumentListItemResponse(
+                item.documentId(),
+                item.kbId(),
+                item.filename(),
+                item.fileSize(),
+                item.status(),
+                item.failureReason(),
+                item.createdAt(),
+                item.updatedAt());
     }
 
     /**
