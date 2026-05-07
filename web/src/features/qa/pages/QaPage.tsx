@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useEffect, useMemo, useState } from "react";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import {
 	Button,
 	Card,
@@ -7,6 +7,7 @@ import {
 	Form,
 	Input,
 	InputNumber,
+	Select,
 	Space,
 	Table,
 	Tag,
@@ -20,10 +21,11 @@ import {
 	type AskResponse,
 	type AskReference,
 } from "../../../shared/api/qaApi";
+import { listKnowledgeBases } from "../../../shared/api/knowledgeApi";
 import { ApiErrorAlert } from "../../../shared/ui/ApiErrorAlert";
 
 const qaFormSchema = z.object({
-	kbId: z.string().trim().min(1, "知识库 ID 不能为空"),
+	kbId: z.string().trim().min(1, "请选择知识库"),
 	question: z.string().trim().min(1, "请输入问题"),
 	topK: z.number().int().min(1, "topK 最小为 1").max(20, "topK 最大为 20"),
 });
@@ -47,6 +49,29 @@ export function QaPage() {
 		topK: number;
 	}>();
 	const [result, setResult] = useState<AskResponse | null>(null);
+	const knowledgeQuery = useQuery({
+		queryKey: ["knowledge-bases"],
+		queryFn: listKnowledgeBases,
+	});
+	const activeKnowledgeBases = useMemo(
+		() => (knowledgeQuery.data ?? []).filter((item) => item.status === "ACTIVE"),
+		[knowledgeQuery.data],
+	);
+
+	useEffect(() => {
+		if (activeKnowledgeBases.length === 0) {
+			return;
+		}
+		const currentKbId = form.getFieldValue("kbId");
+		const queryKbId = searchParams.get("kbId");
+		const lastKbId = localStorage.getItem("myai:lastKbId");
+		const candidate = [currentKbId, queryKbId, lastKbId, "default", activeKnowledgeBases[0]?.id].find(
+			(kbId) => (kbId ? activeKnowledgeBases.some((item) => item.id === kbId) : false),
+		);
+		if (candidate) {
+			form.setFieldValue("kbId", candidate);
+		}
+	}, [activeKnowledgeBases, form, searchParams]);
 
 	const askMutation = useMutation({
 		mutationFn: (values: z.infer<typeof qaFormSchema>) =>
@@ -57,6 +82,7 @@ export function QaPage() {
 			}),
 		onSuccess: (data) => {
 			setResult(data);
+			localStorage.setItem("myai:lastKbId", form.getFieldValue("kbId"));
 		},
 	});
 
@@ -86,17 +112,22 @@ export function QaPage() {
 					form={form}
 					layout="vertical"
 					initialValues={{
-						kbId:
-							searchParams.get("kbId") ||
-							localStorage.getItem("myai:lastKbId") ||
-							"default",
+						kbId: "default",
 						question: "",
 						topK: 5,
 					}}
 					onFinish={onSubmit}
 				>
-					<Form.Item label="知识库 ID" name="kbId">
-						<Input placeholder="default" allowClear />
+					<Form.Item label="知识库" name="kbId">
+						<Select
+							placeholder="请选择知识库"
+							loading={knowledgeQuery.isLoading}
+							options={activeKnowledgeBases.map((item) => ({
+								label: `${item.name} (${item.id})`,
+								value: item.id,
+							}))}
+							disabled={knowledgeQuery.isLoading || activeKnowledgeBases.length === 0}
+						/>
 					</Form.Item>
 
 					<Form.Item label="问题" name="question">
@@ -122,6 +153,7 @@ export function QaPage() {
 				</Form>
 			</Card>
 
+			{knowledgeQuery.isError && <ApiErrorAlert error={knowledgeQuery.error} />}
 			{askMutation.isError && <ApiErrorAlert error={askMutation.error} />}
 
 			{result && (

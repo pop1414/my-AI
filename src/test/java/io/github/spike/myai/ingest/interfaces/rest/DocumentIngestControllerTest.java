@@ -29,6 +29,8 @@ import io.github.spike.myai.ingest.domain.model.DocumentId;
 import io.github.spike.myai.ingest.domain.model.UploadStatus;
 import io.github.spike.myai.ingest.domain.model.UploadTicket;
 import io.github.spike.myai.ingest.domain.port.DocumentSourceStorage;
+import io.github.spike.myai.knowledge.application.exception.KnowledgeBaseInactiveException;
+import io.github.spike.myai.knowledge.application.exception.KnowledgeBaseNotFoundException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -115,6 +117,30 @@ class DocumentIngestControllerTest {
 
         verify(acceptUploadUseCase, never()).handle(any(AcceptUploadCommand.class));
         verify(documentSourceStorage, never()).save(any(DocumentId.class), any(String.class), any(byte[].class));
+    }
+
+    @Test
+    @DisplayName("上传知识库不存在时应返回 400")
+    void upload_shouldReturnBadRequest_whenKnowledgeBaseMissing() throws Exception {
+        when(acceptUploadUseCase.handle(any(AcceptUploadCommand.class)))
+                .thenThrow(new KnowledgeBaseNotFoundException("knowledge base not found: kb-missing"));
+        MockMultipartFile file =
+                new MockMultipartFile("file", "demo.txt", MediaType.TEXT_PLAIN_VALUE, "hello".getBytes());
+
+        mockMvc.perform(multipart("/api/v1/documents/upload").file(file).param("kbId", "kb-missing"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @DisplayName("上传知识库停用时应返回 409")
+    void upload_shouldReturnConflict_whenKnowledgeBaseInactive() throws Exception {
+        when(acceptUploadUseCase.handle(any(AcceptUploadCommand.class)))
+                .thenThrow(new KnowledgeBaseInactiveException("knowledge base is inactive: kb-inactive"));
+        MockMultipartFile file =
+                new MockMultipartFile("file", "demo.txt", MediaType.TEXT_PLAIN_VALUE, "hello".getBytes());
+
+        mockMvc.perform(multipart("/api/v1/documents/upload").file(file).param("kbId", "kb-inactive"))
+                .andExpect(status().isConflict());
     }
 
     @Test

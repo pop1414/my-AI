@@ -38,7 +38,7 @@
 - [docs/03-architecture.md](../03-architecture.md)
 - [docs/04-api-contract.yaml](../04-api-contract.yaml)
 - [docs/05-release-notes.md](../05-release-notes.md)
-- [docs/runbooks/v1-closure-plan.md](./v1-closure-plan.md)
+- [docs/runbooks/plans/v1/v1-closure-plan.md](./v1-closure-plan.md)
 - [docs/runbooks/handoffs/2026-05-07-session-handoff-v1-closure.md](./handoffs/2026-05-07-session-handoff-v1-closure.md)
 
 其中：

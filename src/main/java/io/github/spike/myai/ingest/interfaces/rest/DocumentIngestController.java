@@ -23,6 +23,8 @@ import io.github.spike.myai.ingest.interfaces.rest.dto.DocumentChunkPreviewItemR
 import io.github.spike.myai.ingest.interfaces.rest.dto.DocumentChunksPreviewResponse;
 import io.github.spike.myai.ingest.interfaces.rest.dto.DocumentStatusResponse;
 import io.github.spike.myai.ingest.interfaces.rest.dto.UploadResponse;
+import io.github.spike.myai.knowledge.application.exception.KnowledgeBaseInactiveException;
+import io.github.spike.myai.knowledge.application.exception.KnowledgeBaseNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.security.MessageDigest;
@@ -52,6 +54,9 @@ import org.springframework.web.server.ResponseStatusException;
  * </ul>
  *
  * <p>注意：控制器不直接处理领域规则，也不直接访问数据库或第三方 SDK。
+ *
+ * @author Spike
+ * @since 1.0.0
  */
 @RestController
 @RequestMapping("/api/v1/documents")
@@ -78,10 +83,23 @@ public class DocumentIngestController {
      */
     private final DeleteDocumentUseCase deleteDocumentUseCase;
     /**
-     * 文档源文件存储端口。
+     * 文档源文件存储端口：用于保存上传文件的原始内容，供异步处理链路读取。
      */
     private final DocumentSourceStorage documentSourceStorage;
 
+    /**
+     * 构造器注入（Spring 推荐方式）。
+     *
+     * <p>控制器仅依赖用例接口而非具体实现，
+     * 符合依赖倒置原则（DIP），便于单元测试时注入 Mock。
+     *
+     * @param acceptUploadUseCase            上传受理用例
+     * @param getDocumentStatusUseCase       文档状态查询用例
+     * @param getDocumentChunksPreviewUseCase 文档分块预览用例
+     * @param reprocessDocumentUseCase       文档重处理用例
+     * @param deleteDocumentUseCase          文档删除用例
+     * @param documentSourceStorage          源文件存储端口
+     */
     public DocumentIngestController(
             AcceptUploadUseCase acceptUploadUseCase,
             GetDocumentStatusUseCase getDocumentStatusUseCase,
@@ -132,11 +150,19 @@ public class DocumentIngestController {
         AcceptUploadCommand command = new AcceptUploadCommand(file.getOriginalFilename(), file.getSize(), kbId, fileHash);
 
         // 调用应用层的处理逻辑处理上传命令。
-        UploadTicket uploadTicket = acceptUploadUseCase.handle(command);
+        // 异常映射：领域异常 → HTTP 状态码，控制器负责语义转换
+        UploadTicket uploadTicket;
         try {
+            uploadTicket = acceptUploadUseCase.handle(command);
             // 受理成功后立即持久化源文件，供异步处理链路（解析/分块/向量化）读取。
             // 当命中幂等复用既有 documentId 时，这里会走存储端口的幂等写入（存在则不覆盖）。
             documentSourceStorage.save(uploadTicket.documentId(), file.getOriginalFilename(), file.getBytes());
+        } catch (KnowledgeBaseNotFoundException ex) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, ex.getMessage(), ex);
+        } catch (KnowledgeBaseInactiveException ex) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, ex.getMessage(), ex);
+        } catch (IllegalArgumentException ex) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, ex.getMessage(), ex);
         } catch (IOException ex) {
             // IO 异常处理，抛出 BAD_REQUEST 返回前端。
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "failed to read upload file", ex);
@@ -266,41 +292,82 @@ public class DocumentIngestController {
      *   <li>路径：DELETE /api/v1/documents/{documentId}</li>
      *   <li>响应：204 No Content（删除成功或幂等删除）</li>
      * </ul>
+     *
+     * <p>异常映射策略：
+     * <ul>
+     *   <li>{@code DocumentNotFoundException} → 404，资源不存在；</li>
+     *   <li>{@code DocumentDeleteConflictException} → 409，文档状态冲突（如处理中不可删除）；</li>
+     *   <li>{@code DocumentDeleteFailedException} → 500，基础设施层删除失败；</li>
+     *   <li>{@code IllegalArgumentException} → 400，参数校验失败。</li>
+     * </ul>
+     *
+     * @param documentId 文档资产 ID
+     * @return 204 No Content（无响应体）
      */
     @DeleteMapping(value = "/{documentId}")
     public ResponseEntity<Void> delete(@PathVariable("documentId") String documentId) {
         try {
+            // 委派给应用层用例处理删除逻辑（含源文件清理、向量删除、状态检查）
             deleteDocumentUseCase.handle(new DeleteDocumentCommand(documentId));
+            // 删除成功返回 204，无响应体
             return ResponseEntity.noContent().build();
         } catch (DocumentNotFoundException ex) {
+            // 文档不存在 → 404
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, ex.getMessage(), ex);
         } catch (DocumentDeleteConflictException ex) {
+            // 文档状态冲突（如正在处理中不可删除）→ 409
             throw new ResponseStatusException(HttpStatus.CONFLICT, ex.getMessage(), ex);
         } catch (DocumentDeleteFailedException ex) {
+            // 基础设施层删除失败（存储异常等）→ 500
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, ex.getMessage(), ex);
         } catch (IllegalArgumentException ex) {
+            // 参数校验失败 → 400
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, ex.getMessage(), ex);
         }
     }
 
     /**
-     * 计算上传文件的 SHA-256 哈希。
-     * 多次读取利用 java.security.MessageDigest 计算分块哈希值。
+     * 计算上传文件的 SHA-256 哈希值。
+     *
+     * <p>采用流式分块读取策略，避免将整个文件加载到内存：
+     * <ol>
+     *   <li>获取 {@link MessageDigest} SHA-256 实例；</li>
+     *   <li>以 8KB 缓冲区流式读取文件输入流；</li>
+     *   <li>每次读取后调用 {@code digest.update()} 增量更新哈希；</li>
+     *   <li>全部读取完毕后调用 {@code digest.digest()} 获取最终哈希；</li>
+     *   <li>使用 {@link HexFormat} 将字节数组转为十六进制小写字符串。</li>
+     * </ol>
+     *
+     * <p>缓冲区大小 {@code 8192}（8KB）是经验值，
+     * 在内存占用与系统调用次数之间取得平衡。
+     *
+     * @param file 上传的文件
+     * @return SHA-256 哈希值的十六进制字符串（64 字符，小写）
      */
     private static String calculateFileHash(MultipartFile file) {
         try {
+            // 1. 获取 SHA-256 消息摘要实例
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
+
+            // 2. 流式读取文件，避免全量加载到内存
             try (InputStream inputStream = file.getInputStream()) {
+                // 8KB 缓冲区，平衡内存占用与 I/O 次数
                 byte[] buffer = new byte[8192];
                 int bytesRead;
+
+                // 3. 循环读取并增量更新哈希值
                 while ((bytesRead = inputStream.read(buffer)) != -1) {
-                    digest.update(buffer, 0, bytesRead);
+                    digest.update(buffer, 0, bytesRead);  // 仅处理实际读取的字节数
                 }
-            }
+            } // try-with-resources 自动关闭输入流
+
+            // 4. 计算最终哈希并格式化为十六进制小写字符串
             return HexFormat.of().formatHex(digest.digest());
         } catch (IOException ex) {
+            // 文件读取失败（如流中断、文件被删除）→ 400
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "failed to read upload file", ex);
         } catch (NoSuchAlgorithmException ex) {
+            // SHA-256 算法不可用（JVM 配置异常，正常情况不会发生）→ 500
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "sha-256 not available", ex);
         }
     }

@@ -16,6 +16,11 @@ import io.github.spike.myai.ingest.domain.model.UploadStatus;
 import io.github.spike.myai.ingest.domain.model.UploadTicket;
 import io.github.spike.myai.ingest.domain.port.DocumentIdGenerator;
 import io.github.spike.myai.ingest.domain.port.DocumentRepository;
+import io.github.spike.myai.knowledge.application.exception.KnowledgeBaseInactiveException;
+import io.github.spike.myai.knowledge.application.exception.KnowledgeBaseNotFoundException;
+import io.github.spike.myai.knowledge.domain.model.KnowledgeBase;
+import io.github.spike.myai.knowledge.domain.model.KnowledgeBaseStatus;
+import io.github.spike.myai.knowledge.domain.port.KnowledgeBaseRepository;
 import java.time.Instant;
 import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
@@ -39,11 +44,14 @@ class AcceptUploadApplicationServiceTest {
     void handle_shouldReturnAcceptedTicket() {
         DocumentIdGenerator generator = Mockito.mock(DocumentIdGenerator.class);
         DocumentRepository repository = Mockito.mock(DocumentRepository.class);
+        KnowledgeBaseRepository knowledgeBaseRepository = Mockito.mock(KnowledgeBaseRepository.class);
         when(generator.nextId()).thenReturn(new DocumentId("doc-001"));
         when(repository.findByKbIdAndFileHash(eq("kb-x"), eq("hash-a")))
                 .thenReturn(Optional.empty());
+        when(knowledgeBaseRepository.findByKbId(eq("kb-x")))
+                .thenReturn(Optional.of(new KnowledgeBase("kb-x", "知识库X", "", KnowledgeBaseStatus.ACTIVE, Instant.now(), Instant.now())));
 
-        AcceptUploadApplicationService service = new AcceptUploadApplicationService(generator, repository);
+        AcceptUploadApplicationService service = new AcceptUploadApplicationService(generator, repository, knowledgeBaseRepository);
         AcceptUploadCommand command = new AcceptUploadCommand("a.txt", 10L, "kb-x", "hash-a");
 
         UploadTicket ticket = service.handle(command);
@@ -60,11 +68,14 @@ class AcceptUploadApplicationServiceTest {
     void handle_shouldWork_whenKbIdIsBlank() {
         DocumentIdGenerator generator = Mockito.mock(DocumentIdGenerator.class);
         DocumentRepository repository = Mockito.mock(DocumentRepository.class);
+        KnowledgeBaseRepository knowledgeBaseRepository = Mockito.mock(KnowledgeBaseRepository.class);
         when(generator.nextId()).thenReturn(new DocumentId("doc-blank-kb"));
         when(repository.findByKbIdAndFileHash(eq("default"), eq("hash-b")))
                 .thenReturn(Optional.empty());
+        when(knowledgeBaseRepository.findByKbId(eq("default")))
+                .thenReturn(Optional.of(new KnowledgeBase("default", "default", "", KnowledgeBaseStatus.ACTIVE, Instant.now(), Instant.now())));
 
-        AcceptUploadApplicationService service = new AcceptUploadApplicationService(generator, repository);
+        AcceptUploadApplicationService service = new AcceptUploadApplicationService(generator, repository, knowledgeBaseRepository);
         AcceptUploadCommand command = new AcceptUploadCommand("b.txt", 20L, " ", "hash-b");
 
         UploadTicket ticket = service.handle(command);
@@ -86,6 +97,7 @@ class AcceptUploadApplicationServiceTest {
     void handle_shouldReuseExistingDocument_whenDuplicateUpload() {
         DocumentIdGenerator generator = Mockito.mock(DocumentIdGenerator.class);
         DocumentRepository repository = Mockito.mock(DocumentRepository.class);
+        KnowledgeBaseRepository knowledgeBaseRepository = Mockito.mock(KnowledgeBaseRepository.class);
         Document existing = new Document(
                 new DocumentId("doc-existing"),
                 "kb-dup",
@@ -107,8 +119,10 @@ class AcceptUploadApplicationServiceTest {
                 Instant.now());
         when(repository.findByKbIdAndFileHash(eq("kb-dup"), eq("hash-dup")))
                 .thenReturn(Optional.of(existing));
+        when(knowledgeBaseRepository.findByKbId(eq("kb-dup")))
+                .thenReturn(Optional.of(new KnowledgeBase("kb-dup", "知识库", "", KnowledgeBaseStatus.ACTIVE, Instant.now(), Instant.now())));
 
-        AcceptUploadApplicationService service = new AcceptUploadApplicationService(generator, repository);
+        AcceptUploadApplicationService service = new AcceptUploadApplicationService(generator, repository, knowledgeBaseRepository);
         AcceptUploadCommand command = new AcceptUploadCommand("new.txt", 99L, "kb-dup", "hash-dup");
 
         UploadTicket ticket = service.handle(command);
@@ -117,5 +131,36 @@ class AcceptUploadApplicationServiceTest {
         assertEquals(UploadStatus.ACCEPTED, ticket.status());
         verify(generator, never()).nextId();
         verify(repository, never()).save(any(Document.class));
+    }
+
+    @Test
+    @DisplayName("知识库不存在时应抛出未找到异常")
+    void handle_shouldThrow_whenKnowledgeBaseMissing() {
+        DocumentIdGenerator generator = Mockito.mock(DocumentIdGenerator.class);
+        DocumentRepository repository = Mockito.mock(DocumentRepository.class);
+        KnowledgeBaseRepository knowledgeBaseRepository = Mockito.mock(KnowledgeBaseRepository.class);
+        when(knowledgeBaseRepository.findByKbId(eq("kb-missing"))).thenReturn(Optional.empty());
+
+        AcceptUploadApplicationService service = new AcceptUploadApplicationService(generator, repository, knowledgeBaseRepository);
+
+        org.junit.jupiter.api.Assertions.assertThrows(
+                KnowledgeBaseNotFoundException.class,
+                () -> service.handle(new AcceptUploadCommand("x.txt", 1L, "kb-missing", "hash-x")));
+    }
+
+    @Test
+    @DisplayName("知识库停用时应抛出冲突异常")
+    void handle_shouldThrow_whenKnowledgeBaseInactive() {
+        DocumentIdGenerator generator = Mockito.mock(DocumentIdGenerator.class);
+        DocumentRepository repository = Mockito.mock(DocumentRepository.class);
+        KnowledgeBaseRepository knowledgeBaseRepository = Mockito.mock(KnowledgeBaseRepository.class);
+        when(knowledgeBaseRepository.findByKbId(eq("kb-inactive")))
+                .thenReturn(Optional.of(new KnowledgeBase("kb-inactive", "禁用库", "", KnowledgeBaseStatus.INACTIVE, Instant.now(), Instant.now())));
+
+        AcceptUploadApplicationService service = new AcceptUploadApplicationService(generator, repository, knowledgeBaseRepository);
+
+        org.junit.jupiter.api.Assertions.assertThrows(
+                KnowledgeBaseInactiveException.class,
+                () -> service.handle(new AcceptUploadCommand("x.txt", 1L, "kb-inactive", "hash-x")));
     }
 }

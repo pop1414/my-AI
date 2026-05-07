@@ -1,6 +1,18 @@
 ﻿# 发布说明（Release Notes）
 
 ## [Unreleased]
+### Added
+- 新增知识库主数据表：`knowledge_bases`（自增主键 + 唯一业务键 `kb_id`）
+- 新增知识库创建接口：`POST /api/v1/knowledge-bases`
+- 新增知识库编辑接口：`PATCH /api/v1/knowledge-bases/{kbId}`
+
+### Changed
+- 知识库列表接口升级为“主数据 + `INDEXED` 统计”视图，保留既有 `id/name/indexedDocumentCount` 字段并新增 `description/status`
+- 上传与问答链路增加知识库存在性/状态校验：显式传入不存在知识库返回 `400`，传入停用知识库返回 `409`
+- 上传页与问答页改为以知识库选择器为主，知识库页升级为可创建、可编辑的管理台
+
+### Notes
+- 启动迁移会自动补齐 `default` 知识库，并从 `ingest_documents` 回填历史 `kb_id`，避免旧数据升级后失联
 
 ---
 

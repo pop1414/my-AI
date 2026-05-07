@@ -12,11 +12,11 @@
 - 路线图：[docs/02-roadmap.md](./docs/02-roadmap.md)
 - 架构总览：[docs/03-architecture.md](./docs/03-architecture.md)
 - API 契约：[docs/04-api-contract.yaml](./docs/04-api-contract.yaml)
-- V1 收口计划：[docs/runbooks/v1-closure-plan.md](./docs/runbooks/v1-closure-plan.md)
-- V1 版本归档：[docs/runbooks/v1-release-archive.md](./docs/runbooks/v1-release-archive.md)
-- V1.1 规划草案：[docs/runbooks/v1-1-plan.md](./docs/runbooks/v1-1-plan.md)
-- 文档工作流：[docs/runbooks/my-ai-document-workflow.md](./docs/runbooks/my-ai-document-workflow.md)
-- Git 工作流：[docs/runbooks/my-ai-git-workflow.md](./docs/runbooks/my-ai-git-workflow.md)
+- V1 收口计划：[docs/runbooks/plans/v1/v1-closure-plan.md](./docs/runbooks/plans/v1/v1-closure-plan.md)
+- V1 版本归档：[docs/runbooks/plans/v1/v1-release-archive.md](./docs/runbooks/plans/v1/v1-release-archive.md)
+- V1.1 规划草案：[docs/runbooks/plans/v1-1/v1-1-plan.md](./docs/runbooks/plans/v1-1/v1-1-plan.md)
+- 文档工作流：[docs/runbooks/workflows/my-ai-document-workflow.md](./docs/runbooks/workflows/my-ai-document-workflow.md)
+- Git 工作流：[docs/runbooks/workflows/my-ai-git-workflow.md](./docs/runbooks/workflows/my-ai-git-workflow.md)
 - 学习沉淀入口：[docs/learning/README.md](./docs/learning/README.md)
 - 课程交付入口：[deliverables/course/README.md](./deliverables/course/README.md)
 
@@ -34,7 +34,7 @@
 - 历史变化通过 ADR、Roadmap、Release Notes 留痕
 - 课程材料与长期工程文档分开维护，但课程内容主要整理自工程真源
 
-## 1. 当前能力（截至 2026-05-07）
+## 1. 当前能力（截至 2026-05-07，含 V1.1 知识库主数据化）
 
 - 上传受理：`POST /api/v1/documents/upload`
     - 返回 `documentId + ACCEPTED`
@@ -62,15 +62,20 @@
     - `POST /api/v1/documents/{documentId}/reprocess`
     - `DELETE /api/v1/documents/{documentId}`
 - 已实现 API（knowledge / qa）：
-    - `GET /api/v1/knowledge-bases`（仅统计 `INDEXED`）
+    - `POST /api/v1/knowledge-bases`（创建知识库，服务端生成 `kb_id`）
+    - `GET /api/v1/knowledge-bases`（知识库主数据 + `INDEXED` 统计）
+    - `PATCH /api/v1/knowledge-bases/{kbId}`（编辑 `name/description/status`）
     - `POST /api/v1/qa/ask`（同步返回）
     - 无命中场景：`200 + 兜底回答 + 空 references`
     - `references` 结构：`documentId/chunkIndex/contentPreview`
+    - 上传/问答显式传入不存在知识库时返回 `400`，传入停用知识库时返回 `409`
 
-- 前端控制台（`web/`，截至 2026-05-06）：
+- 前端控制台（`web/`，截至 2026-05-07）：
     - React 19 + TypeScript 6 + Vite 8 + Ant Design 6
     - 7 个功能页面，按路由懒加载代码拆分
-    - 知识库统计列表 + 单轮问答（answer + references）
+    - 知识库主数据管理（创建、查看、编辑、停用）
+    - 上传页与问答页改为知识库选择器驱动
+    - 单轮问答（answer + references）
     - 上传 → 状态查询 → 分块预览 → 重处理 → 删除 完整链路
     - TanStack Query 自动轮询 + 终态检测
     - Zod 运行时接口校验
@@ -194,7 +199,7 @@ npm run dev
 
 1. 文档上传 → 拖入文件提交
 2. 状态查询 → 等待文档到达 `INDEXED`
-3. 知识库 → 查看 `indexedDocumentCount`，点击"去问答"
+3. 知识库 → 可新建/编辑知识库，查看 `indexedDocumentCount`，点击"去问答"
 4. 问答 → 输入问题，查看 `answer` 与引用分块
 
 **curl 方式**：
