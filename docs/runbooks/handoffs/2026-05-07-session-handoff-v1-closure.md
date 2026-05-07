@@ -46,7 +46,7 @@
 - [README.md](../../../README.md)
 - [docs/02-roadmap.md](../../02-roadmap.md)
 - [docs/05-release-notes.md](../../05-release-notes.md)
-- [docs/runbooks/v1-closure-plan.md](../v1-closure-plan.md)
+- [docs/runbooks/plans/v1/v1-closure-plan.md](../plans/v1/v1-closure-plan.md)
 
 具体改动：
 
@@ -107,8 +107,8 @@
 并已新增：
 
 - [docs/README.md](../../README.md)
-- [docs/runbooks/my-ai-document-workflow.md](../my-ai-document-workflow.md)
-- [docs/runbooks/my-ai-git-workflow.md](../my-ai-git-workflow.md)
+- [docs/runbooks/workflows/my-ai-document-workflow.md](../workflows/my-ai-document-workflow.md)
+- [docs/runbooks/workflows/my-ai-git-workflow.md](../workflows/my-ai-git-workflow.md)
 
 ## 8. 关键判断
 
