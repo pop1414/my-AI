@@ -163,7 +163,7 @@ public class JdbcKnowledgeBaseRepository implements KnowledgeBaseRepository {
             LEFT JOIN ingest_documents doc
                    ON doc.kb_id = kb.kb_id
                   AND doc.status = 'INDEXED'
-            GROUP BY kb.kb_id, kb.name, kb.description, kb.status
+            GROUP BY kb.kb_id, kb.name, kb.description, kb.status, kb.created_at
             ORDER BY kb.created_at ASC, kb.kb_id ASC
             """;
 

@@ -47,5 +47,7 @@ class JdbcKnowledgeBaseRepositoryTest {
         verify(jdbcTemplate).query(sqlCaptor.capture(), any(RowMapper.class));
         assertTrue(sqlCaptor.getValue().contains("LEFT JOIN ingest_documents"));
         assertTrue(sqlCaptor.getValue().contains("doc.status = 'INDEXED'"));
+        assertTrue(sqlCaptor.getValue().contains("GROUP BY kb.kb_id, kb.name, kb.description, kb.status, kb.created_at"));
+        assertTrue(sqlCaptor.getValue().contains("ORDER BY kb.created_at ASC, kb.kb_id ASC"));
     }
 }
