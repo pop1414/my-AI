@@ -14,6 +14,7 @@
 - API 契约：[docs/04-api-contract.yaml](./docs/04-api-contract.yaml)
 - V1 收口计划：[docs/runbooks/v1-closure-plan.md](./docs/runbooks/v1-closure-plan.md)
 - V1 版本归档：[docs/runbooks/v1-release-archive.md](./docs/runbooks/v1-release-archive.md)
+- V1.1 规划草案：[docs/runbooks/v1-1-plan.md](./docs/runbooks/v1-1-plan.md)
 - 文档工作流：[docs/runbooks/my-ai-document-workflow.md](./docs/runbooks/my-ai-document-workflow.md)
 - Git 工作流：[docs/runbooks/my-ai-git-workflow.md](./docs/runbooks/my-ai-git-workflow.md)
 - 学习沉淀入口：[docs/learning/README.md](./docs/learning/README.md)
