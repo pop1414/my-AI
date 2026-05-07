@@ -237,13 +237,13 @@ curl -sS -X POST "http://localhost:8080/api/v1/qa/ask" \
 curl -i -X DELETE "http://localhost:8080/api/v1/documents/{documentId}"
 ```
 
-4. 删除后再次查状态，预期返回 `DELETED`（不是 `404`）：
+6. 删除后再次查状态，预期返回 `DELETED`（不是 `404`）：
 
 ```bash
 curl -sS "http://localhost:8080/api/v1/documents/{documentId}/status"
 ```
 
-5. 查看 ingest 指标：
+7. 查看 ingest 指标：
 
 ```bash
 curl -sS "http://localhost:8080/actuator/metrics/myai.ingest.process.success.total"
@@ -327,7 +327,7 @@ curl -sS "http://localhost:8080/actuator/metrics/myai.ingest.delete.success.tota
 
 ## 8. 版本目标
 
-- `V1`：完成 ingest 最小闭环与可追踪处理
+- `V1`：完成 ingest / knowledge / qa 最小完整闭环与前端控制台演示链路
 - `V2`：增强解析能力与更完整的检索问答链路
 
 ## 9. 前端控制台（web）
@@ -338,7 +338,14 @@ curl -sS "http://localhost:8080/actuator/metrics/myai.ingest.delete.success.tota
     - `ingest/upload`
     - `ingest/status`
     - `ingest/chunks-preview`
-    - `knowledge/qa/reprocess`（草案占位页）
+    - `ingest/reprocess`
+    - `ingest/delete`
+    - `knowledge`
+    - `qa`
+- 当前控制台能力：
+    - 文档上传、状态查询、分块预览、重处理、删除
+    - 知识库统计列表与跳转问答
+    - 单轮问答结果与引用来源展示
 
 启动方式：
 

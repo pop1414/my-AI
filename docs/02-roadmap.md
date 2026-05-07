@@ -1,6 +1,6 @@
 # 版本路线图（Roadmap）
 
-## 当前进度快照（截至 2026-04-14）
+## 当前进度快照（截至 2026-05-07）
 
 ### 已完成
 - `ingest` 受理闭环：上传受理、状态查询、`kbId + fileHash` 幂等
@@ -11,12 +11,13 @@
 - 重处理能力：`POST /api/v1/documents/{documentId}/reprocess`（`splitVersion++`）
 - 瞬时错误重试：指数退避 + jitter（区分 `is_transient`）
 - 资产删除闭环：`DELETE /api/v1/documents/{documentId}`（`DELETING -> DELETED`）
+- `knowledge` 子域前端接入：知识库列表、`indexedDocumentCount` 展示、跳转问答
+- `qa` 子域前端接入：单轮问答、结构化引用展示、无命中兜底提示
+- V1 控制台闭环：上传 -> 状态查询 -> 知识库统计 -> 单轮问答
+- 本地端到端环境收敛：前后端联调路径、运行脚本与最小演示顺序
 
 ### 进行中
-- V1 收口：本地端到端环境收敛（PostgreSQL/PGVector、DashScope Key、运行脚本与联调手册）
-- ingest 启动结构自检与最小可观测能力补齐（Actuator + Micrometer）
-- M2 问答链路收口：同步问答能力与结构化引用（SSE 仅文档预留）
-- DDD 边界收敛：knowledge / qa 从 ingest 中拆分为独立子域（包级）
+- V1 发布归档：版本说明、提交历史、演示材料与课程包装整理
 
 ### 未开始（V1 后半段 / V2）
 - OCR 与复杂版式增强
@@ -34,11 +35,14 @@
 - TXT/PDF 入库
 - 固定 DashScope（Spring AI Alibaba）
 - 固定向量库（PostgreSQL + PGVector）
+- 知识库统计列表
 - 基础 RAG 问答（同步返回版）
+- 前端控制台最小演示闭环
 
 ### 验收条件
 - 端到端流程可演示
 - 可持续本地开发和打包
+- 前后端文案与当前实现一致
 
 ## V2.0（进阶版）
 ### 目标
