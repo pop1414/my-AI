@@ -9,6 +9,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import io.github.spike.myai.qa.application.result.AskQuestionResult;
 import io.github.spike.myai.qa.application.result.AskReferenceResult;
 import io.github.spike.myai.qa.application.usecase.AskQuestionUseCase;
+import io.github.spike.myai.knowledge.application.exception.KnowledgeBaseInactiveException;
+import io.github.spike.myai.knowledge.application.exception.KnowledgeBaseNotFoundException;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -70,6 +72,38 @@ class QaControllerTest {
                                 }
                                 """))
                 .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @DisplayName("问答知识库不存在时应返回 400")
+    void ask_shouldReturnBadRequest_whenKnowledgeBaseMissing() throws Exception {
+        when(askQuestionUseCase.handle(any())).thenThrow(new KnowledgeBaseNotFoundException("knowledge base not found: kb-missing"));
+
+        mockMvc.perform(post("/api/v1/qa/ask")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "question": "什么是RAG",
+                                  "kbId": "kb-missing"
+                                }
+                                """))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @DisplayName("问答知识库停用时应返回 409")
+    void ask_shouldReturnConflict_whenKnowledgeBaseInactive() throws Exception {
+        when(askQuestionUseCase.handle(any())).thenThrow(new KnowledgeBaseInactiveException("knowledge base is inactive: kb-inactive"));
+
+        mockMvc.perform(post("/api/v1/qa/ask")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "question": "什么是RAG",
+                                  "kbId": "kb-inactive"
+                                }
+                                """))
+                .andExpect(status().isConflict());
     }
 
     @Test

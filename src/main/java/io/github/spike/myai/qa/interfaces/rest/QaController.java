@@ -3,6 +3,8 @@ package io.github.spike.myai.qa.interfaces.rest;
 import io.github.spike.myai.qa.application.command.AskQuestionCommand;
 import io.github.spike.myai.qa.application.result.AskReferenceResult;
 import io.github.spike.myai.qa.application.usecase.AskQuestionUseCase;
+import io.github.spike.myai.knowledge.application.exception.KnowledgeBaseInactiveException;
+import io.github.spike.myai.knowledge.application.exception.KnowledgeBaseNotFoundException;
 import io.github.spike.myai.qa.interfaces.rest.dto.AskReferenceResponse;
 import io.github.spike.myai.qa.interfaces.rest.dto.AskRequest;
 import io.github.spike.myai.qa.interfaces.rest.dto.AskResponse;
@@ -26,13 +28,22 @@ import org.springframework.web.server.ResponseStatusException;
  * </ul>
  *
  * <p>版本说明：V1 仅提供同步单次问答，流式（SSE）能力暂不开放。
+ *
+ * @author Spike
+ * @since 1.0.0
  */
 @RestController
 @RequestMapping("/api/v1/qa")
 public class QaController {
 
+    /** 问答用例接口，控制器仅依赖接口不依赖具体实现，符合依赖倒置原则 */
     private final AskQuestionUseCase askQuestionUseCase;
 
+    /**
+     * 构造器注入。
+     *
+     * @param askQuestionUseCase 问答用例
+     */
     public QaController(AskQuestionUseCase askQuestionUseCase) {
         this.askQuestionUseCase = askQuestionUseCase;
     }
@@ -47,26 +58,54 @@ public class QaController {
      *   <li>响应：application/json，包含回答文本与引用片段</li>
      * </ul>
      *
+     * <p>异常映射：
+     * <ul>
+     *   <li>{@code request == null} → 400，请求体为空；</li>
+     *   <li>{@code KnowledgeBaseNotFoundException} → 400，目标知识库不存在；</li>
+     *   <li>{@code KnowledgeBaseInactiveException} → 409，知识库已停用；</li>
+     *   <li>{@code IllegalArgumentException} → 400，参数校验失败。</li>
+     * </ul>
+     *
      * @param request 问答请求体，必须包含有效问题文本
      * @return 问答响应（answer + references）
      */
     @PostMapping(value = "/ask", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     public AskResponse ask(@RequestBody(required = false) AskRequest request) {
+        // 接口安全阀：请求体为空时快速失败，避免穿透到应用层
         if (request == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "request body is required");
         }
         try {
-            var result = askQuestionUseCase.handle(new AskQuestionCommand(request.question(), request.kbId(), request.topK()));
+            // 将 HTTP 请求 DTO 转换为应用层命令对象，隔离接口协议与用例编排
+            var result = askQuestionUseCase.handle(
+                    new AskQuestionCommand(request.question(), request.kbId(), request.topK()));
+
+            // 将领域结果映射为 REST 响应 DTO，引用列表通过方法引用转换
             return new AskResponse(
                     result.answer(),
-                    result.references().stream().map(QaController::toReferenceResponse).toList());
+                    result.references().stream()
+                            .map(QaController::toReferenceResponse)
+                            .toList());
+        } catch (KnowledgeBaseNotFoundException ex) {
+            // 知识库不存在 → 400（用户输入了无效的 kbId）
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, ex.getMessage(), ex);
+        } catch (KnowledgeBaseInactiveException ex) {
+            // 知识库已停用 → 409（资源状态冲突）
+            throw new ResponseStatusException(HttpStatus.CONFLICT, ex.getMessage(), ex);
         } catch (IllegalArgumentException ex) {
+            // 参数校验失败（如问题为空、topK 越界）→ 400
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, ex.getMessage(), ex);
         }
     }
 
     /**
-     * 将应用层引用结果映射为 REST 响应项，避免应用模型直接暴露给接口层。
+     * 将应用层引用结果映射为 REST 响应项（DTO 转换）。
+     *
+     * <p>该映射确保应用层模型变更不影响对外 API 契约，
+     * 外部调用方仅依赖 REST DTO 结构。
+     *
+     * @param item 应用层引用结果
+     * @return REST 层的引用响应项
      */
     private static AskReferenceResponse toReferenceResponse(AskReferenceResult item) {
         return new AskReferenceResponse(item.documentId(), item.chunkIndex(), item.contentPreview());
