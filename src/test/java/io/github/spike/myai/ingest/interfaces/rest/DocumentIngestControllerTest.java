@@ -17,13 +17,17 @@ import io.github.spike.myai.ingest.application.exception.DocumentDeleteFailedExc
 import io.github.spike.myai.ingest.application.exception.DocumentNotFoundException;
 import io.github.spike.myai.ingest.application.query.GetDocumentChunksPreviewQuery;
 import io.github.spike.myai.ingest.application.query.GetDocumentStatusQuery;
+import io.github.spike.myai.ingest.application.query.ListDocumentsQuery;
 import io.github.spike.myai.ingest.application.result.DocumentChunkPreviewItemResult;
 import io.github.spike.myai.ingest.application.result.DocumentChunksPreviewResult;
+import io.github.spike.myai.ingest.application.result.DocumentListItemResult;
+import io.github.spike.myai.ingest.application.result.DocumentListPageResult;
 import io.github.spike.myai.ingest.application.result.DocumentStatusResult;
 import io.github.spike.myai.ingest.application.usecase.AcceptUploadUseCase;
 import io.github.spike.myai.ingest.application.usecase.DeleteDocumentUseCase;
 import io.github.spike.myai.ingest.application.usecase.GetDocumentChunksPreviewUseCase;
 import io.github.spike.myai.ingest.application.usecase.GetDocumentStatusUseCase;
+import io.github.spike.myai.ingest.application.usecase.ListDocumentsUseCase;
 import io.github.spike.myai.ingest.application.usecase.ReprocessDocumentUseCase;
 import io.github.spike.myai.ingest.domain.model.DocumentId;
 import io.github.spike.myai.ingest.domain.model.UploadStatus;
@@ -31,6 +35,7 @@ import io.github.spike.myai.ingest.domain.model.UploadTicket;
 import io.github.spike.myai.ingest.domain.port.DocumentSourceStorage;
 import io.github.spike.myai.knowledge.application.exception.KnowledgeBaseInactiveException;
 import io.github.spike.myai.knowledge.application.exception.KnowledgeBaseNotFoundException;
+import org.hamcrest.Matchers;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -54,6 +59,7 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 class DocumentIngestControllerTest {
 
     private AcceptUploadUseCase acceptUploadUseCase;
+    private ListDocumentsUseCase listDocumentsUseCase;
     private GetDocumentStatusUseCase getDocumentStatusUseCase;
     private GetDocumentChunksPreviewUseCase getDocumentChunksPreviewUseCase;
     private ReprocessDocumentUseCase reprocessDocumentUseCase;
@@ -64,6 +70,7 @@ class DocumentIngestControllerTest {
     @BeforeEach
     void setUp() {
         this.acceptUploadUseCase = Mockito.mock(AcceptUploadUseCase.class);
+        this.listDocumentsUseCase = Mockito.mock(ListDocumentsUseCase.class);
         this.getDocumentStatusUseCase = Mockito.mock(GetDocumentStatusUseCase.class);
         this.getDocumentChunksPreviewUseCase = Mockito.mock(GetDocumentChunksPreviewUseCase.class);
         this.reprocessDocumentUseCase = Mockito.mock(ReprocessDocumentUseCase.class);
@@ -72,12 +79,69 @@ class DocumentIngestControllerTest {
         DocumentIngestController controller =
                 new DocumentIngestController(
                         acceptUploadUseCase,
+                        listDocumentsUseCase,
                         getDocumentStatusUseCase,
                         getDocumentChunksPreviewUseCase,
                         reprocessDocumentUseCase,
                         deleteDocumentUseCase,
                         documentSourceStorage);
         this.mockMvc = MockMvcBuilders.standaloneSetup(controller).build();
+    }
+
+    @Test
+    @DisplayName("文档列表查询应返回分页结果与失败原因字段")
+    void listDocuments_shouldReturnPagedItems() throws Exception {
+        when(listDocumentsUseCase.handle(any(ListDocumentsQuery.class))).thenReturn(new DocumentListPageResult(
+                java.util.List.of(
+                        new DocumentListItemResult(
+                                "doc-1",
+                                "kb-1",
+                                "alpha.txt",
+                                128L,
+                                "FAILED",
+                                "parse failed",
+                                java.time.Instant.parse("2026-05-07T10:00:00Z"),
+                                java.time.Instant.parse("2026-05-07T10:05:00Z")),
+                        new DocumentListItemResult(
+                                "doc-2",
+                                "kb-1",
+                                "beta.txt",
+                                64L,
+                                "INDEXED",
+                                null,
+                                java.time.Instant.parse("2026-05-07T09:00:00Z"),
+                                java.time.Instant.parse("2026-05-07T09:10:00Z"))),
+                2L,
+                20,
+                0));
+
+        mockMvc.perform(get("/api/v1/documents")
+                        .param("kbId", "kb-1")
+                        .param("filename", "alpha"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.total").value(2))
+                .andExpect(jsonPath("$.limit").value(20))
+                .andExpect(jsonPath("$.items[0].documentId").value("doc-1"))
+                .andExpect(jsonPath("$.items[0].failureReason").value("parse failed"))
+                .andExpect(jsonPath("$.items[1].documentId").value("doc-2"))
+                .andExpect(jsonPath("$.items[1].failureReason").value(Matchers.nullValue()));
+
+        ArgumentCaptor<ListDocumentsQuery> captor = ArgumentCaptor.forClass(ListDocumentsQuery.class);
+        verify(listDocumentsUseCase).handle(captor.capture());
+        org.junit.jupiter.api.Assertions.assertEquals("kb-1", captor.getValue().kbId());
+        org.junit.jupiter.api.Assertions.assertEquals("alpha", captor.getValue().filename());
+        org.junit.jupiter.api.Assertions.assertEquals(20, captor.getValue().limit());
+        org.junit.jupiter.api.Assertions.assertEquals(0, captor.getValue().offset());
+    }
+
+    @Test
+    @DisplayName("文档列表参数非法时应返回 400")
+    void listDocuments_shouldReturnBadRequest_whenInvalidStatus() throws Exception {
+        mockMvc.perform(get("/api/v1/documents")
+                        .param("status", "INVALID_VALUE"))
+                .andExpect(status().isBadRequest());
+
+        verify(listDocumentsUseCase, never()).handle(any(ListDocumentsQuery.class));
     }
 
     @Test
