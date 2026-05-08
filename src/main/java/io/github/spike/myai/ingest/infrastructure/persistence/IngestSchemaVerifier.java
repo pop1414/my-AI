@@ -48,6 +48,7 @@ public class IngestSchemaVerifier implements ApplicationRunner {
     private static final Set<String> REQUIRED_COLUMNS = Set.of(
             "document_id",
             "kb_id",
+            "workspace_id",
             "file_hash",
             "filename",
             "status",

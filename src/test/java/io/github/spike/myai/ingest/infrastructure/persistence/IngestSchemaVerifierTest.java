@@ -112,6 +112,7 @@ class IngestSchemaVerifierTest {
         return List.of(
                 row("document_id"),
                 row("kb_id"),
+                row("workspace_id"),
                 row("file_hash"),
                 row("filename"),
                 row("status"),
@@ -126,6 +127,7 @@ class IngestSchemaVerifierTest {
         return List.of(
                 row("document_id"),
                 row("kb_id"),
+                row("workspace_id"),
                 row("file_hash"),
                 row("filename"),
                 row("retry_count"),
