@@ -24,12 +24,13 @@
 6. [05-release-notes.md](./05-release-notes.md)：版本变化记录与正式发布条目
 7. [runbooks/plans/v1/v1-release-archive.md](./runbooks/plans/v1/v1-release-archive.md)：V1 版本归档记录与冻结范围
 8. [runbooks/plans/v1-1/v1-1-plan.md](./runbooks/plans/v1-1/v1-1-plan.md)：V1.1 规划草案与优先级拆解
-9. [06-ingest-acceptance-closure.md](./06-ingest-acceptance-closure.md)：上传受理闭环
-10. [07-ingest-processing-execution.md](./07-ingest-processing-execution.md)：处理执行闭环
-11. [adr/](./adr/)：关键技术决策和历史留痕
-12. [runbooks/plans/v1/v1-closure-plan.md](./runbooks/plans/v1/v1-closure-plan.md)：V1 收口执行计划（历史记录）
-13. [runbooks/workflows/my-ai-document-workflow.md](./runbooks/workflows/my-ai-document-workflow.md)：项目文档工作流
-14. [runbooks/workflows/my-ai-git-workflow.md](./runbooks/workflows/my-ai-git-workflow.md)：项目 Git 工作流
+9. [runbooks/plans/rag-access-control/rag-access-control-plan.md](./runbooks/plans/rag-access-control/rag-access-control-plan.md)：成熟 RAG 权限体系专题计划
+10. [06-ingest-acceptance-closure.md](./06-ingest-acceptance-closure.md)：上传受理闭环
+11. [07-ingest-processing-execution.md](./07-ingest-processing-execution.md)：处理执行闭环
+12. [adr/](./adr/)：关键技术决策和历史留痕（含 `ADR-0005` 权限体系基础决策）
+13. [runbooks/plans/v1/v1-closure-plan.md](./runbooks/plans/v1/v1-closure-plan.md)：V1 收口执行计划（历史记录）
+14. [runbooks/workflows/my-ai-document-workflow.md](./runbooks/workflows/my-ai-document-workflow.md)：项目文档工作流
+15. [runbooks/workflows/my-ai-git-workflow.md](./runbooks/workflows/my-ai-git-workflow.md)：项目 Git 工作流
 
 ## 2. 当前目录职责
 
@@ -45,7 +46,7 @@
 
 ### 2.2 决策留痕
 
-- [adr/](./adr/)：架构决策记录（ADR）
+- [adr/](./adr/)：架构决策记录（ADR，包含 `ADR-0005` RAG 权限体系基础决策）
 
 规则：
 
@@ -65,6 +66,8 @@
 ### 2.5 执行与联调手册
 
 - [runbooks/](./runbooks/)：执行计划、联调手册、演示脚本、排障手册
+- 其中权限体系专项计划入口：
+  - [runbooks/plans/rag-access-control/rag-access-control-plan.md](./runbooks/plans/rag-access-control/rag-access-control-plan.md)
 
 ## 3. 未来迁移方向
 

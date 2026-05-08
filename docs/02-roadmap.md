@@ -23,6 +23,8 @@
 - 课程交付材料整理：报告、演示脚本、截图素材与最终导出件归集
 - 文档真源同步：README / API 契约 / Roadmap / Runbook 持续对齐当前 V1.1 基线
 - 独立权限体系规划：从原 V1.1 轻量鉴权拆出，转向更成熟的 RAG 权限模型设计
+  - 专题计划：[RAG 权限体系专项计划](D:\Code\project\my-AI\docs\runbooks\plans\rag-access-control\rag-access-control-plan.md)
+  - 决策留痕：[ADR-0005：RAG 权限体系基础决策](D:\Code\project\my-AI\docs\adr\ADR-0005-rag-access-control-foundation.md)
 
 ### 未开始（后续专项 / V2+）
 - 成熟权限体系工程化落地
@@ -79,6 +81,10 @@
 ### 目标
 围绕真实 RAG 系统的身份、资源、动作与作用域，单独规划一套可持续演进的权限体系。
 
+### 专题入口
+- 计划文档：[RAG 权限体系专项计划](D:\Code\project\my-AI\docs\runbooks\plans\rag-access-control\rag-access-control-plan.md)
+- 决策文档：[ADR-0005：RAG 权限体系基础决策](D:\Code\project\my-AI\docs\adr\ADR-0005-rag-access-control-foundation.md)
+
 ### 关键能力
 - 认证入口：登录、会话或令牌策略
 - 授权模型：用户 / 角色 / 资源 / 动作 / 作用域
@@ -89,6 +95,7 @@
 - 先定义资源边界，再选实现技术
 - 先支持知识库级 / 文档级授权，再考虑更细粒度扩展
 - 为后续工作区、多团队、多租户预留演进空间
+- 首期采用本地账号 + Session 基线，并补齐 CSRF 与登录防爆破防护
 
 ## V2.0（进阶版）
 ### 目标

@@ -13,6 +13,9 @@ V1.1 的原始目标，是在现有闭环上补齐“更可持续使用”的基
 - “知识库主数据化”已完成
 - “文档列表与管理台”已完成
 - 原计划中的“轻量认证与访问控制”不再作为 V1.1 收口项继续推进，而是独立拆出，升级为更完整的 RAG 权限体系专项
+- 独立专项入口已落文为：
+  - [RAG 权限体系专项计划](D:\Code\project\my-AI\docs\runbooks\plans\rag-access-control\rag-access-control-plan.md)
+  - [ADR-0005：RAG 权限体系基础决策](D:\Code\project\my-AI\docs\adr\ADR-0005-rag-access-control-foundation.md)
 
 一句话定义：
 
@@ -94,6 +97,11 @@ V1.1 的原始目标，是在现有闭环上补齐“更可持续使用”的基
 
 目标：围绕真实 RAG 系统的对象边界和访问链路，单独规划一套可持续演进的权限体系，而不是仅做一次轻量入口封装。
 
+专题入口：
+
+- [RAG 权限体系专项计划](D:\Code\project\my-AI\docs\runbooks\plans\rag-access-control\rag-access-control-plan.md)
+- [ADR-0005：RAG 权限体系基础决策](D:\Code\project\my-AI\docs\adr\ADR-0005-rag-access-control-foundation.md)
+
 建议覆盖范围：
 
 - 身份认证：登录、会话、令牌或网关接入策略
@@ -107,6 +115,7 @@ V1.1 的原始目标，是在现有闭环上补齐“更可持续使用”的基
 - 先画清楚资源与动作矩阵，再选技术实现
 - 先定义知识库级与文档级边界，再决定是否下钻到分块和引用级
 - 优先让权限体系服务后续演进，而不是只满足一次“先挡住入口”的短期诉求
+- 首期安全基线需显式覆盖 CSRF 防护与登录暴力破解防护，而不是在工程落地时临时补想
 
 ## 5. 明确不并入 V1.1 的内容
 
@@ -166,6 +175,11 @@ V1.1 已完成部分可回看以下主题边界：
 2. 单独补一份权限体系范围确认文档或 ADR
 3. 先定义资源对象、角色边界和授权矩阵
 4. 再决定采用何种认证 / 会话 / 授权落地方案
+
+当前该步骤已完成为：
+
+- [RAG 权限体系专项计划](D:\Code\project\my-AI\docs\runbooks\plans\rag-access-control\rag-access-control-plan.md)
+- [ADR-0005：RAG 权限体系基础决策](D:\Code\project\my-AI\docs\adr\ADR-0005-rag-access-control-foundation.md)
 
 ## 10. 一句话结论
 

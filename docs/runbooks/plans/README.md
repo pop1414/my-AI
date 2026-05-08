@@ -12,16 +12,19 @@
 
 - [v1/](./v1/)：V1 收口与归档相关文档
 - [v1-1/](./v1-1/)：V1.1 规划与后续主题拆解
+- [rag-access-control/](./rag-access-control/)：RAG 权限体系专项规划
 
 ## 当前文件
 
 - [v1/v1-closure-plan.md](./v1/v1-closure-plan.md)：V1 闭环收口计划（历史记录）
 - [v1/v1-release-archive.md](./v1/v1-release-archive.md)：V1 正式归档记录
 - [v1-1/v1-1-plan.md](./v1-1/v1-1-plan.md)：V1.1 总规划草案
+- [rag-access-control/rag-access-control-plan.md](./rag-access-control/rag-access-control-plan.md)：成熟 RAG 权限体系专题计划
 
 ## 使用规则
 
 - 版本总规划放在 `plans/<version>/`
 - 某个主题需要细化时，继续放在同版本目录下
+- 跨版本、但需要长期独立演进的专题，可以单独建立主题目录
 - 计划执行完成后可以继续保留，作为版本推进的留痕
 - 如果内容已经变成“当前系统事实”，要同步到 `docs/` 正式文档，而不是只留在计划文档里
