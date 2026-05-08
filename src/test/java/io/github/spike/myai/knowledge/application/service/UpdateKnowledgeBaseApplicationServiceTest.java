@@ -13,6 +13,7 @@ import io.github.spike.myai.knowledge.domain.model.KnowledgeBase;
 import io.github.spike.myai.knowledge.domain.model.KnowledgeBaseStatus;
 import io.github.spike.myai.knowledge.domain.model.KnowledgeBaseSummary;
 import io.github.spike.myai.knowledge.domain.port.KnowledgeBaseRepository;
+import io.github.spike.myai.shared.workspace.WorkspaceConstants;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -26,9 +27,9 @@ class UpdateKnowledgeBaseApplicationServiceTest {
     @DisplayName("编辑知识库时应更新名称描述和状态")
     void handle_shouldUpdateKnowledgeBase() {
         KnowledgeBaseRepository repository = Mockito.mock(KnowledgeBaseRepository.class);
-        when(repository.findByKbId(eq("kb-1"))).thenReturn(Optional.of(
+        when(repository.findByKbId(eq(WorkspaceConstants.DEFAULT_WORKSPACE_ID), eq("kb-1"))).thenReturn(Optional.of(
                 new KnowledgeBase("kb-1", "旧名称", "旧描述", KnowledgeBaseStatus.ACTIVE, Instant.now(), Instant.now())));
-        when(repository.listKnowledgeBases()).thenReturn(List.of(
+        when(repository.listKnowledgeBases(eq(WorkspaceConstants.DEFAULT_WORKSPACE_ID))).thenReturn(List.of(
                 new KnowledgeBaseSummary("kb-1", "新名称", "新描述", KnowledgeBaseStatus.INACTIVE, 2)));
         UpdateKnowledgeBaseApplicationService service = new UpdateKnowledgeBaseApplicationService(repository);
 
@@ -45,7 +46,7 @@ class UpdateKnowledgeBaseApplicationServiceTest {
     @DisplayName("编辑不存在知识库时应抛出未找到异常")
     void handle_shouldThrow_whenKnowledgeBaseMissing() {
         KnowledgeBaseRepository repository = Mockito.mock(KnowledgeBaseRepository.class);
-        when(repository.findByKbId(eq("kb-missing"))).thenReturn(Optional.empty());
+        when(repository.findByKbId(eq(WorkspaceConstants.DEFAULT_WORKSPACE_ID), eq("kb-missing"))).thenReturn(Optional.empty());
         UpdateKnowledgeBaseApplicationService service = new UpdateKnowledgeBaseApplicationService(repository);
 
         assertThrows(

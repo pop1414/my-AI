@@ -2,6 +2,8 @@ package io.github.spike.myai.ingest.application.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -49,13 +51,13 @@ class GetDocumentStatusApplicationServiceTest {
                 "v1",
                 Instant.now(),
                 Instant.now());
-        when(repository.findById(documentId)).thenReturn(Optional.of(document));
+        when(repository.findById(anyString(), eq(documentId))).thenReturn(Optional.of(document));
 
         DocumentStatusResult result = service.handle(new GetDocumentStatusQuery("doc-100"));
 
         assertEquals("doc-100", result.documentId().value());
         assertEquals(UploadStatus.INDEXED, result.status());
-        verify(repository, times(1)).findById(documentId);
+        verify(repository, times(1)).findById(anyString(), eq(documentId));
     }
 
     @Test
@@ -63,7 +65,7 @@ class GetDocumentStatusApplicationServiceTest {
     void handle_shouldThrowException_whenMissing() {
         DocumentRepository repository = Mockito.mock(DocumentRepository.class);
         GetDocumentStatusApplicationService service = new GetDocumentStatusApplicationService(repository);
-        when(repository.findById(new DocumentId("doc-missing"))).thenReturn(Optional.empty());
+        when(repository.findById(anyString(), eq(new DocumentId("doc-missing")))).thenReturn(Optional.empty());
 
         assertThrows(
                 DocumentNotFoundException.class,
@@ -95,7 +97,7 @@ class GetDocumentStatusApplicationServiceTest {
                 "v1",
                 Instant.now(),
                 Instant.now());
-        when(repository.findById(documentId)).thenReturn(Optional.of(document));
+        when(repository.findById(anyString(), eq(documentId))).thenReturn(Optional.of(document));
 
         DocumentStatusResult result = service.handle(new GetDocumentStatusQuery("doc-deleted"));
 

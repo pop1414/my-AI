@@ -3,6 +3,7 @@ package io.github.spike.myai.ingest.application.service;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -54,10 +55,10 @@ class ReprocessDocumentApplicationServiceTest {
                 "v1",
                 Instant.now(),
                 Instant.now());
-        when(repository.findById(documentId)).thenReturn(Optional.of(ingesting));
+        when(repository.findById(anyString(), eq(documentId))).thenReturn(Optional.of(ingesting));
 
         assertThrows(IllegalStateException.class, () -> service.handle(new ReprocessDocumentCommand("doc-rep-1")));
-        verify(repository, times(1)).findById(documentId);
+        verify(repository, times(1)).findById(anyString(), eq(documentId));
     }
 
     @Test
@@ -87,8 +88,8 @@ class ReprocessDocumentApplicationServiceTest {
                 "v1",
                 Instant.now(),
                 Instant.now());
-        when(repository.findById(documentId)).thenReturn(Optional.of(failed));
-        when(repository.requestReprocess(eq(documentId), eq(UploadStatus.FAILED), eq("v2"), any(Instant.class)))
+        when(repository.findById(anyString(), eq(documentId))).thenReturn(Optional.of(failed));
+        when(repository.requestReprocess(anyString(), eq(documentId), eq(UploadStatus.FAILED), eq("v2"), any(Instant.class)))
                 .thenReturn(true);
 
         DocumentStatusResult result = service.handle(new ReprocessDocumentCommand("doc-rep-2"));
@@ -104,7 +105,7 @@ class ReprocessDocumentApplicationServiceTest {
         DocumentRepository repository = Mockito.mock(DocumentRepository.class);
         DocumentVectorIndexer vectorIndexer = Mockito.mock(DocumentVectorIndexer.class);
         ReprocessDocumentApplicationService service = new ReprocessDocumentApplicationService(repository, vectorIndexer);
-        when(repository.findById(new DocumentId("doc-missing"))).thenReturn(Optional.empty());
+        when(repository.findById(anyString(), eq(new DocumentId("doc-missing")))).thenReturn(Optional.empty());
 
         assertThrows(DocumentNotFoundException.class, () -> service.handle(new ReprocessDocumentCommand("doc-missing")));
     }

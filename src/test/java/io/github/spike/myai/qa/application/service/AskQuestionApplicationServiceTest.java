@@ -17,6 +17,7 @@ import io.github.spike.myai.knowledge.domain.port.KnowledgeBaseRepository;
 import io.github.spike.myai.qa.domain.model.RetrievedChunk;
 import io.github.spike.myai.qa.domain.port.AnswerGenerationPort;
 import io.github.spike.myai.qa.domain.port.ChunkRetrievalPort;
+import io.github.spike.myai.shared.workspace.WorkspaceConstants;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -35,7 +36,7 @@ class AskQuestionApplicationServiceTest {
         KnowledgeBaseRepository knowledgeBaseRepository = Mockito.mock(KnowledgeBaseRepository.class);
         AskQuestionApplicationService service =
                 new AskQuestionApplicationService(chunkRetrievalPort, answerGenerationPort, knowledgeBaseRepository);
-        when(knowledgeBaseRepository.findByKbId(eq("kb-1")))
+        when(knowledgeBaseRepository.findByKbId(eq(WorkspaceConstants.DEFAULT_WORKSPACE_ID), eq("kb-1")))
                 .thenReturn(java.util.Optional.of(new KnowledgeBase("kb-1", "知识库1", "", KnowledgeBaseStatus.ACTIVE, java.time.Instant.now(), java.time.Instant.now())));
 
         when(chunkRetrievalPort.similaritySearch(eq("什么是 RAG"), anyInt()))
@@ -64,7 +65,7 @@ class AskQuestionApplicationServiceTest {
         KnowledgeBaseRepository knowledgeBaseRepository = Mockito.mock(KnowledgeBaseRepository.class);
         AskQuestionApplicationService service =
                 new AskQuestionApplicationService(chunkRetrievalPort, answerGenerationPort, knowledgeBaseRepository);
-        when(knowledgeBaseRepository.findByKbId(eq("default")))
+        when(knowledgeBaseRepository.findByKbId(eq(WorkspaceConstants.DEFAULT_WORKSPACE_ID), eq("default")))
                 .thenReturn(java.util.Optional.of(new KnowledgeBase("default", "default", "", KnowledgeBaseStatus.ACTIVE, java.time.Instant.now(), java.time.Instant.now())));
 
         when(chunkRetrievalPort.similaritySearch(eq("找不到"), eq(20)))
@@ -85,7 +86,7 @@ class AskQuestionApplicationServiceTest {
         KnowledgeBaseRepository knowledgeBaseRepository = Mockito.mock(KnowledgeBaseRepository.class);
         AskQuestionApplicationService service =
                 new AskQuestionApplicationService(chunkRetrievalPort, answerGenerationPort, knowledgeBaseRepository);
-        when(knowledgeBaseRepository.findByKbId(eq("kb-missing"))).thenReturn(java.util.Optional.empty());
+        when(knowledgeBaseRepository.findByKbId(eq(WorkspaceConstants.DEFAULT_WORKSPACE_ID), eq("kb-missing"))).thenReturn(java.util.Optional.empty());
 
         assertThrows(KnowledgeBaseNotFoundException.class, () -> service.handle(new AskQuestionCommand("问题", "kb-missing", 1)));
     }
@@ -98,7 +99,7 @@ class AskQuestionApplicationServiceTest {
         KnowledgeBaseRepository knowledgeBaseRepository = Mockito.mock(KnowledgeBaseRepository.class);
         AskQuestionApplicationService service =
                 new AskQuestionApplicationService(chunkRetrievalPort, answerGenerationPort, knowledgeBaseRepository);
-        when(knowledgeBaseRepository.findByKbId(eq("kb-inactive")))
+        when(knowledgeBaseRepository.findByKbId(eq(WorkspaceConstants.DEFAULT_WORKSPACE_ID), eq("kb-inactive")))
                 .thenReturn(java.util.Optional.of(new KnowledgeBase("kb-inactive", "禁用库", "", KnowledgeBaseStatus.INACTIVE, java.time.Instant.now(), java.time.Instant.now())));
 
         assertThrows(KnowledgeBaseInactiveException.class, () -> service.handle(new AskQuestionCommand("问题", "kb-inactive", 1)));

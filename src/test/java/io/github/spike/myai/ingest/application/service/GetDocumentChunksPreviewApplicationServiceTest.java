@@ -2,6 +2,7 @@ package io.github.spike.myai.ingest.application.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 
@@ -54,9 +55,9 @@ class GetDocumentChunksPreviewApplicationServiceTest {
                 "v1",
                 Instant.now(),
                 Instant.now());
-        when(documentRepository.findById(documentId)).thenReturn(Optional.of(doc));
-        when(chunkPreviewRepository.countByDocumentId(eq(documentId), eq("v1"))).thenReturn(1);
-        when(chunkPreviewRepository.findByDocumentId(eq(documentId), eq("v1"), eq(10), eq(0)))
+        when(documentRepository.findById(anyString(), eq(documentId))).thenReturn(Optional.of(doc));
+        when(chunkPreviewRepository.countByDocumentId(anyString(), eq(documentId), eq("v1"))).thenReturn(1);
+        when(chunkPreviewRepository.findByDocumentId(anyString(), eq(documentId), eq("v1"), eq(10), eq(0)))
                 .thenReturn(List.of(new DocumentChunkPreview(
                         0,
                         "0123456789abcdefghijklmnopqrstuvwxyz",
@@ -82,7 +83,7 @@ class GetDocumentChunksPreviewApplicationServiceTest {
         DocumentChunkPreviewRepository chunkPreviewRepository = Mockito.mock(DocumentChunkPreviewRepository.class);
         GetDocumentChunksPreviewApplicationService service =
                 new GetDocumentChunksPreviewApplicationService(documentRepository, chunkPreviewRepository);
-        when(documentRepository.findById(new DocumentId("doc-missing"))).thenReturn(Optional.empty());
+        when(documentRepository.findById(anyString(), eq(new DocumentId("doc-missing")))).thenReturn(Optional.empty());
 
         assertThrows(
                 DocumentNotFoundException.class,

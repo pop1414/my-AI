@@ -11,6 +11,7 @@ import static org.mockito.Mockito.when;
 import io.github.spike.myai.ingest.domain.model.DocumentListFilter;
 import io.github.spike.myai.ingest.domain.model.DocumentListPage;
 import io.github.spike.myai.ingest.domain.model.UploadStatus;
+import io.github.spike.myai.shared.workspace.WorkspaceConstants;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -26,15 +27,16 @@ class JdbcDocumentListRepositoryTest {
     void findPage_shouldExcludeDeletedByDefault() {
         JdbcTemplate jdbcTemplate = Mockito.mock(JdbcTemplate.class);
         JdbcDocumentListRepository repository = new JdbcDocumentListRepository(jdbcTemplate);
-        when(jdbcTemplate.query(any(String.class), any(RowMapper.class), eq(20), eq(0)))
+        when(jdbcTemplate.query(any(String.class), any(RowMapper.class), eq(WorkspaceConstants.DEFAULT_WORKSPACE_ID), eq(20), eq(0)))
                 .thenReturn(List.of());
-        when(jdbcTemplate.queryForObject(any(String.class), eq(Long.class)))
+        when(jdbcTemplate.queryForObject(any(String.class), eq(Long.class), eq(WorkspaceConstants.DEFAULT_WORKSPACE_ID)))
                 .thenReturn(0L);
 
         DocumentListPage page = repository.findPage(new DocumentListFilter(null, null, null, true, 20, 0));
 
         ArgumentCaptor<String> sqlCaptor = ArgumentCaptor.forClass(String.class);
-        verify(jdbcTemplate).query(sqlCaptor.capture(), any(RowMapper.class), eq(20), eq(0));
+        verify(jdbcTemplate).query(sqlCaptor.capture(), any(RowMapper.class), eq(WorkspaceConstants.DEFAULT_WORKSPACE_ID), eq(20), eq(0));
+        assertTrue(sqlCaptor.getValue().contains("workspace_id = ?"));
         assertTrue(sqlCaptor.getValue().contains("status <> 'DELETED'"));
         assertTrue(sqlCaptor.getValue().contains("ORDER BY created_at DESC"));
         assertTrue(sqlCaptor.getValue().contains("LIMIT ? OFFSET ?"));
@@ -46,15 +48,31 @@ class JdbcDocumentListRepositoryTest {
     void findPage_shouldUseExplicitStatus_whenDeletedRequested() {
         JdbcTemplate jdbcTemplate = Mockito.mock(JdbcTemplate.class);
         JdbcDocumentListRepository repository = new JdbcDocumentListRepository(jdbcTemplate);
-        when(jdbcTemplate.query(any(String.class), any(RowMapper.class), eq("DELETED"), eq(10), eq(5)))
+        when(jdbcTemplate.query(
+                        any(String.class),
+                        any(RowMapper.class),
+                        eq(WorkspaceConstants.DEFAULT_WORKSPACE_ID),
+                        eq("DELETED"),
+                        eq(10),
+                        eq(5)))
                 .thenReturn(List.of());
-        when(jdbcTemplate.queryForObject(any(String.class), eq(Long.class), eq("DELETED")))
+        when(jdbcTemplate.queryForObject(
+                        any(String.class),
+                        eq(Long.class),
+                        eq(WorkspaceConstants.DEFAULT_WORKSPACE_ID),
+                        eq("DELETED")))
                 .thenReturn(0L);
 
         repository.findPage(new DocumentListFilter(null, UploadStatus.DELETED, null, false, 10, 5));
 
         ArgumentCaptor<String> sqlCaptor = ArgumentCaptor.forClass(String.class);
-        verify(jdbcTemplate).query(sqlCaptor.capture(), any(RowMapper.class), eq("DELETED"), eq(10), eq(5));
+        verify(jdbcTemplate).query(
+                sqlCaptor.capture(),
+                any(RowMapper.class),
+                eq(WorkspaceConstants.DEFAULT_WORKSPACE_ID),
+                eq("DELETED"),
+                eq(10),
+                eq(5));
         assertTrue(sqlCaptor.getValue().contains("status = ?"));
         assertFalse(sqlCaptor.getValue().contains("status <> 'DELETED'"));
     }
@@ -64,17 +82,41 @@ class JdbcDocumentListRepositoryTest {
     void findPage_shouldApplyKbIdAndFilenameFilter() {
         JdbcTemplate jdbcTemplate = Mockito.mock(JdbcTemplate.class);
         JdbcDocumentListRepository repository = new JdbcDocumentListRepository(jdbcTemplate);
-        when(jdbcTemplate.query(any(String.class), any(RowMapper.class), eq("kb-1"), eq("%合同%"), eq(5), eq(10)))
+        when(jdbcTemplate.query(
+                        any(String.class),
+                        any(RowMapper.class),
+                        eq(WorkspaceConstants.DEFAULT_WORKSPACE_ID),
+                        eq("kb-1"),
+                        eq("%合同%"),
+                        eq(5),
+                        eq(10)))
                 .thenReturn(List.of());
-        when(jdbcTemplate.queryForObject(any(String.class), eq(Long.class), eq("kb-1"), eq("%合同%")))
+        when(jdbcTemplate.queryForObject(
+                        any(String.class),
+                        eq(Long.class),
+                        eq(WorkspaceConstants.DEFAULT_WORKSPACE_ID),
+                        eq("kb-1"),
+                        eq("%合同%")))
                 .thenReturn(2L);
 
         repository.findPage(new DocumentListFilter("kb-1", null, "合同", true, 5, 10));
 
         ArgumentCaptor<String> sqlCaptor = ArgumentCaptor.forClass(String.class);
-        verify(jdbcTemplate).query(sqlCaptor.capture(), any(RowMapper.class), eq("kb-1"), eq("%合同%"), eq(5), eq(10));
+        verify(jdbcTemplate).query(
+                sqlCaptor.capture(),
+                any(RowMapper.class),
+                eq(WorkspaceConstants.DEFAULT_WORKSPACE_ID),
+                eq("kb-1"),
+                eq("%合同%"),
+                eq(5),
+                eq(10));
         assertTrue(sqlCaptor.getValue().contains("kb_id = ?"));
         assertTrue(sqlCaptor.getValue().contains("COALESCE(filename, '') LIKE ?"));
-        verify(jdbcTemplate).queryForObject(contains("COUNT(1)"), eq(Long.class), eq("kb-1"), eq("%合同%"));
+        verify(jdbcTemplate).queryForObject(
+                contains("COUNT(1)"),
+                eq(Long.class),
+                eq(WorkspaceConstants.DEFAULT_WORKSPACE_ID),
+                eq("kb-1"),
+                eq("%合同%"));
     }
 }

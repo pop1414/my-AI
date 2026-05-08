@@ -3,6 +3,7 @@ package io.github.spike.myai.ingest.application.service;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -28,14 +29,14 @@ class ClaimNextUploadedDocumentApplicationServiceTest {
     @DisplayName("无 UPLOADED 候选时，应返回空")
     void handle_shouldReturnEmpty_whenNoUploadedDocument() {
         DocumentRepository repository = Mockito.mock(DocumentRepository.class);
-        when(repository.findOldestReadyForProcessing(any(Instant.class))).thenReturn(Optional.empty());
+        when(repository.findOldestReadyForProcessing(anyString(), any(Instant.class))).thenReturn(Optional.empty());
         ClaimNextUploadedDocumentApplicationService service = new ClaimNextUploadedDocumentApplicationService(repository);
 
         Optional<DocumentId> result = service.handle();
 
         assertTrue(result.isEmpty());
-        verify(repository, times(1)).findOldestReadyForProcessing(any(Instant.class));
-        verify(repository, never()).compareAndSetStatus(any(), any(), any(), any(), any());
+        verify(repository, times(1)).findOldestReadyForProcessing(anyString(), any(Instant.class));
+        verify(repository, never()).compareAndSetStatus(anyString(), any(), any(), any(), any(), any());
     }
 
     @Test
@@ -61,8 +62,9 @@ class ClaimNextUploadedDocumentApplicationServiceTest {
                 "v1",
                 Instant.now(),
                 Instant.now());
-        when(repository.findOldestReadyForProcessing(any(Instant.class))).thenReturn(Optional.of(uploaded));
+        when(repository.findOldestReadyForProcessing(anyString(), any(Instant.class))).thenReturn(Optional.of(uploaded));
         when(repository.compareAndSetStatus(
+                        anyString(),
                         eq(uploaded.documentId()),
                         eq(UploadStatus.UPLOADED),
                         eq(UploadStatus.INGESTING),
@@ -75,9 +77,9 @@ class ClaimNextUploadedDocumentApplicationServiceTest {
 
         assertTrue(result.isPresent());
         assertEquals("doc-claim-1", result.get().value());
-        verify(repository, times(1)).findOldestReadyForProcessing(any(Instant.class));
+        verify(repository, times(1)).findOldestReadyForProcessing(anyString(), any(Instant.class));
         verify(repository, times(1))
-                .compareAndSetStatus(eq(uploaded.documentId()), eq(UploadStatus.UPLOADED), eq(UploadStatus.INGESTING), eq(null), any(Instant.class));
+                .compareAndSetStatus(anyString(), eq(uploaded.documentId()), eq(UploadStatus.UPLOADED), eq(UploadStatus.INGESTING), eq(null), any(Instant.class));
     }
 
     @Test
@@ -103,8 +105,9 @@ class ClaimNextUploadedDocumentApplicationServiceTest {
                 "v1",
                 Instant.now(),
                 Instant.now());
-        when(repository.findOldestReadyForProcessing(any(Instant.class))).thenReturn(Optional.of(uploaded));
+        when(repository.findOldestReadyForProcessing(anyString(), any(Instant.class))).thenReturn(Optional.of(uploaded));
         when(repository.compareAndSetStatus(
+                        anyString(),
                         eq(uploaded.documentId()),
                         eq(UploadStatus.UPLOADED),
                         eq(UploadStatus.INGESTING),
@@ -117,6 +120,6 @@ class ClaimNextUploadedDocumentApplicationServiceTest {
 
         assertTrue(result.isEmpty());
         verify(repository, times(1))
-                .compareAndSetStatus(eq(uploaded.documentId()), eq(UploadStatus.UPLOADED), eq(UploadStatus.INGESTING), eq(null), any(Instant.class));
+                .compareAndSetStatus(anyString(), eq(uploaded.documentId()), eq(UploadStatus.UPLOADED), eq(UploadStatus.INGESTING), eq(null), any(Instant.class));
     }
 }

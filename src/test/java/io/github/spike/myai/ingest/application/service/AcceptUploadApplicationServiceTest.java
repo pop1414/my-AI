@@ -21,6 +21,7 @@ import io.github.spike.myai.knowledge.application.exception.KnowledgeBaseNotFoun
 import io.github.spike.myai.knowledge.domain.model.KnowledgeBase;
 import io.github.spike.myai.knowledge.domain.model.KnowledgeBaseStatus;
 import io.github.spike.myai.knowledge.domain.port.KnowledgeBaseRepository;
+import io.github.spike.myai.shared.workspace.WorkspaceConstants;
 import java.time.Instant;
 import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
@@ -46,9 +47,9 @@ class AcceptUploadApplicationServiceTest {
         DocumentRepository repository = Mockito.mock(DocumentRepository.class);
         KnowledgeBaseRepository knowledgeBaseRepository = Mockito.mock(KnowledgeBaseRepository.class);
         when(generator.nextId()).thenReturn(new DocumentId("doc-001"));
-        when(repository.findByKbIdAndFileHash(eq("kb-x"), eq("hash-a")))
+        when(repository.findByKbIdAndFileHash(eq(WorkspaceConstants.DEFAULT_WORKSPACE_ID), eq("kb-x"), eq("hash-a")))
                 .thenReturn(Optional.empty());
-        when(knowledgeBaseRepository.findByKbId(eq("kb-x")))
+        when(knowledgeBaseRepository.findByKbId(eq(WorkspaceConstants.DEFAULT_WORKSPACE_ID), eq("kb-x")))
                 .thenReturn(Optional.of(new KnowledgeBase("kb-x", "知识库X", "", KnowledgeBaseStatus.ACTIVE, Instant.now(), Instant.now())));
 
         AcceptUploadApplicationService service = new AcceptUploadApplicationService(generator, repository, knowledgeBaseRepository);
@@ -70,9 +71,9 @@ class AcceptUploadApplicationServiceTest {
         DocumentRepository repository = Mockito.mock(DocumentRepository.class);
         KnowledgeBaseRepository knowledgeBaseRepository = Mockito.mock(KnowledgeBaseRepository.class);
         when(generator.nextId()).thenReturn(new DocumentId("doc-blank-kb"));
-        when(repository.findByKbIdAndFileHash(eq("default"), eq("hash-b")))
+        when(repository.findByKbIdAndFileHash(eq(WorkspaceConstants.DEFAULT_WORKSPACE_ID), eq("default"), eq("hash-b")))
                 .thenReturn(Optional.empty());
-        when(knowledgeBaseRepository.findByKbId(eq("default")))
+        when(knowledgeBaseRepository.findByKbId(eq(WorkspaceConstants.DEFAULT_WORKSPACE_ID), eq("default")))
                 .thenReturn(Optional.of(new KnowledgeBase("default", "default", "", KnowledgeBaseStatus.ACTIVE, Instant.now(), Instant.now())));
 
         AcceptUploadApplicationService service = new AcceptUploadApplicationService(generator, repository, knowledgeBaseRepository);
@@ -87,6 +88,7 @@ class AcceptUploadApplicationServiceTest {
         ArgumentCaptor<Document> documentCaptor = ArgumentCaptor.forClass(Document.class);
         verify(repository, times(1)).save(documentCaptor.capture());
         Document saved = documentCaptor.getValue();
+        assertEquals(WorkspaceConstants.DEFAULT_WORKSPACE_ID, saved.workspaceId());
         assertEquals("default", saved.kbId());
         assertEquals("hash-b", saved.fileHash());
         assertEquals(UploadStatus.UPLOADED, saved.status());
@@ -117,9 +119,9 @@ class AcceptUploadApplicationServiceTest {
                 "v1",
                 Instant.now(),
                 Instant.now());
-        when(repository.findByKbIdAndFileHash(eq("kb-dup"), eq("hash-dup")))
+        when(repository.findByKbIdAndFileHash(eq(WorkspaceConstants.DEFAULT_WORKSPACE_ID), eq("kb-dup"), eq("hash-dup")))
                 .thenReturn(Optional.of(existing));
-        when(knowledgeBaseRepository.findByKbId(eq("kb-dup")))
+        when(knowledgeBaseRepository.findByKbId(eq(WorkspaceConstants.DEFAULT_WORKSPACE_ID), eq("kb-dup")))
                 .thenReturn(Optional.of(new KnowledgeBase("kb-dup", "知识库", "", KnowledgeBaseStatus.ACTIVE, Instant.now(), Instant.now())));
 
         AcceptUploadApplicationService service = new AcceptUploadApplicationService(generator, repository, knowledgeBaseRepository);
@@ -139,7 +141,7 @@ class AcceptUploadApplicationServiceTest {
         DocumentIdGenerator generator = Mockito.mock(DocumentIdGenerator.class);
         DocumentRepository repository = Mockito.mock(DocumentRepository.class);
         KnowledgeBaseRepository knowledgeBaseRepository = Mockito.mock(KnowledgeBaseRepository.class);
-        when(knowledgeBaseRepository.findByKbId(eq("kb-missing"))).thenReturn(Optional.empty());
+        when(knowledgeBaseRepository.findByKbId(eq(WorkspaceConstants.DEFAULT_WORKSPACE_ID), eq("kb-missing"))).thenReturn(Optional.empty());
 
         AcceptUploadApplicationService service = new AcceptUploadApplicationService(generator, repository, knowledgeBaseRepository);
 
@@ -154,7 +156,7 @@ class AcceptUploadApplicationServiceTest {
         DocumentIdGenerator generator = Mockito.mock(DocumentIdGenerator.class);
         DocumentRepository repository = Mockito.mock(DocumentRepository.class);
         KnowledgeBaseRepository knowledgeBaseRepository = Mockito.mock(KnowledgeBaseRepository.class);
-        when(knowledgeBaseRepository.findByKbId(eq("kb-inactive")))
+        when(knowledgeBaseRepository.findByKbId(eq(WorkspaceConstants.DEFAULT_WORKSPACE_ID), eq("kb-inactive")))
                 .thenReturn(Optional.of(new KnowledgeBase("kb-inactive", "禁用库", "", KnowledgeBaseStatus.INACTIVE, Instant.now(), Instant.now())));
 
         AcceptUploadApplicationService service = new AcceptUploadApplicationService(generator, repository, knowledgeBaseRepository);
