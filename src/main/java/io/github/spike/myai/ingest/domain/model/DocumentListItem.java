@@ -1,5 +1,6 @@
 package io.github.spike.myai.ingest.domain.model;
 
+import io.github.spike.myai.shared.workspace.WorkspaceConstants;
 import java.time.Instant;
 
 /**
@@ -27,6 +28,7 @@ import java.time.Instant;
  * </ul>
  *
  * @param documentId    文档唯一标识
+ * @param workspaceId   所属工作区标识（当前固定为 {@code "default"}）
  * @param kbId          所属知识库业务键
  * @param filename      原始文件名
  * @param fileSize      文件大小（字节）
@@ -39,6 +41,7 @@ import java.time.Instant;
  */
 public record DocumentListItem(
         DocumentId documentId,
+        String workspaceId,
         String kbId,
         String filename,
         long fileSize,
@@ -46,6 +49,42 @@ public record DocumentListItem(
         String failureReason,
         Instant createdAt,
         Instant updatedAt) {
+
+    /**
+     * 便利构造器：自动填充默认工作区标识。
+     *
+     * <p>当前为单工作区模式，调用方无需显式传递 {@code workspaceId}，
+     * 该构造器自动使用 {@link WorkspaceConstants#DEFAULT_WORKSPACE_ID}。
+     *
+     * @param documentId    文档唯一标识
+     * @param kbId          所属知识库业务键
+     * @param filename      原始文件名
+     * @param fileSize      文件大小（字节）
+     * @param status        当前处理状态
+     * @param failureReason 失败原因（可为 {@code null}）
+     * @param createdAt     创建时间
+     * @param updatedAt     更新时间
+     */
+    public DocumentListItem(
+            DocumentId documentId,
+            String kbId,
+            String filename,
+            long fileSize,
+            UploadStatus status,
+            String failureReason,
+            Instant createdAt,
+            Instant updatedAt) {
+        this(
+                documentId,
+                WorkspaceConstants.DEFAULT_WORKSPACE_ID,
+                kbId,
+                filename,
+                fileSize,
+                status,
+                failureReason,
+                createdAt,
+                updatedAt);
+    }
 
     /**
      * 紧凑构造器：确保数据库投影结果的核心字段有效。
@@ -59,6 +98,9 @@ public record DocumentListItem(
         // 文档标识不可为空（数据库投影结果的基本保证）
         if (documentId == null) {
             throw new IllegalArgumentException("documentId must not be null");
+        }
+        if (workspaceId == null || workspaceId.isBlank()) {
+            throw new IllegalArgumentException("workspaceId must not be blank");
         }
         // kbId 不可为空，知识库归属是文档的基本属性
         if (kbId == null || kbId.isBlank()) {

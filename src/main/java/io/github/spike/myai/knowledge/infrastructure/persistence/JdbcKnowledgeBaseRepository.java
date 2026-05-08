@@ -49,9 +49,10 @@ public class JdbcKnowledgeBaseRepository implements KnowledgeBaseRepository {
      * </ul>
      */
     private static final String UPSERT_SQL = """
-            INSERT INTO knowledge_bases (kb_id, name, description, status, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO knowledge_bases (kb_id, workspace_id, name, description, status, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT (kb_id) DO UPDATE SET
+                workspace_id = EXCLUDED.workspace_id,
                 name = EXCLUDED.name,
                 description = EXCLUDED.description,
                 status = EXCLUDED.status,
@@ -60,9 +61,9 @@ public class JdbcKnowledgeBaseRepository implements KnowledgeBaseRepository {
 
     /** 按业务键查询单个知识库聚合根 */
     private static final String FIND_BY_KB_ID_SQL = """
-            SELECT kb_id, name, description, status, created_at, updated_at
+            SELECT kb_id, workspace_id, name, description, status, created_at, updated_at
             FROM knowledge_bases
-            WHERE kb_id = ?
+            WHERE workspace_id = ? AND kb_id = ?
             """;
 
     /**
@@ -81,6 +82,7 @@ public class JdbcKnowledgeBaseRepository implements KnowledgeBaseRepository {
      */
     private static final String LIST_KNOWLEDGE_BASES_SQL = """
             SELECT kb.kb_id,
+                   kb.workspace_id,
                    kb.name,
                    kb.description,
                    kb.status,
@@ -88,8 +90,10 @@ public class JdbcKnowledgeBaseRepository implements KnowledgeBaseRepository {
             FROM knowledge_bases kb
             LEFT JOIN ingest_documents doc
                    ON doc.kb_id = kb.kb_id
+                  AND doc.workspace_id = kb.workspace_id
                   AND doc.status = 'INDEXED'
-            GROUP BY kb.kb_id, kb.name, kb.description, kb.status, kb.created_at
+            WHERE kb.workspace_id = ?
+            GROUP BY kb.kb_id, kb.workspace_id, kb.name, kb.description, kb.status, kb.created_at
             ORDER BY kb.created_at ASC, kb.kb_id ASC
             """;
 
@@ -107,6 +111,7 @@ public class JdbcKnowledgeBaseRepository implements KnowledgeBaseRepository {
      */
     private static final RowMapper<KnowledgeBase> KNOWLEDGE_BASE_ROW_MAPPER = (rs, rowNum) -> new KnowledgeBase(
             rs.getString("kb_id"),
+            rs.getString("workspace_id"),
             rs.getString("name"),
             rs.getString("description"),
             KnowledgeBaseStatus.valueOf(rs.getString("status")),
@@ -121,6 +126,7 @@ public class JdbcKnowledgeBaseRepository implements KnowledgeBaseRepository {
     private static final RowMapper<KnowledgeBaseSummary> KNOWLEDGE_BASE_SUMMARY_ROW_MAPPER = (rs, rowNum) ->
             new KnowledgeBaseSummary(
                     rs.getString("kb_id"),
+                    rs.getString("workspace_id"),
                     rs.getString("name"),
                     rs.getString("description"),
                     KnowledgeBaseStatus.valueOf(rs.getString("status")),
@@ -164,6 +170,7 @@ public class JdbcKnowledgeBaseRepository implements KnowledgeBaseRepository {
         jdbcTemplate.update(
                 UPSERT_SQL,
                 knowledgeBase.kbId(),                           // 业务键
+                knowledgeBase.workspaceId(),                    // 工作区
                 knowledgeBase.name(),                           // 名称
                 knowledgeBase.description(),                    // 描述
                 knowledgeBase.status().name(),                  // 枚举 → 字符串
@@ -176,14 +183,16 @@ public class JdbcKnowledgeBaseRepository implements KnowledgeBaseRepository {
      *
      * <p>使用 JDBC 查询后通过 Stream 取首条结果，
      * 若无匹配行则返回 {@link Optional#empty()}。
+     * 查询时同时匹配 {@code workspace_id} 与 {@code kb_id}。
      *
-     * @param kbId 知识库业务键
+     * @param workspaceId 工作区标识
+     * @param kbId        知识库业务键
      * @return 包含聚合根的 {@link Optional}，不存在时为空
      */
     @Override
-    public Optional<KnowledgeBase> findByKbId(String kbId) {
+    public Optional<KnowledgeBase> findByKbId(String workspaceId, String kbId) {
         // 执行查询，取 Stream 首元素（最多一条，因为 kb_id 有唯一索引）
-        return jdbcTemplate.query(FIND_BY_KB_ID_SQL, KNOWLEDGE_BASE_ROW_MAPPER, kbId)
+        return jdbcTemplate.query(FIND_BY_KB_ID_SQL, KNOWLEDGE_BASE_ROW_MAPPER, workspaceId, kbId)
                 .stream()
                 .findFirst();
     }
@@ -195,12 +204,14 @@ public class JdbcKnowledgeBaseRepository implements KnowledgeBaseRepository {
      * 已索引文档数量。无文档的知识库计数为 0。
      *
      * <p>结果按创建时间升序排列，保证分页或增量同步时顺序稳定。
+     * 查询限定在指定工作区范围内。
      *
+     * @param workspaceId 工作区标识
      * @return 知识库摘要视图列表（可能为空列表）
      */
     @Override
-    public List<KnowledgeBaseSummary> listKnowledgeBases() {
+    public List<KnowledgeBaseSummary> listKnowledgeBases(String workspaceId) {
         // 直接执行聚合查询，RowMapper 负责将结果集映射为读模型
-        return jdbcTemplate.query(LIST_KNOWLEDGE_BASES_SQL, KNOWLEDGE_BASE_SUMMARY_ROW_MAPPER);
+        return jdbcTemplate.query(LIST_KNOWLEDGE_BASES_SQL, KNOWLEDGE_BASE_SUMMARY_ROW_MAPPER, workspaceId);
     }
 }

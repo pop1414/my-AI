@@ -11,6 +11,7 @@ import io.github.spike.myai.ingest.domain.port.DocumentRepository;
 import io.github.spike.myai.ingest.domain.port.DocumentSourceStorage;
 import io.github.spike.myai.ingest.domain.port.DocumentTextParser;
 import io.github.spike.myai.ingest.domain.port.DocumentVectorIndexer;
+import io.github.spike.myai.shared.workspace.WorkspaceConstants;
 import java.time.Instant;
 import java.time.Duration;
 import java.util.List;
@@ -20,40 +21,66 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 /**
- * 文档处理执行应用服务。
+ * 文档处理执行应用服务（Application Service）。
  *
- * <p>执行链路：
+ * <p>该服务实现 {@link ProcessDocumentUseCase} 用例接口，
+ * 负责执行文档入库的完整处理链路。
+ *
+ * <h3>处理链路</h3>
+ * <ol>
+ *   <li>读取源文件；</li>
+ *   <li>解析纯文本；</li>
+ *   <li>文本分块；</li>
+ *   <li>向量写入；</li>
+ *   <li>状态推进到 INDEXED（成功）或 FAILED / 重试（失败）。</li>
+ * </ol>
+ *
+ * <h3>错误处理策略</h3>
  * <ul>
- *     <li>读取源文件</li>
- *     <li>解析纯文本</li>
- *     <li>文本分块</li>
- *     <li>向量写入</li>
- *     <li>状态推进到 INDEXED/FAILED</li>
+ *   <li><b>瞬时错误</b>：通过 {@link RetryPolicy} 判断，安排指数退避重试；</li>
+ *   <li><b>致命错误</b>：直接标记为 FAILED，保留完整错误信息供排障。</li>
  * </ul>
+ *
+ * <p>所有状态变更均通过 CAS 乐观锁执行，防止并发覆盖。
+ *
+ * @author Spike
+ * @since 1.0.0
  */
 @Service
 public class ProcessDocumentApplicationService implements ProcessDocumentUseCase {
 
     private static final Logger log = LoggerFactory.getLogger(ProcessDocumentApplicationService.class);
-    /**
-     * 基础重试延迟时间（毫秒），用于指数退避算法的基数。
-     */
+
+    /** 基础重试延迟（毫秒），用于指数退避算法的基数 */
     private static final long BASE_RETRY_DELAY_MILLIS = 1000L;
-    /**
-     * 随机抖动上限（毫秒），防止大量任务在同一时刻重试造成系统压力峰值。
-     */
+    /** 随机抖动上限（毫秒），防止大量任务同时重试造成压力峰值 */
     private static final long JITTER_MILLIS = 300L;
 
-    private final DocumentRepository documentRepository; // 文档元数据仓库
-    private final DocumentSourceStorage sourceStorage; // 源文件存储
-    private final DocumentTextParser documentTextParser; // 文本解析器
-    private final DocumentChunker documentChunker; // 文本分块器
-    private final DocumentVectorIndexer documentVectorIndexer; // 矢量索引器
-    private final RetryPolicy retryPolicy; // 重试策略判断器
-    private final IngestMetrics ingestMetrics; // 业务指标监控
+    /** 文档元数据仓储 */
+    private final DocumentRepository documentRepository;
+    /** 源文件存储 */
+    private final DocumentSourceStorage sourceStorage;
+    /** 文本解析器 */
+    private final DocumentTextParser documentTextParser;
+    /** 文本分块器 */
+    private final DocumentChunker documentChunker;
+    /** 矢量索引器 */
+    private final DocumentVectorIndexer documentVectorIndexer;
+    /** 重试策略判断器 */
+    private final RetryPolicy retryPolicy;
+    /** 业务指标监控 */
+    private final IngestMetrics ingestMetrics;
 
     /**
-     * 构造函数：注入处理流程所需的各项基础设施和策略组件。
+     * 构造器注入：注入处理流程所需的各项基础设施和策略组件。
+     *
+     * @param documentRepository     文档元数据仓储
+     * @param sourceStorage          源文件存储
+     * @param documentTextParser     文本解析器
+     * @param documentChunker        文本分块器
+     * @param documentVectorIndexer  矢量索引器
+     * @param retryPolicy            重试策略判断器
+     * @param ingestMetrics          业务指标监控
      */
     public ProcessDocumentApplicationService(
             DocumentRepository documentRepository,
@@ -82,8 +109,9 @@ public class ProcessDocumentApplicationService implements ProcessDocumentUseCase
      */
     @Override
     public void handle(DocumentId documentId) {
+        String workspaceId = WorkspaceConstants.DEFAULT_WORKSPACE_ID;
         // 第一步：读取当前文档资产快照，后续所有处理都以该快照为准。
-        Document document = documentRepository.findById(documentId).orElse(null);
+        Document document = documentRepository.findById(workspaceId, documentId).orElse(null);
         if (document == null) {
             log.warn("Skip process because document not found. documentId={}", documentId.value());
             return;
@@ -116,7 +144,8 @@ public class ProcessDocumentApplicationService implements ProcessDocumentUseCase
 
             // 步骤 5: 状态收口：仅当当前仍是 INGESTING 时，才允许推进到最终成功态 INDEXED。
             // 使用 CAS 确保在处理期间文档没有被外部（如删除操作）修改。
-            boolean updated = documentRepository.markIndexed(documentId, UploadStatus.INGESTING, Instant.now());
+            boolean updated = documentRepository.markIndexed(
+                    workspaceId, documentId, UploadStatus.INGESTING, Instant.now());
             if (!updated) {
                 log.warn("Status update to INDEXED skipped by CAS. documentId={}", documentId.value());
                 return;
@@ -136,6 +165,7 @@ public class ProcessDocumentApplicationService implements ProcessDocumentUseCase
 
                 // 将状态更新为待重试，并记录当前的错误代码和摘要。
                 boolean updated = documentRepository.markRetry(
+                        workspaceId,
                         documentId,
                         UploadStatus.INGESTING,
                         nextRetryCount,
@@ -162,6 +192,7 @@ public class ProcessDocumentApplicationService implements ProcessDocumentUseCase
             String reason = trimFailureReason(decision.errorMessage());
             // 非瞬时错误或超过最大重试次数时，直接进入 FAILED 并保留错误信息。
             boolean updated = documentRepository.markFailed(
+                    workspaceId,
                     documentId,
                     UploadStatus.INGESTING,
                     reason,
@@ -217,4 +248,3 @@ public class ProcessDocumentApplicationService implements ProcessDocumentUseCase
         return Duration.ofMillis(exponential + jitter);
     }
 }
-

@@ -18,7 +18,11 @@ import org.springframework.stereotype.Repository;
  * <ul>
  *     <li>使用 JdbcTemplate 实现最小可读、可控的 SQL 访问。</li>
  *     <li>采用 UPSERT（ON CONFLICT）保证 save 可用于新增和状态更新。</li>
+ *     <li>表结构由 Flyway 统一维护，仓储仅负责运行时读写。</li>
  * </ul>
+ *
+ * @author Spike
+ * @since 1.0.0
  */
 @Repository
 public class JdbcDocumentRepository implements DocumentRepository {
@@ -29,15 +33,16 @@ public class JdbcDocumentRepository implements DocumentRepository {
      */
     private static final String UPSERT_SQL = """
             INSERT INTO ingest_documents
-              (document_id, kb_id, file_hash, filename, file_size, status, failure_reason,
+              (document_id, workspace_id, kb_id, file_hash, filename, file_size, status, failure_reason,
                retry_count, retry_max, next_retry_at, last_error_code, last_error_message, last_error_at,
                reprocess_count, reprocess_requested_at, split_version,
                created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?,
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?,
                     ?, ?, ?, ?, ?, ?,
                     ?, ?, ?,
                     ?, ?)
             ON CONFLICT (document_id) DO UPDATE SET
+              workspace_id = EXCLUDED.workspace_id,
               kb_id = EXCLUDED.kb_id,
               file_hash = EXCLUDED.file_hash,
               filename = EXCLUDED.filename,
@@ -61,12 +66,12 @@ public class JdbcDocumentRepository implements DocumentRepository {
      * 根据主键查询完整文档信息的 SQL。
      */
     private static final String FIND_BY_ID_SQL = """
-            SELECT document_id, kb_id, file_hash, filename, file_size, status, failure_reason,
+            SELECT document_id, workspace_id, kb_id, file_hash, filename, file_size, status, failure_reason,
                    retry_count, retry_max, next_retry_at, last_error_code, last_error_message, last_error_at,
                    reprocess_count, reprocess_requested_at, split_version,
                    created_at, updated_at
             FROM ingest_documents
-            WHERE document_id = ?
+            WHERE workspace_id = ? AND document_id = ?
             """;
 
     /**
@@ -74,12 +79,12 @@ public class JdbcDocumentRepository implements DocumentRepository {
      * 检查当前知识库内是否已存在相同 Hash 的文件，若存在则取最新的一条。
      */
     private static final String FIND_BY_KB_ID_AND_FILE_HASH_SQL = """
-            SELECT document_id, kb_id, file_hash, filename, file_size, status, failure_reason,
+            SELECT document_id, workspace_id, kb_id, file_hash, filename, file_size, status, failure_reason,
                    retry_count, retry_max, next_retry_at, last_error_code, last_error_message, last_error_at,
                    reprocess_count, reprocess_requested_at, split_version,
                    created_at, updated_at
             FROM ingest_documents
-            WHERE kb_id = ? AND file_hash = ? AND status <> 'DELETED'
+            WHERE workspace_id = ? AND kb_id = ? AND file_hash = ? AND status <> 'DELETED'
             ORDER BY created_at DESC
             LIMIT 1
             """;
@@ -89,12 +94,13 @@ public class JdbcDocumentRepository implements DocumentRepository {
      * 排除正在处理的任务、已达到最大重试次数的任务以及尚未到达重试退避时间的任务。
      */
     private static final String FIND_OLDEST_READY_SQL = """
-            SELECT document_id, kb_id, file_hash, filename, file_size, status, failure_reason,
+            SELECT document_id, workspace_id, kb_id, file_hash, filename, file_size, status, failure_reason,
                    retry_count, retry_max, next_retry_at, last_error_code, last_error_message, last_error_at,
                    reprocess_count, reprocess_requested_at, split_version,
                    created_at, updated_at
             FROM ingest_documents
-            WHERE status = 'UPLOADED'
+            WHERE workspace_id = ?
+              AND status = 'UPLOADED'
               AND (next_retry_at IS NULL OR next_retry_at <= ?)
               AND retry_count < retry_max
             ORDER BY COALESCE(next_retry_at, created_at) ASC, created_at ASC
@@ -108,7 +114,7 @@ public class JdbcDocumentRepository implements DocumentRepository {
     private static final String COMPARE_AND_SET_STATUS_SQL = """
             UPDATE ingest_documents
             SET status = ?, failure_reason = ?, updated_at = ?
-            WHERE document_id = ? AND status = ?
+            WHERE workspace_id = ? AND document_id = ? AND status = ?
             """;
 
     /**
@@ -125,7 +131,7 @@ public class JdbcDocumentRepository implements DocumentRepository {
                 last_error_message = NULL,
                 last_error_at = NULL,
                 updated_at = ?
-            WHERE document_id = ? AND status = ?
+            WHERE workspace_id = ? AND document_id = ? AND status = ?
             """;
 
     /**
@@ -140,7 +146,7 @@ public class JdbcDocumentRepository implements DocumentRepository {
                 last_error_message = ?,
                 last_error_at = ?,
                 updated_at = ?
-            WHERE document_id = ? AND status = ?
+            WHERE workspace_id = ? AND document_id = ? AND status = ?
             """;
 
     /**
@@ -157,7 +163,7 @@ public class JdbcDocumentRepository implements DocumentRepository {
                 last_error_message = ?,
                 last_error_at = ?,
                 updated_at = ?
-            WHERE document_id = ? AND status = ?
+            WHERE workspace_id = ? AND document_id = ? AND status = ?
             """;
 
     /**
@@ -174,25 +180,37 @@ public class JdbcDocumentRepository implements DocumentRepository {
                 reprocess_requested_at = ?,
                 split_version = ?,
                 updated_at = ?
-            WHERE document_id = ? AND status = ?
+            WHERE workspace_id = ? AND document_id = ? AND status = ?
             """;
     private static final String MARK_DELETING_SQL = """
             UPDATE ingest_documents
             SET status = 'DELETING',
                 updated_at = ?
-            WHERE document_id = ? AND status = ?
+            WHERE workspace_id = ? AND document_id = ? AND status = ?
             """;
+
+    /**
+     * 标记为已删除的 SQL。
+     *
+     * <p>仅当文档当前状态为 {@code DELETING} 时才执行，确保删除流程的原子性。
+     */
     private static final String MARK_DELETED_SQL = """
             UPDATE ingest_documents
             SET status = 'DELETED',
                 updated_at = ?
-            WHERE document_id = ? AND status = 'DELETING'
+            WHERE workspace_id = ? AND document_id = ? AND status = 'DELETING'
             """;
+
+    /**
+     * 删除失败回滚 SQL。
+     *
+     * <p>将 DELETING 状态的文档恢复到指定状态（删除前的状态）。
+     */
     private static final String ROLLBACK_DELETING_SQL = """
             UPDATE ingest_documents
             SET status = ?,
                 updated_at = ?
-            WHERE document_id = ? AND status = 'DELETING'
+            WHERE workspace_id = ? AND document_id = ? AND status = 'DELETING'
             """;
 
     /**
@@ -200,6 +218,7 @@ public class JdbcDocumentRepository implements DocumentRepository {
      */
     private static final RowMapper<Document> DOCUMENT_ROW_MAPPER = (rs, rowNum) -> new Document(
             new DocumentId(rs.getString("document_id")),
+            rs.getString("workspace_id"),
             rs.getString("kb_id"),
             rs.getString("file_hash"),
             rs.getString("filename"),
@@ -239,6 +258,7 @@ public class JdbcDocumentRepository implements DocumentRepository {
         jdbcTemplate.update(
                 UPSERT_SQL,
                 document.documentId().value(),
+                document.workspaceId(),
                 document.kbId(),
                 document.fileHash(),
                 document.filename(),
@@ -265,8 +285,8 @@ public class JdbcDocumentRepository implements DocumentRepository {
      * @return 查询结果（Optional 封装）
      */
     @Override
-    public Optional<Document> findById(DocumentId documentId) {
-        return jdbcTemplate.query(FIND_BY_ID_SQL, DOCUMENT_ROW_MAPPER, documentId.value()).stream().findFirst();
+    public Optional<Document> findById(String workspaceId, DocumentId documentId) {
+        return jdbcTemplate.query(FIND_BY_ID_SQL, DOCUMENT_ROW_MAPPER, workspaceId, documentId.value()).stream().findFirst();
     }
 
     /**
@@ -274,8 +294,8 @@ public class JdbcDocumentRepository implements DocumentRepository {
      * 用于在上传前检查是否存在完全一致且已处理的文件。
      */
     @Override
-    public Optional<Document> findByKbIdAndFileHash(String kbId, String fileHash) {
-        return jdbcTemplate.query(FIND_BY_KB_ID_AND_FILE_HASH_SQL, DOCUMENT_ROW_MAPPER, kbId, fileHash)
+    public Optional<Document> findByKbIdAndFileHash(String workspaceId, String kbId, String fileHash) {
+        return jdbcTemplate.query(FIND_BY_KB_ID_AND_FILE_HASH_SQL, DOCUMENT_ROW_MAPPER, workspaceId, kbId, fileHash)
                 .stream()
                 .findFirst();
     }
@@ -285,9 +305,9 @@ public class JdbcDocumentRepository implements DocumentRepository {
      * 这是 InProcessWorker 等调度器的核心数据来源。
      */
     @Override
-    public Optional<Document> findOldestReadyForProcessing(Instant now) {
+    public Optional<Document> findOldestReadyForProcessing(String workspaceId, Instant now) {
         // 固定按 next_retry_at/created_at 升序取 1 条，保证处理顺序尽量稳定、可预期。
-        return jdbcTemplate.query(FIND_OLDEST_READY_SQL, DOCUMENT_ROW_MAPPER, Timestamp.from(now))
+        return jdbcTemplate.query(FIND_OLDEST_READY_SQL, DOCUMENT_ROW_MAPPER, workspaceId, Timestamp.from(now))
                 .stream()
                 .findFirst();
     }
@@ -298,6 +318,7 @@ public class JdbcDocumentRepository implements DocumentRepository {
      */
     @Override
     public boolean compareAndSetStatus(
+            String workspaceId,
             DocumentId documentId,
             UploadStatus expectedStatus,
             UploadStatus targetStatus,
@@ -310,17 +331,19 @@ public class JdbcDocumentRepository implements DocumentRepository {
                 targetStatus.name(),
                 failureReason,
                 Timestamp.from(updatedAt),
+                workspaceId,
                 documentId.value(),
                 expectedStatus.name());
         return updatedRows == 1;
     }
 
     @Override
-    public boolean markIndexed(DocumentId documentId, UploadStatus expectedStatus, Instant updatedAt) {
+    public boolean markIndexed(String workspaceId, DocumentId documentId, UploadStatus expectedStatus, Instant updatedAt) {
         // 成功收口：重试信息一并清理，避免污染后续查询。
         int updatedRows = jdbcTemplate.update(
                 MARK_INDEXED_SQL,
                 Timestamp.from(updatedAt),
+                workspaceId,
                 documentId.value(),
                 expectedStatus.name());
         return updatedRows == 1;
@@ -328,6 +351,7 @@ public class JdbcDocumentRepository implements DocumentRepository {
 
     @Override
     public boolean markFailed(
+            String workspaceId,
             DocumentId documentId,
             UploadStatus expectedStatus,
             String failureReason,
@@ -343,6 +367,7 @@ public class JdbcDocumentRepository implements DocumentRepository {
                 errorMessage,
                 toTimestamp(errorAt),
                 Timestamp.from(updatedAt),
+                workspaceId,
                 documentId.value(),
                 expectedStatus.name());
         return updatedRows == 1;
@@ -350,6 +375,7 @@ public class JdbcDocumentRepository implements DocumentRepository {
 
     @Override
     public boolean markRetry(
+            String workspaceId,
             DocumentId documentId,
             UploadStatus expectedStatus,
             int retryCount,
@@ -367,6 +393,7 @@ public class JdbcDocumentRepository implements DocumentRepository {
                 errorMessage,
                 toTimestamp(errorAt),
                 Timestamp.from(updatedAt),
+                workspaceId,
                 documentId.value(),
                 expectedStatus.name());
         return updatedRows == 1;
@@ -374,6 +401,7 @@ public class JdbcDocumentRepository implements DocumentRepository {
 
     @Override
     public boolean requestReprocess(
+            String workspaceId,
             DocumentId documentId,
             UploadStatus expectedStatus,
             String newSplitVersion,
@@ -384,36 +412,72 @@ public class JdbcDocumentRepository implements DocumentRepository {
                 Timestamp.from(requestedAt),
                 newSplitVersion,
                 Timestamp.from(requestedAt),
+                workspaceId,
                 documentId.value(),
                 expectedStatus.name());
         return updatedRows == 1;
     }
 
+    /**
+     * 将文档状态推进为 DELETING。
+     *
+     * <p>采用 CAS 机制，仅当文档当前状态与期望状态一致时才更新。
+     *
+     * @param workspaceId    工作区标识
+     * @param documentId     文档资产 ID
+     * @param expectedStatus 期望当前状态
+     * @param updatedAt      更新时间
+     * @return 更新是否成功
+     */
     @Override
-    public boolean markDeleting(DocumentId documentId, UploadStatus expectedStatus, Instant updatedAt) {
+    public boolean markDeleting(String workspaceId, DocumentId documentId, UploadStatus expectedStatus, Instant updatedAt) {
         int updatedRows = jdbcTemplate.update(
                 MARK_DELETING_SQL,
                 Timestamp.from(updatedAt),
+                workspaceId,
                 documentId.value(),
                 expectedStatus.name());
         return updatedRows == 1;
     }
 
+    /**
+     * 将文档状态推进为 DELETED（物理标记删除完成）。
+     *
+     * <p>仅当文档当前状态为 {@code DELETING} 时才执行，无需额外 CAS 参数。
+     *
+     * @param workspaceId 工作区标识
+     * @param documentId  文档资产 ID
+     * @param updatedAt   更新时间
+     * @return 更新是否成功
+     */
     @Override
-    public boolean markDeleted(DocumentId documentId, Instant updatedAt) {
+    public boolean markDeleted(String workspaceId, DocumentId documentId, Instant updatedAt) {
         int updatedRows = jdbcTemplate.update(
                 MARK_DELETED_SQL,
                 Timestamp.from(updatedAt),
+                workspaceId,
                 documentId.value());
         return updatedRows == 1;
     }
 
+    /**
+     * 删除失败时回滚 DELETING 状态。
+     *
+     * <p>将文档从 DELETING 状态恢复到指定的回滚状态（删除前的状态）。
+     *
+     * @param workspaceId    工作区标识
+     * @param documentId     文档资产 ID
+     * @param rollbackStatus 回滚目标状态
+     * @param updatedAt      更新时间
+     * @return 更新是否成功
+     */
     @Override
-    public boolean rollbackDeleting(DocumentId documentId, UploadStatus rollbackStatus, Instant updatedAt) {
+    public boolean rollbackDeleting(String workspaceId, DocumentId documentId, UploadStatus rollbackStatus, Instant updatedAt) {
         int updatedRows = jdbcTemplate.update(
                 ROLLBACK_DELETING_SQL,
                 rollbackStatus.name(),
                 Timestamp.from(updatedAt),
+                workspaceId,
                 documentId.value());
         return updatedRows == 1;
     }

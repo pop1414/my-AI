@@ -12,6 +12,7 @@ import io.github.spike.myai.knowledge.application.exception.KnowledgeBaseInactiv
 import io.github.spike.myai.knowledge.application.exception.KnowledgeBaseNotFoundException;
 import io.github.spike.myai.knowledge.domain.model.KnowledgeBaseStatus;
 import io.github.spike.myai.knowledge.domain.port.KnowledgeBaseRepository;
+import io.github.spike.myai.shared.workspace.WorkspaceConstants;
 import java.time.Instant;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -100,18 +101,18 @@ public class AcceptUploadApplicationService implements AcceptUploadUseCase {
     @Override
     public UploadTicket handle(AcceptUploadCommand command) {
         // 1. 解析知识库 ID：为空或空白时回退到默认知识库
-        // 1. 解析知识库 ID：为空或空白时回退到默认知识库
+        String workspaceId = WorkspaceConstants.DEFAULT_WORKSPACE_ID;
         String resolvedKbId = resolveKbId(command.kbId());
 
         // 2. 校验目标知识库：存在性 + 启用状态，不满足则快速失败
-        validateKnowledgeBase(resolvedKbId);
+        validateKnowledgeBase(workspaceId, resolvedKbId);
 
         String fileHash = command.fileHash();
 
         // 3. 幂等去重：通过文件哈希检查是否已有相同文件在库中
         //    若存在则直接复用已有的 DocumentId，避免分配新 ID 导致数据冗余
         Document existingDocument =
-                documentRepository.findByKbIdAndFileHash(resolvedKbId, fileHash).orElse(null);
+                documentRepository.findByKbIdAndFileHash(workspaceId, resolvedKbId, fileHash).orElse(null);
 
         if (existingDocument != null) {
             // 命中幂等：相同文件已受理过，直接返回已有票据
@@ -131,7 +132,14 @@ public class AcceptUploadApplicationService implements AcceptUploadUseCase {
         // 5. 创建 UPLOADED 状态的文档聚合根并持久化
         //    后续异步 Job 会轮询该状态并推进处理链路（解析 → 分块 → 向量化）
         Document document =
-                Document.uploaded(documentId, resolvedKbId, fileHash, command.filename(), command.fileSize(), now);
+                Document.uploaded(
+                        documentId,
+                        workspaceId,
+                        resolvedKbId,
+                        fileHash,
+                        command.filename(),
+                        command.fileSize(),
+                        now);
         documentRepository.save(document);
 
         // 6. 记录关键链路日志，便于后续定位上传请求是否进入应用层
@@ -178,9 +186,9 @@ public class AcceptUploadApplicationService implements AcceptUploadUseCase {
      * @throws KnowledgeBaseNotFoundException 当知识库不存在时
      * @throws KnowledgeBaseInactiveException 当知识库处于非启用状态时
      */
-    private void validateKnowledgeBase(String kbId) {
+    private void validateKnowledgeBase(String workspaceId, String kbId) {
         // 1. 查找知识库，不存在则快速失败
-        var knowledgeBase = knowledgeBaseRepository.findByKbId(kbId)
+        var knowledgeBase = knowledgeBaseRepository.findByKbId(workspaceId, kbId)
                 .orElseThrow(() -> new KnowledgeBaseNotFoundException("knowledge base not found: " + kbId));
 
         // 2. 状态校验：仅 ACTIVE 状态允许接收新文档

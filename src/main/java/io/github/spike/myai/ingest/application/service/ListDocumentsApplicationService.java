@@ -9,6 +9,7 @@ import io.github.spike.myai.ingest.domain.model.DocumentListItem;
 import io.github.spike.myai.ingest.domain.model.DocumentListPage;
 import io.github.spike.myai.ingest.domain.model.UploadStatus;
 import io.github.spike.myai.ingest.domain.port.DocumentListRepository;
+import io.github.spike.myai.shared.workspace.WorkspaceConstants;
 import org.springframework.stereotype.Service;
 
 /**
@@ -62,6 +63,7 @@ public class ListDocumentsApplicationService implements ListDocumentsUseCase {
         // 1. 将应用层 Query 转换为领域层过滤条件
         //    excludeDeletedByDefault() 实现默认不展示已删除文档的语义
         DocumentListPage page = documentListRepository.findPage(new DocumentListFilter(
+                WorkspaceConstants.DEFAULT_WORKSPACE_ID, // 当前阶段固定默认工作区
                 query.normalizedKbId(),          // 知识库 ID（null 表示不过滤）
                 query.requestedStatus(),          // 状态过滤（null 表示不过滤）
                 query.normalizedFilename(),       // 文件名模糊匹配（null 表示不过滤）

@@ -51,6 +51,7 @@ public class JdbcDocumentListRepository implements DocumentListRepository {
      */
     private static final String SELECT_BASE_SQL = """
             SELECT document_id,
+                   workspace_id,
                    kb_id,
                    filename,
                    file_size,
@@ -100,6 +101,7 @@ public class JdbcDocumentListRepository implements DocumentListRepository {
      */
     private static final RowMapper<DocumentListItem> ROW_MAPPER = (rs, rowNum) -> new DocumentListItem(
             new DocumentId(rs.getString("document_id")),
+            rs.getString("workspace_id"),
             rs.getString("kb_id"),
             rs.getString("filename"),
             rs.getLong("file_size"),
@@ -173,8 +175,8 @@ public class JdbcDocumentListRepository implements DocumentListRepository {
      * 根据过滤条件动态构建 WHERE 子句。
      *
      * <p>构建策略（按优先级）：
-     * <ol>
-     *   <li>{@code kbId} 不为 {@code null} → 追加 {@code kb_id = ?} 精确匹配；</li>
+     * <ol>     *   <li><b>workspaceId 必选过滤</b>：始终追加 {@code workspace_id = ?}，
+     *       确保多工作区数据隔离（即使当前仅单工作区）；</li>     *   <li>{@code kbId} 不为 {@code null} → 追加 {@code kb_id = ?} 精确匹配；</li>
      *   <li>{@code status} 不为 {@code null} → 追加 {@code status = ?} 精确匹配；
      *       若 {@code status} 为 {@code null} 但 {@code excludeDeleted} 为
      *       {@code true} → 追加 {@code status <> 'DELETED'} 排除条件；</li>
@@ -193,6 +195,10 @@ public class JdbcDocumentListRepository implements DocumentListRepository {
      */
     private static String buildWhereClause(DocumentListFilter filter, List<Object> args) {
         List<String> conditions = new ArrayList<>();
+
+        // 0. workspaceId 必选过滤：始终追加，确保多工作区数据隔离
+        conditions.add("workspace_id = ?");
+        args.add(filter.workspaceId());
 
         // 1. kbId 精确过滤
         if (filter.kbId() != null) {

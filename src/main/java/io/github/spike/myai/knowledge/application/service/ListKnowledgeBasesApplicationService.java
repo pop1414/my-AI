@@ -3,6 +3,7 @@ package io.github.spike.myai.knowledge.application.service;
 import io.github.spike.myai.knowledge.application.result.KnowledgeBaseResult;
 import io.github.spike.myai.knowledge.application.usecase.ListKnowledgeBasesUseCase;
 import io.github.spike.myai.knowledge.domain.port.KnowledgeBaseRepository;
+import io.github.spike.myai.shared.workspace.WorkspaceConstants;
 import java.util.List;
 import org.springframework.stereotype.Service;
 
@@ -11,7 +12,7 @@ import org.springframework.stereotype.Service;
  *
  * <p>该服务实现 {@link ListKnowledgeBasesUseCase} 用例接口，负责：
  * <ul>
- *   <li>调用领域端口 {@link KnowledgeBaseRepository#listKnowledgeBases()}
+ *   <li>调用领域端口 {@link KnowledgeBaseRepository#listKnowledgeBases(String)}
  *       读取知识库主数据与聚合统计；</li>
  *   <li>将领域模型流式映射为应用层 {@link KnowledgeBaseResult} 结果对象；</li>
  *   <li>封装当前版本（V1.1）的业务约定与输出口径。</li>
@@ -56,7 +57,7 @@ public class ListKnowledgeBasesApplicationService implements ListKnowledgeBasesU
     public List<KnowledgeBaseResult> handle() {
         // 从仓库获取全量知识库视图列表，通过 Stream 流式转换为应用层 DTO
         // listKnowledgeBases() 返回的视图项已包含 indexedDocumentCount 聚合字段
-        return knowledgeBaseRepository.listKnowledgeBases().stream()
+        return knowledgeBaseRepository.listKnowledgeBases(WorkspaceConstants.DEFAULT_WORKSPACE_ID).stream()
                 .map(item -> new KnowledgeBaseResult(
                         item.kbId(),                     // 知识库唯一标识
                         item.name(),                     // 知识库名称

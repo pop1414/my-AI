@@ -6,6 +6,7 @@ import io.github.spike.myai.knowledge.application.result.KnowledgeBaseResult;
 import io.github.spike.myai.knowledge.application.usecase.UpdateKnowledgeBaseUseCase;
 import io.github.spike.myai.knowledge.domain.model.KnowledgeBase;
 import io.github.spike.myai.knowledge.domain.port.KnowledgeBaseRepository;
+import io.github.spike.myai.shared.workspace.WorkspaceConstants;
 import java.time.Instant;
 import org.springframework.stereotype.Service;
 
@@ -66,7 +67,8 @@ public class UpdateKnowledgeBaseApplicationService implements UpdateKnowledgeBas
     public KnowledgeBaseResult handle(UpdateKnowledgeBaseCommand command) {
         // 1. 按 ID 查找现有知识库，不存在则抛出业务异常
         //    使用 Optional.orElseThrow 实现快速失败（Fail-Fast）
-        KnowledgeBase current = knowledgeBaseRepository.findByKbId(command.normalizedKbId())
+        String workspaceId = WorkspaceConstants.DEFAULT_WORKSPACE_ID;
+        KnowledgeBase current = knowledgeBaseRepository.findByKbId(workspaceId, command.normalizedKbId())
                 .orElseThrow(() -> new KnowledgeBaseNotFoundException(
                         "knowledge base not found: " + command.normalizedKbId()));
 
@@ -85,7 +87,7 @@ public class UpdateKnowledgeBaseApplicationService implements UpdateKnowledgeBas
         // 4. 查询已索引文档数量
         //    从仓库的全量列表中过滤出当前知识库并提取索引计数
         //    使用 mapToLong 避免自动装箱，提升性能
-        long indexedDocumentCount = knowledgeBaseRepository.listKnowledgeBases().stream()
+        long indexedDocumentCount = knowledgeBaseRepository.listKnowledgeBases(workspaceId).stream()
                 .filter(item -> item.kbId().equals(updated.kbId()))
                 .mapToLong(item -> item.indexedDocumentCount())
                 .findFirst()

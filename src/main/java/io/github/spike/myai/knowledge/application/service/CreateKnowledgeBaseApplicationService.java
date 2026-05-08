@@ -6,6 +6,7 @@ import io.github.spike.myai.knowledge.application.usecase.CreateKnowledgeBaseUse
 import io.github.spike.myai.knowledge.domain.model.KnowledgeBase;
 import io.github.spike.myai.knowledge.domain.port.KnowledgeBaseIdGenerator;
 import io.github.spike.myai.knowledge.domain.port.KnowledgeBaseRepository;
+import io.github.spike.myai.shared.workspace.WorkspaceConstants;
 import java.time.Instant;
 import org.springframework.stereotype.Service;
 
@@ -74,6 +75,7 @@ public class CreateKnowledgeBaseApplicationService implements CreateKnowledgeBas
         // 参数均来自 Command 对象的规整化方法，确保数据一致性
         KnowledgeBase knowledgeBase = KnowledgeBase.create(
                 knowledgeBaseIdGenerator.nextKbId(),    // 生成全局唯一 ID
+                WorkspaceConstants.DEFAULT_WORKSPACE_ID, // 当前阶段显式落入默认工作区
                 command.normalizedName(),                // 规整化后的名称
                 command.normalizedDescription(),         // 规整化后的描述
                 command.resolvedStatus(),                // 解析后的状态（含默认值处理）

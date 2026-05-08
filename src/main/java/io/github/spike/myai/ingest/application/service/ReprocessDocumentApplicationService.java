@@ -10,22 +10,53 @@ import io.github.spike.myai.ingest.domain.model.SplitVersion;
 import io.github.spike.myai.ingest.domain.model.UploadStatus;
 import io.github.spike.myai.ingest.domain.port.DocumentRepository;
 import io.github.spike.myai.ingest.domain.port.DocumentVectorIndexer;
+import io.github.spike.myai.shared.workspace.WorkspaceConstants;
 import java.time.Instant;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 /**
- * 文档重处理应用服务。
+ * 文档重处理应用服务（Application Service）。
+ *
+ * <p>该服务实现 {@link ReprocessDocumentUseCase} 用例接口，
+ * 负责对处于 FAILED 或 INDEXED 状态的文档发起全量重处理。
+ *
+ * <h3>核心机制：版本化重处理</h3>
+ * <p>通过 {@code splitVersion} 递增实现版本隔离：
+ * <ol>
+ *   <li><b>避免冲突</b>：异步删除旧版本向量时，利用版本号过滤裁剪，
+ *       不会误删新开始处理的向量数据；</li>
+ *   <li><b>检索隔离</b>：检索接口通过版本过滤，确保用户查不到
+ *       正在重洗的中间状态数据。</li>
+ * </ol>
+ *
+ * <h3>约束</h3>
+ * <ul>
+ *   <li>INGESTING 状态禁止重处理，避免与正在进行的分块/向量化冲突；</li>
+ *   <li>仅 FAILED / INDEXED 可进入重处理；</li>
+ *   <li>清理旧版本向量失败时回退到 FAILED 状态。</li>
+ * </ul>
+ *
+ * @author Spike
+ * @since 1.0.0
  */
 @Service
 public class ReprocessDocumentApplicationService implements ReprocessDocumentUseCase {
 
     private static final Logger log = LoggerFactory.getLogger(ReprocessDocumentApplicationService.class);
 
+    /** 文档仓储端口 */
     private final DocumentRepository documentRepository;
+    /** 矢量索引端口：用于删除旧版本向量 */
     private final DocumentVectorIndexer documentVectorIndexer;
 
+    /**
+     * 构造器注入。
+     *
+     * @param documentRepository     文档仓储
+     * @param documentVectorIndexer  矢量索引器
+     */
     public ReprocessDocumentApplicationService(
             DocumentRepository documentRepository,
             DocumentVectorIndexer documentVectorIndexer) {
@@ -35,8 +66,9 @@ public class ReprocessDocumentApplicationService implements ReprocessDocumentUse
 
     @Override
     public DocumentStatusResult handle(ReprocessDocumentCommand command) {
+        String workspaceId = WorkspaceConstants.DEFAULT_WORKSPACE_ID;
         DocumentId documentId = new DocumentId(command.documentId());
-        Document document = documentRepository.findById(documentId)
+        Document document = documentRepository.findById(workspaceId, documentId)
                 .orElseThrow(() -> new DocumentNotFoundException("document not found: " + documentId.value()));
         // INGESTING 阶段禁止重处理，避免与正在进行的分块/向量化冲突。
         if (document.status() == UploadStatus.INGESTING) {
@@ -57,7 +89,12 @@ public class ReprocessDocumentApplicationService implements ReprocessDocumentUse
         Instant now = Instant.now();
 
         // CAS 更新：仅当当前状态仍为预期状态时才允许进入重处理队列。
-        boolean updated = documentRepository.requestReprocess(documentId, document.status(), newSplitVersion, now);
+        boolean updated = documentRepository.requestReprocess(
+                workspaceId,
+                documentId,
+                document.status(),
+                newSplitVersion,
+                now);
         if (!updated) {
             throw new IllegalStateException("document status changed, reprocess aborted");
         }
@@ -70,6 +107,7 @@ public class ReprocessDocumentApplicationService implements ReprocessDocumentUse
             // 清理失败时回退到 FAILED，并记录错误，防止文档“消失”。
             String reason = trimFailureReason(ex.getMessage());
             documentRepository.markFailed(
+                    workspaceId,
                     documentId,
                     UploadStatus.UPLOADED,
                     reason,

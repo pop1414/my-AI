@@ -1,5 +1,6 @@
 package io.github.spike.myai.knowledge.domain.model;
 
+import io.github.spike.myai.shared.workspace.WorkspaceConstants;
 import java.time.Instant;
 
 /**
@@ -35,6 +36,7 @@ import java.time.Instant;
  * </ul>
  *
  * @param kbId        对外业务键（系统生成的全局唯一标识）
+ * @param workspaceId 所属工作区标识（当前固定为 {@code "default"}）
  * @param name        展示名称（1~100 字符）
  * @param description 描述信息（可为空字符串，最长 500 字符）
  * @param status      当前生命周期状态
@@ -45,11 +47,35 @@ import java.time.Instant;
  */
 public record KnowledgeBase(
         String kbId,
+        String workspaceId,
         String name,
         String description,
         KnowledgeBaseStatus status,
         Instant createdAt,
         Instant updatedAt) {
+
+    /**
+     * 便利构造器：自动填充默认工作区标识。
+     *
+     * <p>当前为单工作区模式，调用方无需显式传递 {@code workspaceId}，
+     * 该构造器自动使用 {@link WorkspaceConstants#DEFAULT_WORKSPACE_ID}。
+     *
+     * @param kbId        知识库业务键
+     * @param name        展示名称
+     * @param description 描述信息
+     * @param status      生命周期状态
+     * @param createdAt   创建时间
+     * @param updatedAt   更新时间
+     */
+    public KnowledgeBase(
+            String kbId,
+            String name,
+            String description,
+            KnowledgeBaseStatus status,
+            Instant createdAt,
+            Instant updatedAt) {
+        this(kbId, WorkspaceConstants.DEFAULT_WORKSPACE_ID, name, description, status, createdAt, updatedAt);
+    }
 
     /**
      * 紧凑构造器（Compact Canonical Constructor）。
@@ -70,16 +96,21 @@ public record KnowledgeBase(
             throw new IllegalArgumentException("kbId must not be blank");
         }
 
-        // 2. name 必填校验：名称不可为空或空白字符串
+        // 2. workspaceId 必填校验：工作区标识不可为空（便利构造器自动填充默认值）
+        if (workspaceId == null || workspaceId.isBlank()) {
+            throw new IllegalArgumentException("workspaceId must not be blank");
+        }
+
+        // 3. name 必填校验：名称不可为空或空白字符串
         if (name == null || name.isBlank()) {
             throw new IllegalArgumentException("name must not be blank");
         }
-        // 3. name 长度校验：去除首尾空格后不超过 100 字符
+        // 4. name 长度校验：去除首尾空格后不超过 100 字符
         if (name.trim().length() > 100) {
             throw new IllegalArgumentException("name length must be between 1 and 100");
         }
 
-        // 4. description 规整化与长度校验
+        // 5. description 规整化与长度校验
         //    null 视为空字符串，去除首尾空格；最长 500 字符
         String normalizedDescription = description == null ? "" : description.trim();
         if (normalizedDescription.length() > 500) {
@@ -87,24 +118,25 @@ public record KnowledgeBase(
         }
         description = normalizedDescription;    // 写回规整化后的值
 
-        // 5. status 必填校验：聚合根必须有一个明确的状态
+        // 6. status 必填校验：聚合根必须有一个明确的状态
         if (status == null) {
             throw new IllegalArgumentException("status must not be null");
         }
 
-        // 6. 时间戳必填校验：创建时间和更新时间均不可为空
+        // 7. 时间戳必填校验：创建时间和更新时间均不可为空
         if (createdAt == null || updatedAt == null) {
             throw new IllegalArgumentException("createdAt/updatedAt must not be null");
         }
 
-        // 7. name 去除首尾空格后写回（在长度校验通过后执行）
+        // 8. name 去除首尾空格后写回（在长度校验通过后执行）
         name = name.trim();
     }
 
     /**
-     * 静态工厂方法：创建新的知识库聚合根。
+     * 静态工厂方法：创建新的知识库聚合根（使用默认工作区）。
      *
-     * <p>新创建时 {@code createdAt} 与 {@code updatedAt} 均为同一时间点，
+     * <p>便利重载，自动填充 {@link WorkspaceConstants#DEFAULT_WORKSPACE_ID}。
+     * 新创建时 {@code createdAt} 与 {@code updatedAt} 均为同一时间点，
      * 表示"创建即最后一次修改"。
      *
      * @param kbId        知识库业务键
@@ -120,8 +152,32 @@ public record KnowledgeBase(
             String description,
             KnowledgeBaseStatus status,
             Instant now) {
+        return create(kbId, WorkspaceConstants.DEFAULT_WORKSPACE_ID, name, description, status, now);
+    }
+
+    /**
+     * 静态工厂方法：创建新的知识库聚合根（显式指定工作区）。
+     *
+     * <p>新创建时 {@code createdAt} 与 {@code updatedAt} 均为同一时间点。
+     * 调用方需显式传入 {@code workspaceId}，适用于多工作区场景。
+     *
+     * @param kbId        知识库业务键
+     * @param workspaceId 所属工作区标识
+     * @param name        知识库名称
+     * @param description 知识库描述
+     * @param status      初始状态
+     * @param now         当前时间（创建时间）
+     * @return 新创建的知识库聚合根
+     */
+    public static KnowledgeBase create(
+            String kbId,
+            String workspaceId,
+            String name,
+            String description,
+            KnowledgeBaseStatus status,
+            Instant now) {
         // 创建时 createdAt 与 updatedAt 设为同一时间
-        return new KnowledgeBase(kbId, name, description, status, now, now);
+        return new KnowledgeBase(kbId, workspaceId, name, description, status, now, now);
     }
 
     /**
@@ -152,6 +208,7 @@ public record KnowledgeBase(
         // 保留 kbId 和 createdAt 不变，仅刷新 updatedAt
         return new KnowledgeBase(
                 kbId,               // 标识不变
+                workspaceId,        // 工作区不变
                 nextName,           // 新名称（已由应用层规整化）
                 nextDescription,    // 新描述（已由应用层规整化）
                 nextStatus,         // 新状态（已由应用层解析）

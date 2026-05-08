@@ -11,6 +11,7 @@ import io.github.spike.myai.knowledge.domain.port.KnowledgeBaseRepository;
 import io.github.spike.myai.qa.domain.model.RetrievedChunk;
 import io.github.spike.myai.qa.domain.port.AnswerGenerationPort;
 import io.github.spike.myai.qa.domain.port.ChunkRetrievalPort;
+import io.github.spike.myai.shared.workspace.WorkspaceConstants;
 import java.util.List;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
@@ -180,7 +181,7 @@ public class AskQuestionApplicationService implements AskQuestionUseCase {
      */
     private void validateKnowledgeBase(String kbId) {
         // 1. 查找知识库，不存在则快速失败
-        var knowledgeBase = knowledgeBaseRepository.findByKbId(kbId)
+        var knowledgeBase = knowledgeBaseRepository.findByKbId(WorkspaceConstants.DEFAULT_WORKSPACE_ID, kbId)
                 .orElseThrow(() -> new KnowledgeBaseNotFoundException("knowledge base not found: " + kbId));
 
         // 2. 状态校验：仅 ACTIVE 状态允许问答

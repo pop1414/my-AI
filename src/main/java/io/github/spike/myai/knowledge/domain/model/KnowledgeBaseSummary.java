@@ -1,5 +1,7 @@
 package io.github.spike.myai.knowledge.domain.model;
 
+import io.github.spike.myai.shared.workspace.WorkspaceConstants;
+
 /**
  * 知识库列表摘要视图（读模型 / Read Model）。
  *
@@ -22,6 +24,7 @@ package io.github.spike.myai.knowledge.domain.model;
  * </table>
  *
  * @param kbId                 知识库业务键
+ * @param workspaceId          所属工作区标识（当前固定为 {@code "default"}）
  * @param name                 展示名称
  * @param description          描述信息
  * @param status               当前生命周期状态
@@ -31,8 +34,30 @@ package io.github.spike.myai.knowledge.domain.model;
  */
 public record KnowledgeBaseSummary(
         String kbId,
+        String workspaceId,
         String name,
         String description,
         KnowledgeBaseStatus status,
         long indexedDocumentCount) {
+
+    /**
+     * 便利构造器：自动填充默认工作区标识。
+     *
+     * <p>当前为单工作区模式，调用方无需显式传递 {@code workspaceId}，
+     * 该构造器自动使用 {@link WorkspaceConstants#DEFAULT_WORKSPACE_ID}。
+     *
+     * @param kbId                 知识库业务键
+     * @param name                 展示名称
+     * @param description          描述信息
+     * @param status               当前生命周期状态
+     * @param indexedDocumentCount 已索引文档数量
+     */
+    public KnowledgeBaseSummary(
+            String kbId,
+            String name,
+            String description,
+            KnowledgeBaseStatus status,
+            long indexedDocumentCount) {
+        this(kbId, WorkspaceConstants.DEFAULT_WORKSPACE_ID, name, description, status, indexedDocumentCount);
+    }
 }
