@@ -49,6 +49,19 @@
 > `Flyway` 已把 `knowledge_bases.workspace_id`、`ingest_documents.workspace_id` 设为 `NOT NULL`，  
 > 但应用层旧代码仍未显式传递工作区，导致创建和读写链路与新 schema 约束不一致。
 
+### 2.3 已完成：权限 grant 与审计表 schema 落地
+
+在默认工作区显式化之后，已继续补齐阶段二第 1 步剩余数据库对象：
+
+- 新增 `knowledge_base_grants`，承载知识库级授权角色
+- 新增 `document_grants`，承载文档级允许/拒绝覆盖
+- 新增 `audit_events`，承载后续登录、授权、成员变更等审计事件
+- 补充 `(workspace_id, kb_id)` 与 `(workspace_id, document_id)` 组合唯一索引，支撑 grant 表复合外键
+- 通过后续迁移将 grant 表授权主体对齐到 `(workspace_id, user_id)` membership，避免授权脱离工作区成员关系独立存在
+- 将 `ingest_documents.workspace_id` 纳入 `IngestSchemaVerifier` 启动关键列校验
+
+当前阶段只完成 schema 前置建设，不接入认证、授权判断或审计写入业务逻辑。
+
 ## 3. 本次会话新增的关键代码点
 
 ### 3.1 新增工作区常量入口
@@ -116,7 +129,7 @@
 
 ## 4. 已完成验证
 
-本次会话已执行并通过：
+本阶段已执行并通过：
 
 - 后端测试：`.\\mvnw.cmd -q test`
 
@@ -124,18 +137,26 @@
 
 - 本次默认工作区显式化改造未破坏现有后端主链路
 - `Flyway + schema-validation + IngestSchemaVerifier` 可以在当前工作区正常共存
+- `V2__add_authorization_grants_and_audit_tables.sql` 与 `V3__align_grants_with_workspace_memberships.sql` 已随 Spring Boot 测试启动完成本地迁移验证
 
 ## 5. 当前剩余缺口
 
 当前分支虽然已经把“数据库强约束”和“运行时代码显式字段”对齐，但还不能视为阶段二整体完成。
 
-### 5.1 仍未完成的数据库对象
+### 5.1 数据库对象状态
 
-按阶段二计划，以下表仍未落地：
+按阶段二计划，权限主数据相关表已完成首批 schema 落地：
 
+- `workspaces`
+- `users`
+- `local_credentials`
+- `workspace_memberships`
 - `knowledge_base_grants`
 - `document_grants`
 - `audit_events`
+- `login_lock_states`
+
+当前剩余不是“缺表”，而是这些表尚未接入认证、授权服务、审计写入和管理接口。
 
 ### 5.2 仍未完成的认证与授权基线
 
@@ -214,18 +235,19 @@
 
 ## 7. 下一步建议
 
-建议继续留在当前分支，把“阶段二第 1 步剩余数据库对象”收完，再考虑切到认证分支。
+建议当前 `feature/auth-flyway-schema` 分支在完成提交与审阅后收口，然后切入认证基线分支。
 
 推荐顺序：
 
-1. 补齐 `knowledge_base_grants`、`document_grants`、`audit_events` 的 Flyway 迁移
-2. 明确这些表在当前阶段是否只落 schema，不接业务逻辑
-3. 确认当前分支收口后，再切下一分支进入认证基线
+1. 提交当前 schema 与文档收口改动
+2. 从当前稳定点切出 `feature/auth-security-baseline`
+3. 在新分支优先完成后端认证基线，不进入前端页面编码
+4. 后端 `login/logout/me`、`401/403`、CSRF Header 语义稳定后，再安排前端接入
 
-如果当前分支确认收口，下一条分支建议命名：
+下一条分支建议命名：
 
 - `feature/auth-security-baseline`
 
 ## 8. 一句话交接
 
-**当前 `feature/auth-flyway-schema` 分支已经完成 Flyway 接管与默认工作区显式化收口，数据库约束与运行时代码边界已基本对齐；但认证、授权、grant 表与审计能力仍未开始，后续应继续在“阶段二第 1 步剩余 schema”或下一分支“认证基线”上推进。**
+**当前 `feature/auth-flyway-schema` 分支已经完成 Flyway 接管、默认工作区显式化、grant 表与审计表 schema 前置收口；后续应在 `feature/auth-security-baseline` 分支进入 Spring Security、Session 登录、CSRF 基线与登录锁定等后端认证能力建设，前端暂不编码。**
