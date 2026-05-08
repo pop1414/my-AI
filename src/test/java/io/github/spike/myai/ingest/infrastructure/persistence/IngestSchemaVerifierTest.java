@@ -24,7 +24,6 @@ class IngestSchemaVerifierTest {
     void run_shouldPass_whenSchemaValid() {
         JdbcTemplate jdbcTemplate = Mockito.mock(JdbcTemplate.class);
         IngestProperties properties = new IngestProperties();
-        JdbcDocumentRepository repository = Mockito.mock(JdbcDocumentRepository.class);
 
         when(jdbcTemplate.queryForList(anyString(), eq("ingest_documents")))
                 .thenReturn(requiredColumns());
@@ -41,7 +40,7 @@ class IngestSchemaVerifierTest {
                         eq("uk_ingest_documents_kb_file_hash")))
                 .thenReturn("((file_hash IS NOT NULL) AND (status <> 'DELETED'::text))");
 
-        IngestSchemaVerifier verifier = new IngestSchemaVerifier(jdbcTemplate, properties, repository);
+        IngestSchemaVerifier verifier = new IngestSchemaVerifier(jdbcTemplate, properties);
         assertDoesNotThrow(() -> verifier.run(null));
     }
 
@@ -50,11 +49,10 @@ class IngestSchemaVerifierTest {
     void run_shouldFail_whenMissingColumn() {
         JdbcTemplate jdbcTemplate = Mockito.mock(JdbcTemplate.class);
         IngestProperties properties = new IngestProperties();
-        JdbcDocumentRepository repository = Mockito.mock(JdbcDocumentRepository.class);
         when(jdbcTemplate.queryForList(anyString(), eq("ingest_documents")))
                 .thenReturn(requiredColumnsWithoutStatus());
 
-        IngestSchemaVerifier verifier = new IngestSchemaVerifier(jdbcTemplate, properties, repository);
+        IngestSchemaVerifier verifier = new IngestSchemaVerifier(jdbcTemplate, properties);
         assertThrows(IllegalStateException.class, () -> verifier.run(null));
     }
 
@@ -63,7 +61,6 @@ class IngestSchemaVerifierTest {
     void run_shouldFail_whenMissingIndex() {
         JdbcTemplate jdbcTemplate = Mockito.mock(JdbcTemplate.class);
         IngestProperties properties = new IngestProperties();
-        JdbcDocumentRepository repository = Mockito.mock(JdbcDocumentRepository.class);
         when(jdbcTemplate.queryForList(anyString(), eq("ingest_documents")))
                 .thenReturn(requiredColumns());
         when(jdbcTemplate.query(
@@ -73,7 +70,7 @@ class IngestSchemaVerifierTest {
                         eq("uk_ingest_documents_kb_file_hash")))
                 .thenReturn(null);
 
-        IngestSchemaVerifier verifier = new IngestSchemaVerifier(jdbcTemplate, properties, repository);
+        IngestSchemaVerifier verifier = new IngestSchemaVerifier(jdbcTemplate, properties);
         assertThrows(IllegalStateException.class, () -> verifier.run(null));
     }
 
@@ -82,7 +79,6 @@ class IngestSchemaVerifierTest {
     void run_shouldFail_whenIndexPredicateMismatch() {
         JdbcTemplate jdbcTemplate = Mockito.mock(JdbcTemplate.class);
         IngestProperties properties = new IngestProperties();
-        JdbcDocumentRepository repository = Mockito.mock(JdbcDocumentRepository.class);
         when(jdbcTemplate.queryForList(anyString(), eq("ingest_documents")))
                 .thenReturn(requiredColumns());
         when(jdbcTemplate.query(
@@ -98,7 +94,7 @@ class IngestSchemaVerifierTest {
                         eq("uk_ingest_documents_kb_file_hash")))
                 .thenReturn("(file_hash IS NOT NULL)");
 
-        IngestSchemaVerifier verifier = new IngestSchemaVerifier(jdbcTemplate, properties, repository);
+        IngestSchemaVerifier verifier = new IngestSchemaVerifier(jdbcTemplate, properties);
         assertThrows(IllegalStateException.class, () -> verifier.run(null));
     }
 
@@ -108,8 +104,7 @@ class IngestSchemaVerifierTest {
         JdbcTemplate jdbcTemplate = Mockito.mock(JdbcTemplate.class);
         IngestProperties properties = new IngestProperties();
         properties.getSchemaCheck().setEnabled(false);
-        JdbcDocumentRepository repository = Mockito.mock(JdbcDocumentRepository.class);
-        IngestSchemaVerifier verifier = new IngestSchemaVerifier(jdbcTemplate, properties, repository);
+        IngestSchemaVerifier verifier = new IngestSchemaVerifier(jdbcTemplate, properties);
         assertDoesNotThrow(() -> verifier.run(null));
     }
 

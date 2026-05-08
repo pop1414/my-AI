@@ -17,88 +17,11 @@ import org.springframework.stereotype.Repository;
  * <p>设计说明：
  * <ul>
  *     <li>使用 JdbcTemplate 实现最小可读、可控的 SQL 访问。</li>
- *     <li>在仓储初始化时自动建表，降低本地开发门槛。</li>
  *     <li>采用 UPSERT（ON CONFLICT）保证 save 可用于新增和状态更新。</li>
  * </ul>
  */
 @Repository
 public class JdbcDocumentRepository implements DocumentRepository {
-
-    /**
-     * 文档主表表名。
-     */
-    private static final String TABLE_NAME = "ingest_documents";
-
-    /**
-     * 基础建表 DDL。
-     * 包含主键、知识库关联、文件元数据、状态机控制字段、重试机制字段以及版本控制字段。
-     */
-    private static final String INIT_SQL = """
-            CREATE TABLE IF NOT EXISTS ingest_documents (
-                document_id VARCHAR(64) PRIMARY KEY,
-                kb_id VARCHAR(128) NOT NULL,
-                file_hash VARCHAR(64),
-                filename VARCHAR(512),
-                file_size BIGINT NOT NULL,
-                status VARCHAR(32) NOT NULL,
-                failure_reason TEXT,
-                retry_count INT NOT NULL DEFAULT 0,
-                retry_max INT NOT NULL DEFAULT 3,
-                next_retry_at TIMESTAMPTZ,
-                last_error_code VARCHAR(64),
-                last_error_message TEXT,
-                last_error_at TIMESTAMPTZ,
-                reprocess_count INT NOT NULL DEFAULT 0,
-                reprocess_requested_at TIMESTAMPTZ,
-                split_version VARCHAR(32) NOT NULL DEFAULT 'v1',
-                created_at TIMESTAMPTZ NOT NULL,
-                updated_at TIMESTAMPTZ NOT NULL
-            );
-            """;
-
-    /**
-     * 为文件内容哈希增加字段（用于去重和秒传判断）。
-     */
-    private static final String ADD_FILE_HASH_COLUMN_SQL = """
-            ALTER TABLE ingest_documents
-            ADD COLUMN IF NOT EXISTS file_hash VARCHAR(64)
-            """;
-
-    /**
-     * 兼容性升级：为老版本数据库补齐重试相关的持久化列。
-     */
-    private static final String ADD_RETRY_COLUMNS_SQL = """
-            ALTER TABLE ingest_documents
-            ADD COLUMN IF NOT EXISTS retry_count INT NOT NULL DEFAULT 0,
-            ADD COLUMN IF NOT EXISTS retry_max INT NOT NULL DEFAULT 3,
-            ADD COLUMN IF NOT EXISTS next_retry_at TIMESTAMPTZ,
-            ADD COLUMN IF NOT EXISTS last_error_code VARCHAR(64),
-            ADD COLUMN IF NOT EXISTS last_error_message TEXT,
-            ADD COLUMN IF NOT EXISTS last_error_at TIMESTAMPTZ
-            """;
-
-    /**
-     * 兼容性升级：为老版本数据库补齐重处理计数及分块策略版本字段。
-     */
-    private static final String ADD_REPROCESS_COLUMNS_SQL = """
-            ALTER TABLE ingest_documents
-            ADD COLUMN IF NOT EXISTS reprocess_count INT NOT NULL DEFAULT 0,
-            ADD COLUMN IF NOT EXISTS reprocess_requested_at TIMESTAMPTZ,
-            ADD COLUMN IF NOT EXISTS split_version VARCHAR(32) NOT NULL DEFAULT 'v1'
-            """;
-    private static final String DROP_UNIQUE_INDEX_SQL = """
-            DROP INDEX IF EXISTS uk_ingest_documents_kb_file_hash
-            """;
-
-    /**
-     * 创建唯一索引。
-     * 约束同一知识库（kb_id）下文件内容的唯一性，实现业务层面的上传幂等。
-     */
-    private static final String CREATE_UNIQUE_INDEX_SQL = """
-            CREATE UNIQUE INDEX IF NOT EXISTS uk_ingest_documents_kb_file_hash
-            ON ingest_documents (kb_id, file_hash)
-            WHERE file_hash IS NOT NULL AND status <> 'DELETED'
-            """;
 
     /**
      * UPSERT 逻辑：存在即更新，不存在即插入。
@@ -298,17 +221,12 @@ public class JdbcDocumentRepository implements DocumentRepository {
     private final JdbcTemplate jdbcTemplate;
 
     /**
-     * 构造函数：注入 JdbcTemplate 并执行架构自愈（建表及字段补齐）。
+     * 构造函数：注入 JdbcTemplate。
+     *
+     * <p>表结构由 Flyway 统一维护，仓储本身不再承担建表和补字段职责。
      */
     public JdbcDocumentRepository(JdbcTemplate jdbcTemplate) {
         this.jdbcTemplate = jdbcTemplate;
-        // 依次执行 DDL 语句以确保数据库 Schema 与代码模型版本同步。
-        this.jdbcTemplate.execute(INIT_SQL);
-        this.jdbcTemplate.execute(ADD_FILE_HASH_COLUMN_SQL);
-        this.jdbcTemplate.execute(ADD_RETRY_COLUMNS_SQL);
-        this.jdbcTemplate.execute(ADD_REPROCESS_COLUMNS_SQL);
-        this.jdbcTemplate.execute(DROP_UNIQUE_INDEX_SQL);
-        this.jdbcTemplate.execute(CREATE_UNIQUE_INDEX_SQL);
     }
 
     /**

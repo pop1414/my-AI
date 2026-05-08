@@ -5,7 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -26,15 +26,13 @@ import org.springframework.jdbc.core.RowMapper;
 class JdbcDocumentRepositoryTest {
 
     @Test
-    @DisplayName("构造初始化应替换唯一索引并保留 DELETED 过滤策略")
-    void constructor_shouldRecreateUniqueIndexWithDeletedFilter() {
+    @DisplayName("构造初始化不应再执行隐式 DDL")
+    void constructor_shouldNotExecuteImplicitDdl() {
         JdbcTemplate jdbcTemplate = Mockito.mock(JdbcTemplate.class);
 
         new JdbcDocumentRepository(jdbcTemplate);
 
-        verify(jdbcTemplate, atLeastOnce()).execute(contains("DROP INDEX IF EXISTS uk_ingest_documents_kb_file_hash"));
-        verify(jdbcTemplate, atLeastOnce())
-                .execute(contains("WHERE file_hash IS NOT NULL AND status <> 'DELETED'"));
+        verify(jdbcTemplate, never()).execute(any(String.class));
     }
 
     @Test

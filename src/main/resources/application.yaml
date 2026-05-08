@@ -9,6 +9,10 @@ spring:
     url: ${PGVECTOR_DATASOURCE_URL:jdbc:postgresql://localhost:5432/myai}
     username: ${PGVECTOR_DATASOURCE_USERNAME:admin}
     password: ${PGVECTOR_DATASOURCE_PASSWORD:admin}
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+    baseline-version: 0
   ai:
     dashscope:
       # 通过环境变量注入，避免把密钥写入仓库
@@ -21,8 +25,8 @@ spring:
           model: ${DASHSCOPE_EMBEDDING_MODEL:text-embedding-v4}
     vectorstore:
       pgvector:
-        # Spring AI 启动时会自动在 PG 中创建 vector 插件和相关的数据表
-        initialize-schema: true
+        # 表结构由 Flyway 统一管理，避免与应用启动时的自动建表逻辑冲突
+        initialize-schema: false
         # 自动校验表结构
         schema-validation: true
         schema-name: public
