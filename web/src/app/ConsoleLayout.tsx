@@ -17,6 +17,7 @@ const { Title, Text } = Typography;
 type MenuItem = Required<MenuProps>["items"][number];
 
 const menuItems: MenuItem[] = [
+	{ key: "/ingest/documents", icon: <FileTextOutlined />, label: "文档列表" },
 	{ key: "/ingest/upload", icon: <UploadOutlined />, label: "文档上传" },
 	{ key: "/ingest/status", icon: <FileSyncOutlined />, label: "状态查询" },
 	{
@@ -32,7 +33,22 @@ const menuItems: MenuItem[] = [
 ];
 
 function resolveTitle(pathname: string): string {
+	if (pathname.startsWith("/ingest/documents/")) {
+		const suffix = pathname.split("/").slice(3).join("/");
+		const map: Record<string, string> = {
+			status: "文档状态查询",
+			"chunks-preview": "文档分块预览",
+			reprocess: "文档重处理",
+			delete: "删除文档资产",
+		};
+		// 提取纯操作名（去掉 documentId 段）
+		const action = suffix.includes("/")
+			? suffix.split("/").slice(1).join("/")
+			: suffix;
+		return map[action] ?? "文档详情";
+	}
 	const map: Record<string, string> = {
+		"/ingest/documents": "文档列表与管理台",
 		"/ingest/upload": "文档上传受理",
 		"/ingest/status": "文档状态查询",
 		"/ingest/chunks-preview": "文档分块预览",
@@ -42,6 +58,14 @@ function resolveTitle(pathname: string): string {
 		"/qa": "问答控制台",
 	};
 	return map[pathname] ?? "Ingest 控制台";
+}
+
+function resolveMenuSelectedKey(pathname: string): string {
+	// 所有 /ingest/documents/... 嵌套路由都高亮"文档列表"
+	if (pathname.startsWith("/ingest/documents/")) {
+		return "/ingest/documents";
+	}
+	return pathname;
 }
 
 export function ConsoleLayout() {
@@ -55,7 +79,7 @@ export function ConsoleLayout() {
 				<Menu
 					theme="dark"
 					mode="inline"
-					selectedKeys={[location.pathname]}
+					selectedKeys={[resolveMenuSelectedKey(location.pathname)]}
 					items={menuItems}
 					onClick={({ key }) => navigate(key)}
 				/>
