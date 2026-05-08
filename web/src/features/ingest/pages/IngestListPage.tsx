@@ -37,8 +37,6 @@ const filterSchema = z.object({
 });
 
 const DOCUMENT_STATUSES = [
-	"ACCEPTED",
-	"UPLOADED",
 	"INGESTING",
 	"INDEXED",
 	"FAILED",
@@ -120,13 +118,14 @@ export function IngestListPage() {
 
 	const knowledgeBaseOptions = useMemo(
 		() =>
-			(knowledgeQuery.data ?? []).map((item) => ({
-				label: `${item.name} (${item.id})`,
-				value: item.id,
-			})),
+			(knowledgeQuery.data ?? [])
+				.filter((item) => item.status === "ACTIVE")
+				.map((item) => ({
+					label: `${item.name} (${item.id})`,
+					value: item.id,
+				})),
 		[knowledgeQuery.data],
 	);
-
 	const onSubmit = () => {
 		const values = filterSchema.parse(form.getFieldsValue());
 		setFilters(values);
@@ -207,71 +206,69 @@ export function IngestListPage() {
 			key: "action",
 			width: 280,
 			fixed: "right",
-			render: (_, record) => (
-				<Space size="small" wrap>
-					<Tooltip title="查看状态">
-						<Button
-							size="small"
-							icon={<SearchOutlined />}
-							onClick={() => {
-								localStorage.setItem(
-									"myai:lastDocumentId",
-									record.documentId,
-								);
-								navigate("/ingest/status");
-							}}
-						/>
-					</Tooltip>
-					<Tooltip title="分块预览">
-						<Button
-							size="small"
-							icon={<FileSearchOutlined />}
-							onClick={() => {
-								localStorage.setItem(
-									"myai:lastDocumentId",
-									record.documentId,
-								);
-								navigate("/ingest/chunks-preview");
-							}}
-						/>
-					</Tooltip>
-					<Tooltip title="重处理">
-						<Button
-							size="small"
-							icon={<FileSyncOutlined />}
-							disabled={
-								record.status === "DELETED" ||
-								record.status === "DELETING"
-							}
-							onClick={() => {
-								localStorage.setItem(
-									"myai:lastDocumentId",
-									record.documentId,
-								);
-								navigate("/ingest/reprocess");
-							}}
-						/>
-					</Tooltip>
-					<Tooltip title="删除">
-						<Button
-							size="small"
-							danger
-							icon={<DeleteOutlined />}
-							disabled={
-								record.status === "DELETED" ||
-								record.status === "DELETING"
-							}
-							onClick={() => {
-								localStorage.setItem(
-									"myai:lastDocumentId",
-									record.documentId,
-								);
-								navigate("/ingest/delete");
-							}}
-						/>
-					</Tooltip>
-				</Space>
-			),
+			render: (_, record) => {
+				const showChunksPreview = record.status === "INDEXED";
+				const showReprocess =
+					record.status === "FAILED" || record.status === "INDEXED";
+				const showDelete =
+					record.status !== "DELETED" && record.status !== "DELETING";
+
+				return (
+					<Space size="small" wrap>
+						<Tooltip title="查看状态">
+							<Button
+								size="small"
+								icon={<SearchOutlined />}
+								onClick={() =>
+									navigate(
+										`/ingest/documents/${encodeURIComponent(record.documentId)}/status`,
+									)
+								}
+							/>
+						</Tooltip>
+						{showChunksPreview && (
+							<Tooltip title="分块预览">
+								<Button
+									size="small"
+									icon={<FileSearchOutlined />}
+									onClick={() =>
+										navigate(
+											`/ingest/documents/${encodeURIComponent(record.documentId)}/chunks-preview`,
+										)
+									}
+								/>
+							</Tooltip>
+						)}
+						{showReprocess && (
+							<Tooltip title="重处理">
+								<Button
+									size="small"
+									icon={<FileSyncOutlined />}
+									onClick={() =>
+										navigate(
+											`/ingest/documents/${encodeURIComponent(record.documentId)}/reprocess`,
+										)
+									}
+								/>
+							</Tooltip>
+						)}
+						{showDelete && (
+							<Tooltip title="删除">
+								<Button
+									size="small"
+									danger
+									icon={<DeleteOutlined />}
+									onClick={() =>
+										navigate(
+											`/ingest/documents/${encodeURIComponent(record.documentId)}/delete`,
+										)
+									}
+								/>
+							</Tooltip>
+						)}
+					</Space>
+				);
+			},
 		},
 	];
 
