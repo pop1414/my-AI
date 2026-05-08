@@ -3,7 +3,7 @@ info:
   title: My-AI API
   version: 0.1.0
   description: |
-    V1.1 接口契约（单用户、知识库主数据化基线）
+    V1.1 接口契约（知识库主数据化 + 文档列表管理基线）
 servers:
   - url: http://localhost:8080
 
@@ -13,6 +13,67 @@ tags:
   - name: qa
 
 paths:
+  /api/v1/documents:
+    get:
+      tags: [ingest]
+      summary: 查询文档分页列表
+      description: |
+        返回文档管理台所需的分页结果；
+        默认按 `createdAt DESC` 排序；
+        当未传 `status` 时，默认排除 `DELETED`。
+      x-stage: implemented
+      parameters:
+        - name: kbId
+          in: query
+          required: false
+          schema:
+            type: string
+          description: 知识库业务键 kb_id；传入不存在值时返回空列表而非 400
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [UPLOADED, INGESTING, INDEXED, FAILED, DELETING, DELETED]
+          description: 不传时默认排除 DELETED；显式传 DELETED 时仅查询已删除文档
+        - name: filename
+          in: query
+          required: false
+          schema:
+            type: string
+            maxLength: 200
+          description: 文件名模糊匹配
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 20
+            minimum: 1
+            maximum: 100
+          description: 每页条数
+        - name: offset
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 0
+            minimum: 0
+          description: 分页偏移量
+      responses:
+        '200':
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentListPageResponse'
+        '400':
+          description: 参数非法
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
   /api/v1/documents/upload:
     post:
       tags: [ingest]
@@ -354,6 +415,47 @@ components:
         status:
           type: string
           example: UPLOADED
+
+    DocumentListPageResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/DocumentListItemResponse'
+        total:
+          type: integer
+          format: int64
+        limit:
+          type: integer
+        offset:
+          type: integer
+
+    DocumentListItemResponse:
+      type: object
+      properties:
+        documentId:
+          type: string
+        kbId:
+          type: string
+        filename:
+          type: string
+        fileSize:
+          type: integer
+          format: int64
+        status:
+          type: string
+          enum: [UPLOADED, INGESTING, INDEXED, FAILED, DELETING, DELETED]
+        failureReason:
+          type: string
+          nullable: true
+          description: 仅 FAILED 状态时返回实际失败原因，其余状态返回 null
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
 
     DocumentChunksPreviewResponse:
       type: object

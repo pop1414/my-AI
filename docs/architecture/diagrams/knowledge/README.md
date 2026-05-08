@@ -1,6 +1,6 @@
 # Knowledge 领域图纸索引
 
-本目录用于描述 `knowledge` 子域（知识库目录与统计视图）的职责边界。
+本目录用于描述 `knowledge` 子域（知识库主数据管理与统计视图）的职责边界。
 
 ## 图纸清单
 - `knowledge-boundary.puml`

@@ -5,14 +5,21 @@
 - 新增知识库主数据表：`knowledge_bases`（自增主键 + 唯一业务键 `kb_id`）
 - 新增知识库创建接口：`POST /api/v1/knowledge-bases`
 - 新增知识库编辑接口：`PATCH /api/v1/knowledge-bases/{kbId}`
+- 新增文档分页列表接口：`GET /api/v1/documents`
+- 新增前端文档列表主入口：`/ingest/documents`
+- 新增文档列表统一跳转链路：状态 / 分块预览 / 重处理 / 删除
 
 ### Changed
 - 知识库列表接口升级为“主数据 + `INDEXED` 统计”视图，保留既有 `id/name/indexedDocumentCount` 字段并新增 `description/status`
 - 上传与问答链路增加知识库存在性/状态校验：显式传入不存在知识库返回 `400`，传入停用知识库返回 `409`
 - 上传页与问答页改为以知识库选择器为主，知识库页升级为可创建、可编辑的管理台
+- 控制台默认落点从上传页切换为文档列表页，旧路由 `/ingest/list` 改为兼容重定向
+- 文档列表页行为与执行计划对齐：URL 路径参数传递 `documentId`、`kbId` 仅展示 `ACTIVE`、状态筛选与按钮显隐规则收紧
+- V1.1 范围调整：原“轻量认证与访问控制”从收口范围中拆出，转为独立的成熟 RAG 权限体系规划
 
 ### Notes
 - 启动迁移会自动补齐 `default` 知识库，并从 `ingest_documents` 回填历史 `kb_id`，避免旧数据升级后失联
+- 当前 `Unreleased` 阶段的重点，已从“补一个轻量权限入口”调整为“先完成 V1.1 管理基础收口，再独立规划权限体系”
 
 ---
 
