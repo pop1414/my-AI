@@ -63,7 +63,7 @@
 - `feature/qa-page`
 - `feature/knowledge-page`
 - `feature/v1-closure`
-- `feature/auth-v1-1`
+- `feature/rag-access-control`
 
 适用场景：
 
@@ -383,7 +383,7 @@ git tag -a course-submission-v1 -m "Course submission version"
 
 ### 后续演进类
 
-- `feature/auth-v1-1`
+- `feature/rag-access-control`
 - `feature/document-list`
 - `feature/kb-management`
 

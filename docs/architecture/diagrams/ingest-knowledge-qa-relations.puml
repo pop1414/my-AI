@@ -20,8 +20,10 @@ rectangle "Ingest Domain\n(文档资产生命周期)" as Ingest {
   usecase "DELETE /api/v1/documents/{id}" as UC_Delete
 }
 
-rectangle "Knowledge Domain\n(只读统计视图)" as Knowledge {
-  usecase "GET /api/v1/knowledge-bases" as UC_KB
+rectangle "Knowledge Domain\n(主数据管理与统计视图)" as Knowledge {
+  usecase "POST /api/v1/knowledge-bases" as UC_KB_Create
+  usecase "GET /api/v1/knowledge-bases" as UC_KB_List
+  usecase "PATCH /api/v1/knowledge-bases/{kbId}" as UC_KB_Update
 }
 
 rectangle "QA Domain\n(检索与回答编排)" as QA {
@@ -29,6 +31,7 @@ rectangle "QA Domain\n(检索与回答编排)" as QA {
 }
 
 database "ingest_documents\n(状态与元数据)" as TableDocs
+database "knowledge_bases\n(知识库主数据)" as TableKB
 database "PGVector\n(文档 chunk 向量)" as VDB
 
 Client --> Ingest
@@ -38,14 +41,15 @@ Client --> QA
 Ingest --> TableDocs : 写入/推进状态
 Ingest --> VDB : 写入/删除向量
 
-Knowledge --> TableDocs : 只读聚合\nstatus = INDEXED
+Knowledge --> TableKB : 读写主数据
+Knowledge --> TableDocs : 聚合 INDEXED 统计
 QA --> VDB : TopK 检索
 QA --> TableDocs : 读取必要元数据
 
 note right of Knowledge
 当前代码口径：
-- 仅统计 INDEXED 文档
-- name 在 V1 暂与 kbId 一致
+- 维护知识库主数据
+- 叠加 INDEXED 文档统计
 end note
 
 note bottom of Ingest
@@ -54,4 +58,3 @@ Knowledge 与 QA 均消费其产物
 end note
 
 @enduml
-

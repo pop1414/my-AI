@@ -22,14 +22,14 @@
 4. [03-architecture.md](./03-architecture.md)：系统分层、子域、图纸入口
 5. [04-api-contract.yaml](./04-api-contract.yaml)：接口契约
 6. [05-release-notes.md](./05-release-notes.md)：版本变化记录与正式发布条目
-7. [runbooks/v1-release-archive.md](./runbooks/v1-release-archive.md)：V1 版本归档记录与冻结范围
-8. [runbooks/v1-1-plan.md](./runbooks/v1-1-plan.md)：V1.1 规划草案与优先级拆解
+7. [runbooks/plans/v1/v1-release-archive.md](./runbooks/plans/v1/v1-release-archive.md)：V1 版本归档记录与冻结范围
+8. [runbooks/plans/v1-1/v1-1-plan.md](./runbooks/plans/v1-1/v1-1-plan.md)：V1.1 规划草案与优先级拆解
 9. [06-ingest-acceptance-closure.md](./06-ingest-acceptance-closure.md)：上传受理闭环
 10. [07-ingest-processing-execution.md](./07-ingest-processing-execution.md)：处理执行闭环
 11. [adr/](./adr/)：关键技术决策和历史留痕
-12. [runbooks/v1-closure-plan.md](./runbooks/v1-closure-plan.md)：V1 收口执行计划（历史记录）
-13. [runbooks/my-ai-document-workflow.md](./runbooks/my-ai-document-workflow.md)：项目文档工作流
-14. [runbooks/my-ai-git-workflow.md](./runbooks/my-ai-git-workflow.md)：项目 Git 工作流
+12. [runbooks/plans/v1/v1-closure-plan.md](./runbooks/plans/v1/v1-closure-plan.md)：V1 收口执行计划（历史记录）
+13. [runbooks/workflows/my-ai-document-workflow.md](./runbooks/workflows/my-ai-document-workflow.md)：项目文档工作流
+14. [runbooks/workflows/my-ai-git-workflow.md](./runbooks/workflows/my-ai-git-workflow.md)：项目 Git 工作流
 
 ## 2. 当前目录职责
 

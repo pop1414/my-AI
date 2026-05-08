@@ -12,11 +12,11 @@
 - 路线图：[docs/02-roadmap.md](./docs/02-roadmap.md)
 - 架构总览：[docs/03-architecture.md](./docs/03-architecture.md)
 - API 契约：[docs/04-api-contract.yaml](./docs/04-api-contract.yaml)
-- V1 收口计划：[docs/runbooks/v1-closure-plan.md](./docs/runbooks/v1-closure-plan.md)
-- V1 版本归档：[docs/runbooks/v1-release-archive.md](./docs/runbooks/v1-release-archive.md)
-- V1.1 规划草案：[docs/runbooks/v1-1-plan.md](./docs/runbooks/v1-1-plan.md)
-- 文档工作流：[docs/runbooks/my-ai-document-workflow.md](./docs/runbooks/my-ai-document-workflow.md)
-- Git 工作流：[docs/runbooks/my-ai-git-workflow.md](./docs/runbooks/my-ai-git-workflow.md)
+- V1 收口计划：[docs/runbooks/plans/v1/v1-closure-plan.md](./docs/runbooks/plans/v1/v1-closure-plan.md)
+- V1 版本归档：[docs/runbooks/plans/v1/v1-release-archive.md](./docs/runbooks/plans/v1/v1-release-archive.md)
+- V1.1 规划草案：[docs/runbooks/plans/v1-1/v1-1-plan.md](./docs/runbooks/plans/v1-1/v1-1-plan.md)
+- 文档工作流：[docs/runbooks/workflows/my-ai-document-workflow.md](./docs/runbooks/workflows/my-ai-document-workflow.md)
+- Git 工作流：[docs/runbooks/workflows/my-ai-git-workflow.md](./docs/runbooks/workflows/my-ai-git-workflow.md)
 - 学习沉淀入口：[docs/learning/README.md](./docs/learning/README.md)
 - 课程交付入口：[deliverables/course/README.md](./deliverables/course/README.md)
 
@@ -34,7 +34,7 @@
 - 历史变化通过 ADR、Roadmap、Release Notes 留痕
 - 课程材料与长期工程文档分开维护，但课程内容主要整理自工程真源
 
-## 1. 当前能力（截至 2026-05-07）
+## 1. 当前能力（截至 2026-05-08，含 V1.1 管理基础收口）
 
 - 上传受理：`POST /api/v1/documents/upload`
     - 返回 `documentId + ACCEPTED`
@@ -56,21 +56,29 @@
     - 结构优先 + 长度兜底
     - 参数：`chunk=500`、`overlap=100`
 - 已实现 API（`ingest`）：
+    - `GET /api/v1/documents`
     - `POST /api/v1/documents/upload`
     - `GET /api/v1/documents/{documentId}/status`
     - `GET /api/v1/documents/{documentId}/chunks/preview`
     - `POST /api/v1/documents/{documentId}/reprocess`
     - `DELETE /api/v1/documents/{documentId}`
 - 已实现 API（knowledge / qa）：
-    - `GET /api/v1/knowledge-bases`（仅统计 `INDEXED`）
+    - `POST /api/v1/knowledge-bases`（创建知识库，服务端生成 `kb_id`）
+    - `GET /api/v1/knowledge-bases`（知识库主数据 + `INDEXED` 统计）
+    - `PATCH /api/v1/knowledge-bases/{kbId}`（编辑 `name/description/status`）
     - `POST /api/v1/qa/ask`（同步返回）
     - 无命中场景：`200 + 兜底回答 + 空 references`
     - `references` 结构：`documentId/chunkIndex/contentPreview`
+    - 上传/问答显式传入不存在知识库时返回 `400`，传入停用知识库时返回 `409`
 
-- 前端控制台（`web/`，截至 2026-05-06）：
+- 前端控制台（`web/`，截至 2026-05-08）：
     - React 19 + TypeScript 6 + Vite 8 + Ant Design 6
-    - 7 个功能页面，按路由懒加载代码拆分
-    - 知识库统计列表 + 单轮问答（answer + references）
+    - 8 个功能页面，按路由懒加载代码拆分
+    - 文档列表页作为默认落点与 `ingest` 管理主入口
+    - 知识库主数据管理（创建、查看、编辑、停用）
+    - 上传页与问答页改为知识库选择器驱动
+    - 单轮问答（answer + references）
+    - 文档列表 → 状态查询 / 分块预览 / 重处理 / 删除 统一管理链路
     - 上传 → 状态查询 → 分块预览 → 重处理 → 删除 完整链路
     - TanStack Query 自动轮询 + 终态检测
     - Zod 运行时接口校验
@@ -87,7 +95,7 @@
 ## 3. 架构分层（DDD-Lite）
 
 - `ingest`：文档资产入库生命周期（受理/处理/重处理/删除）
-- `knowledge`：知识库目录与统计视图（只读聚合）
+- `knowledge`：知识库主数据管理与统计视图
 - `qa`：检索与回答生成编排（同步问答）
 - 各子域统一采用 `interfaces / application / domain / infrastructure` 四层结构
 
@@ -180,7 +188,7 @@ Linux/macOS:
 
 ### 5.5 V1 本地闭环演示
 
-完整闭环：上传 → 入库 → 知识库统计 → 问答，可通过前端控制台或 curl 完成。
+完整闭环：知识库选择 / 文档上传 / 文档管理 / 入库问答，可通过前端控制台或 curl 完成。
 
 **前端方式**（推荐）：
 
@@ -192,10 +200,11 @@ npm run dev
 
 访问 `http://localhost:3000`，按左侧菜单依次操作：
 
-1. 文档上传 → 拖入文件提交
-2. 状态查询 → 等待文档到达 `INDEXED`
-3. 知识库 → 查看 `indexedDocumentCount`，点击"去问答"
-4. 问答 → 输入问题，查看 `answer` 与引用分块
+1. 文档列表 → 作为默认首页浏览文档资产，进入状态 / 预览 / 重处理 / 删除
+2. 文档上传 → 拖入文件提交
+3. 状态查询 → 等待文档到达 `INDEXED`
+4. 知识库 → 可新建/编辑知识库，查看 `indexedDocumentCount`，点击"去问答"
+5. 问答 → 输入问题，查看 `answer` 与引用分块
 
 **curl 方式**：
 
@@ -264,11 +273,24 @@ curl -sS "http://localhost:8080/actuator/metrics/myai.ingest.delete.success.tota
     - `file`：必填
     - `kbId`：可选，默认 `default`
 
-### 6.2 查询状态
+### 6.2 查询文档列表
+
+- `GET /api/v1/documents`
+- 可选参数：
+    - `kbId`
+    - `status`
+    - `filename`
+    - `limit`（默认 20，范围 1~100）
+    - `offset`（默认 0，范围 >= 0）
+- 默认行为：
+    - 按 `createdAt DESC` 返回
+    - 未传 `status` 时默认排除 `DELETED`
+
+### 6.3 查询状态
 
 - `GET /api/v1/documents/{documentId}/status`
 
-### 6.3 分块预览（调试）
+### 6.4 分块预览（调试）
 
 - `GET /api/v1/documents/{documentId}/chunks/preview`
 - 可选参数：
@@ -277,12 +299,12 @@ curl -sS "http://localhost:8080/actuator/metrics/myai.ingest.delete.success.tota
     - `previewChars`（默认 200，范围 20~2000）
 - 用途：验证“向量化前分块文本”是否符合预期
 
-### 6.4 重处理
+### 6.5 重处理
 
 - `POST /api/v1/documents/{documentId}/reprocess`
 - 允许状态：`FAILED` / `INDEXED`（`INGESTING` 返回 `409`）
 
-### 6.5 删除文档资产
+### 6.6 删除文档资产
 
 - `DELETE /api/v1/documents/{documentId}`
 - 删除行为：
@@ -294,15 +316,17 @@ curl -sS "http://localhost:8080/actuator/metrics/myai.ingest.delete.success.tota
     - 文档不存在：`404`
     - `INGESTING/DELETING`：`409`
 
-### 6.6 查询知识库列表
+### 6.7 查询知识库列表
 
 - `GET /api/v1/knowledge-bases`
 - 返回字段：
     - `id`
-    - `name`（V1 与 `id` 一致）
+    - `name`
+    - `description`
+    - `status`
     - `indexedDocumentCount`（统计口径：`status=INDEXED`）
 
-### 6.7 文档问答（同步）
+### 6.8 文档问答（同步）
 
 - `POST /api/v1/qa/ask`
 - 请求字段：
@@ -330,7 +354,7 @@ curl -sS "http://localhost:8080/actuator/metrics/myai.ingest.delete.success.tota
 ## 8. 版本目标
 
 - `V1.0.0`：已于 `2026-05-07` 完成版本归档，形成 ingest / knowledge / qa 最小完整闭环与前端控制台演示链路
-- `V1.1`：规划补齐用户/权限、文档列表与更完整的知识库管理体验
+- `V1.1`：已完成知识库主数据化与文档列表管理收口；原轻量权限项已拆出，转入独立的成熟 RAG 权限体系规划
 - `V2`：增强解析能力与更完整的检索问答链路
 
 ## 9. 前端控制台（web）
@@ -338,6 +362,7 @@ curl -sS "http://localhost:8080/actuator/metrics/myai.ingest.delete.success.tota
 - 前端工程根目录：`web/`
 - 技术栈：React + TypeScript + Vite + React Router + TanStack Query + Ant Design + zod
 - 当前页面范围：
+    - `ingest/documents`
     - `ingest/upload`
     - `ingest/status`
     - `ingest/chunks-preview`
@@ -346,8 +371,8 @@ curl -sS "http://localhost:8080/actuator/metrics/myai.ingest.delete.success.tota
     - `knowledge`
     - `qa`
 - 当前控制台能力：
-    - 文档上传、状态查询、分块预览、重处理、删除
-    - 知识库统计列表与跳转问答
+    - 文档列表、文档上传、状态查询、分块预览、重处理、删除
+    - 知识库主数据管理与跳转问答
     - 单轮问答结果与引用来源展示
 
 启动方式：

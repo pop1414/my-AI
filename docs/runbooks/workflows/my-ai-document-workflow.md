@@ -95,11 +95,11 @@
 
 推荐位置：
 
-- `docs/runbooks/`
+- `docs/runbooks/plans/<version>/`
 
 在 `my-AI` 中的例子：
 
-- `docs/runbooks/v1-closure-plan.md`
+- `docs/runbooks/plans/v1/v1-closure-plan.md`
 
 ### 3.2 事实文档
 

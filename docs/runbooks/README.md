@@ -11,21 +11,29 @@
 
 ## 当前文档
 
-- [v1-closure-plan.md](./v1-closure-plan.md)：当前 V1 闭环收口计划
-- [v1-release-archive.md](./v1-release-archive.md)：V1 版本归档记录与冻结范围
-- [v1-1-plan.md](./v1-1-plan.md)：V1.1 规划草案与拆解建议
-- [my-ai-document-workflow.md](./my-ai-document-workflow.md)：项目文档工作流与更新规则
-- [my-ai-git-workflow.md](./my-ai-git-workflow.md)：项目 Git 工作流与分支策略
+- [plans/README.md](./plans/README.md)：阶段规划、版本收口、版本归档与主题实施方案
+- [workflows/README.md](./workflows/README.md)：长期有效的项目工作流与更新规则
 - [handoffs/](./handoffs/)：按会话沉淀的交接包与阶段状态记录
 
 ## 适合放在这里的文档类型
 
-- 本地启动与联调手册
-- V1 / V1.1 / 某个里程碑的收口计划
-- 会话交接包
-- 演示脚本
-- 排障手册
-- 发布前检查清单
+- `plans/`：V1 / V1.1 / 某个里程碑的收口计划、主题实施方案、版本归档
+- `workflows/`：文档工作流、Git 工作流、未来稳定下来的演示/排障规范
+- `handoffs/`：会话交接包、阶段状态记录
+
+## 当前结构
+
+```text
+docs/runbooks/
+  README.md
+  plans/README.md
+  plans/
+    v1/
+    v1-1/
+  workflows/README.md
+  workflows/
+  handoffs/
+```
 
 ## 使用规则
 
