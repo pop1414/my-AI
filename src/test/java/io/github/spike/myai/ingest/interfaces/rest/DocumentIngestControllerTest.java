@@ -1,5 +1,6 @@
 package io.github.spike.myai.ingest.interfaces.rest;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -80,11 +81,12 @@ class DocumentIngestControllerTest {
                 new DocumentIngestController(
                         acceptUploadUseCase,
                         listDocumentsUseCase,
-                        getDocumentStatusUseCase,
-                        getDocumentChunksPreviewUseCase,
-                        reprocessDocumentUseCase,
-                        deleteDocumentUseCase,
-                        documentSourceStorage);
+                getDocumentStatusUseCase,
+                getDocumentChunksPreviewUseCase,
+                reprocessDocumentUseCase,
+                deleteDocumentUseCase,
+                documentSourceStorage,
+                new ObjectMapper());
         this.mockMvc = MockMvcBuilders.standaloneSetup(controller).build();
     }
 
@@ -211,16 +213,37 @@ class DocumentIngestControllerTest {
     @DisplayName("状态查询命中时，应返回 200 和当前状态")
     void getStatus_shouldReturnStatus_whenDocumentExists() throws Exception {
         when(getDocumentStatusUseCase.handle(any(GetDocumentStatusQuery.class)))
-                .thenReturn(new DocumentStatusResult(new DocumentId("doc-200"), UploadStatus.UPLOADED));
+                .thenReturn(new DocumentStatusResult(
+                        new DocumentId("doc-200"),
+                        UploadStatus.UPLOADED,
+                        null));
 
         mockMvc.perform(get("/api/v1/documents/{documentId}/status", "doc-200"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.documentId").value("doc-200"))
-                .andExpect(jsonPath("$.status").value("UPLOADED"));
+                .andExpect(jsonPath("$.status").value("UPLOADED"))
+                .andExpect(jsonPath("$.processingMetadata").doesNotExist());
 
         ArgumentCaptor<GetDocumentStatusQuery> captor = ArgumentCaptor.forClass(GetDocumentStatusQuery.class);
         verify(getDocumentStatusUseCase).handle(captor.capture());
         org.junit.jupiter.api.Assertions.assertEquals("doc-200", captor.getValue().documentId());
+    }
+
+    @Test
+    @DisplayName("终态状态查询命中时，应返回 processingMetadata 对象")
+    void getStatus_shouldReturnProcessingMetadata_whenTerminalStatusIncludesMetadata() throws Exception {
+        when(getDocumentStatusUseCase.handle(any(GetDocumentStatusQuery.class)))
+                .thenReturn(new DocumentStatusResult(
+                        new DocumentId("doc-201"),
+                        UploadStatus.INDEXED,
+                        "{\"schema_version\":\"v1\",\"stable\":{\"source_file\":\"demo.pdf\"}}"));
+
+        mockMvc.perform(get("/api/v1/documents/{documentId}/status", "doc-201"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.documentId").value("doc-201"))
+                .andExpect(jsonPath("$.status").value("INDEXED"))
+                .andExpect(jsonPath("$.processingMetadata.schema_version").value("v1"))
+                .andExpect(jsonPath("$.processingMetadata.stable.source_file").value("demo.pdf"));
     }
 
     @Test
@@ -295,7 +318,7 @@ class DocumentIngestControllerTest {
     @DisplayName("重处理触发成功时，应返回 200")
     void reprocess_shouldReturnAccepted_whenAllowed() throws Exception {
         when(reprocessDocumentUseCase.handle(any()))
-                .thenReturn(new DocumentStatusResult(new DocumentId("doc-900"), UploadStatus.UPLOADED));
+                .thenReturn(new DocumentStatusResult(new DocumentId("doc-900"), UploadStatus.UPLOADED, null));
 
         mockMvc.perform(post("/api/v1/documents/{documentId}/reprocess", "doc-900"))
                 .andExpect(status().isOk())

@@ -35,11 +35,11 @@ public class JdbcDocumentRepository implements DocumentRepository {
             INSERT INTO ingest_documents
               (document_id, workspace_id, kb_id, file_hash, filename, file_size, status, failure_reason,
                retry_count, retry_max, next_retry_at, last_error_code, last_error_message, last_error_at,
-               reprocess_count, reprocess_requested_at, split_version,
+               reprocess_count, reprocess_requested_at, split_version, processing_metadata,
                created_at, updated_at)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?,
                     ?, ?, ?, ?, ?, ?,
-                    ?, ?, ?,
+                    ?, ?, ?, CAST(? AS JSONB),
                     ?, ?)
             ON CONFLICT (document_id) DO UPDATE SET
               workspace_id = EXCLUDED.workspace_id,
@@ -58,6 +58,7 @@ public class JdbcDocumentRepository implements DocumentRepository {
               reprocess_count = EXCLUDED.reprocess_count,
               reprocess_requested_at = EXCLUDED.reprocess_requested_at,
               split_version = EXCLUDED.split_version,
+              processing_metadata = EXCLUDED.processing_metadata,
               created_at = EXCLUDED.created_at,
               updated_at = EXCLUDED.updated_at
             """;
@@ -68,7 +69,7 @@ public class JdbcDocumentRepository implements DocumentRepository {
     private static final String FIND_BY_ID_SQL = """
             SELECT document_id, workspace_id, kb_id, file_hash, filename, file_size, status, failure_reason,
                    retry_count, retry_max, next_retry_at, last_error_code, last_error_message, last_error_at,
-                   reprocess_count, reprocess_requested_at, split_version,
+                   reprocess_count, reprocess_requested_at, split_version, processing_metadata,
                    created_at, updated_at
             FROM ingest_documents
             WHERE workspace_id = ? AND document_id = ?
@@ -81,7 +82,7 @@ public class JdbcDocumentRepository implements DocumentRepository {
     private static final String FIND_BY_KB_ID_AND_FILE_HASH_SQL = """
             SELECT document_id, workspace_id, kb_id, file_hash, filename, file_size, status, failure_reason,
                    retry_count, retry_max, next_retry_at, last_error_code, last_error_message, last_error_at,
-                   reprocess_count, reprocess_requested_at, split_version,
+                   reprocess_count, reprocess_requested_at, split_version, processing_metadata,
                    created_at, updated_at
             FROM ingest_documents
             WHERE workspace_id = ? AND kb_id = ? AND file_hash = ? AND status <> 'DELETED'
@@ -96,7 +97,7 @@ public class JdbcDocumentRepository implements DocumentRepository {
     private static final String FIND_OLDEST_READY_SQL = """
             SELECT document_id, workspace_id, kb_id, file_hash, filename, file_size, status, failure_reason,
                    retry_count, retry_max, next_retry_at, last_error_code, last_error_message, last_error_at,
-                   reprocess_count, reprocess_requested_at, split_version,
+                   reprocess_count, reprocess_requested_at, split_version, processing_metadata,
                    created_at, updated_at
             FROM ingest_documents
             WHERE workspace_id = ?
@@ -130,6 +131,7 @@ public class JdbcDocumentRepository implements DocumentRepository {
                 last_error_code = NULL,
                 last_error_message = NULL,
                 last_error_at = NULL,
+                processing_metadata = CAST(? AS JSONB),
                 updated_at = ?
             WHERE workspace_id = ? AND document_id = ? AND status = ?
             """;
@@ -142,6 +144,7 @@ public class JdbcDocumentRepository implements DocumentRepository {
             UPDATE ingest_documents
             SET status = 'FAILED',
                 failure_reason = ?,
+                processing_metadata = CAST(? AS JSONB),
                 last_error_code = ?,
                 last_error_message = ?,
                 last_error_at = ?,
@@ -159,6 +162,7 @@ public class JdbcDocumentRepository implements DocumentRepository {
                 failure_reason = NULL,
                 retry_count = ?,
                 next_retry_at = ?,
+                processing_metadata = NULL,
                 last_error_code = ?,
                 last_error_message = ?,
                 last_error_at = ?,
@@ -176,6 +180,7 @@ public class JdbcDocumentRepository implements DocumentRepository {
                 failure_reason = NULL,
                 retry_count = 0,
                 next_retry_at = NULL,
+                processing_metadata = NULL,
                 reprocess_count = reprocess_count + 1,
                 reprocess_requested_at = ?,
                 split_version = ?,
@@ -234,6 +239,7 @@ public class JdbcDocumentRepository implements DocumentRepository {
             rs.getInt("reprocess_count"),
             toInstant(rs.getTimestamp("reprocess_requested_at")),
             rs.getString("split_version"),
+            rs.getString("processing_metadata"),
             toInstant(rs.getTimestamp("created_at")),
             toInstant(rs.getTimestamp("updated_at")));
 
@@ -274,6 +280,7 @@ public class JdbcDocumentRepository implements DocumentRepository {
                 document.reprocessCount(),
                 toTimestamp(document.reprocessRequestedAt()),
                 document.splitVersion(),
+                document.processingMetadata(),
                 Timestamp.from(document.createdAt()),
                 Timestamp.from(document.updatedAt()));
     }
@@ -338,10 +345,16 @@ public class JdbcDocumentRepository implements DocumentRepository {
     }
 
     @Override
-    public boolean markIndexed(String workspaceId, DocumentId documentId, UploadStatus expectedStatus, Instant updatedAt) {
-        // 成功收口：重试信息一并清理，避免污染后续查询。
+    public boolean markIndexed(
+            String workspaceId,
+            DocumentId documentId,
+            UploadStatus expectedStatus,
+            String processingMetadata,
+            Instant updatedAt) {
+        // 成功收口：重试信息一并清理，避免污染后续查询；processing_metadata 在成功时可选择性回填。
         int updatedRows = jdbcTemplate.update(
                 MARK_INDEXED_SQL,
+                processingMetadata,
                 Timestamp.from(updatedAt),
                 workspaceId,
                 documentId.value(),
@@ -355,14 +368,16 @@ public class JdbcDocumentRepository implements DocumentRepository {
             DocumentId documentId,
             UploadStatus expectedStatus,
             String failureReason,
+            String processingMetadata,
             String errorCode,
             String errorMessage,
             Instant errorAt,
             Instant updatedAt) {
-        // 失败收口：保留错误信息便于排障。
+        // 失败收口：保留错误信息便于排障；processing_metadata 在失败时也可选择性记录部分产物。
         int updatedRows = jdbcTemplate.update(
                 MARK_FAILED_SQL,
                 failureReason,
+                processingMetadata,
                 errorCode,
                 errorMessage,
                 toTimestamp(errorAt),
@@ -385,6 +400,7 @@ public class JdbcDocumentRepository implements DocumentRepository {
             Instant errorAt,
             Instant updatedAt) {
         // 瞬时失败：状态回到 UPLOADED，等待下一次抢占。
+        // 同时清空 processing_metadata，避免旧元数据残留到下一次处理周期。
         int updatedRows = jdbcTemplate.update(
                 MARK_RETRY_SQL,
                 retryCount,
@@ -406,6 +422,7 @@ public class JdbcDocumentRepository implements DocumentRepository {
             UploadStatus expectedStatus,
             String newSplitVersion,
             Instant requestedAt) {
+        // 清空 processing_metadata，因为重处理会重新走完整链路并产出新的元数据。
         // 进入重处理队列：重置重试计数，并更新 splitVersion。
         int updatedRows = jdbcTemplate.update(
                 REQUEST_REPROCESS_SQL,

@@ -6,9 +6,11 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import io.github.spike.myai.ingest.domain.model.Document;
 import io.github.spike.myai.ingest.domain.model.DocumentId;
 import io.github.spike.myai.ingest.domain.model.UploadStatus;
 import io.github.spike.myai.shared.workspace.WorkspaceConstants;
@@ -34,6 +36,49 @@ class JdbcDocumentRepositoryTest {
         new JdbcDocumentRepository(jdbcTemplate);
 
         verify(jdbcTemplate, never()).execute(any(String.class));
+    }
+
+    @Test
+    @DisplayName("save 与 markIndexed 应透传 processing_metadata 字段")
+    void processingMetadataMethods_shouldIncludeJsonbColumn() {
+        JdbcTemplate jdbcTemplate = Mockito.mock(JdbcTemplate.class);
+        JdbcDocumentRepository repository = new JdbcDocumentRepository(jdbcTemplate);
+        Instant now = Instant.now();
+        Document document = new Document(
+                new DocumentId("doc-meta-1"),
+                WorkspaceConstants.DEFAULT_WORKSPACE_ID,
+                "kb-1",
+                "hash-meta-1",
+                "demo.pdf",
+                256L,
+                UploadStatus.INDEXED,
+                null,
+                0,
+                3,
+                null,
+                null,
+                null,
+                null,
+                0,
+                null,
+                "v1",
+                "{\"schema_version\":\"v1\"}",
+                now,
+                now);
+
+        repository.save(document);
+        repository.markIndexed(
+                WorkspaceConstants.DEFAULT_WORKSPACE_ID,
+                new DocumentId("doc-meta-1"),
+                UploadStatus.INGESTING,
+                "{\"schema_version\":\"v1\"}",
+                now);
+
+        ArgumentCaptor<String> sqlCaptor = ArgumentCaptor.forClass(String.class);
+        verify(jdbcTemplate, times(2)).update(sqlCaptor.capture(), any(Object[].class));
+        assertTrue(sqlCaptor.getAllValues().get(0).contains("processing_metadata"));
+        assertTrue(sqlCaptor.getAllValues().get(0).contains("CAST(? AS JSONB)"));
+        assertTrue(sqlCaptor.getAllValues().get(1).contains("processing_metadata = CAST(? AS JSONB)"));
     }
 
     @Test

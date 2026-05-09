@@ -9,6 +9,7 @@ import io.github.spike.myai.ingest.application.result.DocumentStatusResult;
 import io.github.spike.myai.ingest.application.usecase.GetDocumentStatusUseCase;
 import io.github.spike.myai.ingest.domain.model.Document;
 import io.github.spike.myai.ingest.domain.model.DocumentId;
+import io.github.spike.myai.ingest.domain.model.UploadStatus;
 import io.github.spike.myai.ingest.domain.port.DocumentRepository;
 import org.springframework.stereotype.Service;
 
@@ -25,11 +26,11 @@ import org.springframework.stereotype.Service;
  *   <li>接收查询参数并构造领域值对象 {@link DocumentId}；</li>
  *   <li>通过仓储端口查询文档聚合根；</li>
  *   <li>校验当前用户对该文档的读取权限；</li>
- *   <li>将领域对象映射为轻量级返回模型（仅含 documentId + status）。</li>
+ *   <li>将领域对象映射为轻量级返回模型（含 documentId + status + processingMetadata）。</li>
  * </ol>
  *
  * <p>设计说明：该服务为只读操作，不涉及事务管理。
- * 返回模型仅包含状态信息，不暴露文档内容或分块数据。
+ * 返回模型仅包含状态信息与终态处理元数据，不暴露文档内容或分块数据。
  *
  * @author Spike
  * @since 1.0.0
@@ -91,7 +92,24 @@ public class GetDocumentStatusApplicationService implements GetDocumentStatusUse
                 .orElseThrow(() -> new DocumentNotFoundException("document not found: " + documentId.value()));
         // 权限校验：三级判定（工作区 → 文档 → 知识库回退），权不足时抛出 AccessDeniedException
         authorizationService.requireCanReadDocument(currentUser, documentId.value(), document.kbId());
-        // 返回轻量级状态结果：仅含 documentId + status，不暴露文档内容
-        return new DocumentStatusResult(document.documentId(), document.status());
+        // processing_metadata 只在终态暴露，避免处理中状态出现半成品视图。
+        return new DocumentStatusResult(
+                document.documentId(),
+                document.status(),
+                shouldExposeProcessingMetadata(document.status()) ? document.processingMetadata() : null);
+    }
+
+    /**
+     * 判断当前文档状态是否允许对外暴露 processing_metadata。
+     *
+     * <p>设计原则：仅终态（{@link UploadStatus#INDEXED} 或 {@link UploadStatus#FAILED}）
+     * 允许透传处理结果元数据，避免处理中状态（UPLOADED / INGESTING）
+     * 出现半成品视图，确保前端展示的数据是完整的。
+     *
+     * @param status 文档当前处理状态
+     * @return 是否允许暴露 processing_metadata
+     */
+    private static boolean shouldExposeProcessingMetadata(UploadStatus status) {
+        return status == UploadStatus.INDEXED || status == UploadStatus.FAILED;
     }
 }

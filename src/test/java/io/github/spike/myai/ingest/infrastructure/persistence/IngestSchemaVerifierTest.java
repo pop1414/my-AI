@@ -119,6 +119,7 @@ class IngestSchemaVerifierTest {
                 row("retry_count"),
                 row("retry_max"),
                 row("split_version"),
+                row("processing_metadata"),
                 row("created_at"),
                 row("updated_at"));
     }
@@ -133,6 +134,7 @@ class IngestSchemaVerifierTest {
                 row("retry_count"),
                 row("retry_max"),
                 row("split_version"),
+                row("processing_metadata"),
                 row("created_at"),
                 row("updated_at"));
     }

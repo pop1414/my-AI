@@ -161,6 +161,10 @@ String markdown = FlexmarkHtmlConverter.builder().build().convert(cleanHtml);
 - `primary_title` / `title_outline_sample` 表示文档级标题提取结果，不等价于分块节点上的标题路径
 - `best_effort` 仅在算法稳定产出时回填，不作为状态推进前置条件
 
+> 进度快照（2026-05-09）：
+> `processing_metadata` 的数据库字段、schema 自检以及状态接口终态返回基础能力已落地；
+> `cleaned.md` 主链产物与元数据自动回填逻辑仍待后续阶段继续实现。
+
 ---
 
 #### 3.5 模型生态与 Token 对齐（前瞻预留）

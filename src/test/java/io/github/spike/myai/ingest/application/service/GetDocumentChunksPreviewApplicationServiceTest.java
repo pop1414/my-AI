@@ -65,6 +65,7 @@ class GetDocumentChunksPreviewApplicationServiceTest {
                 0,
                 null,
                 "v1",
+                null,
                 Instant.now(),
                 Instant.now());
         when(documentRepository.findById(anyString(), eq(documentId))).thenReturn(Optional.of(doc));
