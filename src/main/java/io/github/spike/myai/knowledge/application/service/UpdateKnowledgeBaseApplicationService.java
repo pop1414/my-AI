@@ -1,12 +1,14 @@
 package io.github.spike.myai.knowledge.application.service;
 
+import io.github.spike.myai.auth.application.context.CurrentUser;
+import io.github.spike.myai.auth.application.context.CurrentUserProvider;
+import io.github.spike.myai.auth.application.service.AuthorizationService;
 import io.github.spike.myai.knowledge.application.command.UpdateKnowledgeBaseCommand;
 import io.github.spike.myai.knowledge.application.exception.KnowledgeBaseNotFoundException;
 import io.github.spike.myai.knowledge.application.result.KnowledgeBaseResult;
 import io.github.spike.myai.knowledge.application.usecase.UpdateKnowledgeBaseUseCase;
 import io.github.spike.myai.knowledge.domain.model.KnowledgeBase;
 import io.github.spike.myai.knowledge.domain.port.KnowledgeBaseRepository;
-import io.github.spike.myai.shared.workspace.WorkspaceConstants;
 import java.time.Instant;
 import org.springframework.stereotype.Service;
 
@@ -38,13 +40,26 @@ public class UpdateKnowledgeBaseApplicationService implements UpdateKnowledgeBas
     /** 知识库持久化仓库（领域端口），用于读写知识库聚合根 */
     private final KnowledgeBaseRepository knowledgeBaseRepository;
 
+    /** 当前用户上下文提供器，用于获取工作区标识 */
+    private final CurrentUserProvider currentUserProvider;
+
+    /** 应用层授权服务，用于校验知识库管理权限 */
+    private final AuthorizationService authorizationService;
+
     /**
      * 构造器注入。
      *
      * @param knowledgeBaseRepository 知识库持久化仓库
+     * @param currentUserProvider     当前用户上下文提供器
+     * @param authorizationService    授权服务
      */
-    public UpdateKnowledgeBaseApplicationService(KnowledgeBaseRepository knowledgeBaseRepository) {
+    public UpdateKnowledgeBaseApplicationService(
+            KnowledgeBaseRepository knowledgeBaseRepository,
+            CurrentUserProvider currentUserProvider,
+            AuthorizationService authorizationService) {
         this.knowledgeBaseRepository = knowledgeBaseRepository;
+        this.currentUserProvider = currentUserProvider;
+        this.authorizationService = authorizationService;
     }
 
     /**
@@ -65,35 +80,47 @@ public class UpdateKnowledgeBaseApplicationService implements UpdateKnowledgeBas
      */
     @Override
     public KnowledgeBaseResult handle(UpdateKnowledgeBaseCommand command) {
-        // 1. 按 ID 查找现有知识库，不存在则抛出业务异常
-        //    使用 Optional.orElseThrow 实现快速失败（Fail-Fast）
-        String workspaceId = WorkspaceConstants.DEFAULT_WORKSPACE_ID;
+        // ---------- 第零步：权限校验 ----------
+        // 更新知识库前先校验管理权限：OWNER / ADMIN 或 KB_MANAGER 可执行
+        // 注意：这里校验的是知识库级权限（requireCanManageKnowledgeBase），
+        // 而非工作区级权限（requireCanManageWorkspace），允许被授权的 KB_MANAGER 编辑知识库
+        authorizationService.requireCanManageKnowledgeBase(command.normalizedKbId());
+
+        // ---------- 第一步：查找现有知识库 ----------
+        // 获取当前登录用户的工作区，确保知识库查询限定在本工作区范围内
+        CurrentUser currentUser = currentUserProvider.requireCurrentUser();
+        String workspaceId = currentUser.workspaceId();
+        // 按 ID 查找现有知识库，不存在则抛出业务异常
+        // 使用 Optional.orElseThrow 实现快速失败（Fail-Fast），避免后续空指针
         KnowledgeBase current = knowledgeBaseRepository.findByKbId(workspaceId, command.normalizedKbId())
                 .orElseThrow(() -> new KnowledgeBaseNotFoundException(
                         "knowledge base not found: " + command.normalizedKbId()));
 
-        // 2. 调用领域模型更新方法
-        //    normalizedXxxOrDefault 系列方法实现"不传则保持原值"的语义
-        //    传入当前时间戳作为更新时间
+        // ---------- 第二步：调用领域模型更新方法 ----------
+        // normalizedXxxOrDefault 系列方法实现"传了则改、不传则保持原值"的语义：
+        //   - 若命令中 name 非空 → 使用新名称（已 trim）
+        //   - 若命令中 name 为空 → 使用 current.name()（保持原值）
+        // 传入当前时间戳作为更新时间
         KnowledgeBase updated = current.update(
                 command.normalizedNameOrDefault(current.name()),
                 command.normalizedDescriptionOrDefault(current.description()),
                 command.resolvedStatusOrDefault(current.status()),
                 Instant.now());
 
-        // 3. 持久化更新后的聚合根
+        // ---------- 第三步：持久化更新后的聚合根 ----------
+        // 仓储实现应保证原子性，通常使用 UPDATE WHERE 或乐观锁版本号
         knowledgeBaseRepository.save(updated);
 
-        // 4. 查询已索引文档数量
-        //    从仓库的全量列表中过滤出当前知识库并提取索引计数
-        //    使用 mapToLong 避免自动装箱，提升性能
+        // ---------- 第四步：查询已索引文档数量 ----------
+        // 从仓库的全量列表中过滤出当前知识库并提取索引计数
+        // 使用 mapToLong 避免 Long 自动装箱，减少 GC 压力
         long indexedDocumentCount = knowledgeBaseRepository.listKnowledgeBases(workspaceId).stream()
                 .filter(item -> item.kbId().equals(updated.kbId()))
                 .mapToLong(item -> item.indexedDocumentCount())
                 .findFirst()
                 .orElse(0L);    // 未找到统计信息时默认为 0
 
-        // 5. 构建并返回应用层结果对象
+        // ---------- 第五步：构建并返回应用层结果 ----------
         return new KnowledgeBaseResult(
                 updated.kbId(),
                 updated.name(),

@@ -87,6 +87,56 @@ class AuthorizationServiceTest {
     }
 
     /**
+     * 验证工作区管理权限：仅 OWNER / ADMIN 可执行工作区级管理操作。
+     */
+    @Test
+    @DisplayName("工作区所有者与管理员应具备工作区管理权限")
+    void requireCanManageWorkspace_shouldAllowOwnerAndAdmin() {
+        when(currentUserProvider.requireCurrentUser()).thenReturn(currentUser(WorkspaceRole.WORKSPACE_OWNER));
+        assertDoesNotThrow(service::requireCanManageWorkspace);
+
+        when(currentUserProvider.requireCurrentUser()).thenReturn(currentUser(WorkspaceRole.WORKSPACE_ADMIN));
+        assertDoesNotThrow(service::requireCanManageWorkspace);
+    }
+
+    /**
+     * 验证工作区管理拒绝规则：普通 MEMBER 不能执行工作区级管理操作。
+     */
+    @Test
+    @DisplayName("工作区普通成员不应具备工作区管理权限")
+    void requireCanManageWorkspace_shouldDenyMember() {
+        when(currentUserProvider.requireCurrentUser()).thenReturn(currentUser(WorkspaceRole.WORKSPACE_MEMBER));
+
+        assertThrows(AccessDeniedException.class, service::requireCanManageWorkspace);
+    }
+
+    /**
+     * 验证知识库管理授权：普通 MEMBER 拥有 KB_MANAGER grant 时可管理知识库。
+     */
+    @Test
+    @DisplayName("KB_MANAGER 应允许工作区成员管理知识库")
+    void requireCanManageKnowledgeBase_shouldAllowKbManager() {
+        when(currentUserProvider.requireCurrentUser()).thenReturn(currentUser(WorkspaceRole.WORKSPACE_MEMBER));
+        when(grantRepository.findKnowledgeBaseRole("default", "kb-1", "user-1"))
+                .thenReturn(Optional.of(KnowledgeBaseRole.KB_MANAGER));
+
+        assertDoesNotThrow(() -> service.requireCanManageKnowledgeBase("kb-1"));
+    }
+
+    /**
+     * 验证知识库管理拒绝：KB_READER 只能读取，不能管理知识库。
+     */
+    @Test
+    @DisplayName("KB_READER 不应允许工作区成员管理知识库")
+    void requireCanManageKnowledgeBase_shouldDenyKbReader() {
+        when(currentUserProvider.requireCurrentUser()).thenReturn(currentUser(WorkspaceRole.WORKSPACE_MEMBER));
+        when(grantRepository.findKnowledgeBaseRole("default", "kb-1", "user-1"))
+                .thenReturn(Optional.of(KnowledgeBaseRole.KB_READER));
+
+        assertThrows(AccessDeniedException.class, () -> service.requireCanManageKnowledgeBase("kb-1"));
+    }
+
+    /**
      * 验证知识库级拒绝规则：普通 MEMBER 在无显式知识库授权时，
      * 读取知识库应被拒绝（抛出 AccessDeniedException）。
      */

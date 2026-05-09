@@ -3,10 +3,12 @@ package io.github.spike.myai.knowledge.application.service;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.when;
 
+import io.github.spike.myai.auth.application.context.CurrentUser;
+import io.github.spike.myai.auth.application.context.CurrentUserProvider;
+import io.github.spike.myai.auth.domain.model.WorkspaceRole;
 import io.github.spike.myai.knowledge.domain.model.KnowledgeBaseStatus;
 import io.github.spike.myai.knowledge.domain.model.KnowledgeBaseSummary;
 import io.github.spike.myai.knowledge.domain.port.KnowledgeBaseRepository;
-import io.github.spike.myai.shared.workspace.WorkspaceConstants;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -18,10 +20,13 @@ class ListKnowledgeBasesApplicationServiceTest {
     @DisplayName("存在知识库主数据时应返回带统计的列表")
     void handle_shouldReturnKnowledgeBases() {
         KnowledgeBaseRepository repository = Mockito.mock(KnowledgeBaseRepository.class);
-        when(repository.listKnowledgeBases(WorkspaceConstants.DEFAULT_WORKSPACE_ID)).thenReturn(List.of(
-                new KnowledgeBaseSummary("kb-a", "知识库A", "desc-a", KnowledgeBaseStatus.ACTIVE, 3),
-                new KnowledgeBaseSummary("kb-b", "知识库B", "", KnowledgeBaseStatus.INACTIVE, 0)));
-        ListKnowledgeBasesApplicationService service = new ListKnowledgeBasesApplicationService(repository);
+        CurrentUserProvider currentUserProvider = Mockito.mock(CurrentUserProvider.class);
+        when(currentUserProvider.requireCurrentUser()).thenReturn(
+                new CurrentUser("user-1", "alice", "workspace-a", WorkspaceRole.WORKSPACE_ADMIN));
+        when(repository.listKnowledgeBases("workspace-a")).thenReturn(List.of(
+                new KnowledgeBaseSummary("kb-a", "workspace-a", "知识库A", "desc-a", KnowledgeBaseStatus.ACTIVE, 3),
+                new KnowledgeBaseSummary("kb-b", "workspace-a", "知识库B", "", KnowledgeBaseStatus.INACTIVE, 0)));
+        ListKnowledgeBasesApplicationService service = new ListKnowledgeBasesApplicationService(repository, currentUserProvider);
 
         var result = service.handle();
 

@@ -39,7 +39,7 @@ import org.springframework.stereotype.Service;
  *       可被组合和复用。</li>
  * </ul>
  *
- * <p>当前阶段只落授权骨架和规则入口，暂不主动接入具体业务接口。
+ * <p>当前阶段先接入知识库业务接口，文档与问答接口按后续计划分批接入。
  *
  * @author spike
  * @since 1.0.0
@@ -64,6 +64,27 @@ public class AuthorizationService {
             AuthorizationGrantRepository grantRepository) {
         this.currentUserProvider = currentUserProvider;
         this.grantRepository = grantRepository;
+    }
+
+    /**
+     * 要求当前用户具备工作区管理权限。
+     *
+     * <p>当前仅 {@link WorkspaceRole#WORKSPACE_OWNER} 与
+     * {@link WorkspaceRole#WORKSPACE_ADMIN} 可执行工作区级管理操作，
+     * 例如创建知识库。
+     *
+     * @return 当前用户上下文，便于调用方继续使用其中的工作区标识
+     * @throws AccessDeniedException 权限不足时抛出
+     */
+    public CurrentUser requireCanManageWorkspace() {
+        // 获取当前登录用户（未认证则抛异常）
+        CurrentUser user = currentUserProvider.requireCurrentUser();
+        // 仅 WORKSPACE_OWNER 或 WORKSPACE_ADMIN 可执行工作区级管理操作
+        if (!hasWorkspaceWideAccess(user.workspaceRole())) {
+            throw new AccessDeniedException("workspace manage access denied");
+        }
+        // 返回 CurrentUser 便于调用方（如 CreateKnowledgeBase）直接使用其中的 workspaceId
+        return user;
     }
 
     /**
