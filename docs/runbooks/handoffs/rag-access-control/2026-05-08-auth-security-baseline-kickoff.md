@@ -107,7 +107,7 @@
 
 ## 7. 当前完成状态（2026-05-09）
 
-当前仍在 `feature/auth-security-baseline` 分支，无需新开分支继续推进。
+当前 `feature/auth-security-baseline` 分支的原定职责已经完成，后续治理接口不建议继续堆叠在该分支。
 
 首批认证基线已完成：
 
@@ -215,6 +215,22 @@
 - `docs/04-api-contract.yaml` 已补充 `documents/upload` 的 Cookie 认证、CSRF Header 与 `401/403` 语义
 - 已补充上传受理应用服务单元测试，覆盖贡献权限放行、无权限拒绝和当前工作区写入
 
+文档其他接口权限接入已完成：
+
+- 文档列表已改为在当前用户工作区范围内查询，并对结果执行文档可读权限过滤
+- `documents/{id}/status` 已要求可读取目标文档
+- `documents/{id}/chunks/preview` 已要求可读取目标文档
+- `documents/{id}/reprocess` 已要求可贡献目标文档所属知识库
+- `documents/{id}` 删除已要求可管理目标文档
+- `docs/04-api-contract.yaml` 已补充上述接口的 Cookie 认证、CSRF Header 与 `401/403` 语义
+
+问答接口权限接入已完成：
+
+- `qa.ask` 已要求当前用户对目标知识库具备 `ask` 权限
+- `qa.ask` 已在“召回后、生成前”按文档授权过滤候选分块
+- `qa.ask` 过滤后无可用内容时返回问答兜底结果，不返回 `403`
+- `docs/04-api-contract.yaml` 已补充 `qa.ask` 的 Cookie 认证、CSRF Header 与 `401/403` 语义
+
 已完成验证：
 
 - 后端测试：`.\\mvnw.cmd -q test`
@@ -223,39 +239,39 @@
 
 - 系统已经能够完成登录、登出、当前用户查询、Session 登录态维护和空库初始管理员创建
 - 认证层已经知道当前登录用户是谁、属于哪个默认工作区、拥有哪个工作区角色，并已提供应用层统一读取入口
-- `AuthorizationService` 授权服务骨架已经完成，`knowledge-bases` 与 `documents/upload` 已完成首批权限接入
-- 尚未将文档其他接口与问答接口接入权限判断
-- 因此下一步仍属于 `auth-security-baseline` 分支范围，不需要切新分支
+- `AuthorizationService` 已完成知识库、文档和问答场景所需的应用层授权骨架
+- `knowledge-bases`、`documents` 与 `qa.ask` 已完成当前阶段要求的访问控制接入
+- 接下来进入成员管理、授权管理和审计查询接口建设，建议切出新的治理接口分支继续推进
 
-## 8. 下一步：接入 documents 其他接口权限判断
+## 8. 下一步：进入治理接口建设
 
-下一步建议继续将 `AuthorizationService` 接入文档列表、状态、分块预览、重处理和删除应用服务，
-使文档读写管理接口按知识库授权与文档级覆盖规则执行权限判断；`qa.ask` 仍留到文档接口稳定后处理。
+下一步建议从 `feature/auth-security-baseline` 切出新的治理接口分支，
+例如 `feature/auth-authorization-governance`，
+继续实现成员管理、知识库授权管理、文档授权管理和审计查询接口。
 
 建议实现范围：
 
-- 文档列表：按当前用户工作区查询，并对结果做授权过滤
-- 文档状态：要求可读取目标文档
-- 文档分块预览：要求可读取目标文档
-- 文档重处理：要求可贡献或管理目标文档所属知识库
-- 文档删除：要求可管理目标文档
-- 同步更新 `docs/04-api-contract.yaml` 中相关文档接口的 `401/403` 契约
-- 暂不接入 `qa.ask`，避免召回过滤与接口权限判断同时展开
+- 成员列表、成员新增、成员角色调整、成员停用 / 移除接口
+- 知识库授权列表、授予、调整、回收接口
+- 文档级覆盖授权列表、授予、调整、回收接口
+- 审计事件查询接口
+- 同步更新 `docs/04-api-contract.yaml` 中治理接口的契约说明
 
 建议测试覆盖：
 
-- `DOC_DENY` 覆盖知识库读取允许
-- `KB_READER` 可查看状态与分块预览
-- `KB_CONTRIBUTOR` 可触发重处理
-- `DOC_ALLOW_MANAGE` 可删除文档
-- 无权限时不触发文档状态变更或删除动作
+- 未登录访问治理接口返回 `401`
+- 非工作区管理员访问治理接口返回 `403`
+- 授权变更后立即影响 `knowledge/documents/qa` 权限判断结果
+- 成员变更、知识库授权变更、文档授权变更写入 `audit_events`
 
 后续推进顺序建议保持：
 
-1. 接入 `documents` 其他查询与管理接口权限判断
-2. 接入 `qa.ask` 召回后授权过滤
-3. 后端稳定后再补前端登录页和路由守卫
+1. 成员管理接口
+2. 知识库授权接口
+3. 文档授权接口
+4. 审计查询接口
+5. 后端稳定后再评估前端后台页面接入
 
 ## 9. 一句话交接
 
-**`feature/auth-security-baseline` 已完成 Spring Security、Session 登录、认证接口、CSRF Header、登录锁定、审计写入、bootstrap admin 初始账号引导、角色枚举收口、`CurrentUserProvider` 当前用户上下文、`AuthorizationService` 授权服务骨架、`knowledge-bases` 权限接入与 `documents/upload` 权限接入；下一步继续在当前分支接入文档其他接口权限判断，前端仍暂不编码。**
+**`feature/auth-security-baseline` 已完成 Spring Security、Session 登录、认证接口、CSRF Header、登录锁定、审计写入、bootstrap admin 初始账号引导、角色枚举收口、`CurrentUserProvider` 当前用户上下文、`AuthorizationService` 授权服务骨架、`knowledge-bases` / `documents` / `qa.ask` 权限接入；下一步请切到 `feature/auth-authorization-governance`，继续实现成员管理、知识库授权、文档授权和审计查询接口。**
