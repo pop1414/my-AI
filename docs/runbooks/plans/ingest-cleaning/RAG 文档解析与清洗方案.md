@@ -119,11 +119,47 @@ String markdown = FlexmarkHtmlConverter.builder().build().convert(cleanHtml);
 #### 3.4 最终封装
 
 - 一期主结果为 `cleaned.md` 文件，不要求直接落成最终 node JSON。
-- 可额外生成轻量级 `parse-result.json` 作为运行元数据记录，但其职责仅限于记录中间产物和解析状态。
+- 解析阶段可产出 `parse-result.json` 作为文件化载体，但其**正式身份**应定义为处理结果元数据（Processing Metadata），最终由 worker 写入 `ingest_documents.processing_metadata`（JSONB）列。
+- `processing_metadata` 是正式生产数据，`parse-result.json` 只是其中间落盘形式或回放副本；**数据库字段是事实来源，文件不是最终权威对象**。
+- `processing_metadata` 不作为独立状态查询入口，而是文档处理记录的附加字段：
+  - `UPLOADED` / `INGESTING`：`processing_metadata = null`
+  - `INDEXED` / `FAILED`：返回状态时可顺带返回 `processingMetadata`
+- 现有 `failure_reason`、`last_error_code`、`last_error_message` 继续承担错误状态职责；`processing_metadata` 只负责承载处理结果特征，不重复保存错误主信息。
 - 元数据按“稳定输出 / 条件输出 / 暂不保证”分层管理：
-    - **稳定输出**：`source_file`、`file_type`、`quality`、`created_at`
-    - **条件输出**：`language`、`title_path`、`page_num`
-    - **暂不保证**：`keywords`、复杂版面定位、图片语义摘要
+  - **稳定输出**：`source_file`、`file_ext`、`mime_type`、`quality`、`created_at`
+  - **条件输出**：`language`、`page_count`、`primary_title`、`title_outline_sample`
+  - **暂不保证**：`keywords`、复杂版面定位、图片语义摘要
+
+推荐的 `processing_metadata` 结构如下：
+
+```json
+{
+  "schema_version": "v1",
+  "stable": {
+    "source_file": "xxx.pdf",
+    "file_ext": "pdf",
+    "mime_type": "application/pdf",
+    "quality": "high",
+    "created_at": "2026-05-09T10:30:00Z"
+  },
+  "conditional": {
+    "language": "zh-CN",
+    "page_count": 42,
+    "primary_title": "第一章 背景",
+    "title_outline_sample": ["第一章", "1.1 背景"]
+  },
+  "best_effort": {
+    "keywords": ["RAG", "向量化"]
+  }
+}
+```
+
+字段设计说明：
+
+- `file_ext` 与 `mime_type` 分开存储，避免“文件扩展名”和“MIME 类型”语义混淆
+- `page_count` 表示文档总页数，不使用 `page_num` 这类偏节点级的定位字段
+- `primary_title` / `title_outline_sample` 表示文档级标题提取结果，不等价于分块节点上的标题路径
+- `best_effort` 仅在算法稳定产出时回填，不作为状态推进前置条件
 
 ---
 
@@ -176,6 +212,7 @@ String markdown = FlexmarkHtmlConverter.builder().build().convert(cleanHtml);
 | **Embedding 窗口截断**            | 解析阶段 token 估算不准，导致后续 Embedding 时文本尾部被截断 | ① 在元数据中记录 token_count 供二期参考；② 安全冗余策略在二期分块时强制执行，而不是一期阻塞项。                                            |
 | **临时文件膨胀**                  | raw.xhtml / cleaned.html / cleaned.md 占用磁盘               | ① 默认仅长期保留 `cleaned.md`；② `raw.xhtml` 与 `cleaned.html` 作为调试旁路按需保留；③ 配置清理策略和保留周期。                            |
 | **“落文件”但仍高内存**            | 处理中依然把整份内容拼成大字符串                             | ① parser / cleaner / chunker 接口改为 `Path/Reader` 级；② 避免以 `String` 作为跨模块主接口；③ 明确 Jsoup 属于 DOM 型处理，必要时拆段处理。 |
+| **元数据权威源不清**              | parse-result.json 与数据库字段内容不一致                     | ① 明确 `ingest_documents.processing_metadata` 为事实来源；② `parse-result.json` 仅作为文件化载体或回放副本；③ 状态查询只读数据库字段。      |
 | **中英混排 Token 激增**           | 纯英文 Tokenizer 处理中文时，Token 数会膨胀 3 倍             | 坚持使用阿里 Qwen 专属分词器，该分词器针对中英双语优化，可保证计数准确；计数器固定在 `qwen_v3_base` 不可替换。                             |
 
 ---
@@ -183,6 +220,7 @@ String markdown = FlexmarkHtmlConverter.builder().build().convert(cleanHtml);
 ### 5. 一期产出与二期入口
 
 - **一期交付物**：清洗后的 `cleaned.md` + 轻量级解析结果元数据，可直接被二期分块器读取。
+- **状态查询增强**：当文档进入 `INDEXED` / `FAILED` 时，可随状态查询结果一并返回 `processingMetadata`，补足“只有阶段、没有处理细节”的可观测性缺口。
 - **二期预告（不在本期范围）**：
     - 智能分块：基于 Markdown 标题、段落、token 上限（参考 3.5.3 阈值）自动生成父子块。
     - 表格专项优化：将表格节点类型改为 `table`，`index_content` 替换为语义摘要。

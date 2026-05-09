@@ -79,7 +79,17 @@
 
 - 一期主产物确定为 `cleaned.md`
 - `raw.xhtml` / `cleaned.html` 作为调试旁路产物按需保留
-- 若要增加轻量级解析元数据，优先保持为“可选增强”，避免在本分支中引入过重的存储设计
+- 解析阶段若产出 `parse-result.json`，其正式归宿应为 `ingest_documents.processing_metadata`（JSONB）
+- `processing_metadata` 是正式处理记录，不是调试垃圾文件，也不是独立状态查询入口
+- `parse-result.json` 只是文件化载体或回放副本，数据库字段才是最终事实来源
+- `UPLOADED` / `INGESTING` 阶段允许 `processing_metadata = null`
+- `INDEXED` / `FAILED` 阶段可由状态查询接口顺带返回 `processingMetadata`
+- 元数据字段应优先保持文档级语义，例如：
+  - `file_ext`、`mime_type`
+  - `page_count`
+  - `primary_title`
+  - `title_outline_sample`
+- 避免在该字段中重复写入 `failure_reason`、`last_error_code`、`last_error_message` 这类已有错误状态字段
 
 ## 5. 与治理接口分支的协作边界
 
@@ -95,6 +105,7 @@
 若本分支改变以下任一内容，需要同步更新文档：
 
 - 中间产物形态（如引入 `cleaned.md`）
+- `processing_metadata` 字段结构或返回口径
 - `documents/chunks/preview` 返回口径
 - 文档解析质量标记或新增解析元数据
 - 处理链路中的文件保留、调试产物或回放方式
