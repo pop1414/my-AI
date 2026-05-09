@@ -1,5 +1,8 @@
 package io.github.spike.myai.ingest.application.service;
 
+import io.github.spike.myai.auth.application.context.CurrentUser;
+import io.github.spike.myai.auth.application.context.CurrentUserProvider;
+import io.github.spike.myai.auth.application.service.AuthorizationService;
 import io.github.spike.myai.ingest.application.command.DeleteDocumentCommand;
 import io.github.spike.myai.ingest.application.exception.DocumentDeleteConflictException;
 import io.github.spike.myai.ingest.application.exception.DocumentDeleteFailedException;
@@ -12,7 +15,6 @@ import io.github.spike.myai.ingest.domain.model.UploadStatus;
 import io.github.spike.myai.ingest.domain.port.DocumentRepository;
 import io.github.spike.myai.ingest.domain.port.DocumentSourceStorage;
 import io.github.spike.myai.ingest.domain.port.DocumentVectorIndexer;
-import io.github.spike.myai.shared.workspace.WorkspaceConstants;
 import java.time.Instant;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -44,32 +46,53 @@ public class DeleteDocumentApplicationService implements DeleteDocumentUseCase {
 
     private static final Logger log = LoggerFactory.getLogger(DeleteDocumentApplicationService.class);
 
-    /** 文档元数据仓储端口 */
+    /**
+     * 文档元数据仓储端口：用于查询文档及执行 CAS 状态变更
+     * （markDeleting → markDeleted → rollbackDeleting）。
+     */
     private final DocumentRepository documentRepository;
-    /** 源文件存储端口：用于物理删除上传的原始文件 */
+
+    /** 源文件存储端口：用于物理删除上传的原始文件（如 MinIO / 本地文件系统） */
     private final DocumentSourceStorage documentSourceStorage;
-    /** 矢量索引端口：用于删除文档对应的向量数据 */
+
+    /** 矢量索引端口：用于删除文档对应的向量数据（如 pgvector / Elasticsearch） */
     private final DocumentVectorIndexer documentVectorIndexer;
-    /** 业务指标监控 */
+
+    /**
+     * 业务指标监控：记录删除操作的成功/冲突次数，
+     * 供 Prometheus / Grafana 等监控系统采集。
+     */
     private final IngestMetrics ingestMetrics;
+
+    /** 当前用户上下文提供器：用于获取工作区标识 */
+    private final CurrentUserProvider currentUserProvider;
+
+    /** 授权服务：用于校验当前用户是否具备文档管理权限 */
+    private final AuthorizationService authorizationService;
 
     /**
      * 构造器注入。
      *
-     * @param documentRepository     文档元数据仓储
-     * @param documentSourceStorage  源文件存储
-     * @param documentVectorIndexer  矢量索引器
-     * @param ingestMetrics          业务指标监控
+     * @param documentRepository     文档元数据仓储（领域端口）
+     * @param documentSourceStorage  源文件存储（领域端口）
+     * @param documentVectorIndexer  矢量索引器（领域端口）
+     * @param ingestMetrics          业务指标监控（应用层）
+     * @param currentUserProvider    当前用户上下文提供器（应用层端口）
+     * @param authorizationService   授权服务（应用层）
      */
     public DeleteDocumentApplicationService(
             DocumentRepository documentRepository,
             DocumentSourceStorage documentSourceStorage,
             DocumentVectorIndexer documentVectorIndexer,
-            IngestMetrics ingestMetrics) {
+            IngestMetrics ingestMetrics,
+            CurrentUserProvider currentUserProvider,
+            AuthorizationService authorizationService) {
         this.documentRepository = documentRepository;
         this.documentSourceStorage = documentSourceStorage;
         this.documentVectorIndexer = documentVectorIndexer;
         this.ingestMetrics = ingestMetrics;
+        this.currentUserProvider = currentUserProvider;
+        this.authorizationService = authorizationService;
     }
 
     /**
@@ -82,11 +105,13 @@ public class DeleteDocumentApplicationService implements DeleteDocumentUseCase {
      */
     @Override
     public void handle(DeleteDocumentCommand command) {
-        String workspaceId = WorkspaceConstants.DEFAULT_WORKSPACE_ID;
+        CurrentUser currentUser = currentUserProvider.requireCurrentUser();
+        String workspaceId = currentUser.workspaceId();
         DocumentId documentId = new DocumentId(command.documentId());
         // 1. 查询文档，确保文档存在
         Document document = documentRepository.findById(workspaceId, documentId)
                 .orElseThrow(() -> new DocumentNotFoundException("document not found: " + documentId.value()));
+        authorizationService.requireCanManageDocument(currentUser, documentId.value(), document.kbId());
         UploadStatus status = document.status();
 
         // 2. 幂等检查：如果文档已经是 DELETED 状态，视为成功

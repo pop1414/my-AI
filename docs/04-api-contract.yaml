@@ -4,15 +4,108 @@ info:
   version: 0.1.0
   description: |
     V1.1 接口契约（知识库主数据化 + 文档列表管理基线）
+
+    RAG 权限体系阶段二开始后，除登录接口和健康检查外，`/api/v1/**` 默认需要
+    `HttpOnly Cookie` 中的服务端 Session。所有写操作需要携带固定 Header：
+    `X-MYAI-CSRF: 1`。
 servers:
   - url: http://localhost:8080
 
 tags:
+  - name: auth
   - name: ingest
   - name: knowledge
   - name: qa
 
 paths:
+  /api/v1/auth/login:
+    post:
+      tags: [auth]
+      summary: 本地账号登录
+      description: |
+        登录成功后创建服务端 Session，并通过 HttpOnly Cookie 维持认证态。
+        当前 CSRF 基线要求该写操作携带 `X-MYAI-CSRF: 1`。
+      x-stage: implemented
+      parameters:
+        - $ref: '#/components/parameters/CsrfHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: 登录成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '400':
+          description: 请求体为空或参数缺失
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: 用户名或密码错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: 缺少 CSRF Header、账号停用或账号锁定
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/auth/logout:
+    post:
+      tags: [auth]
+      summary: 登出当前 Session
+      x-stage: implemented
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CsrfHeader'
+      responses:
+        '204':
+          description: 登出成功
+        '401':
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: 缺少或非法 CSRF Header
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/auth/me:
+    get:
+      tags: [auth]
+      summary: 查询当前登录用户
+      x-stage: implemented
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CurrentUserResponse'
+        '401':
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
   /api/v1/documents:
     get:
       tags: [ingest]
@@ -20,8 +113,11 @@ paths:
       description: |
         返回文档管理台所需的分页结果；
         默认按 `createdAt DESC` 排序；
-        当未传 `status` 时，默认排除 `DELETED`。
+        当未传 `status` 时，默认排除 `DELETED`；
+        查询范围限定在当前用户所属工作区，并对结果按知识库授权与文档级覆盖做可读过滤。
       x-stage: implemented
+      security:
+        - cookieAuth: []
       parameters:
         - name: kbId
           in: query
@@ -73,12 +169,31 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: 当前用户无文档读取权限
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
   /api/v1/documents/upload:
     post:
       tags: [ingest]
       summary: 上传文档并触发入库
+      description: |
+        上传文档并受理入库；当前用户必须对目标知识库具备贡献权限
+        （工作区所有者/管理员、KB_MANAGER 或 KB_CONTRIBUTOR）。
       x-stage: implemented
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CsrfHeader'
       requestBody:
         required: true
         content:
@@ -106,6 +221,18 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: 缺少或非法 CSRF Header，或当前用户无目标知识库贡献权限
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '409':
           description: 知识库已停用
           content:
@@ -118,6 +245,11 @@ paths:
       tags: [ingest]
       summary: 查询文档处理状态
       x-stage: implemented
+      description: |
+        当前用户必须对目标文档具备读取权限；
+        支持工作区所有者/管理员、知识库读取授权，以及文档级 `DOC_ALLOW_READ` / `DOC_ALLOW_MANAGE`。
+      security:
+        - cookieAuth: []
       parameters:
         - name: documentId
           in: path
@@ -138,6 +270,18 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: 当前用户无目标文档读取权限
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
   /api/v1/documents/{documentId}/chunks/preview:
     get:
@@ -145,7 +289,10 @@ paths:
       summary: 查询文档分块预览（调试）
       x-stage: implemented
       description: |
-        用于验证“向量化前分块内容”是否符合预期。
+        用于验证“向量化前分块内容”是否符合预期；
+        当前用户必须对目标文档具备读取权限。
+      security:
+        - cookieAuth: []
       parameters:
         - name: documentId
           in: path
@@ -199,13 +346,31 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: 当前用户无目标文档读取权限
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
   /api/v1/documents/{documentId}/reprocess:
     post:
       tags: [ingest]
       summary: 手动触发文档重处理
       x-stage: implemented
+      description: |
+        当前用户必须对目标文档所属知识库具备贡献权限，
+        即工作区所有者/管理员、KB_MANAGER 或 KB_CONTRIBUTOR。
+      security:
+        - cookieAuth: []
       parameters:
+        - $ref: '#/components/parameters/CsrfHeader'
         - name: documentId
           in: path
           required: true
@@ -231,6 +396,18 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: 缺少或非法 CSRF Header，或当前用户无目标知识库贡献权限
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '409':
           description: 当前状态不允许重处理
           content:
@@ -245,8 +422,12 @@ paths:
       x-stage: implemented
       description: |
         软删除文档资产，清理源文件与该 documentId 的全部向量版本；
-        删除成功后可通过 status 接口查询到 DELETED。
+        删除成功后可通过 status 接口查询到 DELETED；
+        当前用户必须对目标文档具备管理权限。
+      security:
+        - cookieAuth: []
       parameters:
+        - $ref: '#/components/parameters/CsrfHeader'
         - name: documentId
           in: path
           required: true
@@ -257,6 +438,18 @@ paths:
           description: 删除成功（或已删除，幂等成功）
         '404':
           description: 文档不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: 缺少或非法 CSRF Header，或当前用户无目标文档管理权限
           content:
             application/json:
               schema:
@@ -280,8 +473,13 @@ paths:
       summary: 创建知识库
       description: |
         归属 knowledge 子域；
-        服务端生成对外业务键 kb_id，客户端只提交 name/description/status。
+        服务端生成对外业务键 kb_id，客户端只提交 name/description/status；
+        仅工作区所有者或管理员可创建知识库。
       x-stage: implemented
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CsrfHeader'
       requestBody:
         required: true
         content:
@@ -301,13 +499,27 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: 缺少或非法 CSRF Header，或当前用户无创建知识库权限
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
     get:
       tags: [knowledge]
       summary: 查询知识库列表
       description: |
         归属 knowledge 子域；
-        返回知识库主数据与已索引文档数量，统计口径固定为 status=INDEXED。
+        返回当前用户工作区内的知识库主数据与已索引文档数量，统计口径固定为 status=INDEXED。
       x-stage: implemented
+      security:
+        - cookieAuth: []
       responses:
         '200':
           description: 查询成功
@@ -317,6 +529,12 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/KnowledgeBase'
+        '401':
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
   /api/v1/knowledge-bases/{kbId}:
     patch:
@@ -324,9 +542,13 @@ paths:
       summary: 编辑知识库
       description: |
         归属 knowledge 子域；
-        允许修改 name、description、status，不允许修改 kb_id。
+        允许修改 name、description、status，不允许修改 kb_id；
+        工作区所有者、管理员或知识库 KB_MANAGER 可编辑。
       x-stage: implemented
+      security:
+        - cookieAuth: []
       parameters:
+        - $ref: '#/components/parameters/CsrfHeader'
         - name: kbId
           in: path
           required: true
@@ -352,6 +574,18 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: 缺少或非法 CSRF Header，或当前用户无编辑知识库权限
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '404':
           description: 知识库不存在
           content:
@@ -366,8 +600,14 @@ paths:
       description: |
         归属 qa 子域；
         V1 先提供同步一次性返回能力；
-        SSE 流式版本仅做文档预留，暂不开放新接口。
+        SSE 流式版本仅做文档预留，暂不开放新接口；
+        当前用户必须对目标知识库具备问答权限；
+        召回结果会在生成前按文档授权过滤，过滤后若无可用内容则返回兜底回答，不返回 403。
       x-stage: implemented
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CsrfHeader'
       requestBody:
         required: true
         content:
@@ -387,6 +627,18 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: 缺少或非法 CSRF Header，或当前用户无目标知识库问答权限
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '409':
           description: 知识库已停用
           content:
@@ -395,7 +647,53 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
 
 components:
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: JSESSIONID
+  parameters:
+    CsrfHeader:
+      name: X-MYAI-CSRF
+      in: header
+      required: true
+      schema:
+        type: string
+        enum: ['1']
+      description: 写操作统一 CSRF Header，当前固定值为 `1`
   schemas:
+    LoginRequest:
+      type: object
+      required: [username, password]
+      properties:
+        username:
+          type: string
+        password:
+          type: string
+          format: password
+
+    LoginResponse:
+      type: object
+      properties:
+        user:
+          $ref: '#/components/schemas/CurrentUserResponse'
+
+    CurrentUserResponse:
+      type: object
+      properties:
+        userId:
+          type: string
+        username:
+          type: string
+        displayName:
+          type: string
+        workspaceId:
+          type: string
+          example: default
+        workspaceRole:
+          type: string
+          enum: [WORKSPACE_OWNER, WORKSPACE_ADMIN, WORKSPACE_MEMBER]
+
     UploadResponse:
       type: object
       properties:

@@ -1,9 +1,10 @@
 package io.github.spike.myai.knowledge.application.service;
 
+import io.github.spike.myai.auth.application.context.CurrentUser;
+import io.github.spike.myai.auth.application.context.CurrentUserProvider;
 import io.github.spike.myai.knowledge.application.result.KnowledgeBaseResult;
 import io.github.spike.myai.knowledge.application.usecase.ListKnowledgeBasesUseCase;
 import io.github.spike.myai.knowledge.domain.port.KnowledgeBaseRepository;
-import io.github.spike.myai.shared.workspace.WorkspaceConstants;
 import java.util.List;
 import org.springframework.stereotype.Service;
 
@@ -31,13 +32,20 @@ public class ListKnowledgeBasesApplicationService implements ListKnowledgeBasesU
     /** 知识库持久化仓库（领域端口），用于读取知识库列表及聚合数据 */
     private final KnowledgeBaseRepository knowledgeBaseRepository;
 
+    /** 当前用户上下文提供器，用于获取工作区标识 */
+    private final CurrentUserProvider currentUserProvider;
+
     /**
      * 构造器注入。
      *
      * @param knowledgeBaseRepository 知识库持久化仓库
+     * @param currentUserProvider     当前用户上下文提供器
      */
-    public ListKnowledgeBasesApplicationService(KnowledgeBaseRepository knowledgeBaseRepository) {
+    public ListKnowledgeBasesApplicationService(
+            KnowledgeBaseRepository knowledgeBaseRepository,
+            CurrentUserProvider currentUserProvider) {
         this.knowledgeBaseRepository = knowledgeBaseRepository;
+        this.currentUserProvider = currentUserProvider;
     }
 
     /**
@@ -55,15 +63,19 @@ public class ListKnowledgeBasesApplicationService implements ListKnowledgeBasesU
      */
     @Override
     public List<KnowledgeBaseResult> handle() {
+        // 获取当前登录用户，确保已认证且可获取工作区标识
+        CurrentUser currentUser = currentUserProvider.requireCurrentUser();
+
         // 从仓库获取全量知识库视图列表，通过 Stream 流式转换为应用层 DTO
-        // listKnowledgeBases() 返回的视图项已包含 indexedDocumentCount 聚合字段
-        return knowledgeBaseRepository.listKnowledgeBases(WorkspaceConstants.DEFAULT_WORKSPACE_ID).stream()
+        // listKnowledgeBases() 返回的视图项已包含 indexedDocumentCount 聚合字段，
+        // 无需额外的数据库查询即可获得完整的列表数据
+        return knowledgeBaseRepository.listKnowledgeBases(currentUser.workspaceId()).stream()
                 .map(item -> new KnowledgeBaseResult(
                         item.kbId(),                     // 知识库唯一标识
                         item.name(),                     // 知识库名称
                         item.description(),              // 知识库描述
                         item.status().name(),            // 枚举转字符串，解耦接口契约
                         item.indexedDocumentCount()))    // 已索引文档数（聚合统计）
-                .toList();  // 收集为不可变列表（Java 16+）
+                .toList();  // 收集为不可变列表（Java 16+），替代 Collectors.toUnmodifiableList()
     }
 }

@@ -1,5 +1,8 @@
 package io.github.spike.myai.ingest.application.service;
 
+import io.github.spike.myai.auth.application.context.CurrentUser;
+import io.github.spike.myai.auth.application.context.CurrentUserProvider;
+import io.github.spike.myai.auth.application.service.AuthorizationService;
 import io.github.spike.myai.ingest.application.exception.DocumentNotFoundException;
 import io.github.spike.myai.ingest.application.query.GetDocumentChunksPreviewQuery;
 import io.github.spike.myai.ingest.application.result.DocumentChunkPreviewItemResult;
@@ -9,7 +12,6 @@ import io.github.spike.myai.ingest.domain.model.DocumentChunkPreview;
 import io.github.spike.myai.ingest.domain.model.DocumentId;
 import io.github.spike.myai.ingest.domain.port.DocumentChunkPreviewRepository;
 import io.github.spike.myai.ingest.domain.port.DocumentRepository;
-import io.github.spike.myai.shared.workspace.WorkspaceConstants;
 import java.util.List;
 import org.springframework.stereotype.Service;
 
@@ -34,22 +36,39 @@ import org.springframework.stereotype.Service;
 @Service
 public class GetDocumentChunksPreviewApplicationService implements GetDocumentChunksPreviewUseCase {
 
-    /** 文档仓储端口：用于校验文档存在性与获取 splitVersion */
+    /**
+     * 文档仓储端口：用于校验文档存在性与获取当前 splitVersion。
+     *
+     * <p>splitVersion 用于确保预览的分块与当前向量索引版本一致。
+     */
     private final DocumentRepository documentRepository;
-    /** 分块预览仓储端口：用于分页查询分块数据 */
+
+    /** 分块预览仓储端口：用于按文档 ID + splitVersion 分页查询分块数据 */
     private final DocumentChunkPreviewRepository documentChunkPreviewRepository;
+
+    /** 当前用户上下文提供器：用于获取工作区标识 */
+    private final CurrentUserProvider currentUserProvider;
+
+    /** 授权服务：用于校验当前用户是否可读取该文档 */
+    private final AuthorizationService authorizationService;
 
     /**
      * 构造器注入。
      *
-     * @param documentRepository           文档存储库接口
-     * @param documentChunkPreviewRepository 文档分块预览存储库接口
+     * @param documentRepository            文档仓储（领域端口）
+     * @param documentChunkPreviewRepository 文档分块预览仓储（领域端口）
+     * @param currentUserProvider           当前用户上下文提供器（应用层端口）
+     * @param authorizationService          授权服务（应用层）
      */
     public GetDocumentChunksPreviewApplicationService(
             DocumentRepository documentRepository,
-            DocumentChunkPreviewRepository documentChunkPreviewRepository) {
+            DocumentChunkPreviewRepository documentChunkPreviewRepository,
+            CurrentUserProvider currentUserProvider,
+            AuthorizationService authorizationService) {
         this.documentRepository = documentRepository;
         this.documentChunkPreviewRepository = documentChunkPreviewRepository;
+        this.currentUserProvider = currentUserProvider;
+        this.authorizationService = authorizationService;
     }
 
     /**
@@ -61,13 +80,15 @@ public class GetDocumentChunksPreviewApplicationService implements GetDocumentCh
      */
     @Override
     public DocumentChunksPreviewResult handle(GetDocumentChunksPreviewQuery query) {
+        CurrentUser currentUser = currentUserProvider.requireCurrentUser();
         DocumentId documentId = new DocumentId(query.documentId());
-        String workspaceId = WorkspaceConstants.DEFAULT_WORKSPACE_ID;
+        String workspaceId = currentUser.workspaceId();
         // 根据 ID 查找文档，如果不存在则抛出异常。
         var document = documentRepository.findById(workspaceId, documentId).orElse(null);
         if (document == null) {
             throw new DocumentNotFoundException("document not found: " + documentId.value());
         }
+        authorizationService.requireCanReadDocument(currentUser, documentId.value(), document.kbId());
 
         // 始终使用文档当前 splitVersion，确保预览与当前向量版本一致。
         String splitVersion = document.splitVersion();

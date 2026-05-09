@@ -1,5 +1,8 @@
 package io.github.spike.myai.ingest.application.service;
 
+import io.github.spike.myai.auth.application.context.CurrentUser;
+import io.github.spike.myai.auth.application.context.CurrentUserProvider;
+import io.github.spike.myai.auth.application.service.AuthorizationService;
 import io.github.spike.myai.ingest.application.command.ReprocessDocumentCommand;
 import io.github.spike.myai.ingest.application.exception.DocumentNotFoundException;
 import io.github.spike.myai.ingest.application.result.DocumentStatusResult;
@@ -10,7 +13,6 @@ import io.github.spike.myai.ingest.domain.model.SplitVersion;
 import io.github.spike.myai.ingest.domain.model.UploadStatus;
 import io.github.spike.myai.ingest.domain.port.DocumentRepository;
 import io.github.spike.myai.ingest.domain.port.DocumentVectorIndexer;
-import io.github.spike.myai.shared.workspace.WorkspaceConstants;
 import java.time.Instant;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -46,30 +48,45 @@ public class ReprocessDocumentApplicationService implements ReprocessDocumentUse
 
     private static final Logger log = LoggerFactory.getLogger(ReprocessDocumentApplicationService.class);
 
-    /** 文档仓储端口 */
+    /** 文档仓储端口：用于查询文档状态及执行 CAS 状态更新 */
     private final DocumentRepository documentRepository;
-    /** 矢量索引端口：用于删除旧版本向量 */
+
+    /** 矢量索引端口：用于删除旧版本向量数据，避免历史向量污染检索结果 */
     private final DocumentVectorIndexer documentVectorIndexer;
+
+    /** 当前用户上下文提供器：用于获取工作区标识 */
+    private final CurrentUserProvider currentUserProvider;
+
+    /** 授权服务：用于校验当前用户是否具备知识库贡献权限 */
+    private final AuthorizationService authorizationService;
 
     /**
      * 构造器注入。
      *
-     * @param documentRepository     文档仓储
-     * @param documentVectorIndexer  矢量索引器
+     * @param documentRepository     文档仓储（领域端口）
+     * @param documentVectorIndexer  矢量索引器（领域端口）
+     * @param currentUserProvider    当前用户上下文提供器（应用层端口）
+     * @param authorizationService   授权服务（应用层）
      */
     public ReprocessDocumentApplicationService(
             DocumentRepository documentRepository,
-            DocumentVectorIndexer documentVectorIndexer) {
+            DocumentVectorIndexer documentVectorIndexer,
+            CurrentUserProvider currentUserProvider,
+            AuthorizationService authorizationService) {
         this.documentRepository = documentRepository;
         this.documentVectorIndexer = documentVectorIndexer;
+        this.currentUserProvider = currentUserProvider;
+        this.authorizationService = authorizationService;
     }
 
     @Override
     public DocumentStatusResult handle(ReprocessDocumentCommand command) {
-        String workspaceId = WorkspaceConstants.DEFAULT_WORKSPACE_ID;
+        CurrentUser currentUser = currentUserProvider.requireCurrentUser();
+        String workspaceId = currentUser.workspaceId();
         DocumentId documentId = new DocumentId(command.documentId());
         Document document = documentRepository.findById(workspaceId, documentId)
                 .orElseThrow(() -> new DocumentNotFoundException("document not found: " + documentId.value()));
+        authorizationService.requireCanContributeKnowledgeBase(currentUser, document.kbId());
         // INGESTING 阶段禁止重处理，避免与正在进行的分块/向量化冲突。
         if (document.status() == UploadStatus.INGESTING) {
             throw new IllegalStateException("document is ingesting and cannot be reprocessed");
@@ -98,7 +115,6 @@ public class ReprocessDocumentApplicationService implements ReprocessDocumentUse
         if (!updated) {
             throw new IllegalStateException("document status changed, reprocess aborted");
         }
-
 
         try {
             // 清理旧版本向量，避免历史向量污染检索结果。
