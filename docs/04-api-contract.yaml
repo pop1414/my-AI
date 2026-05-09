@@ -13,6 +13,7 @@ servers:
 
 tags:
   - name: auth
+  - name: governance
   - name: ingest
   - name: knowledge
   - name: qa
@@ -101,6 +102,96 @@ paths:
                 $ref: '#/components/schemas/CurrentUserResponse'
         '401':
           description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/admin/members:
+    get:
+      tags: [governance]
+      summary: 查询工作区有效成员列表
+      description: |
+        返回当前工作区内“有效成员”列表；
+        当前有效成员口径固定为 `users.status=ACTIVE` 且 `workspace_memberships.status=ACTIVE`；
+        仅工作区所有者或管理员可访问。
+      x-stage: implemented
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/WorkspaceMember'
+        '401':
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: 当前用户无成员治理权限
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/admin/members/{userId}/role:
+    patch:
+      tags: [governance]
+      summary: 调整工作区成员角色
+      description: |
+        调整目标有效成员在当前工作区内的角色；
+        仅工作区所有者或管理员可访问；
+        角色变更成功后应立即影响既有知识库、文档与问答访问控制结果。
+      x-stage: implemented
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CsrfHeader'
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: 目标成员用户 ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateWorkspaceMemberRoleRequest'
+      responses:
+        '200':
+          description: 调整成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkspaceMember'
+        '400':
+          description: 请求体为空或角色值非法
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: 缺少或非法 CSRF Header，或当前用户无成员治理权限
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: 目标成员不存在或不是当前工作区有效成员
           content:
             application/json:
               schema:
@@ -690,6 +781,33 @@ components:
         workspaceId:
           type: string
           example: default
+        workspaceRole:
+          type: string
+          enum: [WORKSPACE_OWNER, WORKSPACE_ADMIN, WORKSPACE_MEMBER]
+
+    WorkspaceMember:
+      type: object
+      properties:
+        userId:
+          type: string
+        username:
+          type: string
+        displayName:
+          type: string
+        workspaceId:
+          type: string
+          example: default
+        workspaceRole:
+          type: string
+          enum: [WORKSPACE_OWNER, WORKSPACE_ADMIN, WORKSPACE_MEMBER]
+        membershipStatus:
+          type: string
+          enum: [ACTIVE]
+
+    UpdateWorkspaceMemberRoleRequest:
+      type: object
+      required: [workspaceRole]
+      properties:
         workspaceRole:
           type: string
           enum: [WORKSPACE_OWNER, WORKSPACE_ADMIN, WORKSPACE_MEMBER]
