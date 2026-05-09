@@ -44,6 +44,12 @@ spring:
         remove-existing-vector-store-table: false
 
 myai:
+  auth:
+    bootstrap-admin:
+      # 空库启动时创建第一个默认工作区管理员；未配置用户名或密码时自动跳过
+      username: ${MYAI_AUTH_BOOTSTRAP_ADMIN_USERNAME:}
+      password: ${MYAI_AUTH_BOOTSTRAP_ADMIN_PASSWORD:}
+      display-name: ${MYAI_AUTH_BOOTSTRAP_ADMIN_DISPLAY_NAME:}
   ingest:
     parser:
       # Tika 解析最大文本长度，防止异常文档输出过长文本导致内存风险
