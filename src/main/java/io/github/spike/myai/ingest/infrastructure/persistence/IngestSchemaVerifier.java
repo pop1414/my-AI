@@ -55,6 +55,7 @@ public class IngestSchemaVerifier implements ApplicationRunner {
             "retry_count",
             "retry_max",
             "split_version",
+            "processing_metadata",
             "created_at",
             "updated_at");
 

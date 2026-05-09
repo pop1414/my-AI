@@ -102,14 +102,21 @@ public interface DocumentRepository {
      * 标记处理成功。
      *
      * <p>同时清理失败原因与重试信息，确保成功状态干净。
+     * `processingMetadata` 为可选参数，供处理链路在成功收口时同步回填结果元数据。
      *
      * @param workspaceId    工作区标识
      * @param documentId     文档资产 ID
      * @param expectedStatus 期望状态
+     * @param processingMetadata 处理结果元数据 JSON 字符串，可为空
      * @param updatedAt      更新时间
      * @return 更新是否成功
      */
-    boolean markIndexed(String workspaceId, DocumentId documentId, UploadStatus expectedStatus, Instant updatedAt);
+    boolean markIndexed(
+            String workspaceId,
+            DocumentId documentId,
+            UploadStatus expectedStatus,
+            String processingMetadata,
+            Instant updatedAt);
 
     /**
      * 标记处理失败。
@@ -120,6 +127,7 @@ public interface DocumentRepository {
      * @param documentId     文档资产 ID
      * @param expectedStatus 期望状态
      * @param failureReason  失败原因
+     * @param processingMetadata 处理结果元数据 JSON 字符串，可为空
      * @param errorCode      错误码
      * @param errorMessage   错误信息
      * @param errorAt        错误发生时间
@@ -131,6 +139,7 @@ public interface DocumentRepository {
             DocumentId documentId,
             UploadStatus expectedStatus,
             String failureReason,
+            String processingMetadata,
             String errorCode,
             String errorMessage,
             Instant errorAt,

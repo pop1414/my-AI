@@ -144,8 +144,10 @@ public class ProcessDocumentApplicationService implements ProcessDocumentUseCase
 
             // 步骤 5: 状态收口：仅当当前仍是 INGESTING 时，才允许推进到最终成功态 INDEXED。
             // 使用 CAS 确保在处理期间文档没有被外部（如删除操作）修改。
+            // 当前阶段 processing_metadata 的自动回填逻辑尚未实现，传入 null 表示暂不写入元数据。
+            // 后续在 cleaned.md 主链改造完成后，此处应改为传入实际的 processingMetadata JSON 字符串。
             boolean updated = documentRepository.markIndexed(
-                    workspaceId, documentId, UploadStatus.INGESTING, Instant.now());
+                    workspaceId, documentId, UploadStatus.INGESTING, null, Instant.now());
             if (!updated) {
                 log.warn("Status update to INDEXED skipped by CAS. documentId={}", documentId.value());
                 return;
@@ -191,11 +193,13 @@ public class ProcessDocumentApplicationService implements ProcessDocumentUseCase
             // 如果不可重试或已达上限，则标记为最终失败态 FAILED。
             String reason = trimFailureReason(decision.errorMessage());
             // 非瞬时错误或超过最大重试次数时，直接进入 FAILED 并保留错误信息。
+            // 失败场景下 processing_metadata 同样暂不写入，待后续主链改造完成后统一补齐。
             boolean updated = documentRepository.markFailed(
                     workspaceId,
                     documentId,
                     UploadStatus.INGESTING,
                     reason,
+                    null,
                     decision.errorCode(),
                     decision.errorMessage(),
                     now,

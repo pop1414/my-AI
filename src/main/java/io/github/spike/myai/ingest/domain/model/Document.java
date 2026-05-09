@@ -39,6 +39,7 @@ import java.time.Instant;
  * @param reprocessCount       人为或系统触发的针对本文档全量“重新处理（洗数据）”累加次数
  * @param reprocessRequestedAt 最近一次成功派发“重新处理任务”的请求发生时间点
  * @param splitVersion         应用在本文档上的文本分块或模型向量化策略版本（如v1/v2），用于检索时版本匹配和灰度
+ * @param processingMetadata   文档处理结果元数据（JSON 字符串），作为 `processing_metadata` 字段的领域承载
  * @param createdAt            聚合根/文档条目首次落地创建时的持久化时间
  * @param updatedAt            聚合根/文档条目任何字段发生变更时的最后更新时间
  */
@@ -60,6 +61,7 @@ public record Document(
         int reprocessCount,
         Instant reprocessRequestedAt,
         String splitVersion,
+        String processingMetadata,
         Instant createdAt,
         Instant updatedAt) {
 
@@ -86,6 +88,7 @@ public record Document(
             int reprocessCount,
             Instant reprocessRequestedAt,
             String splitVersion,
+            String processingMetadata,
             Instant createdAt,
             Instant updatedAt) {
         this(
@@ -106,6 +109,7 @@ public record Document(
                 reprocessCount,
                 reprocessRequestedAt,
                 splitVersion,
+                processingMetadata,
                 createdAt,
                 updatedAt);
     }
@@ -233,6 +237,7 @@ public record Document(
                 0,                          // 重处理计数归零
                 null,                       // 无重处理请求时间
                 DEFAULT_SPLIT_VERSION,      // 默认分块版本
+                null,                       // 初始无处理结果元数据
                 now,                        // 创建时间
                 now);                       // 更新时间（同创建时间）
     }
@@ -305,6 +310,7 @@ public record Document(
                 reprocessCount,          // 重处理计数不变
                 reprocessRequestedAt,    // 重处理请求时间不变
                 splitVersion,            // 分块版本不变
+                processingMetadata,      // 处理结果元数据默认透传
                 createdAt,               // 创建时间保持不变
                 at);                     // 更新时间刷新为当前时刻
     }

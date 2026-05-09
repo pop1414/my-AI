@@ -60,6 +60,7 @@ class ClaimNextUploadedDocumentApplicationServiceTest {
                 0,
                 null,
                 "v1",
+                null,
                 Instant.now(),
                 Instant.now());
         when(repository.findOldestReadyForProcessing(anyString(), any(Instant.class))).thenReturn(Optional.of(uploaded));
@@ -103,6 +104,7 @@ class ClaimNextUploadedDocumentApplicationServiceTest {
                 0,
                 null,
                 "v1",
+                null,
                 Instant.now(),
                 Instant.now());
         when(repository.findOldestReadyForProcessing(anyString(), any(Instant.class))).thenReturn(Optional.of(uploaded));

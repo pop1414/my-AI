@@ -64,6 +64,7 @@ class ReprocessDocumentApplicationServiceTest {
                 0,
                 null,
                 "v1",
+                null,
                 Instant.now(),
                 Instant.now());
         when(repository.findById(anyString(), eq(documentId))).thenReturn(Optional.of(ingesting));
@@ -105,6 +106,7 @@ class ReprocessDocumentApplicationServiceTest {
                 0,
                 null,
                 "v1",
+                null,
                 Instant.now(),
                 Instant.now());
         when(repository.findById(anyString(), eq(documentId))).thenReturn(Optional.of(failed));

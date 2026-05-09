@@ -120,13 +120,15 @@ public class ReprocessDocumentApplicationService implements ReprocessDocumentUse
             // 清理旧版本向量，避免历史向量污染检索结果。
             documentVectorIndexer.deleteByDocumentIdAndSplitVersion(documentId, oldSplitVersion);
         } catch (Exception ex) {
-            // 清理失败时回退到 FAILED，并记录错误，防止文档“消失”。
+            // 清理失败时回退到 FAILED，并记录错误，防止文档"消失"。
+            // 重处理清理阶段尚未产出 processing_metadata，传入 null 表示无元数据可回填。
             String reason = trimFailureReason(ex.getMessage());
             documentRepository.markFailed(
                     workspaceId,
                     documentId,
                     UploadStatus.UPLOADED,
                     reason,
+                    null,
                     ex.getClass().getSimpleName(),
                     ex.getMessage(),
                     now,
@@ -140,7 +142,8 @@ public class ReprocessDocumentApplicationService implements ReprocessDocumentUse
                 documentId.value(),
                 oldSplitVersion,
                 newSplitVersion);
-        return new DocumentStatusResult(documentId, UploadStatus.UPLOADED);
+        // 重处理仅将文档回退到 UPLOADED 等待重新调度，此时所有旧元数据已清除，故 processingMetadata 传 null。
+        return new DocumentStatusResult(documentId, UploadStatus.UPLOADED, null);
     }
 
     private static String trimFailureReason(String reason) {
