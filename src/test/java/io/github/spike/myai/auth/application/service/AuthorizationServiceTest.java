@@ -208,6 +208,28 @@ class AuthorizationServiceTest {
         assertDoesNotThrow(() -> service.requireCanReadDocument("doc-1", "kb-1"));
     }
 
+    @Test
+    @DisplayName("KB_ASKER 应允许成员在问答场景访问文档")
+    void requireCanAskDocument_shouldFallbackToKnowledgeBaseAskGrant() {
+        when(currentUserProvider.requireCurrentUser()).thenReturn(currentUser(WorkspaceRole.WORKSPACE_MEMBER));
+        when(grantRepository.findDocumentPermission("default", "doc-1", "user-1")).thenReturn(Optional.empty());
+        when(grantRepository.findKnowledgeBaseRole("default", "kb-1", "user-1"))
+                .thenReturn(Optional.of(KnowledgeBaseRole.KB_ASKER));
+
+        assertDoesNotThrow(() -> service.requireCanAskDocument("doc-1", "kb-1"));
+    }
+
+    @Test
+    @DisplayName("问答场景下文档级 DOC_DENY 应覆盖 KB_ASKER")
+    void requireCanAskDocument_shouldDenyWhenDocumentGrantIsDeny() {
+        when(currentUserProvider.requireCurrentUser()).thenReturn(currentUser(WorkspaceRole.WORKSPACE_MEMBER));
+        when(grantRepository.findDocumentPermission("default", "doc-1", "user-1"))
+                .thenReturn(Optional.of(DocumentPermission.DOC_DENY));
+
+        assertThrows(AccessDeniedException.class, () -> service.requireCanAskDocument("doc-1", "kb-1"));
+        verify(grantRepository, never()).findKnowledgeBaseRole("default", "kb-1", "user-1");
+    }
+
     /**
      * 构造测试用的 {@link CurrentUser} 实例。
      *

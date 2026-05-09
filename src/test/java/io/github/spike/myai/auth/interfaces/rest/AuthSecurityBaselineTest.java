@@ -12,6 +12,7 @@ import io.github.spike.myai.auth.application.usecase.LoginUseCase;
 import io.github.spike.myai.auth.domain.model.WorkspaceRole;
 import io.github.spike.myai.auth.security.SecurityConstants;
 import io.github.spike.myai.ingest.application.usecase.ListDocumentsUseCase;
+import io.github.spike.myai.qa.application.usecase.AskQuestionUseCase;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -37,6 +38,8 @@ class AuthSecurityBaselineTest {
     private LoginUseCase loginUseCase;
     @MockBean
     private ListDocumentsUseCase listDocumentsUseCase;
+    @MockBean
+    private AskQuestionUseCase askQuestionUseCase;
 
     @Test
     @DisplayName("未登录访问当前用户接口应返回 401")
@@ -192,6 +195,60 @@ class AuthSecurityBaselineTest {
 
         MockHttpSession session = (MockHttpSession) loginResult.getRequest().getSession(false);
         mockMvc.perform(get("/api/v1/documents").session(session))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+    }
+
+    @Test
+    @DisplayName("未登录访问问答接口应返回 401")
+    void qaAsk_shouldReturnUnauthorized_whenAnonymous() throws Exception {
+        mockMvc.perform(post("/api/v1/qa/ask")
+                        .header(SecurityConstants.CSRF_HEADER_NAME, SecurityConstants.CSRF_HEADER_VALUE)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "question": "什么是RAG"
+                                }
+                                """))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("UNAUTHORIZED"));
+    }
+
+    @Test
+    @DisplayName("已登录但无知识库问答权限时应返回 403")
+    void qaAsk_shouldReturnForbidden_whenAccessDenied() throws Exception {
+        when(loginUseCase.handle(any())).thenReturn(new CurrentUserResult(
+                "user-1",
+                "alice",
+                "Alice",
+                "default",
+                WorkspaceRole.WORKSPACE_MEMBER));
+        when(askQuestionUseCase.handle(any()))
+                .thenThrow(new AccessDeniedException("knowledge base ask access denied"));
+
+        MvcResult loginResult = mockMvc.perform(post("/api/v1/auth/login")
+                        .header(SecurityConstants.CSRF_HEADER_NAME, SecurityConstants.CSRF_HEADER_VALUE)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "username": "alice",
+                                  "password": "secret"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        MockHttpSession session = (MockHttpSession) loginResult.getRequest().getSession(false);
+        mockMvc.perform(post("/api/v1/qa/ask")
+                        .session(session)
+                        .header(SecurityConstants.CSRF_HEADER_NAME, SecurityConstants.CSRF_HEADER_VALUE)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "question": "什么是RAG",
+                                  "kbId": "default"
+                                }
+                                """))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("FORBIDDEN"));
     }

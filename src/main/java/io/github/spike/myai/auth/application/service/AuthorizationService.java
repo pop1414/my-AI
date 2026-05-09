@@ -262,6 +262,40 @@ public class AuthorizationService {
     }
 
     /**
+     * 要求当前用户可在问答场景使用指定文档。
+     *
+     * <p>问答场景下，文档级仍遵循 {@link DocumentPermission#DOC_DENY} 最高优先级；
+     * 显式 {@code DOC_ALLOW_READ} / {@code DOC_ALLOW_MANAGE} 均允许进入问答上下文。
+     * 当文档无显式覆盖时，回退到知识库级 {@link KnowledgeBaseRole#KB_ASKER}
+     * 及以上角色判断。
+     *
+     * @param documentId 文档标识
+     * @param kbId       文档所属知识库标识
+     * @throws AccessDeniedException 权限不足时抛出
+     */
+    public void requireCanAskDocument(String documentId, String kbId) {
+        requireCanAskDocument(currentUserProvider.requireCurrentUser(), documentId, kbId);
+    }
+
+    /**
+     * 要求指定当前用户可在问答场景使用指定文档。
+     *
+     * @param user       当前用户上下文
+     * @param documentId 文档标识
+     * @param kbId       文档所属知识库标识
+     * @throws AccessDeniedException 权限不足时抛出
+     */
+    public void requireCanAskDocument(CurrentUser user, String documentId, String kbId) {
+        requireDocumentAccess(
+                user,
+                documentId,
+                kbId,
+                AuthorizationService::canReadDocument,
+                AuthorizationService::canAskKnowledgeBase,
+                "document ask access denied");
+    }
+
+    /**
      * 文档级权限校验核心骨架（三级判定）。
      *
      * <p>判定顺序严格按优先级递减：
@@ -359,6 +393,7 @@ public class AuthorizationService {
      * @return {@code true} 拥有全量工作区权限
      */
     private static boolean hasWorkspaceWideAccess(WorkspaceRole role) {
+        // OWNER 或 ADMIN 即为全量权限角色，可直接放行后续所有授权校验
         return role == WorkspaceRole.WORKSPACE_OWNER || role == WorkspaceRole.WORKSPACE_ADMIN;
     }
 
@@ -372,6 +407,7 @@ public class AuthorizationService {
      * @return {@code true} 可管理知识库
      */
     private static boolean canManageKnowledgeBase(KnowledgeBaseRole role) {
+        // 管理权限为知识库最高权限，仅 KB_MANAGER 持有
         return role == KnowledgeBaseRole.KB_MANAGER;
     }
 
@@ -385,6 +421,7 @@ public class AuthorizationService {
      * @return {@code true} 可贡献内容
      */
     private static boolean canContributeKnowledgeBase(KnowledgeBaseRole role) {
+        // KB_MANAGER 或 KB_CONTRIBUTOR 均可上传、编辑知识库内的文档
         return role == KnowledgeBaseRole.KB_MANAGER || role == KnowledgeBaseRole.KB_CONTRIBUTOR;
     }
 
@@ -399,6 +436,7 @@ public class AuthorizationService {
      * @return {@code true} 可读取知识库
      */
     private static boolean canReadKnowledgeBase(KnowledgeBaseRole role) {
+        // 读取权限：KB_MANAGER / KB_CONTRIBUTOR / KB_READER 均可查看知识库文档列表与内容
         return role == KnowledgeBaseRole.KB_MANAGER
                 || role == KnowledgeBaseRole.KB_CONTRIBUTOR
                 || role == KnowledgeBaseRole.KB_READER;
@@ -415,6 +453,7 @@ public class AuthorizationService {
      * @return {@code true} 可向知识库提问
      */
     private static boolean canAskKnowledgeBase(KnowledgeBaseRole role) {
+        // 问答权限为知识库最低门槛，所有角色均可提问；KB_ASKER 仅限提问，不可查看原始文档
         return role == KnowledgeBaseRole.KB_MANAGER
                 || role == KnowledgeBaseRole.KB_CONTRIBUTOR
                 || role == KnowledgeBaseRole.KB_READER
@@ -431,6 +470,7 @@ public class AuthorizationService {
      * @return {@code true} 可管理文档
      */
     private static boolean canManageDocument(DocumentPermission permission) {
+        // 文档管理权限仅 DOC_ALLOW_MANAGE 持有，可执行删除、移动、权限变更等操作
         return permission == DocumentPermission.DOC_ALLOW_MANAGE;
     }
 
@@ -444,6 +484,7 @@ public class AuthorizationService {
      * @return {@code true} 可读取文档
      */
     private static boolean canReadDocument(DocumentPermission permission) {
+        // DOC_ALLOW_MANAGE 拥有管理权限自然可读，DOC_ALLOW_READ 仅可查看文档内容
         return permission == DocumentPermission.DOC_ALLOW_MANAGE
                 || permission == DocumentPermission.DOC_ALLOW_READ;
     }
