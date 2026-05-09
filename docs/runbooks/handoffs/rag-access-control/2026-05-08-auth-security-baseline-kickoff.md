@@ -124,55 +124,85 @@
 - 登录成功、失败与锁定事件已接入 `audit_events`
 - `docs/04-api-contract.yaml` 已补充 auth 接口、Cookie 认证和 CSRF Header 说明
 
+空库初始账号引导已完成：
+
+- 已新增 bootstrap admin 配置项：
+  - `MYAI_AUTH_BOOTSTRAP_ADMIN_USERNAME`
+  - `MYAI_AUTH_BOOTSTRAP_ADMIN_PASSWORD`
+  - `MYAI_AUTH_BOOTSTRAP_ADMIN_DISPLAY_NAME`
+- 应用启动时会检查默认工作区是否已有 membership
+- 当默认工作区无成员且配置了管理员用户名与密码时，会创建：
+  - `users`
+  - `local_credentials`
+  - `workspace_memberships`
+- 初始角色固定为 `WORKSPACE_OWNER`
+- 密码通过 `BCryptPasswordEncoder` 加密后写入 `local_credentials`
+- 已存在成员时不重复创建初始管理员
+- 未配置用户名或密码时不创建账号，并通过日志说明跳过原因
+
+角色与权限常量已完成 Java 类型化收口：
+
+- 已新增 `WorkspaceRole` 枚举：
+  - `WORKSPACE_OWNER`
+  - `WORKSPACE_ADMIN`
+  - `WORKSPACE_MEMBER`
+- 已新增 `KnowledgeBaseRole` 枚举：
+  - `KB_MANAGER`
+  - `KB_CONTRIBUTOR`
+  - `KB_READER`
+  - `KB_ASKER`
+- 已新增 `DocumentPermission` 枚举：
+  - `DOC_ALLOW_READ`
+  - `DOC_ALLOW_MANAGE`
+  - `DOC_DENY`
+- 登录链路中的 `workspaceRole` 已从字符串收口为 `WorkspaceRole`
+- REST 响应仍输出字符串角色值，保持 `login/me` 接口契约不变
+- JDBC 读写仍与数据库 `VARCHAR` 字段保持 `enum.name()` 同名映射
+
 已完成验证：
 
 - 后端测试：`.\\mvnw.cmd -q test`
 
-当前首批实现仍有一个关键使用缺口：
+当前实现边界：
 
-- 系统尚未提供初始管理员账号创建方式
-- 所有 `/api/v1/**` 受保护后，如果没有初始用户，只能手工插入数据库才能登录
+- 系统已经能够完成登录、登出、当前用户查询、Session 登录态维护和空库初始管理员创建
+- 认证层已经知道当前登录用户是谁、属于哪个默认工作区、拥有哪个工作区角色
+- 业务应用服务尚未统一接入当前用户上下文，后续业务授权不应直接散落读取 `SecurityContextHolder`
+- 因此下一步仍属于 `auth-security-baseline` 分支范围，不需要切新分支
 
-因此下一步仍属于 `auth-security-baseline` 分支范围，不需要切新分支。
+## 8. 下一步：CurrentUserProvider 当前用户上下文
 
-## 8. 下一步：bootstrap admin 初始账号引导
-
-下一步建议实现初始管理员账号引导，让本地环境和后续联调可以在空库或无成员库中自动创建第一个可登录账号。
+下一步建议实现 `CurrentUserProvider`，把 Spring Security Session 中的 `MyAiPrincipal`
+转换为应用层可直接使用的当前用户上下文，为后续 `AuthorizationService` 提供稳定入口。
 
 建议实现范围：
 
-- 新增 bootstrap admin 配置项，例如：
-  - `MYAI_AUTH_BOOTSTRAP_ADMIN_USERNAME`
-  - `MYAI_AUTH_BOOTSTRAP_ADMIN_PASSWORD`
-  - `MYAI_AUTH_BOOTSTRAP_ADMIN_DISPLAY_NAME`
-- 应用启动时检查默认工作区是否已有 membership
-- 当默认工作区没有成员，且配置了管理员用户名与密码时，创建：
-  - `users`
-  - `local_credentials`
-  - `workspace_memberships`
-- 初始角色建议使用 `WORKSPACE_OWNER`
-- 密码必须通过 `BCryptPasswordEncoder` 加密后写入 `local_credentials`
-- 不在 Flyway 脚本中写入明文密码或固定测试密码
-- 已存在成员时不重复创建初始管理员
-- 未配置密码时不创建账号，并通过日志说明跳过原因
+- 新增 `CurrentUser` 应用层模型，字段建议包括：
+  - `userId`
+  - `username`
+  - `workspaceId`
+  - `WorkspaceRole workspaceRole`
+- 新增 `CurrentUserProvider`，统一从 `SecurityContext` 读取当前登录用户
+- 将 `MyAiPrincipal` 转换为应用层 `CurrentUser`
+- 未登录或 Principal 类型不匹配时按未登录处理，避免业务服务直接依赖 Spring Security 细节
+- 暂不接入知识库、文档、问答权限判断，只先稳定当前用户上下文入口
 
 建议测试覆盖：
 
-- 空成员库且配置完整时创建 bootstrap admin
-- 默认工作区已有成员时不重复创建
-- 未配置密码时跳过创建
-- 创建完成后可通过现有 `login` 链路登录
+- 已登录且 Principal 类型正确时返回当前用户上下文
+- 未登录时返回空或抛出明确认证异常
+- Principal 类型不匹配时按未登录处理
+- `WorkspaceRole` 在上下文模型中保持枚举类型
 
 后续推进顺序建议保持：
 
-1. bootstrap admin 初始账号引导
-2. `CurrentUserProvider` 当前用户上下文
-3. `AuthorizationService` 授权服务骨架
-4. 接入 `knowledge-bases` 权限判断
-5. 接入 `documents` 权限判断
-6. 接入 `qa.ask` 召回后授权过滤
-7. 后端稳定后再补前端登录页和路由守卫
+1. `CurrentUserProvider` 当前用户上下文
+2. `AuthorizationService` 授权服务骨架
+3. 接入 `knowledge-bases` 权限判断
+4. 接入 `documents` 权限判断
+5. 接入 `qa.ask` 召回后授权过滤
+6. 后端稳定后再补前端登录页和路由守卫
 
 ## 9. 一句话交接
 
-**`feature/auth-security-baseline` 已完成首批 Spring Security、Session 登录、认证接口、CSRF Header、登录锁定与审计写入；下一步继续在当前分支实现 bootstrap admin 初始账号引导，前端仍暂不编码。**
+**`feature/auth-security-baseline` 已完成 Spring Security、Session 登录、认证接口、CSRF Header、登录锁定、审计写入、bootstrap admin 初始账号引导与角色枚举收口；下一步继续在当前分支实现 `CurrentUserProvider` 当前用户上下文，前端仍暂不编码。**
