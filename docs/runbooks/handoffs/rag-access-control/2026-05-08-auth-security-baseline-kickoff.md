@@ -159,6 +159,20 @@
 - REST 响应仍输出字符串角色值，保持 `login/me` 接口契约不变
 - JDBC 读写仍与数据库 `VARCHAR` 字段保持 `enum.name()` 同名映射
 
+当前用户上下文已完成：
+
+- 已新增 `CurrentUser` 应用层模型，统一承载当前登录用户的：
+  - `userId`
+  - `username`
+  - `workspaceId`
+  - `WorkspaceRole workspaceRole`
+- 已新增 `CurrentUserProvider` 应用层接口，提供：
+  - `currentUser()`
+  - `requireCurrentUser()`
+- 已新增 `SpringSecurityCurrentUserProvider`，从 Spring Security `SecurityContext` 读取 `MyAiPrincipal`
+- 未登录、未认证或 Principal 类型不匹配时按未登录处理
+- 业务服务后续应通过 `CurrentUserProvider` 获取当前用户，避免散落读取 `SecurityContextHolder`
+
 已完成验证：
 
 - 后端测试：`.\\mvnw.cmd -q test`
@@ -166,43 +180,51 @@
 当前实现边界：
 
 - 系统已经能够完成登录、登出、当前用户查询、Session 登录态维护和空库初始管理员创建
-- 认证层已经知道当前登录用户是谁、属于哪个默认工作区、拥有哪个工作区角色
-- 业务应用服务尚未统一接入当前用户上下文，后续业务授权不应直接散落读取 `SecurityContextHolder`
+- 认证层已经知道当前登录用户是谁、属于哪个默认工作区、拥有哪个工作区角色，并已提供应用层统一读取入口
+- 尚未实现 `AuthorizationService` 授权服务骨架
+- 尚未将知识库、文档、问答业务接口接入权限判断
 - 因此下一步仍属于 `auth-security-baseline` 分支范围，不需要切新分支
 
-## 8. 下一步：CurrentUserProvider 当前用户上下文
+## 8. 下一步：AuthorizationService 授权服务骨架
 
-下一步建议实现 `CurrentUserProvider`，把 Spring Security Session 中的 `MyAiPrincipal`
-转换为应用层可直接使用的当前用户上下文，为后续 `AuthorizationService` 提供稳定入口。
+下一步建议实现 `AuthorizationService` 授权服务骨架，先固化工作区角色优先级和资源授权判断入口，
+但暂不大规模改造知识库、文档、问答业务接口。
 
 建议实现范围：
 
-- 新增 `CurrentUser` 应用层模型，字段建议包括：
-  - `userId`
-  - `username`
-  - `workspaceId`
-  - `WorkspaceRole workspaceRole`
-- 新增 `CurrentUserProvider`，统一从 `SecurityContext` 读取当前登录用户
-- 将 `MyAiPrincipal` 转换为应用层 `CurrentUser`
-- 未登录或 Principal 类型不匹配时按未登录处理，避免业务服务直接依赖 Spring Security 细节
-- 暂不接入知识库、文档、问答权限判断，只先稳定当前用户上下文入口
+- 新增授权服务入口，例如 `AuthorizationService`
+- 固化工作区角色优先级：
+  - `WORKSPACE_OWNER` 放行
+  - `WORKSPACE_ADMIN` 放行
+  - `WORKSPACE_MEMBER` 继续检查资源授权
+- 预留知识库授权判断入口：
+  - `requireCanManageKnowledgeBase`
+  - `requireCanContributeKnowledgeBase`
+  - `requireCanReadKnowledgeBase`
+  - `requireCanAskKnowledgeBase`
+- 预留文档权限覆盖入口：
+  - `DOC_DENY` 优先级最高
+  - `DOC_ALLOW_MANAGE`
+  - `DOC_ALLOW_READ`
+- 授权服务依赖 `CurrentUserProvider` 获取当前用户
+- 暂不接入具体业务接口，避免一次性修改过多应用服务
 
 建议测试覆盖：
 
-- 已登录且 Principal 类型正确时返回当前用户上下文
-- 未登录时返回空或抛出明确认证异常
-- Principal 类型不匹配时按未登录处理
-- `WorkspaceRole` 在上下文模型中保持枚举类型
+- `WORKSPACE_OWNER` / `WORKSPACE_ADMIN` 在工作区级判断中放行
+- `WORKSPACE_MEMBER` 在无资源授权时拒绝
+- 未登录时拒绝
+- `DOC_DENY` 覆盖知识库允许
+- 授权拒绝时抛出可映射为 `403` 的异常
 
 后续推进顺序建议保持：
 
-1. `CurrentUserProvider` 当前用户上下文
-2. `AuthorizationService` 授权服务骨架
-3. 接入 `knowledge-bases` 权限判断
-4. 接入 `documents` 权限判断
-5. 接入 `qa.ask` 召回后授权过滤
-6. 后端稳定后再补前端登录页和路由守卫
+1. `AuthorizationService` 授权服务骨架
+2. 接入 `knowledge-bases` 权限判断
+3. 接入 `documents` 权限判断
+4. 接入 `qa.ask` 召回后授权过滤
+5. 后端稳定后再补前端登录页和路由守卫
 
 ## 9. 一句话交接
 
-**`feature/auth-security-baseline` 已完成 Spring Security、Session 登录、认证接口、CSRF Header、登录锁定、审计写入、bootstrap admin 初始账号引导与角色枚举收口；下一步继续在当前分支实现 `CurrentUserProvider` 当前用户上下文，前端仍暂不编码。**
+**`feature/auth-security-baseline` 已完成 Spring Security、Session 登录、认证接口、CSRF Header、登录锁定、审计写入、bootstrap admin 初始账号引导、角色枚举收口与 `CurrentUserProvider` 当前用户上下文；下一步继续在当前分支实现 `AuthorizationService` 授权服务骨架，前端仍暂不编码。**
