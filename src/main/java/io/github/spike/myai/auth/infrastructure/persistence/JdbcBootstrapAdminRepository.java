@@ -195,7 +195,7 @@ public class JdbcBootstrapAdminRepository implements BootstrapAdminRepository {
                         """,
                 account.workspaceId(),
                 userId,
-                account.role(),
+                account.role().name(),
                 now,
                 now);
     }

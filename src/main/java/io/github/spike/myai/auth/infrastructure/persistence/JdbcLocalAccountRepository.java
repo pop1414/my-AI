@@ -2,6 +2,7 @@ package io.github.spike.myai.auth.infrastructure.persistence;
 
 import io.github.spike.myai.auth.domain.model.LoginAccount;
 import io.github.spike.myai.auth.domain.model.LoginFailureState;
+import io.github.spike.myai.auth.domain.model.WorkspaceRole;
 import io.github.spike.myai.auth.domain.port.LocalAccountRepository;
 import io.github.spike.myai.shared.workspace.WorkspaceConstants;
 import java.sql.ResultSet;
@@ -228,7 +229,7 @@ public class JdbcLocalAccountRepository implements LocalAccountRepository {
                 rs.getString("user_status"),
                 rs.getString("password_hash"),
                 rs.getString("workspace_id"),
-                rs.getString("workspace_role"),
+                toWorkspaceRole(rs.getString("workspace_role")),
                 rs.getString("membership_status"),
                 rs.getInt("failed_login_count"),
                 // Timestamp → Instant 安全转换，null 安全
@@ -246,5 +247,15 @@ public class JdbcLocalAccountRepository implements LocalAccountRepository {
      */
     private static Instant toInstant(Timestamp timestamp) {
         return timestamp == null ? null : timestamp.toInstant();
+    }
+
+    /**
+     * 将数据库中的工作区角色字符串转换为枚举。
+     *
+     * @param value 数据库角色值，可能为 null
+     * @return 对应工作区角色；无成员关系时返回 null
+     */
+    private static WorkspaceRole toWorkspaceRole(String value) {
+        return value == null ? null : WorkspaceRole.valueOf(value);
     }
 }

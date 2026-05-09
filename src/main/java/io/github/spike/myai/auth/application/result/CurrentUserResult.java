@@ -1,5 +1,7 @@
 package io.github.spike.myai.auth.application.result;
 
+import io.github.spike.myai.auth.domain.model.WorkspaceRole;
+
 /**
  * 当前用户结果对象。
  *
@@ -11,7 +13,7 @@ package io.github.spike.myai.auth.application.result;
  * @param username      用户名
  * @param displayName   展示名称（如昵称或真实姓名）
  * @param workspaceId    所属工作空间 ID
- * @param workspaceRole  工作空间角色（如 ADMIN、MEMBER）
+ * @param workspaceRole  工作空间角色
  * @author spike
  * @since 1.0.0
  */
@@ -24,6 +26,6 @@ public record CurrentUserResult(
         String displayName,
         /** 所属工作空间 ID */
         String workspaceId,
-        /** 工作空间角色，如 ADMIN / MEMBER */
-        String workspaceRole) {
+        /** 工作空间角色 */
+        WorkspaceRole workspaceRole) {
 }

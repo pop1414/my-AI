@@ -20,7 +20,7 @@ import java.time.Instant;
  * @param userStatus       用户状态（ACTIVE / DISABLED）
  * @param passwordHash     BCrypt 密码哈希值
  * @param workspaceId      所属工作空间 ID
- * @param workspaceRole    工作空间角色（ADMIN / MEMBER 等）
+ * @param workspaceRole    工作空间角色
  * @param membershipStatus 成员资格状态（ACTIVE / INACTIVE）
  * @param failedLoginCount 连续登录失败次数
  * @param lockedUntil      锁定截止时间（{@code null} 表示未锁定）
@@ -40,8 +40,8 @@ public record LoginAccount(
         String passwordHash,
         /** 所属工作空间 ID */
         String workspaceId,
-        /** 工作空间角色：ADMIN / MEMBER */
-        String workspaceRole,
+        /** 工作空间角色 */
+        WorkspaceRole workspaceRole,
         /** 成员资格状态：ACTIVE 或 INACTIVE */
         String membershipStatus,
         /** 连续登录失败次数 */

@@ -1,5 +1,6 @@
 package io.github.spike.myai.auth.security;
 
+import io.github.spike.myai.auth.domain.model.WorkspaceRole;
 import java.io.Serializable;
 
 /**
@@ -21,7 +22,7 @@ import java.io.Serializable;
  * @param username      用户名
  * @param displayName   展示名称（如昵称或真实姓名）
  * @param workspaceId    所属工作空间 ID
- * @param workspaceRole  工作空间角色（如 ADMIN、MEMBER）
+ * @param workspaceRole  工作空间角色
  * @author spike
  * @since 1.0.0
  */
@@ -35,5 +36,5 @@ public record MyAiPrincipal(
         /** 所属工作空间 ID */
         String workspaceId,
         /** 工作空间角色，映射为 ROLE_ 前缀的 Spring Security 权限 */
-        String workspaceRole) implements Serializable {
+        WorkspaceRole workspaceRole) implements Serializable {
 }

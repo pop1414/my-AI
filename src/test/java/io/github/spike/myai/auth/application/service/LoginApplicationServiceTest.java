@@ -12,6 +12,7 @@ import io.github.spike.myai.auth.application.command.LoginCommand;
 import io.github.spike.myai.auth.domain.model.AuditEvent;
 import io.github.spike.myai.auth.domain.model.LoginAccount;
 import io.github.spike.myai.auth.domain.model.LoginFailureState;
+import io.github.spike.myai.auth.domain.model.WorkspaceRole;
 import io.github.spike.myai.auth.domain.port.AuditEventRepository;
 import io.github.spike.myai.auth.domain.port.LocalAccountRepository;
 import java.time.Clock;
@@ -65,7 +66,7 @@ class LoginApplicationServiceTest {
         assertEquals("user-1", result.userId());
         assertEquals("alice", result.username());
         assertEquals("default", result.workspaceId());
-        assertEquals("WORKSPACE_ADMIN", result.workspaceRole());
+        assertEquals(WorkspaceRole.WORKSPACE_ADMIN, result.workspaceRole());
         verify(localAccountRepository).recordSuccessfulLogin("user-1", NOW);
 
         ArgumentCaptor<AuditEvent> captor = ArgumentCaptor.forClass(AuditEvent.class);
@@ -116,7 +117,7 @@ class LoginApplicationServiceTest {
                 "ACTIVE",
                 "{bcrypt}hash",
                 "default",
-                "WORKSPACE_ADMIN",
+                WorkspaceRole.WORKSPACE_ADMIN,
                 "ACTIVE",
                 0,
                 null);

@@ -184,7 +184,7 @@ public class AuthController {
                 principal.username(),
                 principal.displayName(),
                 principal.workspaceId(),
-                principal.workspaceRole());
+                principal.workspaceRole().name());
     }
 
     /**
@@ -214,7 +214,7 @@ public class AuthController {
         return new UsernamePasswordAuthenticationToken(
                 principal,
                 null,
-                List.of(new SimpleGrantedAuthority("ROLE_" + result.workspaceRole())));
+                List.of(new SimpleGrantedAuthority("ROLE_" + result.workspaceRole().name())));
     }
 
     /**
@@ -229,6 +229,6 @@ public class AuthController {
                 result.username(),
                 result.displayName(),
                 result.workspaceId(),
-                result.workspaceRole());
+                result.workspaceRole().name());
     }
 }

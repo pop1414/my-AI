@@ -9,6 +9,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.github.spike.myai.auth.domain.model.BootstrapAdminAccount;
+import io.github.spike.myai.auth.domain.model.WorkspaceRole;
 import io.github.spike.myai.shared.workspace.WorkspaceConstants;
 import java.sql.Timestamp;
 import java.time.Instant;
@@ -61,7 +62,7 @@ class JdbcBootstrapAdminRepositoryTest {
                 "Owner",
                 "{bcrypt}hash",
                 WorkspaceConstants.DEFAULT_WORKSPACE_ID,
-                "WORKSPACE_OWNER",
+                WorkspaceRole.WORKSPACE_OWNER,
                 Instant.parse("2026-05-09T08:00:00Z"));
         Timestamp now = Timestamp.from(account.createdAt());
         when(jdbcTemplate.queryForObject(

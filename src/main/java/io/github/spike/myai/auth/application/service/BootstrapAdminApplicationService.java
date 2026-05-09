@@ -1,6 +1,7 @@
 package io.github.spike.myai.auth.application.service;
 
 import io.github.spike.myai.auth.domain.model.BootstrapAdminAccount;
+import io.github.spike.myai.auth.domain.model.WorkspaceRole;
 import io.github.spike.myai.auth.domain.port.BootstrapAdminRepository;
 import io.github.spike.myai.shared.workspace.WorkspaceConstants;
 import java.time.Clock;
@@ -45,7 +46,7 @@ public class BootstrapAdminApplicationService implements ApplicationRunner {
     private static final Logger log = LoggerFactory.getLogger(BootstrapAdminApplicationService.class);
 
     /** 引导管理员角色常量：工作空间所有者，拥有最高权限 */
-    private static final String BOOTSTRAP_ADMIN_ROLE = "WORKSPACE_OWNER";
+    private static final WorkspaceRole BOOTSTRAP_ADMIN_ROLE = WorkspaceRole.WORKSPACE_OWNER;
 
     /** 引导管理员配置属性（用户名、密码、展示名称） */
     private final AuthBootstrapAdminProperties properties;

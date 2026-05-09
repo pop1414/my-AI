@@ -22,7 +22,7 @@ import java.time.Instant;
  * @param displayName  展示名称（已回退处理，保证非空）
  * @param passwordHash BCrypt 编码后的密码哈希
  * @param workspaceId  工作空间 ID
- * @param role         工作空间角色（固定为 {@code WORKSPACE_OWNER}）
+ * @param role         工作空间角色（固定为 {@link WorkspaceRole#WORKSPACE_OWNER}）
  * @param createdAt    创建时间戳（UTC）
  * @author spike
  * @since 1.0.0
@@ -39,7 +39,7 @@ public record BootstrapAdminAccount(
         /** 工作空间 ID */
         String workspaceId,
         /** 工作空间角色，固定为 WORKSPACE_OWNER */
-        String role,
+        WorkspaceRole role,
         /** 创建时间戳（UTC） */
         Instant createdAt) {
 }

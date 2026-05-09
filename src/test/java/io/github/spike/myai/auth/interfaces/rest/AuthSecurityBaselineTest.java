@@ -9,6 +9,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import io.github.spike.myai.auth.application.result.CurrentUserResult;
 import io.github.spike.myai.auth.application.usecase.LoginUseCase;
+import io.github.spike.myai.auth.domain.model.WorkspaceRole;
 import io.github.spike.myai.auth.security.SecurityConstants;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -64,7 +65,7 @@ class AuthSecurityBaselineTest {
                 "alice",
                 "Alice",
                 "default",
-                "WORKSPACE_ADMIN"));
+                WorkspaceRole.WORKSPACE_ADMIN));
 
         MvcResult loginResult = mockMvc.perform(post("/api/v1/auth/login")
                         .header(SecurityConstants.CSRF_HEADER_NAME, SecurityConstants.CSRF_HEADER_VALUE)
@@ -95,7 +96,7 @@ class AuthSecurityBaselineTest {
                 "alice",
                 "Alice",
                 "default",
-                "WORKSPACE_ADMIN"));
+                WorkspaceRole.WORKSPACE_ADMIN));
 
         MvcResult loginResult = mockMvc.perform(post("/api/v1/auth/login")
                         .header(SecurityConstants.CSRF_HEADER_NAME, SecurityConstants.CSRF_HEADER_VALUE)

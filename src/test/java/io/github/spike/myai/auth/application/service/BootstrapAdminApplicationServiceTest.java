@@ -14,6 +14,7 @@ import io.github.spike.myai.auth.domain.model.AuditEvent;
 import io.github.spike.myai.auth.domain.model.BootstrapAdminAccount;
 import io.github.spike.myai.auth.domain.model.LoginAccount;
 import io.github.spike.myai.auth.domain.model.LoginFailureState;
+import io.github.spike.myai.auth.domain.model.WorkspaceRole;
 import io.github.spike.myai.auth.domain.port.AuditEventRepository;
 import io.github.spike.myai.auth.domain.port.BootstrapAdminRepository;
 import io.github.spike.myai.auth.domain.port.LocalAccountRepository;
@@ -62,7 +63,7 @@ class BootstrapAdminApplicationServiceTest {
         assertEquals("Owner", account.displayName());
         assertEquals("{bcrypt}hash", account.passwordHash());
         assertEquals(WorkspaceConstants.DEFAULT_WORKSPACE_ID, account.workspaceId());
-        assertEquals("WORKSPACE_OWNER", account.role());
+        assertEquals(WorkspaceRole.WORKSPACE_OWNER, account.role());
         assertEquals(NOW, account.createdAt());
     }
 
@@ -137,7 +138,7 @@ class BootstrapAdminApplicationServiceTest {
         assertEquals("owner", currentUser.username());
         assertEquals("Owner", currentUser.displayName());
         assertEquals(WorkspaceConstants.DEFAULT_WORKSPACE_ID, currentUser.workspaceId());
-        assertEquals("WORKSPACE_OWNER", currentUser.workspaceRole());
+        assertEquals(WorkspaceRole.WORKSPACE_OWNER, currentUser.workspaceRole());
         ArgumentCaptor<AuditEvent> captor = ArgumentCaptor.forClass(AuditEvent.class);
         verify(auditEventRepository).save(captor.capture());
         assertEquals("LOGIN_SUCCESS", captor.getValue().eventType());
