@@ -171,7 +171,14 @@ paths:
     post:
       tags: [ingest]
       summary: 上传文档并触发入库
+      description: |
+        上传文档并受理入库；当前用户必须对目标知识库具备贡献权限
+        （工作区所有者/管理员、KB_MANAGER 或 KB_CONTRIBUTOR）。
       x-stage: implemented
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CsrfHeader'
       requestBody:
         required: true
         content:
@@ -195,6 +202,18 @@ paths:
                 $ref: '#/components/schemas/UploadResponse'
         '400':
           description: 参数非法或知识库不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: 缺少或非法 CSRF Header，或当前用户无目标知识库贡献权限
           content:
             application/json:
               schema:
