@@ -600,8 +600,14 @@ paths:
       description: |
         归属 qa 子域；
         V1 先提供同步一次性返回能力；
-        SSE 流式版本仅做文档预留，暂不开放新接口。
+        SSE 流式版本仅做文档预留，暂不开放新接口；
+        当前用户必须对目标知识库具备问答权限；
+        召回结果会在生成前按文档授权过滤，过滤后若无可用内容则返回兜底回答，不返回 403。
       x-stage: implemented
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CsrfHeader'
       requestBody:
         required: true
         content:
@@ -617,6 +623,18 @@ paths:
                 $ref: '#/components/schemas/AskResponse'
         '400':
           description: 参数非法（question 为空、topK 越界或知识库不存在）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: 缺少或非法 CSRF Header，或当前用户无目标知识库问答权限
           content:
             application/json:
               schema:
