@@ -70,6 +70,7 @@
 ## 8. 处理执行设计补充（已采纳，部分能力待实现）
 - 处理模式：异步 worker（单进程）
 - 状态推进：`UPLOADED -> INGESTING -> INDEXED/FAILED`
+- 状态查询：`INDEXED` / `FAILED` 可顺带返回 `processingMetadata`
 - 删除推进：`可删状态 -> DELETING -> DELETED`
 - 分块参数初值：`chunk=500`, `overlap=100`
 - 失败策略：瞬时错误最多 3 次重试（指数退避 + jitter）

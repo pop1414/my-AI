@@ -248,6 +248,8 @@ paths:
       description: |
         当前用户必须对目标文档具备读取权限；
         支持工作区所有者/管理员、知识库读取授权，以及文档级 `DOC_ALLOW_READ` / `DOC_ALLOW_MANAGE`。
+        当状态进入 `INDEXED` / `FAILED` 时，响应可顺带返回 `processingMetadata`，
+        用于暴露文档级处理结果元数据；`UPLOADED` / `INGESTING` 阶段固定返回 `null`。
       security:
         - cookieAuth: []
       parameters:
@@ -713,6 +715,34 @@ components:
         status:
           type: string
           example: UPLOADED
+        processingMetadata:
+          allOf:
+            - $ref: '#/components/schemas/ProcessingMetadata'
+          nullable: true
+          description: 仅 `INDEXED` / `FAILED` 终态允许返回的处理结果元数据
+
+    ProcessingMetadata:
+      type: object
+      description: |
+        文档级处理结果元数据；数据库字段 `ingest_documents.processing_metadata`
+        为事实来源，状态接口仅在终态透传该对象。
+      properties:
+        schema_version:
+          type: string
+          example: v1
+        stable:
+          type: object
+          additionalProperties: true
+          description: 稳定输出字段集合，如 source_file、file_ext、mime_type、quality、created_at
+        conditional:
+          type: object
+          additionalProperties: true
+          description: 条件输出字段集合，如 language、page_count、primary_title、title_outline_sample
+        best_effort:
+          type: object
+          additionalProperties: true
+          description: 尽力而为字段集合，如 keywords
+      additionalProperties: true
 
     DocumentListPageResponse:
       type: object

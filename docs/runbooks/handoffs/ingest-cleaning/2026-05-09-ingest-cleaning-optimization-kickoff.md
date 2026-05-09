@@ -133,3 +133,18 @@
 ## 8. 一句话交接
 
 **`feature/ingest-cleaning-optimization` 专注于文档解析、清洗和现有分块质量优化，不承担成员治理与授权管理接口建设；若涉及中间产物、预览口径或迁移脚本变化，请先同步影响范围再推进。**
+
+## 9. 当前进度快照（2026-05-09）
+
+已完成第一阶段基础收口：
+
+- `ingest_documents.processing_metadata` 已完成数据库字段落地
+- ingest schema 自检已纳入 `processing_metadata` 关键列校验
+- `GET /api/v1/documents/{documentId}/status` 已支持在 `INDEXED` / `FAILED` 终态返回 `processingMetadata`
+- 相关单元测试、接口契约、执行设计文档与发布说明已同步更新
+
+下一步建议：
+
+- 进入 `cleaned.md` 主链改造
+- 在处理链路中补齐 `processing_metadata` 的自动回填逻辑
+- 开始评估 `Tika -> Jsoup -> flexmark` 的中间产物输出方案
