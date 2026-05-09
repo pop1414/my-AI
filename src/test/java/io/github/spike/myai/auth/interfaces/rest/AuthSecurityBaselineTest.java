@@ -11,6 +11,7 @@ import io.github.spike.myai.auth.application.result.CurrentUserResult;
 import io.github.spike.myai.auth.application.usecase.LoginUseCase;
 import io.github.spike.myai.auth.domain.model.WorkspaceRole;
 import io.github.spike.myai.auth.security.SecurityConstants;
+import io.github.spike.myai.ingest.application.usecase.ListDocumentsUseCase;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -19,6 +20,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockHttpSession;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.LockedException;
 import org.springframework.test.web.servlet.MockMvc;
@@ -33,11 +35,21 @@ class AuthSecurityBaselineTest {
 
     @MockBean
     private LoginUseCase loginUseCase;
+    @MockBean
+    private ListDocumentsUseCase listDocumentsUseCase;
 
     @Test
     @DisplayName("未登录访问当前用户接口应返回 401")
     void me_shouldReturnUnauthorized_whenAnonymous() throws Exception {
         mockMvc.perform(get("/api/v1/auth/me"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("UNAUTHORIZED"));
+    }
+
+    @Test
+    @DisplayName("未登录访问文档列表接口应返回 401")
+    void documents_shouldReturnUnauthorized_whenAnonymous() throws Exception {
+        mockMvc.perform(get("/api/v1/documents"))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.code").value("UNAUTHORIZED"));
     }
@@ -152,5 +164,35 @@ class AuthSecurityBaselineTest {
                                 }
                                 """))
                 .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("已登录但无文档读取权限时应返回 403")
+    void documents_shouldReturnForbidden_whenAccessDenied() throws Exception {
+        when(loginUseCase.handle(any())).thenReturn(new CurrentUserResult(
+                "user-1",
+                "alice",
+                "Alice",
+                "default",
+                WorkspaceRole.WORKSPACE_MEMBER));
+        when(listDocumentsUseCase.handle(any()))
+                .thenThrow(new AccessDeniedException("document read access denied"));
+
+        MvcResult loginResult = mockMvc.perform(post("/api/v1/auth/login")
+                        .header(SecurityConstants.CSRF_HEADER_NAME, SecurityConstants.CSRF_HEADER_VALUE)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "username": "alice",
+                                  "password": "secret"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        MockHttpSession session = (MockHttpSession) loginResult.getRequest().getSession(false);
+        mockMvc.perform(get("/api/v1/documents").session(session))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("FORBIDDEN"));
     }
 }

@@ -97,7 +97,20 @@ public class AuthorizationService {
      * @throws AccessDeniedException 权限不足时抛出
      */
     public void requireCanManageKnowledgeBase(String kbId) {
-        CurrentUser user = currentUserProvider.requireCurrentUser();
+        requireCanManageKnowledgeBase(currentUserProvider.requireCurrentUser(), kbId);
+    }
+
+    /**
+     * 要求指定当前用户可管理指定知识库。
+     *
+     * <p>该重载用于调用方已经拿到 {@link CurrentUser} 的场景，
+     * 避免在同一次请求中重复读取安全上下文。
+     *
+     * @param user 当前用户上下文
+     * @param kbId 知识库标识
+     * @throws AccessDeniedException 权限不足时抛出
+     */
+    public void requireCanManageKnowledgeBase(CurrentUser user, String kbId) {
         // 委托知识库级权限校验，角色匹配器为 KB_MANAGER
         requireKnowledgeBaseAccess(user, kbId, AuthorizationService::canManageKnowledgeBase, "knowledge base manage access denied");
     }
@@ -112,7 +125,17 @@ public class AuthorizationService {
      * @throws AccessDeniedException 权限不足时抛出
      */
     public void requireCanContributeKnowledgeBase(String kbId) {
-        CurrentUser user = currentUserProvider.requireCurrentUser();
+        requireCanContributeKnowledgeBase(currentUserProvider.requireCurrentUser(), kbId);
+    }
+
+    /**
+     * 要求指定当前用户可向指定知识库贡献内容。
+     *
+     * @param user 当前用户上下文
+     * @param kbId 知识库标识
+     * @throws AccessDeniedException 权限不足时抛出
+     */
+    public void requireCanContributeKnowledgeBase(CurrentUser user, String kbId) {
         // 委托知识库级权限校验，角色匹配器为 KB_MANAGER 或 KB_CONTRIBUTOR
         requireKnowledgeBaseAccess(user, kbId, AuthorizationService::canContributeKnowledgeBase, "knowledge base contribute access denied");
     }
@@ -128,7 +151,17 @@ public class AuthorizationService {
      * @throws AccessDeniedException 权限不足时抛出
      */
     public void requireCanReadKnowledgeBase(String kbId) {
-        CurrentUser user = currentUserProvider.requireCurrentUser();
+        requireCanReadKnowledgeBase(currentUserProvider.requireCurrentUser(), kbId);
+    }
+
+    /**
+     * 要求指定当前用户可读取指定知识库。
+     *
+     * @param user 当前用户上下文
+     * @param kbId 知识库标识
+     * @throws AccessDeniedException 权限不足时抛出
+     */
+    public void requireCanReadKnowledgeBase(CurrentUser user, String kbId) {
         // 委托知识库级权限校验，角色匹配器为 KB_MANAGER / KB_CONTRIBUTOR / KB_READER
         requireKnowledgeBaseAccess(user, kbId, AuthorizationService::canReadKnowledgeBase, "knowledge base read access denied");
     }
@@ -145,7 +178,17 @@ public class AuthorizationService {
      * @throws AccessDeniedException 权限不足时抛出
      */
     public void requireCanAskKnowledgeBase(String kbId) {
-        CurrentUser user = currentUserProvider.requireCurrentUser();
+        requireCanAskKnowledgeBase(currentUserProvider.requireCurrentUser(), kbId);
+    }
+
+    /**
+     * 要求指定当前用户可在问答场景使用指定知识库。
+     *
+     * @param user 当前用户上下文
+     * @param kbId 知识库标识
+     * @throws AccessDeniedException 权限不足时抛出
+     */
+    public void requireCanAskKnowledgeBase(CurrentUser user, String kbId) {
         // 委托知识库级权限校验，角色匹配器为 KB_MANAGER / KB_CONTRIBUTOR / KB_READER / KB_ASKER
         requireKnowledgeBaseAccess(user, kbId, AuthorizationService::canAskKnowledgeBase, "knowledge base ask access denied");
     }
@@ -162,7 +205,18 @@ public class AuthorizationService {
      * @throws AccessDeniedException 权限不足时抛出
      */
     public void requireCanManageDocument(String documentId, String kbId) {
-        CurrentUser user = currentUserProvider.requireCurrentUser();
+        requireCanManageDocument(currentUserProvider.requireCurrentUser(), documentId, kbId);
+    }
+
+    /**
+     * 要求指定当前用户可管理指定文档。
+     *
+     * @param user       当前用户上下文
+     * @param documentId 文档标识
+     * @param kbId       文档所属知识库标识
+     * @throws AccessDeniedException 权限不足时抛出
+     */
+    public void requireCanManageDocument(CurrentUser user, String documentId, String kbId) {
         // 委托文档级权限校验，文档匹配器为 DOC_ALLOW_MANAGE，回退匹配器为 KB_MANAGER
         requireDocumentAccess(
                 user,
@@ -185,7 +239,18 @@ public class AuthorizationService {
      * @throws AccessDeniedException 权限不足时抛出
      */
     public void requireCanReadDocument(String documentId, String kbId) {
-        CurrentUser user = currentUserProvider.requireCurrentUser();
+        requireCanReadDocument(currentUserProvider.requireCurrentUser(), documentId, kbId);
+    }
+
+    /**
+     * 要求指定当前用户可读取指定文档。
+     *
+     * @param user       当前用户上下文
+     * @param documentId 文档标识
+     * @param kbId       文档所属知识库标识
+     * @throws AccessDeniedException 权限不足时抛出
+     */
+    public void requireCanReadDocument(CurrentUser user, String documentId, String kbId) {
         // 委托文档级权限校验，文档匹配器为 DOC_ALLOW_MANAGE / DOC_ALLOW_READ，回退匹配器为 KB_READER 及以上
         requireDocumentAccess(
                 user,

@@ -4,10 +4,15 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import io.github.spike.myai.auth.application.context.CurrentUser;
+import io.github.spike.myai.auth.application.context.CurrentUserProvider;
+import io.github.spike.myai.auth.application.service.AuthorizationService;
+import io.github.spike.myai.auth.domain.model.WorkspaceRole;
 import io.github.spike.myai.ingest.application.exception.DocumentNotFoundException;
 import io.github.spike.myai.ingest.application.query.GetDocumentStatusQuery;
 import io.github.spike.myai.ingest.application.result.DocumentStatusResult;
@@ -30,10 +35,14 @@ class GetDocumentStatusApplicationServiceTest {
     @DisplayName("查询命中时，应返回文档状态结果")
     void handle_shouldReturnResult_whenFound() {
         DocumentRepository repository = Mockito.mock(DocumentRepository.class);
-        GetDocumentStatusApplicationService service = new GetDocumentStatusApplicationService(repository);
+        CurrentUserProvider currentUserProvider = currentUserProvider();
+        AuthorizationService authorizationService = Mockito.mock(AuthorizationService.class);
+        GetDocumentStatusApplicationService service =
+                new GetDocumentStatusApplicationService(repository, currentUserProvider, authorizationService);
         DocumentId documentId = new DocumentId("doc-100");
         Document document = new Document(
                 documentId,
+                "workspace-a",
                 "kb-1",
                 "hash-100",
                 "a.txt",
@@ -57,15 +66,19 @@ class GetDocumentStatusApplicationServiceTest {
 
         assertEquals("doc-100", result.documentId().value());
         assertEquals(UploadStatus.INDEXED, result.status());
-        verify(repository, times(1)).findById(anyString(), eq(documentId));
+        verify(repository, times(1)).findById(eq("workspace-a"), eq(documentId));
+        verify(authorizationService).requireCanReadDocument(any(CurrentUser.class), eq("doc-100"), eq("kb-1"));
     }
 
     @Test
     @DisplayName("查询未命中时，应抛出 DocumentNotFoundException")
     void handle_shouldThrowException_whenMissing() {
         DocumentRepository repository = Mockito.mock(DocumentRepository.class);
-        GetDocumentStatusApplicationService service = new GetDocumentStatusApplicationService(repository);
-        when(repository.findById(anyString(), eq(new DocumentId("doc-missing")))).thenReturn(Optional.empty());
+        CurrentUserProvider currentUserProvider = currentUserProvider();
+        AuthorizationService authorizationService = Mockito.mock(AuthorizationService.class);
+        GetDocumentStatusApplicationService service =
+                new GetDocumentStatusApplicationService(repository, currentUserProvider, authorizationService);
+        when(repository.findById(eq("workspace-a"), eq(new DocumentId("doc-missing")))).thenReturn(Optional.empty());
 
         assertThrows(
                 DocumentNotFoundException.class,
@@ -76,10 +89,14 @@ class GetDocumentStatusApplicationServiceTest {
     @DisplayName("已删除文档查询时，应返回 DELETED")
     void handle_shouldReturnDeleted_whenDeleted() {
         DocumentRepository repository = Mockito.mock(DocumentRepository.class);
-        GetDocumentStatusApplicationService service = new GetDocumentStatusApplicationService(repository);
+        CurrentUserProvider currentUserProvider = currentUserProvider();
+        AuthorizationService authorizationService = Mockito.mock(AuthorizationService.class);
+        GetDocumentStatusApplicationService service =
+                new GetDocumentStatusApplicationService(repository, currentUserProvider, authorizationService);
         DocumentId documentId = new DocumentId("doc-deleted");
         Document document = new Document(
                 documentId,
+                "workspace-a",
                 "kb-1",
                 "hash-del",
                 "del.txt",
@@ -102,5 +119,12 @@ class GetDocumentStatusApplicationServiceTest {
         DocumentStatusResult result = service.handle(new GetDocumentStatusQuery("doc-deleted"));
 
         assertEquals(UploadStatus.DELETED, result.status());
+    }
+
+    private static CurrentUserProvider currentUserProvider() {
+        CurrentUserProvider provider = Mockito.mock(CurrentUserProvider.class);
+        when(provider.requireCurrentUser()).thenReturn(
+                new CurrentUser("user-1", "alice", "workspace-a", WorkspaceRole.WORKSPACE_MEMBER));
+        return provider;
     }
 }
