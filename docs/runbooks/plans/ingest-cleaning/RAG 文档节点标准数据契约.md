@@ -86,7 +86,7 @@
 | `source_file`     | string        | 稳定输出 | 原始文件名，用于在前端展示来源。                                                        |
 | `file_type`       | string        | 稳定输出 | 文件扩展名：`pdf`、`docx`、`md`、`html` 等。                                            |
 | `chunk_index`     | int           | 稳定输出 | 该节点在全文档中的切块序号（从 1 开始），便于相邻块上下文扩展。                         |
-| `language`        | string        | 稳定输出 | ISO 639-1 语言代码：`zh`、`en` 等。                                                     |
+| `language`        | string        | 条件输出 | ISO 639-1 语言代码：`zh`、`en` 等；在混排或弱结构文档中允许为空或作为弱保证输出。       |
 | `quality`         | string        | 稳定输出 | 文档解析质量标签：`high`（正常）、`low`（弱结构/扫描件）、`warning`（长度或格式风险）。 |
 | `created_at`      | string        | 稳定输出 | ISO 8601 UTC 时间戳，用于增量更新与缓存管理。                                           |
 | `updated_at`      | string        | 稳定输出 | 最后修改时间，同上。                                                                    |
