@@ -373,8 +373,13 @@ paths:
       summary: 创建知识库
       description: |
         归属 knowledge 子域；
-        服务端生成对外业务键 kb_id，客户端只提交 name/description/status。
+        服务端生成对外业务键 kb_id，客户端只提交 name/description/status；
+        仅工作区所有者或管理员可创建知识库。
       x-stage: implemented
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CsrfHeader'
       requestBody:
         required: true
         content:
@@ -394,13 +399,27 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: 缺少或非法 CSRF Header，或当前用户无创建知识库权限
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
     get:
       tags: [knowledge]
       summary: 查询知识库列表
       description: |
         归属 knowledge 子域；
-        返回知识库主数据与已索引文档数量，统计口径固定为 status=INDEXED。
+        返回当前用户工作区内的知识库主数据与已索引文档数量，统计口径固定为 status=INDEXED。
       x-stage: implemented
+      security:
+        - cookieAuth: []
       responses:
         '200':
           description: 查询成功
@@ -410,6 +429,12 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/KnowledgeBase'
+        '401':
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
   /api/v1/knowledge-bases/{kbId}:
     patch:
@@ -417,9 +442,13 @@ paths:
       summary: 编辑知识库
       description: |
         归属 knowledge 子域；
-        允许修改 name、description、status，不允许修改 kb_id。
+        允许修改 name、description、status，不允许修改 kb_id；
+        工作区所有者、管理员或知识库 KB_MANAGER 可编辑。
       x-stage: implemented
+      security:
+        - cookieAuth: []
       parameters:
+        - $ref: '#/components/parameters/CsrfHeader'
         - name: kbId
           in: path
           required: true
@@ -441,6 +470,18 @@ paths:
                 $ref: '#/components/schemas/KnowledgeBase'
         '400':
           description: 参数非法
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: 缺少或非法 CSRF Header，或当前用户无编辑知识库权限
           content:
             application/json:
               schema:

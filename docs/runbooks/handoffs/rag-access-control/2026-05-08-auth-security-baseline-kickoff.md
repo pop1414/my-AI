@@ -173,6 +173,27 @@
 - 未登录、未认证或 Principal 类型不匹配时按未登录处理
 - 业务服务后续应通过 `CurrentUserProvider` 获取当前用户，避免散落读取 `SecurityContextHolder`
 
+授权服务骨架已完成：
+
+- 已新增 `AuthorizationService` 授权服务入口
+- 已新增 `AuthorizationGrantRepository` 授权 grant 读取端口
+- 已新增 JDBC 授权读取实现，仅查询 `ACTIVE` 状态的知识库与文档授权
+- 工作区级授权规则已固化：
+  - `WORKSPACE_OWNER` 放行
+  - `WORKSPACE_ADMIN` 放行
+  - `WORKSPACE_MEMBER` 继续检查资源授权
+- 知识库授权判断入口已预留：
+  - `requireCanManageKnowledgeBase`
+  - `requireCanContributeKnowledgeBase`
+  - `requireCanReadKnowledgeBase`
+  - `requireCanAskKnowledgeBase`
+- 文档权限覆盖入口已预留：
+  - `requireCanManageDocument`
+  - `requireCanReadDocument`
+- 文档级 `DOC_DENY` 已按最高优先级拒绝处理
+- 授权拒绝统一抛出 `AccessDeniedException`，可沿用现有 `403` JSON 语义
+- 已补充 `AuthorizationService` 单元测试，覆盖工作区管理员放行、普通成员无授权拒绝、未登录拒绝与 `DOC_DENY` 覆盖场景
+
 已完成验证：
 
 - 后端测试：`.\\mvnw.cmd -q test`
@@ -181,50 +202,39 @@
 
 - 系统已经能够完成登录、登出、当前用户查询、Session 登录态维护和空库初始管理员创建
 - 认证层已经知道当前登录用户是谁、属于哪个默认工作区、拥有哪个工作区角色，并已提供应用层统一读取入口
-- 尚未实现 `AuthorizationService` 授权服务骨架
+- `AuthorizationService` 授权服务骨架已经完成，但尚未大规模接入业务接口
 - 尚未将知识库、文档、问答业务接口接入权限判断
 - 因此下一步仍属于 `auth-security-baseline` 分支范围，不需要切新分支
 
-## 8. 下一步：AuthorizationService 授权服务骨架
+## 8. 下一步：接入 knowledge-bases 权限判断
 
-下一步建议实现 `AuthorizationService` 授权服务骨架，先固化工作区角色优先级和资源授权判断入口，
-但暂不大规模改造知识库、文档、问答业务接口。
+下一步建议将 `AuthorizationService` 接入知识库应用服务，先让 `knowledge-bases`
+接口开始使用当前用户工作区上下文和权限判断，但仍不展开文档、问答接口改造。
 
 建议实现范围：
 
-- 新增授权服务入口，例如 `AuthorizationService`
-- 固化工作区角色优先级：
-  - `WORKSPACE_OWNER` 放行
-  - `WORKSPACE_ADMIN` 放行
-  - `WORKSPACE_MEMBER` 继续检查资源授权
-- 预留知识库授权判断入口：
-  - `requireCanManageKnowledgeBase`
-  - `requireCanContributeKnowledgeBase`
-  - `requireCanReadKnowledgeBase`
-  - `requireCanAskKnowledgeBase`
-- 预留文档权限覆盖入口：
-  - `DOC_DENY` 优先级最高
-  - `DOC_ALLOW_MANAGE`
-  - `DOC_ALLOW_READ`
-- 授权服务依赖 `CurrentUserProvider` 获取当前用户
-- 暂不接入具体业务接口，避免一次性修改过多应用服务
+- 创建知识库：要求工作区所有者或管理员
+- 更新知识库：要求工作区所有者、管理员或 `KB_MANAGER`
+- 查询知识库列表：使用当前用户 `workspaceId` 查询，不再硬编码默认工作区
+- 同步更新 `docs/04-api-contract.yaml` 中知识库接口的 `401/403` 与 CSRF Header 契约
+- 暂不接入 `documents`、`qa.ask`，避免一次性修改过多业务服务
 
 建议测试覆盖：
 
-- `WORKSPACE_OWNER` / `WORKSPACE_ADMIN` 在工作区级判断中放行
-- `WORKSPACE_MEMBER` 在无资源授权时拒绝
-- 未登录时拒绝
-- `DOC_DENY` 覆盖知识库允许
-- 授权拒绝时抛出可映射为 `403` 的异常
+- `WORKSPACE_OWNER` / `WORKSPACE_ADMIN` 可创建知识库
+- `WORKSPACE_MEMBER` 创建知识库被拒绝
+- `KB_MANAGER` 可更新知识库
+- `KB_READER` 更新知识库被拒绝
+- 知识库列表按当前用户工作区查询
 
 后续推进顺序建议保持：
 
-1. `AuthorizationService` 授权服务骨架
-2. 接入 `knowledge-bases` 权限判断
-3. 接入 `documents` 权限判断
+1. 接入 `knowledge-bases` 权限判断
+2. 接入 `documents/upload` 权限判断
+3. 接入 `documents` 其他查询与管理接口权限判断
 4. 接入 `qa.ask` 召回后授权过滤
 5. 后端稳定后再补前端登录页和路由守卫
 
 ## 9. 一句话交接
 
-**`feature/auth-security-baseline` 已完成 Spring Security、Session 登录、认证接口、CSRF Header、登录锁定、审计写入、bootstrap admin 初始账号引导、角色枚举收口与 `CurrentUserProvider` 当前用户上下文；下一步继续在当前分支实现 `AuthorizationService` 授权服务骨架，前端仍暂不编码。**
+**`feature/auth-security-baseline` 已完成 Spring Security、Session 登录、认证接口、CSRF Header、登录锁定、审计写入、bootstrap admin 初始账号引导、角色枚举收口、`CurrentUserProvider` 当前用户上下文与 `AuthorizationService` 授权服务骨架；下一步继续在当前分支接入 `knowledge-bases` 权限判断，前端仍暂不编码。**
