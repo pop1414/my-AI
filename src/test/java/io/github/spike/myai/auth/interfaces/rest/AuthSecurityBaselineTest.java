@@ -1,0 +1,155 @@
+package io.github.spike.myai.auth.interfaces.rest;
+
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+import io.github.spike.myai.auth.application.result.CurrentUserResult;
+import io.github.spike.myai.auth.application.usecase.LoginUseCase;
+import io.github.spike.myai.auth.security.SecurityConstants;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.http.MediaType;
+import org.springframework.mock.web.MockHttpSession;
+import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.authentication.LockedException;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
+
+@SpringBootTest
+@AutoConfigureMockMvc
+class AuthSecurityBaselineTest {
+
+    @Autowired
+    private MockMvc mockMvc;
+
+    @MockBean
+    private LoginUseCase loginUseCase;
+
+    @Test
+    @DisplayName("未登录访问当前用户接口应返回 401")
+    void me_shouldReturnUnauthorized_whenAnonymous() throws Exception {
+        mockMvc.perform(get("/api/v1/auth/me"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("UNAUTHORIZED"));
+    }
+
+    @Test
+    @DisplayName("写操作缺少 CSRF Header 应返回 403")
+    void writeRequest_shouldReturnForbidden_whenCsrfHeaderMissing() throws Exception {
+        mockMvc.perform(post("/api/v1/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "username": "alice",
+                                  "password": "secret"
+                                }
+                                """))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("CSRF_HEADER_REQUIRED"));
+    }
+
+    @Test
+    @DisplayName("登录成功后应创建 Session 并可读取当前用户")
+    void login_shouldCreateSessionAndMe_shouldReturnCurrentUser() throws Exception {
+        when(loginUseCase.handle(any())).thenReturn(new CurrentUserResult(
+                "user-1",
+                "alice",
+                "Alice",
+                "default",
+                "WORKSPACE_ADMIN"));
+
+        MvcResult loginResult = mockMvc.perform(post("/api/v1/auth/login")
+                        .header(SecurityConstants.CSRF_HEADER_NAME, SecurityConstants.CSRF_HEADER_VALUE)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "username": "alice",
+                                  "password": "secret"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.user.userId").value("user-1"))
+                .andExpect(jsonPath("$.user.workspaceRole").value("WORKSPACE_ADMIN"))
+                .andReturn();
+
+        MockHttpSession session = (MockHttpSession) loginResult.getRequest().getSession(false);
+        mockMvc.perform(get("/api/v1/auth/me").session(session))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.username").value("alice"))
+                .andExpect(jsonPath("$.workspaceId").value("default"));
+    }
+
+    @Test
+    @DisplayName("登出后 Session 应失效")
+    void logout_shouldInvalidateSession() throws Exception {
+        when(loginUseCase.handle(any())).thenReturn(new CurrentUserResult(
+                "user-1",
+                "alice",
+                "Alice",
+                "default",
+                "WORKSPACE_ADMIN"));
+
+        MvcResult loginResult = mockMvc.perform(post("/api/v1/auth/login")
+                        .header(SecurityConstants.CSRF_HEADER_NAME, SecurityConstants.CSRF_HEADER_VALUE)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "username": "alice",
+                                  "password": "secret"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andReturn();
+        MockHttpSession session = (MockHttpSession) loginResult.getRequest().getSession(false);
+
+        mockMvc.perform(post("/api/v1/auth/logout")
+                        .session(session)
+                        .header(SecurityConstants.CSRF_HEADER_NAME, SecurityConstants.CSRF_HEADER_VALUE))
+                .andExpect(status().isNoContent());
+
+        mockMvc.perform(get("/api/v1/auth/me").session(session))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    @DisplayName("登录密码错误应返回 401")
+    void login_shouldReturnUnauthorized_whenCredentialsInvalid() throws Exception {
+        when(loginUseCase.handle(any())).thenThrow(new BadCredentialsException("invalid username or password"));
+
+        mockMvc.perform(post("/api/v1/auth/login")
+                        .header(SecurityConstants.CSRF_HEADER_NAME, SecurityConstants.CSRF_HEADER_VALUE)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "username": "alice",
+                                  "password": "bad"
+                                }
+                                """))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    @DisplayName("账号锁定时登录应返回 403")
+    void login_shouldReturnForbidden_whenAccountLocked() throws Exception {
+        when(loginUseCase.handle(any())).thenThrow(new LockedException("account is locked"));
+
+        mockMvc.perform(post("/api/v1/auth/login")
+                        .header(SecurityConstants.CSRF_HEADER_NAME, SecurityConstants.CSRF_HEADER_VALUE)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "username": "alice",
+                                  "password": "secret"
+                                }
+                                """))
+                .andExpect(status().isForbidden());
+    }
+}
