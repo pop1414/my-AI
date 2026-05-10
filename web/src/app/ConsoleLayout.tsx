@@ -1,36 +1,79 @@
 ﻿import { Suspense } from "react";
 import {
+	AuditOutlined,
 	DeleteOutlined,
 	FileSearchOutlined,
 	FileSyncOutlined,
 	FileTextOutlined,
+	LogoutOutlined,
 	SearchOutlined,
+	TeamOutlined,
 	UploadOutlined,
+	UserOutlined,
 } from "@ant-design/icons";
-import { Breadcrumb, Layout, Menu, Spin, Typography } from "antd";
+import {
+	Breadcrumb,
+	Dropdown,
+	Layout,
+	Menu,
+	Space,
+	Spin,
+	Tag,
+	Typography,
+} from "antd";
 import type { MenuProps } from "antd";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
+import { useAuth } from "../shared/auth/AuthContext";
 
 const { Header, Sider, Content } = Layout;
 const { Title, Text } = Typography;
 
 type MenuItem = Required<MenuProps>["items"][number];
 
-const menuItems: MenuItem[] = [
-	{ key: "/ingest/documents", icon: <FileTextOutlined />, label: "文档列表" },
-	{ key: "/ingest/upload", icon: <UploadOutlined />, label: "文档上传" },
-	{ key: "/ingest/status", icon: <FileSyncOutlined />, label: "状态查询" },
-	{
-		key: "/ingest/chunks-preview",
-		icon: <FileSearchOutlined />,
-		label: "分块预览",
-	},
-	{ key: "/ingest/reprocess", icon: <FileSyncOutlined />, label: "重处理" },
-	{ key: "/ingest/delete", icon: <DeleteOutlined />, label: "删除文档" },
-	{ type: "divider" },
-	{ key: "/knowledge", icon: <FileTextOutlined />, label: "知识库" },
-	{ key: "/qa", icon: <SearchOutlined />, label: "问答" },
-];
+function buildMenuItems(isAdmin: boolean): MenuItem[] {
+	const businessItems: MenuItem[] = [
+		{
+			key: "/ingest/documents",
+			icon: <FileTextOutlined />,
+			label: "文档列表",
+		},
+		{ key: "/ingest/upload", icon: <UploadOutlined />, label: "文档上传" },
+		{
+			key: "/ingest/status",
+			icon: <FileSyncOutlined />,
+			label: "状态查询",
+		},
+		{
+			key: "/ingest/chunks-preview",
+			icon: <FileSearchOutlined />,
+			label: "分块预览",
+		},
+		{
+			key: "/ingest/reprocess",
+			icon: <FileSyncOutlined />,
+			label: "重处理",
+		},
+		{ key: "/ingest/delete", icon: <DeleteOutlined />, label: "删除文档" },
+		{ type: "divider" },
+		{ key: "/knowledge", icon: <FileTextOutlined />, label: "知识库" },
+		{ key: "/qa", icon: <SearchOutlined />, label: "问答" },
+	];
+
+	if (!isAdmin) return businessItems;
+
+	const adminItems: MenuItem[] = [
+		{ type: "divider" },
+		{ type: "group", label: "系统管理" },
+		{ key: "/admin/members", icon: <TeamOutlined />, label: "成员管理" },
+		{
+			key: "/admin/audit-events",
+			icon: <AuditOutlined />,
+			label: "审计日志",
+		},
+	];
+
+	return [...businessItems, ...adminItems];
+}
 
 function resolveTitle(pathname: string): string {
 	if (pathname.startsWith("/ingest/documents/")) {
@@ -47,6 +90,12 @@ function resolveTitle(pathname: string): string {
 			: suffix;
 		return map[action] ?? "文档详情";
 	}
+	if (pathname.startsWith("/admin/knowledge-bases/")) {
+		return "知识库授权管理";
+	}
+	if (pathname.startsWith("/admin/documents/")) {
+		return "文档授权管理";
+	}
 	const map: Record<string, string> = {
 		"/ingest/documents": "文档列表与管理台",
 		"/ingest/upload": "文档上传受理",
@@ -56,6 +105,8 @@ function resolveTitle(pathname: string): string {
 		"/ingest/delete": "删除文档资产",
 		"/knowledge": "知识库管理",
 		"/qa": "问答控制台",
+		"/admin/members": "成员管理",
+		"/admin/audit-events": "审计日志",
 	};
 	return map[pathname] ?? "Ingest 控制台";
 }
@@ -65,12 +116,44 @@ function resolveMenuSelectedKey(pathname: string): string {
 	if (pathname.startsWith("/ingest/documents/")) {
 		return "/ingest/documents";
 	}
+	// 知识库授权管理页高亮"知识库"
+	if (pathname.startsWith("/admin/knowledge-bases/")) {
+		return "/knowledge";
+	}
+	// 文档授权管理页高亮"文档列表"
+	if (pathname.startsWith("/admin/documents/")) {
+		return "/ingest/documents";
+	}
 	return pathname;
 }
 
 export function ConsoleLayout() {
 	const navigate = useNavigate();
 	const location = useLocation();
+	const { user, isAdmin, logout } = useAuth();
+
+	const menuItems = buildMenuItems(isAdmin);
+
+	const roleColorMap: Record<string, string> = {
+		WORKSPACE_OWNER: "gold",
+		WORKSPACE_ADMIN: "blue",
+		WORKSPACE_MEMBER: "default",
+	};
+
+	const userMenuItems: MenuProps["items"] = [
+		{
+			key: "info",
+			label: user?.displayName ?? user?.username ?? "未登录",
+			disabled: true,
+		},
+		{ type: "divider" },
+		{
+			key: "logout",
+			icon: <LogoutOutlined />,
+			label: "退出登录",
+			onClick: () => logout(),
+		},
+	];
 
 	return (
 		<Layout className="console-root">
@@ -94,6 +177,25 @@ export function ConsoleLayout() {
 							V1 闭环：文档上传 · 分块检索 · 知识库统计 · 单轮问答
 						</Text>
 					</div>
+					<Dropdown
+						menu={{ items: userMenuItems }}
+						placement="bottomRight"
+					>
+						<Space style={{ cursor: "pointer" }}>
+							<UserOutlined />
+							<span>{user?.displayName ?? ""}</span>
+							{user?.workspaceRole && (
+								<Tag
+									color={
+										roleColorMap[user.workspaceRole] ??
+										"default"
+									}
+								>
+									{user.workspaceRole}
+								</Tag>
+							)}
+						</Space>
+					</Dropdown>
 				</Header>
 				<Content className="console-content">
 					<Breadcrumb
