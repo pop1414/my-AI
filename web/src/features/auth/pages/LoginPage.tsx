@@ -1,17 +1,36 @@
 import { useMemo } from "react";
 import { Navigate, useSearchParams } from "react-router-dom";
-import { Button, Card, Form, Input, Typography, theme } from "antd";
+import { Alert, Button, Card, Form, Input, Typography, theme } from "antd";
 import { LockOutlined, UserOutlined } from "@ant-design/icons";
 import { useMutation } from "@tanstack/react-query";
-import { login } from "../../../shared/api/authApi";
 import { useAuth } from "../../../shared/auth/AuthContext";
-import { ApiErrorAlert } from "../../../shared/ui/ApiErrorAlert";
 import type { ApiError } from "../../../shared/api/request";
 
 const { Title, Text } = Typography;
 
+function formatLockedUntilMessage(rawMessage: string): string | null {
+	const prefix = "account is locked until ";
+	if (!rawMessage.startsWith(prefix)) {
+		return null;
+	}
+	const iso = rawMessage.slice(prefix.length).trim();
+	const lockedUntil = new Date(iso);
+	if (Number.isNaN(lockedUntil.getTime())) {
+		return "账号已锁定，请稍后再试。";
+	}
+	return `账号已锁定，请于 ${lockedUntil.toLocaleString("zh-CN", {
+		year: "numeric",
+		month: "2-digit",
+		day: "2-digit",
+		hour: "2-digit",
+		minute: "2-digit",
+		second: "2-digit",
+		hour12: false,
+	})} 后重试。`;
+}
+
 export function LoginPage() {
-	const { isAuthenticated } = useAuth();
+	const { isAuthenticated, login } = useAuth();
 	const [searchParams] = useSearchParams();
 	const { token } = theme.useToken();
 
@@ -34,6 +53,24 @@ export function LoginPage() {
 	}
 
 	const apiError = mutation.error as ApiError | null;
+	const errorMessage = useMemo(() => {
+		if (!apiError) {
+			return null;
+		}
+		if (apiError.status === 401) {
+			return "用户名或密码错误，请重新输入。";
+		}
+		if (apiError.status === 403) {
+			if (apiError.message === "account is disabled") {
+				return "账号已被禁用，请联系管理员。";
+			}
+			return (
+				formatLockedUntilMessage(apiError.message) ??
+				"账号已锁定，请稍后再试。"
+			);
+		}
+		return `登录失败：${apiError.message}`;
+	}, [apiError]);
 
 	return (
 		<div
@@ -86,9 +123,9 @@ export function LoginPage() {
 						/>
 					</Form.Item>
 
-					{apiError && (
+					{errorMessage && (
 						<Form.Item>
-							<ApiErrorAlert error={apiError} />
+							<Alert type="error" showIcon message={errorMessage} />
 						</Form.Item>
 					)}
 

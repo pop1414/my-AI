@@ -2,6 +2,7 @@ package io.github.spike.myai.auth.application.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
@@ -102,7 +103,9 @@ class LoginApplicationServiceTest {
         when(localAccountRepository.recordFailedLogin(any(), any(), anyInt(), any()))
                 .thenReturn(new LoginFailureState(3, lockedUntil));
 
-        assertThrows(LockedException.class, () -> service.handle(new LoginCommand("alice", "bad")));
+        LockedException ex = assertThrows(LockedException.class, () -> service.handle(new LoginCommand("alice", "bad")));
+        assertTrue(ex.getMessage().contains("account is locked until"));
+        assertTrue(ex.getMessage().contains(lockedUntil.toString()));
 
         ArgumentCaptor<AuditEvent> captor = ArgumentCaptor.forClass(AuditEvent.class);
         verify(auditEventRepository).save(captor.capture());

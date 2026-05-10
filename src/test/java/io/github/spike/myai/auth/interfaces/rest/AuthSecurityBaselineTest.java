@@ -184,13 +184,15 @@ class AuthSecurityBaselineTest {
                                   "password": "bad"
                                 }
                                 """))
-                .andExpect(status().isUnauthorized());
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("UNAUTHORIZED"))
+                .andExpect(jsonPath("$.message").value("invalid username or password"));
     }
 
     @Test
     @DisplayName("账号锁定时登录应返回 403")
     void login_shouldReturnForbidden_whenAccountLocked() throws Exception {
-        when(loginUseCase.handle(any())).thenThrow(new LockedException("account is locked"));
+        when(loginUseCase.handle(any())).thenThrow(new LockedException("account is locked until 2026-05-10T10:10:00Z"));
 
         mockMvc.perform(post("/api/v1/auth/login")
                         .header(SecurityConstants.CSRF_HEADER_NAME, SecurityConstants.CSRF_HEADER_VALUE)
@@ -201,7 +203,9 @@ class AuthSecurityBaselineTest {
                                   "password": "secret"
                                 }
                                 """))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("FORBIDDEN"))
+                .andExpect(jsonPath("$.message").value("account is locked until 2026-05-10T10:10:00Z"));
     }
 
     @Test
