@@ -15,6 +15,12 @@ const MembersPage = lazy(() =>
 	})),
 );
 
+const KnowledgeBaseGrantsPage = lazy(() =>
+	import("../features/admin/pages/KnowledgeBaseGrantsPage").then((m) => ({
+		default: m.KnowledgeBaseGrantsPage,
+	})),
+);
+
 const IngestListPage = lazy(() =>
 	import("../features/ingest/pages/IngestListPage").then((m) => ({
 		default: m.IngestListPage,
@@ -132,7 +138,11 @@ export function AppRoutes() {
 					<Route path="qa" element={<QaPage />} />
 					{/* 系统管理（仅管理员） */}
 					<Route element={<AdminRoute />}>
-						<Route path="admin/members" element={<MembersPage />} />
+						<Route path="admin/members" element={<MembersPage />} />{" "}
+						<Route
+							path="admin/knowledge-bases/:kbId/grants"
+							element={<KnowledgeBaseGrantsPage />}
+						/>{" "}
 					</Route>
 					<Route
 						path="*"
