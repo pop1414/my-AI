@@ -13,6 +13,7 @@ servers:
 
 tags:
   - name: auth
+  - name: governance
   - name: ingest
   - name: knowledge
   - name: qa
@@ -101,6 +102,535 @@ paths:
                 $ref: '#/components/schemas/CurrentUserResponse'
         '401':
           description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/admin/members:
+    get:
+      tags: [governance]
+      summary: 查询工作区有效成员列表
+      description: |
+        返回当前工作区内“有效成员”列表；
+        当前有效成员口径固定为 `users.status=ACTIVE` 且 `workspace_memberships.status=ACTIVE`；
+        仅工作区所有者或管理员可访问。
+      x-stage: implemented
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/WorkspaceMember'
+        '401':
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: 当前用户无成员治理权限
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/admin/members/{userId}/role:
+    patch:
+      tags: [governance]
+      summary: 调整工作区成员角色
+      description: |
+        调整目标有效成员在当前工作区内的角色；
+        仅工作区所有者或管理员可访问；
+        角色变更成功后应立即影响既有知识库、文档与问答访问控制结果。
+      x-stage: implemented
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CsrfHeader'
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: 目标成员用户 ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateWorkspaceMemberRoleRequest'
+      responses:
+        '200':
+          description: 调整成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkspaceMember'
+        '400':
+          description: 请求体为空或角色值非法
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: 缺少或非法 CSRF Header，或当前用户无成员治理权限
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: 目标成员不存在或不是当前工作区有效成员
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/admin/knowledge-bases/{kbId}/grants:
+    get:
+      tags: [governance]
+      summary: 查询知识库 ACTIVE 授权列表
+      description: |
+        返回当前工作区内指定知识库的 ACTIVE 授权列表；
+        当前列表口径固定为：
+        - `knowledge_base_grants.status = ACTIVE`
+        - 被授权用户 `users.status = ACTIVE`
+        - 被授权成员关系 `workspace_memberships.status = ACTIVE`
+        仅工作区所有者或管理员可访问。
+      x-stage: implemented
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: kbId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: 知识库业务键 kb_id
+      responses:
+        '200':
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/KnowledgeBaseGrant'
+        '400':
+          description: 路径参数非法
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: 当前用户无知识库授权治理权限
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: 知识库不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/admin/knowledge-bases/{kbId}/grants/{userId}:
+    put:
+      tags: [governance]
+      summary: 授予或更新知识库授权
+      description: |
+        为当前工作区内指定知识库授予或更新单个成员的知识库角色；
+        授权对象必须是当前工作区有效成员；
+        同一 `(workspace_id, kb_id, user_id)` 授权关系保持单一真源；
+        授权变更后应立即影响既有知识库、文档与问答访问控制结果。
+      x-stage: implemented
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CsrfHeader'
+        - name: kbId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: 知识库业务键 kb_id
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: 目标成员用户 ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpsertKnowledgeBaseGrantRequest'
+      responses:
+        '200':
+          description: 授权成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KnowledgeBaseGrant'
+        '400':
+          description: 请求体为空、路径参数非法或知识库角色值非法
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: 缺少或非法 CSRF Header，或当前用户无知识库授权治理权限
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: 知识库不存在，或目标用户不是当前工作区有效成员
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    delete:
+      tags: [governance]
+      summary: 回收知识库授权
+      description: |
+        回收当前工作区内指定知识库对单个成员的 ACTIVE 授权；
+        回收成功后应立即影响既有知识库、文档与问答访问控制结果。
+      x-stage: implemented
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CsrfHeader'
+        - name: kbId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: 知识库业务键 kb_id
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: 目标成员用户 ID
+      responses:
+        '204':
+          description: 回收成功
+        '400':
+          description: 路径参数非法
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: 缺少或非法 CSRF Header，或当前用户无知识库授权治理权限
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: 知识库不存在或 ACTIVE 授权不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/admin/documents/{documentId}/grants:
+    get:
+      tags: [governance]
+      summary: 查询文档 ACTIVE 授权列表
+      description: |
+        返回当前工作区内指定文档的 ACTIVE 授权列表；
+        当前列表口径固定为：
+        - `document_grants.status = ACTIVE`
+        - 被授权用户 `users.status = ACTIVE`
+        - 被授权成员关系 `workspace_memberships.status = ACTIVE`
+        仅工作区所有者或管理员可访问。
+      x-stage: implemented
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: documentId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: 文档资产 ID
+      responses:
+        '200':
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/DocumentGrant'
+        '400':
+          description: 路径参数非法
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: 当前用户无文档授权治理权限
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: 文档不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/admin/documents/{documentId}/grants/{userId}:
+    put:
+      tags: [governance]
+      summary: 授予或更新文档授权
+      description: |
+        为当前工作区内指定文档授予或更新单个成员的文档级权限覆盖；
+        授权对象必须是当前工作区有效成员；
+        同一 `(workspace_id, document_id, user_id)` 授权关系保持单一真源；
+        文档级覆盖继续遵循 `DOC_DENY` 最高优先级。
+      x-stage: implemented
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CsrfHeader'
+        - name: documentId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: 文档资产 ID
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: 目标成员用户 ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpsertDocumentGrantRequest'
+      responses:
+        '200':
+          description: 授权成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentGrant'
+        '400':
+          description: 请求体为空、路径参数非法或文档权限值非法
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: 缺少或非法 CSRF Header，或当前用户无文档授权治理权限
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: 文档不存在，或目标用户不是当前工作区有效成员
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    delete:
+      tags: [governance]
+      summary: 回收文档授权
+      description: |
+        回收当前工作区内指定文档对单个成员的 ACTIVE 授权；
+        回收成功后应立即影响既有文档列表、文档读取与问答过滤结果。
+      x-stage: implemented
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CsrfHeader'
+        - name: documentId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: 文档资产 ID
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: 目标成员用户 ID
+      responses:
+        '204':
+          description: 回收成功
+        '400':
+          description: 路径参数非法
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: 缺少或非法 CSRF Header，或当前用户无文档授权治理权限
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: 文档不存在或 ACTIVE 授权不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/admin/audit-events:
+    get:
+      tags: [governance]
+      summary: 查询审计事件分页列表
+      description: |
+        返回当前工作区内的审计事件分页结果；
+        默认按 `occurredAt DESC, auditEventId DESC` 排序；
+        支持按事件类型、操作者、目标类型、目标 ID、结果代码与时间范围过滤；
+        仅工作区所有者或管理员可访问。
+      x-stage: implemented
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: eventType
+          in: query
+          required: false
+          schema:
+            type: string
+          description: 事件类型过滤，如 `LOGIN_SUCCESS`、`DOCUMENT_GRANT_UPSERTED`
+        - name: actorUserId
+          in: query
+          required: false
+          schema:
+            type: string
+          description: 操作者用户 ID 过滤
+        - name: targetType
+          in: query
+          required: false
+          schema:
+            type: string
+          description: 目标类型过滤，如 `USER`、`WORKSPACE_MEMBERSHIP`、`KNOWLEDGE_BASE_GRANT`、`DOCUMENT_GRANT`
+        - name: targetId
+          in: query
+          required: false
+          schema:
+            type: string
+          description: 目标 ID 过滤
+        - name: outcome
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [SUCCESS, FAILURE, DENIED]
+          description: 结果代码过滤
+        - name: occurredFrom
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date-time
+          description: 起始时间（含）
+        - name: occurredTo
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date-time
+          description: 结束时间（含）
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 20
+            minimum: 1
+            maximum: 100
+          description: 每页条数
+        - name: offset
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 0
+            minimum: 0
+          description: 分页偏移量
+      responses:
+        '200':
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditEventPageResponse'
+        '400':
+          description: 查询参数非法
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: 当前用户无审计查询权限
           content:
             application/json:
               schema:
@@ -693,6 +1223,141 @@ components:
         workspaceRole:
           type: string
           enum: [WORKSPACE_OWNER, WORKSPACE_ADMIN, WORKSPACE_MEMBER]
+
+    WorkspaceMember:
+      type: object
+      properties:
+        userId:
+          type: string
+        username:
+          type: string
+        displayName:
+          type: string
+        workspaceId:
+          type: string
+          example: default
+        workspaceRole:
+          type: string
+          enum: [WORKSPACE_OWNER, WORKSPACE_ADMIN, WORKSPACE_MEMBER]
+        membershipStatus:
+          type: string
+          enum: [ACTIVE]
+
+    UpdateWorkspaceMemberRoleRequest:
+      type: object
+      required: [workspaceRole]
+      properties:
+        workspaceRole:
+          type: string
+          enum: [WORKSPACE_OWNER, WORKSPACE_ADMIN, WORKSPACE_MEMBER]
+
+    KnowledgeBaseGrant:
+      type: object
+      properties:
+        workspaceId:
+          type: string
+          example: default
+        kbId:
+          type: string
+        userId:
+          type: string
+        username:
+          type: string
+        displayName:
+          type: string
+        role:
+          type: string
+          enum: [KB_MANAGER, KB_CONTRIBUTOR, KB_READER, KB_ASKER]
+        status:
+          type: string
+          enum: [ACTIVE]
+
+    UpsertKnowledgeBaseGrantRequest:
+      type: object
+      required: [role]
+      properties:
+        role:
+          type: string
+          enum: [KB_MANAGER, KB_CONTRIBUTOR, KB_READER, KB_ASKER]
+
+    DocumentGrant:
+      type: object
+      properties:
+        workspaceId:
+          type: string
+          example: default
+        documentId:
+          type: string
+        userId:
+          type: string
+        username:
+          type: string
+        displayName:
+          type: string
+        permission:
+          type: string
+          enum: [DOC_ALLOW_READ, DOC_ALLOW_MANAGE, DOC_DENY]
+        status:
+          type: string
+          enum: [ACTIVE]
+
+    UpsertDocumentGrantRequest:
+      type: object
+      required: [permission]
+      properties:
+        permission:
+          type: string
+          enum: [DOC_ALLOW_READ, DOC_ALLOW_MANAGE, DOC_DENY]
+
+    AuditEventPageResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/AuditEvent'
+        total:
+          type: integer
+          format: int64
+        limit:
+          type: integer
+        offset:
+          type: integer
+
+    AuditEvent:
+      type: object
+      properties:
+        auditEventId:
+          type: integer
+          format: int64
+        workspaceId:
+          type: string
+          nullable: true
+        actorUserId:
+          type: string
+          nullable: true
+        actorUsername:
+          type: string
+          nullable: true
+        eventType:
+          type: string
+        targetType:
+          type: string
+          nullable: true
+        targetId:
+          type: string
+          nullable: true
+        outcome:
+          type: string
+          enum: [SUCCESS, FAILURE, DENIED]
+        reason:
+          type: string
+        metadata:
+          type: object
+          additionalProperties: true
+        occurredAt:
+          type: string
+          format: date-time
 
     UploadResponse:
       type: object

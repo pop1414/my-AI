@@ -8,11 +8,28 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import io.github.spike.myai.auth.application.result.CurrentUserResult;
+import io.github.spike.myai.auth.application.result.AuditEventItemResult;
+import io.github.spike.myai.auth.application.result.AuditEventPageResult;
+import io.github.spike.myai.auth.application.result.DocumentGrantResult;
+import io.github.spike.myai.auth.application.result.KnowledgeBaseGrantResult;
+import io.github.spike.myai.auth.application.result.WorkspaceMemberResult;
+import io.github.spike.myai.auth.application.usecase.ListAuditEventsUseCase;
+import io.github.spike.myai.auth.application.usecase.ListDocumentGrantsUseCase;
+import io.github.spike.myai.auth.application.usecase.ListKnowledgeBaseGrantsUseCase;
 import io.github.spike.myai.auth.application.usecase.LoginUseCase;
+import io.github.spike.myai.auth.application.usecase.RevokeDocumentGrantUseCase;
+import io.github.spike.myai.auth.application.usecase.RevokeKnowledgeBaseGrantUseCase;
+import io.github.spike.myai.auth.application.usecase.ListWorkspaceMembersUseCase;
+import io.github.spike.myai.auth.application.usecase.UpsertDocumentGrantUseCase;
+import io.github.spike.myai.auth.application.usecase.UpsertKnowledgeBaseGrantUseCase;
+import io.github.spike.myai.auth.application.usecase.UpdateWorkspaceMemberRoleUseCase;
+import io.github.spike.myai.auth.domain.model.DocumentPermission;
+import io.github.spike.myai.auth.domain.model.KnowledgeBaseRole;
 import io.github.spike.myai.auth.domain.model.WorkspaceRole;
 import io.github.spike.myai.auth.security.SecurityConstants;
 import io.github.spike.myai.ingest.application.usecase.ListDocumentsUseCase;
 import io.github.spike.myai.qa.application.usecase.AskQuestionUseCase;
+import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -40,6 +57,24 @@ class AuthSecurityBaselineTest {
     private ListDocumentsUseCase listDocumentsUseCase;
     @MockBean
     private AskQuestionUseCase askQuestionUseCase;
+    @MockBean
+    private ListWorkspaceMembersUseCase listWorkspaceMembersUseCase;
+    @MockBean
+    private UpdateWorkspaceMemberRoleUseCase updateWorkspaceMemberRoleUseCase;
+    @MockBean
+    private ListKnowledgeBaseGrantsUseCase listKnowledgeBaseGrantsUseCase;
+    @MockBean
+    private UpsertKnowledgeBaseGrantUseCase upsertKnowledgeBaseGrantUseCase;
+    @MockBean
+    private RevokeKnowledgeBaseGrantUseCase revokeKnowledgeBaseGrantUseCase;
+    @MockBean
+    private ListDocumentGrantsUseCase listDocumentGrantsUseCase;
+    @MockBean
+    private UpsertDocumentGrantUseCase upsertDocumentGrantUseCase;
+    @MockBean
+    private RevokeDocumentGrantUseCase revokeDocumentGrantUseCase;
+    @MockBean
+    private ListAuditEventsUseCase listAuditEventsUseCase;
 
     @Test
     @DisplayName("未登录访问当前用户接口应返回 401")
@@ -251,5 +286,296 @@ class AuthSecurityBaselineTest {
                                 """))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+    }
+
+    @Test
+    @DisplayName("未登录访问成员治理接口应返回 401")
+    void adminMembers_shouldReturnUnauthorized_whenAnonymous() throws Exception {
+        mockMvc.perform(get("/api/v1/admin/members"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("UNAUTHORIZED"));
+    }
+
+    @Test
+    @DisplayName("普通成员访问成员治理接口应返回 403")
+    void adminMembers_shouldReturnForbidden_whenAccessDenied() throws Exception {
+        when(loginUseCase.handle(any())).thenReturn(new CurrentUserResult(
+                "user-1",
+                "alice",
+                "Alice",
+                "default",
+                WorkspaceRole.WORKSPACE_MEMBER));
+        when(listWorkspaceMembersUseCase.handle())
+                .thenThrow(new AccessDeniedException("workspace manage access denied"));
+
+        MvcResult loginResult = mockMvc.perform(post("/api/v1/auth/login")
+                        .header(SecurityConstants.CSRF_HEADER_NAME, SecurityConstants.CSRF_HEADER_VALUE)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "username": "alice",
+                                  "password": "secret"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        MockHttpSession session = (MockHttpSession) loginResult.getRequest().getSession(false);
+        mockMvc.perform(get("/api/v1/admin/members").session(session))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+    }
+
+    @Test
+    @DisplayName("管理员访问成员治理接口应返回成员列表")
+    void adminMembers_shouldReturnWorkspaceMembers_whenAdminLoggedIn() throws Exception {
+        when(loginUseCase.handle(any())).thenReturn(new CurrentUserResult(
+                "user-1",
+                "alice",
+                "Alice",
+                "default",
+                WorkspaceRole.WORKSPACE_ADMIN));
+        when(listWorkspaceMembersUseCase.handle()).thenReturn(List.of(
+                new WorkspaceMemberResult("user-1", "alice", "Alice", "default", WorkspaceRole.WORKSPACE_ADMIN, "ACTIVE")));
+
+        MvcResult loginResult = mockMvc.perform(post("/api/v1/auth/login")
+                        .header(SecurityConstants.CSRF_HEADER_NAME, SecurityConstants.CSRF_HEADER_VALUE)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "username": "alice",
+                                  "password": "secret"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        MockHttpSession session = (MockHttpSession) loginResult.getRequest().getSession(false);
+        mockMvc.perform(get("/api/v1/admin/members").session(session))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].userId").value("user-1"))
+                .andExpect(jsonPath("$[0].workspaceRole").value("WORKSPACE_ADMIN"));
+    }
+
+    @Test
+    @DisplayName("未登录访问知识库授权治理接口应返回 401")
+    void knowledgeBaseGrants_shouldReturnUnauthorized_whenAnonymous() throws Exception {
+        mockMvc.perform(get("/api/v1/admin/knowledge-bases/{kbId}/grants", "kb-1"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("UNAUTHORIZED"));
+    }
+
+    @Test
+    @DisplayName("普通成员访问知识库授权治理接口应返回 403")
+    void knowledgeBaseGrants_shouldReturnForbidden_whenAccessDenied() throws Exception {
+        when(loginUseCase.handle(any())).thenReturn(new CurrentUserResult(
+                "user-1",
+                "alice",
+                "Alice",
+                "default",
+                WorkspaceRole.WORKSPACE_MEMBER));
+        when(listKnowledgeBaseGrantsUseCase.handle("kb-1"))
+                .thenThrow(new AccessDeniedException("workspace manage access denied"));
+
+        MvcResult loginResult = mockMvc.perform(post("/api/v1/auth/login")
+                        .header(SecurityConstants.CSRF_HEADER_NAME, SecurityConstants.CSRF_HEADER_VALUE)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "username": "alice",
+                                  "password": "secret"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        MockHttpSession session = (MockHttpSession) loginResult.getRequest().getSession(false);
+        mockMvc.perform(get("/api/v1/admin/knowledge-bases/{kbId}/grants", "kb-1").session(session))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+    }
+
+    @Test
+    @DisplayName("管理员访问知识库授权治理接口应返回授权列表")
+    void knowledgeBaseGrants_shouldReturnGrantList_whenAdminLoggedIn() throws Exception {
+        when(loginUseCase.handle(any())).thenReturn(new CurrentUserResult(
+                "user-1",
+                "alice",
+                "Alice",
+                "default",
+                WorkspaceRole.WORKSPACE_ADMIN));
+        when(listKnowledgeBaseGrantsUseCase.handle("kb-1")).thenReturn(List.of(
+                new KnowledgeBaseGrantResult("default", "kb-1", "user-2", "bob", "Bob", KnowledgeBaseRole.KB_READER, "ACTIVE")));
+
+        MvcResult loginResult = mockMvc.perform(post("/api/v1/auth/login")
+                        .header(SecurityConstants.CSRF_HEADER_NAME, SecurityConstants.CSRF_HEADER_VALUE)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "username": "alice",
+                                  "password": "secret"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        MockHttpSession session = (MockHttpSession) loginResult.getRequest().getSession(false);
+        mockMvc.perform(get("/api/v1/admin/knowledge-bases/{kbId}/grants", "kb-1").session(session))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].userId").value("user-2"))
+                .andExpect(jsonPath("$[0].role").value("KB_READER"));
+    }
+
+    @Test
+    @DisplayName("未登录访问文档授权治理接口应返回 401")
+    void documentGrants_shouldReturnUnauthorized_whenAnonymous() throws Exception {
+        mockMvc.perform(get("/api/v1/admin/documents/{documentId}/grants", "doc-1"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("UNAUTHORIZED"));
+    }
+
+    @Test
+    @DisplayName("普通成员访问文档授权治理接口应返回 403")
+    void documentGrants_shouldReturnForbidden_whenAccessDenied() throws Exception {
+        when(loginUseCase.handle(any())).thenReturn(new CurrentUserResult(
+                "user-1",
+                "alice",
+                "Alice",
+                "default",
+                WorkspaceRole.WORKSPACE_MEMBER));
+        when(listDocumentGrantsUseCase.handle("doc-1"))
+                .thenThrow(new AccessDeniedException("workspace manage access denied"));
+
+        MvcResult loginResult = mockMvc.perform(post("/api/v1/auth/login")
+                        .header(SecurityConstants.CSRF_HEADER_NAME, SecurityConstants.CSRF_HEADER_VALUE)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "username": "alice",
+                                  "password": "secret"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        MockHttpSession session = (MockHttpSession) loginResult.getRequest().getSession(false);
+        mockMvc.perform(get("/api/v1/admin/documents/{documentId}/grants", "doc-1").session(session))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+    }
+
+    @Test
+    @DisplayName("管理员访问文档授权治理接口应返回授权列表")
+    void documentGrants_shouldReturnGrantList_whenAdminLoggedIn() throws Exception {
+        when(loginUseCase.handle(any())).thenReturn(new CurrentUserResult(
+                "user-1",
+                "alice",
+                "Alice",
+                "default",
+                WorkspaceRole.WORKSPACE_ADMIN));
+        when(listDocumentGrantsUseCase.handle("doc-1")).thenReturn(List.of(
+                new DocumentGrantResult("default", "doc-1", "user-2", "bob", "Bob", DocumentPermission.DOC_ALLOW_READ, "ACTIVE")));
+
+        MvcResult loginResult = mockMvc.perform(post("/api/v1/auth/login")
+                        .header(SecurityConstants.CSRF_HEADER_NAME, SecurityConstants.CSRF_HEADER_VALUE)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "username": "alice",
+                                  "password": "secret"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        MockHttpSession session = (MockHttpSession) loginResult.getRequest().getSession(false);
+        mockMvc.perform(get("/api/v1/admin/documents/{documentId}/grants", "doc-1").session(session))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].userId").value("user-2"))
+                .andExpect(jsonPath("$[0].permission").value("DOC_ALLOW_READ"));
+    }
+
+    @Test
+    @DisplayName("未登录访问审计查询接口应返回 401")
+    void auditEvents_shouldReturnUnauthorized_whenAnonymous() throws Exception {
+        mockMvc.perform(get("/api/v1/admin/audit-events"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("UNAUTHORIZED"));
+    }
+
+    @Test
+    @DisplayName("普通成员访问审计查询接口应返回 403")
+    void auditEvents_shouldReturnForbidden_whenAccessDenied() throws Exception {
+        when(loginUseCase.handle(any())).thenReturn(new CurrentUserResult(
+                "user-1",
+                "alice",
+                "Alice",
+                "default",
+                WorkspaceRole.WORKSPACE_MEMBER));
+        when(listAuditEventsUseCase.handle(any()))
+                .thenThrow(new AccessDeniedException("workspace manage access denied"));
+
+        MvcResult loginResult = mockMvc.perform(post("/api/v1/auth/login")
+                        .header(SecurityConstants.CSRF_HEADER_NAME, SecurityConstants.CSRF_HEADER_VALUE)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "username": "alice",
+                                  "password": "secret"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        MockHttpSession session = (MockHttpSession) loginResult.getRequest().getSession(false);
+        mockMvc.perform(get("/api/v1/admin/audit-events").session(session))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+    }
+
+    @Test
+    @DisplayName("管理员访问审计查询接口应返回分页结果")
+    void auditEvents_shouldReturnPage_whenAdminLoggedIn() throws Exception {
+        when(loginUseCase.handle(any())).thenReturn(new CurrentUserResult(
+                "user-1",
+                "alice",
+                "Alice",
+                "default",
+                WorkspaceRole.WORKSPACE_ADMIN));
+        when(listAuditEventsUseCase.handle(any())).thenReturn(new AuditEventPageResult(
+                List.of(new AuditEventItemResult(
+                        1001L,
+                        "default",
+                        "user-1",
+                        "alice",
+                        "DOCUMENT_GRANT_UPSERTED",
+                        "DOCUMENT_GRANT",
+                        "doc-1:user-2",
+                        "SUCCESS",
+                        "",
+                        "{\"permission\":\"DOC_ALLOW_READ\"}",
+                        java.time.Instant.parse("2026-05-10T03:00:00Z"))),
+                1L,
+                20,
+                0));
+
+        MvcResult loginResult = mockMvc.perform(post("/api/v1/auth/login")
+                        .header(SecurityConstants.CSRF_HEADER_NAME, SecurityConstants.CSRF_HEADER_VALUE)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "username": "alice",
+                                  "password": "secret"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        MockHttpSession session = (MockHttpSession) loginResult.getRequest().getSession(false);
+        mockMvc.perform(get("/api/v1/admin/audit-events").session(session))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.total").value(1))
+                .andExpect(jsonPath("$.items[0].auditEventId").value(1001))
+                .andExpect(jsonPath("$.items[0].eventType").value("DOCUMENT_GRANT_UPSERTED"));
     }
 }
