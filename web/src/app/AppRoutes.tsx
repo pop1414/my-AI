@@ -21,6 +21,12 @@ const KnowledgeBaseGrantsPage = lazy(() =>
 	})),
 );
 
+const DocumentGrantsPage = lazy(() =>
+	import("../features/admin/pages/DocumentGrantsPage").then((m) => ({
+		default: m.DocumentGrantsPage,
+	})),
+);
+
 const IngestListPage = lazy(() =>
 	import("../features/ingest/pages/IngestListPage").then((m) => ({
 		default: m.IngestListPage,
@@ -142,6 +148,10 @@ export function AppRoutes() {
 						<Route
 							path="admin/knowledge-bases/:kbId/grants"
 							element={<KnowledgeBaseGrantsPage />}
+						/>{" "}
+						<Route
+							path="admin/documents/:documentId/grants"
+							element={<DocumentGrantsPage />}
 						/>{" "}
 					</Route>
 					<Route
