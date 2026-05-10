@@ -89,6 +89,21 @@
 2. `PUT /api/v1/admin/knowledge-bases/{kbId}/grants/{userId}`
 3. `DELETE /api/v1/admin/knowledge-bases/{kbId}/grants/{userId}`
 
+当前进度同步（2026-05-10，知识库授权治理已完成）：
+
+- 已完成知识库 ACTIVE 授权列表接口：`GET /api/v1/admin/knowledge-bases/{kbId}/grants`
+- 已完成知识库授权授予 / 更新接口：`PUT /api/v1/admin/knowledge-bases/{kbId}/grants/{userId}`
+- 已完成知识库授权回收接口：`DELETE /api/v1/admin/knowledge-bases/{kbId}/grants/{userId}`
+- 知识库授权治理接口已统一要求 `WORKSPACE_OWNER` / `WORKSPACE_ADMIN`
+- 授权对象已统一要求为当前工作区有效成员，继续复用成员治理阶段收口的成员真源
+- 知识库授权写入已固定为 `(workspace_id, kb_id, user_id)` 单一真源，并通过 UPSERT 维持 ACTIVE 授权
+- 知识库授权回收已改为 `DISABLED`，不做物理删除
+- 知识库授权变更已写入 `audit_events`
+- `docs/04-api-contract.yaml` 已补充知识库授权治理接口契约、认证说明、CSRF Header 与 `400/401/403/404` 语义
+- 后端测试 `.\\mvnw.cmd -q test` 已通过
+
+这意味着知识库级授权治理已经闭环，接下来可以继续实现文档级覆盖授权接口，并验证 `DOC_DENY` 与文档例外授权在治理侧的写入与回收流程。
+
 ### 4.3 文档授权接口
 
 - 查询文档级覆盖授权列表
@@ -101,6 +116,12 @@
 
 - 文档级覆盖继续遵循 `DOC_DENY` 最高优先级
 - 文档级覆盖仅用于资源例外，不替代知识库级主授权模型
+
+下一步建议按以下顺序落地：
+
+1. `GET /api/v1/admin/documents/{documentId}/grants`
+2. `PUT /api/v1/admin/documents/{documentId}/grants/{userId}`
+3. `DELETE /api/v1/admin/documents/{documentId}/grants/{userId}`
 
 ### 4.4 审计查询接口
 
@@ -141,4 +162,4 @@
 
 ## 7. 一句话交接
 
-**`feature/auth-authorization-governance` 已完成成员治理首批接口（成员列表、角色调整），并已收口有效成员真源；下一步请继续实现知识库授权管理接口，再推进文档授权接口和审计查询接口。**
+**`feature/auth-authorization-governance` 已完成成员治理首批接口与知识库授权治理接口，并已收口有效成员真源与知识库授权单一真源；下一步请继续实现文档授权治理接口，再推进审计查询接口。**
