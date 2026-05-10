@@ -4,12 +4,24 @@ import {
 	FileSearchOutlined,
 	FileSyncOutlined,
 	FileTextOutlined,
+	LogoutOutlined,
 	SearchOutlined,
 	UploadOutlined,
+	UserOutlined,
 } from "@ant-design/icons";
-import { Breadcrumb, Layout, Menu, Spin, Typography } from "antd";
+import {
+	Breadcrumb,
+	Dropdown,
+	Layout,
+	Menu,
+	Space,
+	Spin,
+	Tag,
+	Typography,
+} from "antd";
 import type { MenuProps } from "antd";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
+import { useAuth } from "../shared/auth/AuthContext";
 
 const { Header, Sider, Content } = Layout;
 const { Title, Text } = Typography;
@@ -71,6 +83,28 @@ function resolveMenuSelectedKey(pathname: string): string {
 export function ConsoleLayout() {
 	const navigate = useNavigate();
 	const location = useLocation();
+	const { user, logout } = useAuth();
+
+	const roleColorMap: Record<string, string> = {
+		WORKSPACE_OWNER: "gold",
+		WORKSPACE_ADMIN: "blue",
+		WORKSPACE_MEMBER: "default",
+	};
+
+	const userMenuItems: MenuProps["items"] = [
+		{
+			key: "info",
+			label: user?.displayName ?? user?.username ?? "未登录",
+			disabled: true,
+		},
+		{ type: "divider" },
+		{
+			key: "logout",
+			icon: <LogoutOutlined />,
+			label: "退出登录",
+			onClick: () => logout(),
+		},
+	];
 
 	return (
 		<Layout className="console-root">
@@ -94,6 +128,25 @@ export function ConsoleLayout() {
 							V1 闭环：文档上传 · 分块检索 · 知识库统计 · 单轮问答
 						</Text>
 					</div>
+					<Dropdown
+						menu={{ items: userMenuItems }}
+						placement="bottomRight"
+					>
+						<Space style={{ cursor: "pointer" }}>
+							<UserOutlined />
+							<span>{user?.displayName ?? ""}</span>
+							{user?.workspaceRole && (
+								<Tag
+									color={
+										roleColorMap[user.workspaceRole] ??
+										"default"
+									}
+								>
+									{user.workspaceRole}
+								</Tag>
+							)}
+						</Space>
+					</Dropdown>
 				</Header>
 				<Content className="console-content">
 					<Breadcrumb
