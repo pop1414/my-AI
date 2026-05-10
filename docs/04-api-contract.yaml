@@ -535,6 +535,107 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+  /api/v1/admin/audit-events:
+    get:
+      tags: [governance]
+      summary: 查询审计事件分页列表
+      description: |
+        返回当前工作区内的审计事件分页结果；
+        默认按 `occurredAt DESC, auditEventId DESC` 排序；
+        支持按事件类型、操作者、目标类型、目标 ID、结果代码与时间范围过滤；
+        仅工作区所有者或管理员可访问。
+      x-stage: implemented
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: eventType
+          in: query
+          required: false
+          schema:
+            type: string
+          description: 事件类型过滤，如 `LOGIN_SUCCESS`、`DOCUMENT_GRANT_UPSERTED`
+        - name: actorUserId
+          in: query
+          required: false
+          schema:
+            type: string
+          description: 操作者用户 ID 过滤
+        - name: targetType
+          in: query
+          required: false
+          schema:
+            type: string
+          description: 目标类型过滤，如 `USER`、`WORKSPACE_MEMBERSHIP`、`KNOWLEDGE_BASE_GRANT`、`DOCUMENT_GRANT`
+        - name: targetId
+          in: query
+          required: false
+          schema:
+            type: string
+          description: 目标 ID 过滤
+        - name: outcome
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [SUCCESS, FAILURE, DENIED]
+          description: 结果代码过滤
+        - name: occurredFrom
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date-time
+          description: 起始时间（含）
+        - name: occurredTo
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date-time
+          description: 结束时间（含）
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 20
+            minimum: 1
+            maximum: 100
+          description: 每页条数
+        - name: offset
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 0
+            minimum: 0
+          description: 分页偏移量
+      responses:
+        '200':
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditEventPageResponse'
+        '400':
+          description: 查询参数非法
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: 当前用户无审计查询权限
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
   /api/v1/documents:
     get:
       tags: [ingest]
@@ -1207,6 +1308,56 @@ components:
         permission:
           type: string
           enum: [DOC_ALLOW_READ, DOC_ALLOW_MANAGE, DOC_DENY]
+
+    AuditEventPageResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/AuditEvent'
+        total:
+          type: integer
+          format: int64
+        limit:
+          type: integer
+        offset:
+          type: integer
+
+    AuditEvent:
+      type: object
+      properties:
+        auditEventId:
+          type: integer
+          format: int64
+        workspaceId:
+          type: string
+          nullable: true
+        actorUserId:
+          type: string
+          nullable: true
+        actorUsername:
+          type: string
+          nullable: true
+        eventType:
+          type: string
+        targetType:
+          type: string
+          nullable: true
+        targetId:
+          type: string
+          nullable: true
+        outcome:
+          type: string
+          enum: [SUCCESS, FAILURE, DENIED]
+        reason:
+          type: string
+        metadata:
+          type: object
+          additionalProperties: true
+        occurredAt:
+          type: string
+          format: date-time
 
     UploadResponse:
       type: object

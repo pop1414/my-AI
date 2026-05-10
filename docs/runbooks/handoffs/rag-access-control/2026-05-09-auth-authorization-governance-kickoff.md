@@ -154,6 +154,27 @@
 2. 按事件类型、成员、资源、时间范围补充查询参数
 3. 统一审计查询返回模型，并补充分页 / 排序约束
 
+当前进度同步（2026-05-10，审计查询已完成）：
+
+- 已完成审计事件分页列表接口：`GET /api/v1/admin/audit-events`
+- 已支持按以下维度过滤：
+  - `eventType`
+  - `actorUserId`
+  - `targetType`
+  - `targetId`
+  - `outcome`
+  - `occurredFrom`
+  - `occurredTo`
+- 已支持分页参数：
+  - `limit`
+  - `offset`
+- 审计查询结果已固定按 `occurredAt DESC, auditEventId DESC` 排序
+- 审计查询接口已统一要求 `WORKSPACE_OWNER` / `WORKSPACE_ADMIN`
+- `docs/04-api-contract.yaml` 已补充审计查询接口契约、过滤参数与分页返回模型
+- 后端测试 `.\\mvnw.cmd -q test` 已通过
+
+这意味着治理阶段后端接口已全部完成，当前分支不建议继续堆叠新的治理能力。
+
 ## 5. 接口与契约更新要求
 
 本分支落地时需要同步更新 `docs/04-api-contract.yaml`，至少新增：
@@ -183,4 +204,4 @@
 
 ## 7. 一句话交接
 
-**`feature/auth-authorization-governance` 已完成成员治理、知识库授权治理与文档授权治理接口，并已收口成员真源与资源授权单一真源；下一步请继续实现审计查询接口。**
+**`feature/auth-authorization-governance` 已完成成员治理、知识库授权治理、文档授权治理与审计查询接口，治理阶段后端能力已闭环；下一步建议切出新分支，进入前端后台接入或治理体验优化。**
