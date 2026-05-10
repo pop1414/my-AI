@@ -27,6 +27,12 @@ const DocumentGrantsPage = lazy(() =>
 	})),
 );
 
+const AuditEventsPage = lazy(() =>
+	import("../features/admin/pages/AuditEventsPage").then((m) => ({
+		default: m.AuditEventsPage,
+	})),
+);
+
 const IngestListPage = lazy(() =>
 	import("../features/ingest/pages/IngestListPage").then((m) => ({
 		default: m.IngestListPage,
@@ -152,6 +158,10 @@ export function AppRoutes() {
 						<Route
 							path="admin/documents/:documentId/grants"
 							element={<DocumentGrantsPage />}
+						/>{" "}
+						<Route
+							path="admin/audit-events"
+							element={<AuditEventsPage />}
 						/>{" "}
 					</Route>
 					<Route
