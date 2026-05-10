@@ -8,10 +8,15 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import io.github.spike.myai.auth.application.result.CurrentUserResult;
+import io.github.spike.myai.auth.application.result.KnowledgeBaseGrantResult;
 import io.github.spike.myai.auth.application.result.WorkspaceMemberResult;
+import io.github.spike.myai.auth.application.usecase.ListKnowledgeBaseGrantsUseCase;
 import io.github.spike.myai.auth.application.usecase.LoginUseCase;
+import io.github.spike.myai.auth.application.usecase.RevokeKnowledgeBaseGrantUseCase;
 import io.github.spike.myai.auth.application.usecase.ListWorkspaceMembersUseCase;
+import io.github.spike.myai.auth.application.usecase.UpsertKnowledgeBaseGrantUseCase;
 import io.github.spike.myai.auth.application.usecase.UpdateWorkspaceMemberRoleUseCase;
+import io.github.spike.myai.auth.domain.model.KnowledgeBaseRole;
 import io.github.spike.myai.auth.domain.model.WorkspaceRole;
 import io.github.spike.myai.auth.security.SecurityConstants;
 import io.github.spike.myai.ingest.application.usecase.ListDocumentsUseCase;
@@ -48,6 +53,12 @@ class AuthSecurityBaselineTest {
     private ListWorkspaceMembersUseCase listWorkspaceMembersUseCase;
     @MockBean
     private UpdateWorkspaceMemberRoleUseCase updateWorkspaceMemberRoleUseCase;
+    @MockBean
+    private ListKnowledgeBaseGrantsUseCase listKnowledgeBaseGrantsUseCase;
+    @MockBean
+    private UpsertKnowledgeBaseGrantUseCase upsertKnowledgeBaseGrantUseCase;
+    @MockBean
+    private RevokeKnowledgeBaseGrantUseCase revokeKnowledgeBaseGrantUseCase;
 
     @Test
     @DisplayName("未登录访问当前用户接口应返回 401")
@@ -328,5 +339,74 @@ class AuthSecurityBaselineTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].userId").value("user-1"))
                 .andExpect(jsonPath("$[0].workspaceRole").value("WORKSPACE_ADMIN"));
+    }
+
+    @Test
+    @DisplayName("未登录访问知识库授权治理接口应返回 401")
+    void knowledgeBaseGrants_shouldReturnUnauthorized_whenAnonymous() throws Exception {
+        mockMvc.perform(get("/api/v1/admin/knowledge-bases/{kbId}/grants", "kb-1"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("UNAUTHORIZED"));
+    }
+
+    @Test
+    @DisplayName("普通成员访问知识库授权治理接口应返回 403")
+    void knowledgeBaseGrants_shouldReturnForbidden_whenAccessDenied() throws Exception {
+        when(loginUseCase.handle(any())).thenReturn(new CurrentUserResult(
+                "user-1",
+                "alice",
+                "Alice",
+                "default",
+                WorkspaceRole.WORKSPACE_MEMBER));
+        when(listKnowledgeBaseGrantsUseCase.handle("kb-1"))
+                .thenThrow(new AccessDeniedException("workspace manage access denied"));
+
+        MvcResult loginResult = mockMvc.perform(post("/api/v1/auth/login")
+                        .header(SecurityConstants.CSRF_HEADER_NAME, SecurityConstants.CSRF_HEADER_VALUE)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "username": "alice",
+                                  "password": "secret"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        MockHttpSession session = (MockHttpSession) loginResult.getRequest().getSession(false);
+        mockMvc.perform(get("/api/v1/admin/knowledge-bases/{kbId}/grants", "kb-1").session(session))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+    }
+
+    @Test
+    @DisplayName("管理员访问知识库授权治理接口应返回授权列表")
+    void knowledgeBaseGrants_shouldReturnGrantList_whenAdminLoggedIn() throws Exception {
+        when(loginUseCase.handle(any())).thenReturn(new CurrentUserResult(
+                "user-1",
+                "alice",
+                "Alice",
+                "default",
+                WorkspaceRole.WORKSPACE_ADMIN));
+        when(listKnowledgeBaseGrantsUseCase.handle("kb-1")).thenReturn(List.of(
+                new KnowledgeBaseGrantResult("default", "kb-1", "user-2", "bob", "Bob", KnowledgeBaseRole.KB_READER, "ACTIVE")));
+
+        MvcResult loginResult = mockMvc.perform(post("/api/v1/auth/login")
+                        .header(SecurityConstants.CSRF_HEADER_NAME, SecurityConstants.CSRF_HEADER_VALUE)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "username": "alice",
+                                  "password": "secret"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        MockHttpSession session = (MockHttpSession) loginResult.getRequest().getSession(false);
+        mockMvc.perform(get("/api/v1/admin/knowledge-bases/{kbId}/grants", "kb-1").session(session))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].userId").value("user-2"))
+                .andExpect(jsonPath("$[0].role").value("KB_READER"));
     }
 }
