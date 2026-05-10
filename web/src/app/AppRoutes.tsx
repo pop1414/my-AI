@@ -1,11 +1,17 @@
 ﻿import { lazy } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import { ConsoleLayout } from "./ConsoleLayout";
-import { ProtectedRoute } from "../shared/auth/RouteGuards";
+import { AdminRoute, ProtectedRoute } from "../shared/auth/RouteGuards";
 
 const LoginPage = lazy(() =>
 	import("../features/auth/pages/LoginPage").then((m) => ({
 		default: m.LoginPage,
+	})),
+);
+
+const MembersPage = lazy(() =>
+	import("../features/admin/pages/MembersPage").then((m) => ({
+		default: m.MembersPage,
 	})),
 );
 
@@ -124,6 +130,10 @@ export function AppRoutes() {
 
 					<Route path="knowledge" element={<KnowledgePage />} />
 					<Route path="qa" element={<QaPage />} />
+					{/* 系统管理（仅管理员） */}
+					<Route element={<AdminRoute />}>
+						<Route path="admin/members" element={<MembersPage />} />
+					</Route>
 					<Route
 						path="*"
 						element={<Navigate to="/ingest/documents" replace />}
