@@ -197,6 +197,175 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+  /api/v1/admin/knowledge-bases/{kbId}/grants:
+    get:
+      tags: [governance]
+      summary: 查询知识库 ACTIVE 授权列表
+      description: |
+        返回当前工作区内指定知识库的 ACTIVE 授权列表；
+        当前列表口径固定为：
+        - `knowledge_base_grants.status = ACTIVE`
+        - 被授权用户 `users.status = ACTIVE`
+        - 被授权成员关系 `workspace_memberships.status = ACTIVE`
+        仅工作区所有者或管理员可访问。
+      x-stage: implemented
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: kbId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: 知识库业务键 kb_id
+      responses:
+        '200':
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/KnowledgeBaseGrant'
+        '400':
+          description: 路径参数非法
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: 当前用户无知识库授权治理权限
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: 知识库不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/admin/knowledge-bases/{kbId}/grants/{userId}:
+    put:
+      tags: [governance]
+      summary: 授予或更新知识库授权
+      description: |
+        为当前工作区内指定知识库授予或更新单个成员的知识库角色；
+        授权对象必须是当前工作区有效成员；
+        同一 `(workspace_id, kb_id, user_id)` 授权关系保持单一真源；
+        授权变更后应立即影响既有知识库、文档与问答访问控制结果。
+      x-stage: implemented
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CsrfHeader'
+        - name: kbId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: 知识库业务键 kb_id
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: 目标成员用户 ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpsertKnowledgeBaseGrantRequest'
+      responses:
+        '200':
+          description: 授权成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KnowledgeBaseGrant'
+        '400':
+          description: 请求体为空、路径参数非法或知识库角色值非法
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: 缺少或非法 CSRF Header，或当前用户无知识库授权治理权限
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: 知识库不存在，或目标用户不是当前工作区有效成员
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    delete:
+      tags: [governance]
+      summary: 回收知识库授权
+      description: |
+        回收当前工作区内指定知识库对单个成员的 ACTIVE 授权；
+        回收成功后应立即影响既有知识库、文档与问答访问控制结果。
+      x-stage: implemented
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CsrfHeader'
+        - name: kbId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: 知识库业务键 kb_id
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: 目标成员用户 ID
+      responses:
+        '204':
+          description: 回收成功
+        '400':
+          description: 路径参数非法
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: 缺少或非法 CSRF Header，或当前用户无知识库授权治理权限
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: 知识库不存在或 ACTIVE 授权不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
   /api/v1/documents:
     get:
       tags: [ingest]
@@ -811,6 +980,35 @@ components:
         workspaceRole:
           type: string
           enum: [WORKSPACE_OWNER, WORKSPACE_ADMIN, WORKSPACE_MEMBER]
+
+    KnowledgeBaseGrant:
+      type: object
+      properties:
+        workspaceId:
+          type: string
+          example: default
+        kbId:
+          type: string
+        userId:
+          type: string
+        username:
+          type: string
+        displayName:
+          type: string
+        role:
+          type: string
+          enum: [KB_MANAGER, KB_CONTRIBUTOR, KB_READER, KB_ASKER]
+        status:
+          type: string
+          enum: [ACTIVE]
+
+    UpsertKnowledgeBaseGrantRequest:
+      type: object
+      required: [role]
+      properties:
+        role:
+          type: string
+          enum: [KB_MANAGER, KB_CONTRIBUTOR, KB_READER, KB_ASKER]
 
     UploadResponse:
       type: object
