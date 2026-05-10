@@ -54,6 +54,20 @@
 
 建议先完成成员查询和角色调整，再做新增与停用，这样后续知识库 / 文档授权可以直接复用成员真源。
 
+当前进度同步（2026-05-09，成员治理首批已完成）：
+
+- 已完成工作区有效成员列表接口：`GET /api/v1/admin/members`
+- 已完成工作区成员角色调整接口：`PATCH /api/v1/admin/members/{userId}/role`
+- 成员治理接口已统一要求 `WORKSPACE_OWNER` / `WORKSPACE_ADMIN`
+- 当前“有效成员”口径已收口为：
+  - `users.status = ACTIVE`
+  - `workspace_memberships.status = ACTIVE`
+- 成员角色调整成功后已写入 `audit_events`
+- `docs/04-api-contract.yaml` 已补充成员治理接口契约
+- 后端测试 `.\\mvnw.cmd -q test` 已通过
+
+这意味着知识库 / 文档授权接口后续可以直接复用成员真源校验，不需要重复定义“谁可以被授权”。
+
 ### 4.2 知识库授权接口
 
 - 查询知识库授权列表
@@ -68,6 +82,12 @@
 - 授权对象必须是当前工作区有效成员
 - 同一 `(workspace_id, kb_id, user_id)` 授权关系需保持单一真源
 - 授权变更后应立即影响既有 `knowledge/documents/qa` 访问控制结果
+
+下一步建议按以下顺序落地：
+
+1. `GET /api/v1/admin/knowledge-bases/{kbId}/grants`
+2. `PUT /api/v1/admin/knowledge-bases/{kbId}/grants/{userId}`
+3. `DELETE /api/v1/admin/knowledge-bases/{kbId}/grants/{userId}`
 
 ### 4.3 文档授权接口
 
@@ -121,4 +141,4 @@
 
 ## 7. 一句话交接
 
-**`feature/auth-security-baseline` 已完成认证基线、文档权限接入和 `qa.ask` 召回后授权过滤；下一步请切到 `feature/auth-authorization-governance`，继续实现成员管理、知识库授权、文档授权和审计查询接口。**
+**`feature/auth-authorization-governance` 已完成成员治理首批接口（成员列表、角色调整），并已收口有效成员真源；下一步请继续实现知识库授权管理接口，再推进文档授权接口和审计查询接口。**
