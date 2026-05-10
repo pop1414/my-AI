@@ -62,7 +62,7 @@ const auditEventSchema = z.object({
 	targetId: z.string().nullable().optional(),
 	outcome: z.enum(["SUCCESS", "FAILURE", "DENIED"]),
 	reason: z.string(),
-	metadata: z.record(z.unknown()).optional(),
+	metadata: z.record(z.string(), z.unknown()).optional(),
 	occurredAt: z.string().min(1),
 });
 
