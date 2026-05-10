@@ -179,7 +179,7 @@ public class LoginApplicationService implements LoginUseCase {
             // 若失败次数达到阈值，账户被锁定
             if (failureState.locked()) {
                 auditLoginFailure(account, "ACCOUNT_LOCKED", now);
-                throw new LockedException("account is locked");
+                throw new LockedException(buildLockedMessage(failureState.lockedUntil()));
             }
             // 未达阈值，记录密码错误审计并返回通用认证异常
             auditLoginFailure(account, "BAD_CREDENTIALS", now);
@@ -239,8 +239,14 @@ public class LoginApplicationService implements LoginUseCase {
             // 记录锁定审计日志
             auditLoginFailure(account, "ACCOUNT_LOCKED", now);
             // 抛出锁定异常，由全局异常处理器映射为 HTTP 403
-            throw new LockedException("account is locked");
+            throw new LockedException(buildLockedMessage(account.lockedUntil()));
         }
+    }
+
+    private static String buildLockedMessage(Instant lockedUntil) {
+        return lockedUntil == null
+                ? "account is locked"
+                : "account is locked until " + lockedUntil;
     }
 
     /**
