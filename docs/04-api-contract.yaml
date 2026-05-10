@@ -366,6 +366,175 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+  /api/v1/admin/documents/{documentId}/grants:
+    get:
+      tags: [governance]
+      summary: 查询文档 ACTIVE 授权列表
+      description: |
+        返回当前工作区内指定文档的 ACTIVE 授权列表；
+        当前列表口径固定为：
+        - `document_grants.status = ACTIVE`
+        - 被授权用户 `users.status = ACTIVE`
+        - 被授权成员关系 `workspace_memberships.status = ACTIVE`
+        仅工作区所有者或管理员可访问。
+      x-stage: implemented
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: documentId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: 文档资产 ID
+      responses:
+        '200':
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/DocumentGrant'
+        '400':
+          description: 路径参数非法
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: 当前用户无文档授权治理权限
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: 文档不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/admin/documents/{documentId}/grants/{userId}:
+    put:
+      tags: [governance]
+      summary: 授予或更新文档授权
+      description: |
+        为当前工作区内指定文档授予或更新单个成员的文档级权限覆盖；
+        授权对象必须是当前工作区有效成员；
+        同一 `(workspace_id, document_id, user_id)` 授权关系保持单一真源；
+        文档级覆盖继续遵循 `DOC_DENY` 最高优先级。
+      x-stage: implemented
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CsrfHeader'
+        - name: documentId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: 文档资产 ID
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: 目标成员用户 ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpsertDocumentGrantRequest'
+      responses:
+        '200':
+          description: 授权成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentGrant'
+        '400':
+          description: 请求体为空、路径参数非法或文档权限值非法
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: 缺少或非法 CSRF Header，或当前用户无文档授权治理权限
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: 文档不存在，或目标用户不是当前工作区有效成员
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    delete:
+      tags: [governance]
+      summary: 回收文档授权
+      description: |
+        回收当前工作区内指定文档对单个成员的 ACTIVE 授权；
+        回收成功后应立即影响既有文档列表、文档读取与问答过滤结果。
+      x-stage: implemented
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CsrfHeader'
+        - name: documentId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: 文档资产 ID
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: 目标成员用户 ID
+      responses:
+        '204':
+          description: 回收成功
+        '400':
+          description: 路径参数非法
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: 缺少或非法 CSRF Header，或当前用户无文档授权治理权限
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: 文档不存在或 ACTIVE 授权不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
   /api/v1/documents:
     get:
       tags: [ingest]
@@ -1009,6 +1178,35 @@ components:
         role:
           type: string
           enum: [KB_MANAGER, KB_CONTRIBUTOR, KB_READER, KB_ASKER]
+
+    DocumentGrant:
+      type: object
+      properties:
+        workspaceId:
+          type: string
+          example: default
+        documentId:
+          type: string
+        userId:
+          type: string
+        username:
+          type: string
+        displayName:
+          type: string
+        permission:
+          type: string
+          enum: [DOC_ALLOW_READ, DOC_ALLOW_MANAGE, DOC_DENY]
+        status:
+          type: string
+          enum: [ACTIVE]
+
+    UpsertDocumentGrantRequest:
+      type: object
+      required: [permission]
+      properties:
+        permission:
+          type: string
+          enum: [DOC_ALLOW_READ, DOC_ALLOW_MANAGE, DOC_DENY]
 
     UploadResponse:
       type: object

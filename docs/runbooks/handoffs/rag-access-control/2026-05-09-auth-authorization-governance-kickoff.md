@@ -123,6 +123,21 @@
 2. `PUT /api/v1/admin/documents/{documentId}/grants/{userId}`
 3. `DELETE /api/v1/admin/documents/{documentId}/grants/{userId}`
 
+当前进度同步（2026-05-10，文档授权治理已完成）：
+
+- 已完成文档 ACTIVE 授权列表接口：`GET /api/v1/admin/documents/{documentId}/grants`
+- 已完成文档授权授予 / 更新接口：`PUT /api/v1/admin/documents/{documentId}/grants/{userId}`
+- 已完成文档授权回收接口：`DELETE /api/v1/admin/documents/{documentId}/grants/{userId}`
+- 文档授权治理接口已统一要求 `WORKSPACE_OWNER` / `WORKSPACE_ADMIN`
+- 授权对象已统一要求为当前工作区有效成员，继续复用成员治理阶段收口的成员真源
+- 文档授权写入已固定为 `(workspace_id, document_id, user_id)` 单一真源，并通过 UPSERT 维持 ACTIVE 授权
+- 文档授权回收已改为 `DISABLED`，不做物理删除
+- 文档授权变更已写入 `audit_events`
+- `docs/04-api-contract.yaml` 已补充文档授权治理接口契约、认证说明、CSRF Header 与 `400/401/403/404` 语义
+- 后端测试 `.\\mvnw.cmd -q test` 已通过
+
+这意味着治理接口中与资源访问控制直接相关的成员、知识库授权、文档授权三块都已经闭环，接下来只剩审计查询接口建设。
+
 ### 4.4 审计查询接口
 
 - 提供 `audit_events` 查询接口
@@ -132,6 +147,12 @@
   - 知识库授权变更
   - 文档授权变更
 - 支持按成员、资源、时间范围过滤
+
+下一步建议按以下顺序落地：
+
+1. `GET /api/v1/admin/audit-events`
+2. 按事件类型、成员、资源、时间范围补充查询参数
+3. 统一审计查询返回模型，并补充分页 / 排序约束
 
 ## 5. 接口与契约更新要求
 
@@ -162,4 +183,4 @@
 
 ## 7. 一句话交接
 
-**`feature/auth-authorization-governance` 已完成成员治理首批接口与知识库授权治理接口，并已收口有效成员真源与知识库授权单一真源；下一步请继续实现文档授权治理接口，再推进审计查询接口。**
+**`feature/auth-authorization-governance` 已完成成员治理、知识库授权治理与文档授权治理接口，并已收口成员真源与资源授权单一真源；下一步请继续实现审计查询接口。**
