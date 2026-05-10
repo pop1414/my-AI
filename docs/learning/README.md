@@ -52,6 +52,7 @@
 - [rag/2026-05-rag-chunking-notes.md](./rag/2026-05-rag-chunking-notes.md)
 - [database/2026-05-pgvector-indexing-notes.md](./database/2026-05-pgvector-indexing-notes.md)
 - [backend/2026-05-worker-retry-design.md](./backend/2026-05-worker-retry-design.md)
+- [backend/2026-05-auth-sql-error-response-checklist.md](./backend/2026-05-auth-sql-error-response-checklist.md)
 
 ## 6. 使用规则
 
