@@ -144,11 +144,14 @@ public class JdbcLocalAccountRepository implements LocalAccountRepository {
                 """
                         INSERT INTO login_lock_states
                           (user_id, failed_login_count, locked_until, last_failed_at, updated_at)
-                        VALUES (?, 1, CASE WHEN ? <= 1 THEN ? ELSE NULL END, ?, ?)
+                        VALUES (?, 1, CASE
+                            WHEN ? <= 1 THEN CAST(? AS TIMESTAMPTZ)
+                            ELSE NULL::TIMESTAMPTZ
+                        END, ?, ?)
                         ON CONFLICT (user_id) DO UPDATE
                         SET failed_login_count = login_lock_states.failed_login_count + 1,
                             locked_until = CASE
-                                WHEN login_lock_states.failed_login_count + 1 >= ? THEN ?
+                                WHEN login_lock_states.failed_login_count + 1 >= ? THEN CAST(? AS TIMESTAMPTZ)
                                 ELSE login_lock_states.locked_until
                             END,
                             last_failed_at = ?,
