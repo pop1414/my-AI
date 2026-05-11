@@ -11,6 +11,7 @@ import io.github.spike.myai.auth.application.usecase.RevokeKnowledgeBaseGrantUse
 import io.github.spike.myai.auth.application.usecase.UpsertKnowledgeBaseGrantUseCase;
 import io.github.spike.myai.auth.interfaces.rest.dto.KnowledgeBaseGrantResponse;
 import io.github.spike.myai.auth.interfaces.rest.dto.UpsertKnowledgeBaseGrantRequest;
+import java.util.List;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;

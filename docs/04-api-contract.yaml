@@ -258,6 +258,11 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+      x-frontend-note: |
+        前端知识库授权管理页采用“整表勾选 + 保存”交互，但保存时按成员差量调用
+        `PUT /api/v1/admin/knowledge-bases/{kbId}/grants/{userId}` 与
+        `DELETE /api/v1/admin/knowledge-bases/{kbId}/grants/{userId}`；
+        当前资源维度不提供 `grants:batch` 接口。
 
   /api/v1/admin/knowledge-bases/{kbId}/grants/{userId}:
     put:
@@ -427,6 +432,11 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+      x-frontend-note: |
+        前端文档授权管理页采用“整表勾选 + 保存”交互，但保存时按成员差量调用
+        `PUT /api/v1/admin/documents/{documentId}/grants/{userId}` 与
+        `DELETE /api/v1/admin/documents/{documentId}/grants/{userId}`；
+        当前资源维度不提供 `grants:batch` 接口。
 
   /api/v1/admin/documents/{documentId}/grants/{userId}:
     put:
@@ -537,6 +547,250 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
         '404':
           description: 文档不存在或 ACTIVE 授权不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/admin/members/{userId}/knowledge-base-grants:
+    get:
+      tags: [governance]
+      summary: 查询成员维度知识库授权列表
+      description: |
+        返回指定有效成员在当前工作区下的知识库 ACTIVE 授权列表；
+        仅工作区所有者或管理员可访问。
+      x-stage: implemented
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: 目标成员用户 ID
+      responses:
+        '200':
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/KnowledgeBaseGrant'
+        '400':
+          description: 路径参数非法
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: 当前用户无成员治理权限
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: 目标成员不存在或不是当前工作区有效成员
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/admin/members/{userId}/knowledge-base-grants:batch:
+    put:
+      tags: [governance]
+      summary: 批量覆盖成员维度知识库授权
+      description: |
+        以“成员”为维度整体替换其知识库授权集合；
+        不在请求列表中的现有 ACTIVE 授权将被回收；
+        仅工作区所有者或管理员可访问。
+      x-stage: implemented
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CsrfHeader'
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: 目标成员用户 ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                assignments:
+                  type: array
+                  items:
+                    type: object
+                    required: [kbId, role]
+                    properties:
+                      kbId:
+                        type: string
+                      role:
+                        type: string
+                        enum: [KB_MANAGER, KB_CONTRIBUTOR, KB_READER, KB_ASKER]
+      responses:
+        '200':
+          description: 覆盖成功
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/KnowledgeBaseGrant'
+        '400':
+          description: 请求体为空、路径参数非法或角色值非法
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: 缺少或非法 CSRF Header，或当前用户无成员治理权限
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: 目标成员不存在或不是当前工作区有效成员
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/admin/members/{userId}/document-grants:
+    get:
+      tags: [governance]
+      summary: 查询成员维度文档授权列表
+      description: |
+        返回指定有效成员在当前工作区下的文档 ACTIVE 授权列表；
+        仅工作区所有者或管理员可访问。
+      x-stage: implemented
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: 目标成员用户 ID
+      responses:
+        '200':
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/DocumentGrant'
+        '400':
+          description: 路径参数非法
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: 当前用户无成员治理权限
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: 目标成员不存在或不是当前工作区有效成员
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/admin/members/{userId}/document-grants:batch:
+    put:
+      tags: [governance]
+      summary: 批量覆盖成员维度文档授权
+      description: |
+        以“成员”为维度整体替换其文档授权集合；
+        不在请求列表中的现有 ACTIVE 授权将被回收；
+        仅工作区所有者或管理员可访问。
+      x-stage: implemented
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CsrfHeader'
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: 目标成员用户 ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                assignments:
+                  type: array
+                  items:
+                    type: object
+                    required: [documentId, permission]
+                    properties:
+                      documentId:
+                        type: string
+                      permission:
+                        type: string
+                        enum: [DOC_ALLOW_READ, DOC_ALLOW_MANAGE, DOC_DENY]
+      responses:
+        '200':
+          description: 覆盖成功
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/DocumentGrant'
+        '400':
+          description: 请求体为空、路径参数非法或权限值非法
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: 缺少或非法 CSRF Header，或当前用户无成员治理权限
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: 目标成员不存在或不是当前工作区有效成员
           content:
             application/json:
               schema:

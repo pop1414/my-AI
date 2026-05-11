@@ -11,6 +11,7 @@ import io.github.spike.myai.auth.application.usecase.RevokeDocumentGrantUseCase;
 import io.github.spike.myai.auth.application.usecase.UpsertDocumentGrantUseCase;
 import io.github.spike.myai.auth.interfaces.rest.dto.DocumentGrantResponse;
 import io.github.spike.myai.auth.interfaces.rest.dto.UpsertDocumentGrantRequest;
+import java.util.List;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
