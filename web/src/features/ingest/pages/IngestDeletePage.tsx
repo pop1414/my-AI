@@ -11,7 +11,7 @@ import {
 	Tag,
 	Typography,
 } from "antd";
-import { useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { z } from "zod";
 import {
 	deleteDocument,
@@ -45,6 +45,7 @@ function statusColor(status?: string): string {
 }
 
 export function IngestDeletePage() {
+	const navigate = useNavigate();
 	const { documentId: urlDocumentId } = useParams<{ documentId?: string }>();
 	const [form] = Form.useForm<{ documentId: string }>();
 	const [deletedDocumentId, setDeletedDocumentId] = useState<string | null>(
@@ -89,9 +90,14 @@ export function IngestDeletePage() {
 			<Card
 				title="删除文档资产"
 				extra={
-					<Typography.Text type="secondary">
-						DELETE /api/v1/documents/{"{documentId}"}
-					</Typography.Text>
+					<Space>
+						<Button onClick={() => navigate("/ingest/documents")}>
+							返回文档列表
+						</Button>
+						<Typography.Text type="secondary">
+							DELETE /api/v1/documents/{"{documentId}"}
+						</Typography.Text>
+					</Space>
 				}
 			>
 				<Typography.Paragraph type="secondary" style={{ marginTop: 0 }}>

@@ -114,9 +114,11 @@ function resolveMenuSelectedKey(pathname: string): string {
 	if (pathname.startsWith("/ingest/documents/")) {
 		return "/ingest/documents";
 	}
+	if (pathname.startsWith("/admin/documents/")) {
+		return "/ingest/documents";
+	}
 	if (
 		pathname.startsWith("/admin/knowledge-bases/") ||
-		pathname.startsWith("/admin/documents/") ||
 		pathname.startsWith("/admin")
 	) {
 		return "/admin";

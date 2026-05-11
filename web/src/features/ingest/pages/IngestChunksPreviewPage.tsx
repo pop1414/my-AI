@@ -11,7 +11,7 @@ import {
 	Typography,
 } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import { useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { z } from "zod";
 import {
 	getDocumentChunksPreview,
@@ -55,6 +55,7 @@ const columns: ColumnsType<DocumentChunksPreviewResponse["chunks"][number]> = [
 ];
 
 export function IngestChunksPreviewPage() {
+	const navigate = useNavigate();
 	const { documentId: urlDocumentId } = useParams<{ documentId?: string }>();
 	const [form] = Form.useForm<QueryInput>();
 	const initialDocumentId =
@@ -91,9 +92,14 @@ export function IngestChunksPreviewPage() {
 			<Card
 				title="文档分块预览"
 				extra={
-					<Typography.Text type="secondary">
-						GET /api/v1/documents/{"{documentId}"}/chunks/preview
-					</Typography.Text>
+					<Space>
+						<Button onClick={() => navigate("/ingest/documents")}>
+							返回文档列表
+						</Button>
+						<Typography.Text type="secondary">
+							GET /api/v1/documents/{"{documentId}"}/chunks/preview
+						</Typography.Text>
+					</Space>
 				}
 			>
 				<Form

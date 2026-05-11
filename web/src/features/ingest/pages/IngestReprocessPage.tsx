@@ -1,7 +1,7 @@
 ﻿import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { Alert, Button, Card, Form, Input, Space, Tag, Typography } from "antd";
-import { useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { z } from "zod";
 import {
 	reprocessDocument,
@@ -30,6 +30,7 @@ function statusColor(status?: string): string {
 }
 
 export function IngestReprocessPage() {
+	const navigate = useNavigate();
 	const { documentId: urlDocumentId } = useParams<{ documentId?: string }>();
 	const [form] = Form.useForm<{ documentId: string }>();
 	const [result, setResult] = useState<DocumentStatusResponse | null>(null);
@@ -63,9 +64,14 @@ export function IngestReprocessPage() {
 			<Card
 				title="触发文档重处理"
 				extra={
-					<Typography.Text type="secondary">
-						POST /api/v1/documents/{"{documentId}"}/reprocess
-					</Typography.Text>
+					<Space>
+						<Button onClick={() => navigate("/ingest/documents")}>
+							返回文档列表
+						</Button>
+						<Typography.Text type="secondary">
+							POST /api/v1/documents/{"{documentId}"}/reprocess
+						</Typography.Text>
+					</Space>
 				}
 			>
 				<Form

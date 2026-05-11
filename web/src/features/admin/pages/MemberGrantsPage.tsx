@@ -44,6 +44,19 @@ const documentPermissionOptions: Array<{
 	{ label: "拒绝", value: "DOC_DENY" },
 ];
 
+function toggleChecked(
+	currentValues: string[],
+	targetValue: string,
+	checked: boolean,
+): string[] {
+	if (checked) {
+		return currentValues.includes(targetValue)
+			? currentValues
+			: [...currentValues, targetValue];
+	}
+	return currentValues.filter((item) => item !== targetValue);
+}
+
 export function MemberGrantsPage() {
 	const { userId = "" } = useParams<{ userId: string }>();
 	const navigate = useNavigate();
@@ -151,6 +164,23 @@ export function MemberGrantsPage() {
 			(knowledgeQuery.data ?? []).filter((item) => item.status === "ACTIVE"),
 		[knowledgeQuery.data],
 	);
+	const currentDocumentItems = documentsQuery.data?.items ?? [];
+	const currentDocumentIds = currentDocumentItems.map((item) => item.documentId);
+	const knowledgeCheckAll =
+		activeKnowledgeBases.length > 0 &&
+		selectedKnowledgeBaseIds.length === activeKnowledgeBases.length;
+	const knowledgeIndeterminate =
+		selectedKnowledgeBaseIds.length > 0 &&
+		selectedKnowledgeBaseIds.length < activeKnowledgeBases.length;
+	const visibleSelectedDocumentCount = currentDocumentIds.filter((documentId) =>
+		selectedDocumentIds.includes(documentId),
+	).length;
+	const documentCheckAll =
+		currentDocumentIds.length > 0 &&
+		visibleSelectedDocumentCount === currentDocumentIds.length;
+	const documentIndeterminate =
+		visibleSelectedDocumentCount > 0 &&
+		visibleSelectedDocumentCount < currentDocumentIds.length;
 
 	const knowledgeColumns: ColumnsType<KnowledgeBase> = [
 		{
@@ -163,7 +193,7 @@ export function MemberGrantsPage() {
 					onChange={(event) => {
 						if (event.target.checked) {
 							setSelectedKnowledgeBaseIds((prev) =>
-								prev.includes(kbId) ? prev : [...prev, kbId],
+								toggleChecked(prev, kbId, true),
 							);
 							setKnowledgeBaseRoles((prev) => ({
 								...prev,
@@ -172,7 +202,7 @@ export function MemberGrantsPage() {
 							return;
 						}
 						setSelectedKnowledgeBaseIds((prev) =>
-							prev.filter((item) => item !== kbId),
+							toggleChecked(prev, kbId, false),
 						);
 					}}
 				/>
@@ -217,7 +247,7 @@ export function MemberGrantsPage() {
 					onChange={(event) => {
 						if (event.target.checked) {
 							setSelectedDocumentIds((prev) =>
-								prev.includes(documentId) ? prev : [...prev, documentId],
+								toggleChecked(prev, documentId, true),
 							);
 							setDocumentPermissions((prev) => ({
 								...prev,
@@ -226,7 +256,7 @@ export function MemberGrantsPage() {
 							return;
 						}
 						setSelectedDocumentIds((prev) =>
-							prev.filter((item) => item !== documentId),
+							toggleChecked(prev, documentId, false),
 						);
 					}}
 				/>
@@ -321,6 +351,34 @@ export function MemberGrantsPage() {
 								<Typography.Paragraph type="secondary">
 									当前已选择 {selectedKnowledgeBaseIds.length} 个知识库。
 								</Typography.Paragraph>
+								<Space style={{ marginBottom: 16 }} wrap>
+									<Checkbox
+										checked={knowledgeCheckAll}
+										indeterminate={knowledgeIndeterminate}
+										onChange={(event) => {
+											if (event.target.checked) {
+												setSelectedKnowledgeBaseIds(
+													activeKnowledgeBases.map((item) => item.id),
+												);
+												setKnowledgeBaseRoles((prev) => ({
+													...Object.fromEntries(
+														activeKnowledgeBases.map((item) => [
+															item.id,
+															prev[item.id] ?? "KB_READER",
+														]),
+													),
+												}));
+												return;
+											}
+											setSelectedKnowledgeBaseIds([]);
+										}}
+									>
+										本页全选
+									</Checkbox>
+									<Button size="small" onClick={() => setSelectedKnowledgeBaseIds([])}>
+										清空选择
+									</Button>
+								</Space>
 								{replaceKnowledgeMutation.isError && (
 									<ApiErrorAlert error={replaceKnowledgeMutation.error} />
 								)}
@@ -375,6 +433,54 @@ export function MemberGrantsPage() {
 								<Typography.Paragraph type="secondary">
 									当前已选择 {selectedDocumentIds.length} 个文档。
 								</Typography.Paragraph>
+								<Space style={{ marginBottom: 16 }} wrap>
+									<Checkbox
+										checked={documentCheckAll}
+										indeterminate={documentIndeterminate}
+										onChange={(event) => {
+											if (event.target.checked) {
+												setSelectedDocumentIds((prev) => {
+													const next = new Set(prev);
+													currentDocumentIds.forEach((documentId) =>
+														next.add(documentId),
+													);
+													return Array.from(next);
+												});
+												setDocumentPermissions((prev) => ({
+													...prev,
+													...Object.fromEntries(
+														currentDocumentIds.map((documentId) => [
+															documentId,
+															prev[documentId] ?? "DOC_ALLOW_READ",
+														]),
+													),
+												}));
+												return;
+											}
+											setSelectedDocumentIds((prev) =>
+												prev.filter(
+													(documentId) =>
+														!currentDocumentIds.includes(documentId),
+												),
+											);
+										}}
+									>
+										本页全选
+									</Checkbox>
+									<Button
+										size="small"
+										onClick={() =>
+											setSelectedDocumentIds((prev) =>
+												prev.filter(
+													(documentId) =>
+														!currentDocumentIds.includes(documentId),
+												),
+											)
+										}
+									>
+										清空本页
+									</Button>
+								</Space>
 								{replaceDocumentMutation.isError && (
 									<ApiErrorAlert error={replaceDocumentMutation.error} />
 								)}

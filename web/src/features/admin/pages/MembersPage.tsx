@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Form, Modal, Select, Table, Tag, Typography } from "antd";
+import { Button, Form, Modal, Select, Space, Table, Tag, Typography } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { useNavigate } from "react-router-dom";
 import {
@@ -91,11 +91,13 @@ export function MembersPage() {
 		{
 			title: "操作",
 			key: "action",
-			width: 220,
+			width: 260,
 			render: (_, record) => (
-				<>
+				<Space size="small" wrap>
 					{canEditRole(record) && (
-						<a
+						<Button
+							type="link"
+							size="small"
 							onClick={() => {
 								setEditingMember(record);
 								roleForm.setFieldsValue({
@@ -104,11 +106,12 @@ export function MembersPage() {
 							}}
 						>
 							编辑角色
-						</a>
+						</Button>
 					)}
-					{canEditRole(record) && canConfigureGrants(record) && " · "}
 					{canConfigureGrants(record) && (
-						<a
+						<Button
+							type="link"
+							size="small"
 							onClick={() =>
 								navigate(
 									`/admin/members/${encodeURIComponent(record.userId)}/grants?tab=knowledge`,
@@ -116,10 +119,10 @@ export function MembersPage() {
 							}
 						>
 							授权配置
-						</a>
+						</Button>
 					)}
 					{!canEditRole(record) && !canConfigureGrants(record) && "-"}
-				</>
+				</Space>
 			),
 		},
 	];

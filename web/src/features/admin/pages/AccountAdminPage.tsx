@@ -67,6 +67,11 @@ export function AccountAdminPage() {
 	const [createAdminModalOpen, setCreateAdminModalOpen] = useState(false);
 	const [createMemberModalOpen, setCreateMemberModalOpen] = useState(false);
 	const [memberProvisionStep, setMemberProvisionStep] = useState(0);
+	const [memberDraft, setMemberDraft] = useState<{
+		username: string;
+		displayName: string;
+		password: string;
+	} | null>(null);
 	const [selectedKnowledgeBaseIds, setSelectedKnowledgeBaseIds] = useState<string[]>(
 		[],
 	);
@@ -163,6 +168,7 @@ export function AccountAdminPage() {
 
 	const resetMemberProvisionWizard = () => {
 		memberForm.resetFields();
+		setMemberDraft(null);
 		setSelectedKnowledgeBaseIds([]);
 		setKnowledgeBaseRoles({});
 		setMemberProvisionStep(0);
@@ -409,7 +415,12 @@ export function AccountAdminPage() {
 							<Button
 								type="primary"
 								onClick={async () => {
-									await memberForm.validateFields();
+									const values = await memberForm.validateFields();
+									setMemberDraft({
+										username: values.username.trim(),
+										displayName: values.displayName.trim(),
+										password: values.password,
+									});
 									setMemberProvisionStep(1);
 								}}
 							>
@@ -422,13 +433,18 @@ export function AccountAdminPage() {
 							<Button
 								type="primary"
 								loading={createMemberMutation.isPending}
-								disabled={selectedKnowledgeBaseIds.length === 0}
+								disabled={
+									selectedKnowledgeBaseIds.length === 0 || memberDraft === null
+								}
 								onClick={async () => {
-									const values = await memberForm.validateFields();
+									if (!memberDraft) {
+										setMemberProvisionStep(0);
+										return;
+									}
 									await createMemberMutation.mutateAsync({
-										username: values.username,
-										displayName: values.displayName,
-										password: values.password,
+										username: memberDraft.username,
+										displayName: memberDraft.displayName,
+										password: memberDraft.password,
 										initialKnowledgeBaseGrants: selectedKnowledgeBaseIds.map(
 											(kbId) => ({
 												kbId,
@@ -457,14 +473,32 @@ export function AccountAdminPage() {
 						<Form.Item
 							name="username"
 							label="用户名"
-							rules={[{ required: true, message: "请输入用户名" }]}
+							rules={[
+								{ required: true, message: "请输入用户名" },
+								{
+									validator: async (_, value: string | undefined) => {
+										if (!value || value.trim().length === 0) {
+											throw new Error("请输入用户名");
+										}
+									},
+								},
+							]}
 						>
 							<Input />
 						</Form.Item>
 						<Form.Item
 							name="displayName"
 							label="显示名"
-							rules={[{ required: true, message: "请输入显示名" }]}
+							rules={[
+								{ required: true, message: "请输入显示名" },
+								{
+									validator: async (_, value: string | undefined) => {
+										if (!value || value.trim().length === 0) {
+											throw new Error("请输入显示名");
+										}
+									},
+								},
+							]}
 						>
 							<Input />
 						</Form.Item>
