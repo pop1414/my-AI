@@ -1,6 +1,5 @@
 package io.github.spike.myai.auth.interfaces.rest;
 
-import io.github.spike.myai.auth.application.command.ReplaceKnowledgeBaseMemberGrantsCommand;
 import io.github.spike.myai.auth.application.command.RevokeKnowledgeBaseGrantCommand;
 import io.github.spike.myai.auth.application.command.UpsertKnowledgeBaseGrantCommand;
 import io.github.spike.myai.auth.application.exception.KnowledgeBaseGrantNotFoundException;
@@ -8,13 +7,10 @@ import io.github.spike.myai.auth.application.exception.ManagedKnowledgeBaseNotFo
 import io.github.spike.myai.auth.application.exception.WorkspaceMemberNotFoundException;
 import io.github.spike.myai.auth.application.result.KnowledgeBaseGrantResult;
 import io.github.spike.myai.auth.application.usecase.ListKnowledgeBaseGrantsUseCase;
-import io.github.spike.myai.auth.application.usecase.ReplaceKnowledgeBaseMemberGrantsUseCase;
 import io.github.spike.myai.auth.application.usecase.RevokeKnowledgeBaseGrantUseCase;
 import io.github.spike.myai.auth.application.usecase.UpsertKnowledgeBaseGrantUseCase;
 import io.github.spike.myai.auth.interfaces.rest.dto.KnowledgeBaseGrantResponse;
-import io.github.spike.myai.auth.interfaces.rest.dto.ReplaceKnowledgeBaseMemberGrantsRequest;
 import io.github.spike.myai.auth.interfaces.rest.dto.UpsertKnowledgeBaseGrantRequest;
-import java.util.List;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -26,6 +22,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
+import java.util.List;
 
 /**
  * 知识库授权治理 REST 控制器。
@@ -34,7 +31,6 @@ import org.springframework.web.server.ResponseStatusException;
  * <ul>
  *   <li>查询指定知识库下所有活跃授权记录</li>
  *   <li>向指定用户授予或更新知识库访问权限（Upsert）</li>
- *   <li>以知识库为维度批量覆盖成员授权（声明式同步）</li>
  *   <li>回收指定用户的知识库访问权限（软删除）</li>
  * </ul>
  * 所有接口均要求调用方具备工作区管理权限，权限校验由下游用例层完成。
@@ -53,8 +49,6 @@ public class KnowledgeBaseGrantAdminController {
     private final ListKnowledgeBaseGrantsUseCase listKnowledgeBaseGrantsUseCase;
     /** 授予或更新知识库授权用例 */
     private final UpsertKnowledgeBaseGrantUseCase upsertKnowledgeBaseGrantUseCase;
-    /** 批量覆盖知识库授权用例 */
-    private final ReplaceKnowledgeBaseMemberGrantsUseCase replaceKnowledgeBaseMemberGrantsUseCase;
     /** 回收知识库授权用例 */
     private final RevokeKnowledgeBaseGrantUseCase revokeKnowledgeBaseGrantUseCase;
 
@@ -63,17 +57,14 @@ public class KnowledgeBaseGrantAdminController {
      *
      * @param listKnowledgeBaseGrantsUseCase          查询授权列表用例
      * @param upsertKnowledgeBaseGrantUseCase         授予/更新授权用例
-     * @param replaceKnowledgeBaseMemberGrantsUseCase 批量覆盖成员授权用例
      * @param revokeKnowledgeBaseGrantUseCase         回收授权用例
      */
     public KnowledgeBaseGrantAdminController(
             ListKnowledgeBaseGrantsUseCase listKnowledgeBaseGrantsUseCase,
             UpsertKnowledgeBaseGrantUseCase upsertKnowledgeBaseGrantUseCase,
-            ReplaceKnowledgeBaseMemberGrantsUseCase replaceKnowledgeBaseMemberGrantsUseCase,
             RevokeKnowledgeBaseGrantUseCase revokeKnowledgeBaseGrantUseCase) {
         this.listKnowledgeBaseGrantsUseCase = listKnowledgeBaseGrantsUseCase;
         this.upsertKnowledgeBaseGrantUseCase = upsertKnowledgeBaseGrantUseCase;
-        this.replaceKnowledgeBaseMemberGrantsUseCase = replaceKnowledgeBaseMemberGrantsUseCase;
         this.revokeKnowledgeBaseGrantUseCase = revokeKnowledgeBaseGrantUseCase;
     }
 
@@ -138,43 +129,6 @@ public class KnowledgeBaseGrantAdminController {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, ex.getMessage(), ex);
         } catch (IllegalArgumentException ex) {
             // 参数非法（如角色值无效），映射为 400
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, ex.getMessage(), ex);
-        }
-    }
-/**
-     * 以知识库为维度批量覆盖成员授权（声明式同步）。
-     *
-     * <p>PUT /api/v1/admin/knowledge-bases/{kbId}/grants:batch
-     *
-     * <p>将指定知识库的成员授权集合整体替换为请求中的授权列表，
-     * 不在列表中的现有授权将被软删除。
-     *
-     * @param kbId    知识库唯一标识
-     * @param request 期望的成员授权列表
-     * @return 替换后的完整授权列表
-     */
-    @PutMapping(value = ":batch", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
-    public List<KnowledgeBaseGrantResponse> replaceKnowledgeBaseGrants(
-            @PathVariable("kbId") String kbId,
-            @RequestBody(required = false) ReplaceKnowledgeBaseMemberGrantsRequest request) {
-        if (request == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "request body is required");
-        }
-        // 将请求 DTO 转换为命令对象（含授权列表），委托用例层执行批量替换
-        try {
-            return replaceKnowledgeBaseMemberGrantsUseCase.handle(new ReplaceKnowledgeBaseMemberGrantsCommand(
-                            kbId,
-                            request.assignments() == null
-                                    ? List.of()
-                                    : request.assignments().stream()
-                                            .map(item -> new ReplaceKnowledgeBaseMemberGrantsCommand.Assignment(item.userId(), item.role()))
-                                            .toList()))
-                    .stream()
-                    .map(KnowledgeBaseGrantAdminController::toResponse)
-                    .toList();
-        } catch (ManagedKnowledgeBaseNotFoundException | WorkspaceMemberNotFoundException ex) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, ex.getMessage(), ex);
-        } catch (IllegalArgumentException ex) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, ex.getMessage(), ex);
         }
     }

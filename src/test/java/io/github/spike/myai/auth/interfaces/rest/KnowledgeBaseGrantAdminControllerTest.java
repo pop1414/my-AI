@@ -12,7 +12,6 @@ import io.github.spike.myai.auth.application.exception.KnowledgeBaseGrantNotFoun
 import io.github.spike.myai.auth.application.exception.ManagedKnowledgeBaseNotFoundException;
 import io.github.spike.myai.auth.application.result.KnowledgeBaseGrantResult;
 import io.github.spike.myai.auth.application.usecase.ListKnowledgeBaseGrantsUseCase;
-import io.github.spike.myai.auth.application.usecase.ReplaceKnowledgeBaseMemberGrantsUseCase;
 import io.github.spike.myai.auth.application.usecase.RevokeKnowledgeBaseGrantUseCase;
 import io.github.spike.myai.auth.application.usecase.UpsertKnowledgeBaseGrantUseCase;
 import io.github.spike.myai.auth.domain.model.KnowledgeBaseRole;
@@ -29,7 +28,6 @@ class KnowledgeBaseGrantAdminControllerTest {
 
     private ListKnowledgeBaseGrantsUseCase listKnowledgeBaseGrantsUseCase;
     private UpsertKnowledgeBaseGrantUseCase upsertKnowledgeBaseGrantUseCase;
-    private ReplaceKnowledgeBaseMemberGrantsUseCase replaceKnowledgeBaseMemberGrantsUseCase;
     private RevokeKnowledgeBaseGrantUseCase revokeKnowledgeBaseGrantUseCase;
     private MockMvc mockMvc;
 
@@ -37,12 +35,10 @@ class KnowledgeBaseGrantAdminControllerTest {
     void setUp() {
         this.listKnowledgeBaseGrantsUseCase = Mockito.mock(ListKnowledgeBaseGrantsUseCase.class);
         this.upsertKnowledgeBaseGrantUseCase = Mockito.mock(UpsertKnowledgeBaseGrantUseCase.class);
-        this.replaceKnowledgeBaseMemberGrantsUseCase = Mockito.mock(ReplaceKnowledgeBaseMemberGrantsUseCase.class);
         this.revokeKnowledgeBaseGrantUseCase = Mockito.mock(RevokeKnowledgeBaseGrantUseCase.class);
         KnowledgeBaseGrantAdminController controller = new KnowledgeBaseGrantAdminController(
                 listKnowledgeBaseGrantsUseCase,
                 upsertKnowledgeBaseGrantUseCase,
-                replaceKnowledgeBaseMemberGrantsUseCase,
                 revokeKnowledgeBaseGrantUseCase);
         this.mockMvc = MockMvcBuilders.standaloneSetup(controller).build();
     }

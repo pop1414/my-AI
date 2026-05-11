@@ -12,7 +12,6 @@ import io.github.spike.myai.auth.application.exception.DocumentGrantNotFoundExce
 import io.github.spike.myai.auth.application.exception.ManagedDocumentNotFoundException;
 import io.github.spike.myai.auth.application.result.DocumentGrantResult;
 import io.github.spike.myai.auth.application.usecase.ListDocumentGrantsUseCase;
-import io.github.spike.myai.auth.application.usecase.ReplaceDocumentMemberGrantsUseCase;
 import io.github.spike.myai.auth.application.usecase.RevokeDocumentGrantUseCase;
 import io.github.spike.myai.auth.application.usecase.UpsertDocumentGrantUseCase;
 import io.github.spike.myai.auth.domain.model.DocumentPermission;
@@ -29,7 +28,6 @@ class DocumentGrantAdminControllerTest {
 
     private ListDocumentGrantsUseCase listDocumentGrantsUseCase;
     private UpsertDocumentGrantUseCase upsertDocumentGrantUseCase;
-    private ReplaceDocumentMemberGrantsUseCase replaceDocumentMemberGrantsUseCase;
     private RevokeDocumentGrantUseCase revokeDocumentGrantUseCase;
     private MockMvc mockMvc;
 
@@ -37,12 +35,10 @@ class DocumentGrantAdminControllerTest {
     void setUp() {
         this.listDocumentGrantsUseCase = Mockito.mock(ListDocumentGrantsUseCase.class);
         this.upsertDocumentGrantUseCase = Mockito.mock(UpsertDocumentGrantUseCase.class);
-        this.replaceDocumentMemberGrantsUseCase = Mockito.mock(ReplaceDocumentMemberGrantsUseCase.class);
         this.revokeDocumentGrantUseCase = Mockito.mock(RevokeDocumentGrantUseCase.class);
         DocumentGrantAdminController controller = new DocumentGrantAdminController(
                 listDocumentGrantsUseCase,
                 upsertDocumentGrantUseCase,
-                replaceDocumentMemberGrantsUseCase,
                 revokeDocumentGrantUseCase);
         this.mockMvc = MockMvcBuilders.standaloneSetup(controller).build();
     }
