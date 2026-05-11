@@ -13,15 +13,20 @@ import io.github.spike.myai.auth.application.result.AuditEventPageResult;
 import io.github.spike.myai.auth.application.result.DocumentGrantResult;
 import io.github.spike.myai.auth.application.result.KnowledgeBaseGrantResult;
 import io.github.spike.myai.auth.application.result.WorkspaceMemberResult;
+import io.github.spike.myai.auth.application.usecase.CreateManagedAccountUseCase;
 import io.github.spike.myai.auth.application.usecase.ListAuditEventsUseCase;
 import io.github.spike.myai.auth.application.usecase.ListDocumentGrantsUseCase;
 import io.github.spike.myai.auth.application.usecase.ListKnowledgeBaseGrantsUseCase;
+import io.github.spike.myai.auth.application.usecase.ListManagedAccountsUseCase;
 import io.github.spike.myai.auth.application.usecase.LoginUseCase;
+import io.github.spike.myai.auth.application.usecase.RemoveManagedAccountMembershipUseCase;
 import io.github.spike.myai.auth.application.usecase.RevokeDocumentGrantUseCase;
 import io.github.spike.myai.auth.application.usecase.RevokeKnowledgeBaseGrantUseCase;
 import io.github.spike.myai.auth.application.usecase.ListWorkspaceMembersUseCase;
+import io.github.spike.myai.auth.application.usecase.ResetManagedAccountPasswordUseCase;
 import io.github.spike.myai.auth.application.usecase.UpsertDocumentGrantUseCase;
 import io.github.spike.myai.auth.application.usecase.UpsertKnowledgeBaseGrantUseCase;
+import io.github.spike.myai.auth.application.usecase.UpdateManagedAccountStatusUseCase;
 import io.github.spike.myai.auth.application.usecase.UpdateWorkspaceMemberRoleUseCase;
 import io.github.spike.myai.auth.domain.model.DocumentPermission;
 import io.github.spike.myai.auth.domain.model.KnowledgeBaseRole;
@@ -61,6 +66,16 @@ class AuthSecurityBaselineTest {
     private ListWorkspaceMembersUseCase listWorkspaceMembersUseCase;
     @MockBean
     private UpdateWorkspaceMemberRoleUseCase updateWorkspaceMemberRoleUseCase;
+    @MockBean
+    private ListManagedAccountsUseCase listManagedAccountsUseCase;
+    @MockBean
+    private CreateManagedAccountUseCase createManagedAccountUseCase;
+    @MockBean
+    private UpdateManagedAccountStatusUseCase updateManagedAccountStatusUseCase;
+    @MockBean
+    private ResetManagedAccountPasswordUseCase resetManagedAccountPasswordUseCase;
+    @MockBean
+    private RemoveManagedAccountMembershipUseCase removeManagedAccountMembershipUseCase;
     @MockBean
     private ListKnowledgeBaseGrantsUseCase listKnowledgeBaseGrantsUseCase;
     @MockBean
