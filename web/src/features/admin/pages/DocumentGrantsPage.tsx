@@ -4,9 +4,10 @@ import { Button, Card, Checkbox, Select, Space, Table, Tag, Typography } from "a
 import type { ColumnsType } from "antd/es/table";
 import { useNavigate, useParams } from "react-router-dom";
 import {
+	deleteDocumentGrant,
 	listDocumentGrants,
 	listMembers,
-	replaceDocumentMemberGrants,
+	upsertDocumentGrant,
 	type DocumentGrant,
 	type WorkspaceMember,
 } from "../../../shared/api/adminApi";
@@ -50,10 +51,31 @@ export function DocumentGrantsPage() {
 	}, [grantsQuery.data, documentId]);
 
 	const replaceMutation = useMutation({
-		mutationFn: (assignments: Array<{
-			userId: string;
-			permission: DocumentGrant["permission"];
-		}>) => replaceDocumentMemberGrants(documentId!, assignments),
+		mutationFn: async () => {
+			const currentGrants = grantsQuery.data ?? [];
+			const currentGrantedUserIds = new Set(
+				currentGrants.map((item) => item.userId),
+			);
+			const nextGrantedUserIds = new Set(selectedUserIds);
+			const deleteTargets = currentGrants.filter(
+				(item) => !nextGrantedUserIds.has(item.userId),
+			);
+
+			await Promise.all([
+				...selectedUserIds.map((userId) =>
+					upsertDocumentGrant(
+						documentId!,
+						userId,
+						permissionsByUserId[userId] ?? "DOC_ALLOW_READ",
+					),
+				),
+				...deleteTargets
+					.filter((item) => currentGrantedUserIds.has(item.userId))
+					.map((item) => deleteDocumentGrant(documentId!, item.userId)),
+			]);
+
+			return listDocumentGrants(documentId!);
+		},
 		onSuccess: (data) => {
 			setSelectedUserIds(data.map((item) => item.userId));
 			setPermissionsByUserId(
@@ -68,6 +90,10 @@ export function DocumentGrantsPage() {
 	const members = (membersQuery.data ?? []).filter(
 		(item) => item.workspaceRole === "WORKSPACE_MEMBER",
 	);
+	const checkAll =
+		members.length > 0 && selectedUserIds.length === members.length;
+	const indeterminate =
+		selectedUserIds.length > 0 && selectedUserIds.length < members.length;
 
 	const columns: ColumnsType<WorkspaceMember> = [
 		{
@@ -159,19 +185,43 @@ export function DocumentGrantsPage() {
 						<Button
 							type="primary"
 							loading={replaceMutation.isPending}
-							onClick={() =>
-								replaceMutation.mutate(
-									selectedUserIds.map((userId) => ({
-										userId,
-										permission:
-											permissionsByUserId[userId] ?? "DOC_ALLOW_READ",
-									})),
-								)
-							}
+							onClick={() => replaceMutation.mutate()}
 						>
 							保存授权
 						</Button>
 					</Space>
+				</Space>
+			</Card>
+
+			<Card size="small">
+				<Space wrap>
+					<Checkbox
+						checked={checkAll}
+						indeterminate={indeterminate}
+						onChange={(event) => {
+							if (event.target.checked) {
+								setSelectedUserIds(members.map((item) => item.userId));
+								setPermissionsByUserId((prev) => ({
+									...Object.fromEntries(
+										members.map((item) => [
+											item.userId,
+											prev[item.userId] ?? "DOC_ALLOW_READ",
+										]),
+									),
+								}));
+								return;
+							}
+							setSelectedUserIds([]);
+						}}
+					>
+						全选成员
+					</Checkbox>
+					<Button size="small" onClick={() => setSelectedUserIds([])}>
+						清空选择
+					</Button>
+					<Typography.Text type="secondary">
+						当前批量选择 {selectedUserIds.length} 名成员。
+					</Typography.Text>
 				</Space>
 			</Card>
 

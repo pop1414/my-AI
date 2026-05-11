@@ -4,9 +4,10 @@ import { Button, Card, Checkbox, Select, Space, Table, Tag, Typography } from "a
 import type { ColumnsType } from "antd/es/table";
 import { useNavigate, useParams } from "react-router-dom";
 import {
+	deleteKnowledgeBaseGrant,
 	listKnowledgeBaseGrants,
 	listMembers,
-	replaceKnowledgeBaseMemberGrants,
+	upsertKnowledgeBaseGrant,
 	type KnowledgeBaseGrant,
 	type WorkspaceMember,
 } from "../../../shared/api/adminApi";
@@ -61,10 +62,28 @@ export function KnowledgeBaseGrantsPage() {
 	}, [grantsQuery.data, kbId]);
 
 	const replaceMutation = useMutation({
-		mutationFn: (assignments: Array<{
-			userId: string;
-			role: KnowledgeBaseGrant["role"];
-		}>) => replaceKnowledgeBaseMemberGrants(kbId!, assignments),
+		mutationFn: async () => {
+			const currentGrants = grantsQuery.data ?? [];
+			const nextGrantedUserIds = new Set(selectedUserIds);
+			const deleteTargets = currentGrants.filter(
+				(item) => !nextGrantedUserIds.has(item.userId),
+			);
+
+			await Promise.all([
+				...selectedUserIds.map((userId) =>
+					upsertKnowledgeBaseGrant(
+						kbId!,
+						userId,
+						rolesByUserId[userId] ?? "KB_READER",
+					),
+				),
+				...deleteTargets.map((item) =>
+					deleteKnowledgeBaseGrant(kbId!, item.userId),
+				),
+			]);
+
+			return listKnowledgeBaseGrants(kbId!);
+		},
 		onSuccess: (data) => {
 			setSelectedUserIds(data.map((item) => item.userId));
 			setRolesByUserId(
@@ -78,6 +97,10 @@ export function KnowledgeBaseGrantsPage() {
 		(item) => item.workspaceRole === "WORKSPACE_MEMBER",
 	);
 	const kbName = kbQuery.data?.name ?? kbId;
+	const checkAll =
+		members.length > 0 && selectedUserIds.length === members.length;
+	const indeterminate =
+		selectedUserIds.length > 0 && selectedUserIds.length < members.length;
 
 	const columns: ColumnsType<WorkspaceMember> = [
 		{
@@ -167,18 +190,43 @@ export function KnowledgeBaseGrantsPage() {
 						<Button
 							type="primary"
 							loading={replaceMutation.isPending}
-							onClick={() =>
-								replaceMutation.mutate(
-									selectedUserIds.map((userId) => ({
-										userId,
-										role: rolesByUserId[userId] ?? "KB_READER",
-									})),
-								)
-							}
+							onClick={() => replaceMutation.mutate()}
 						>
 							保存授权
 						</Button>
 					</Space>
+				</Space>
+			</Card>
+
+			<Card size="small">
+				<Space wrap>
+					<Checkbox
+						checked={checkAll}
+						indeterminate={indeterminate}
+						onChange={(event) => {
+							if (event.target.checked) {
+								setSelectedUserIds(members.map((item) => item.userId));
+								setRolesByUserId((prev) => ({
+									...Object.fromEntries(
+										members.map((item) => [
+											item.userId,
+											prev[item.userId] ?? "KB_READER",
+										]),
+									),
+								}));
+								return;
+							}
+							setSelectedUserIds([]);
+						}}
+					>
+						全选成员
+					</Checkbox>
+					<Button size="small" onClick={() => setSelectedUserIds([])}>
+						清空选择
+					</Button>
+					<Typography.Text type="secondary">
+						当前批量选择 {selectedUserIds.length} 名成员。
+					</Typography.Text>
 				</Space>
 			</Card>
 
