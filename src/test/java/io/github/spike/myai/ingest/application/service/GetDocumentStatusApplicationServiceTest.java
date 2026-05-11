@@ -58,6 +58,7 @@ class GetDocumentStatusApplicationServiceTest {
                 0,
                 null,
                 "v1",
+                "{\"schema_version\":\"v1\"}",
                 Instant.now(),
                 Instant.now());
         when(repository.findById(anyString(), eq(documentId))).thenReturn(Optional.of(document));
@@ -66,6 +67,7 @@ class GetDocumentStatusApplicationServiceTest {
 
         assertEquals("doc-100", result.documentId().value());
         assertEquals(UploadStatus.INDEXED, result.status());
+        assertEquals("{\"schema_version\":\"v1\"}", result.processingMetadata());
         verify(repository, times(1)).findById(eq("workspace-a"), eq(documentId));
         verify(authorizationService).requireCanReadDocument(any(CurrentUser.class), eq("doc-100"), eq("kb-1"));
     }
@@ -112,6 +114,7 @@ class GetDocumentStatusApplicationServiceTest {
                 0,
                 null,
                 "v1",
+                "{\"schema_version\":\"v1\"}",
                 Instant.now(),
                 Instant.now());
         when(repository.findById(anyString(), eq(documentId))).thenReturn(Optional.of(document));
@@ -119,6 +122,7 @@ class GetDocumentStatusApplicationServiceTest {
         DocumentStatusResult result = service.handle(new GetDocumentStatusQuery("doc-deleted"));
 
         assertEquals(UploadStatus.DELETED, result.status());
+        assertEquals(null, result.processingMetadata());
     }
 
     private static CurrentUserProvider currentUserProvider() {

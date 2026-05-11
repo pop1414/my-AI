@@ -141,6 +141,7 @@ class AcceptUploadApplicationServiceTest {
                 0,
                 null,
                 "v1",
+                null,
                 Instant.now(),
                 Instant.now());
         when(repository.findByKbIdAndFileHash(eq("workspace-a"), eq("kb-dup"), eq("hash-dup")))

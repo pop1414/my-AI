@@ -1,5 +1,7 @@
 package io.github.spike.myai.ingest.interfaces.rest;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.spike.myai.ingest.application.command.AcceptUploadCommand;
 import io.github.spike.myai.ingest.application.command.DeleteDocumentCommand;
 import io.github.spike.myai.ingest.application.command.ReprocessDocumentCommand;
@@ -96,6 +98,10 @@ public class DocumentIngestController {
      * 文档源文件存储端口：用于保存上传文件的原始内容，供异步处理链路读取。
      */
     private final DocumentSourceStorage documentSourceStorage;
+    /**
+     * JSON 映射器：用于解析 processing_metadata 字段。
+     */
+    private final ObjectMapper objectMapper;
 
     /**
      * 构造器注入（Spring 推荐方式）。
@@ -110,6 +116,7 @@ public class DocumentIngestController {
      * @param reprocessDocumentUseCase       文档重处理用例
      * @param deleteDocumentUseCase          文档删除用例
      * @param documentSourceStorage          源文件存储端口
+     * @param objectMapper                   Jackson JSON 映射器
      */
     public DocumentIngestController(
             AcceptUploadUseCase acceptUploadUseCase,
@@ -118,7 +125,8 @@ public class DocumentIngestController {
             GetDocumentChunksPreviewUseCase getDocumentChunksPreviewUseCase,
             ReprocessDocumentUseCase reprocessDocumentUseCase,
             DeleteDocumentUseCase deleteDocumentUseCase,
-            DocumentSourceStorage documentSourceStorage) {
+            DocumentSourceStorage documentSourceStorage,
+            ObjectMapper objectMapper) {
         this.acceptUploadUseCase = acceptUploadUseCase;
         this.listDocumentsUseCase = listDocumentsUseCase;
         this.getDocumentStatusUseCase = getDocumentStatusUseCase;
@@ -126,6 +134,7 @@ public class DocumentIngestController {
         this.reprocessDocumentUseCase = reprocessDocumentUseCase;
         this.deleteDocumentUseCase = deleteDocumentUseCase;
         this.documentSourceStorage = documentSourceStorage;
+        this.objectMapper = objectMapper;
     }
 
     /**
@@ -236,7 +245,7 @@ public class DocumentIngestController {
             // 委派给应用层服务进行状态查询逻辑。
             DocumentStatusResult result =
                     getDocumentStatusUseCase.handle(new GetDocumentStatusQuery(documentId));
-            return new DocumentStatusResponse(result.documentId().value(), result.status().name());
+            return toDocumentStatusResponse(result);
         } catch (DocumentNotFoundException ex) {
             // 捕获未找到文档异常，向前端转化为 404 NOT FOUND 状态码。
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, ex.getMessage(), ex);
@@ -316,6 +325,54 @@ public class DocumentIngestController {
     }
 
     /**
+     * 将应用层状态查询结果转换为 REST 响应 DTO。
+     *
+     * <p>该映射方法负责：
+     * <ol>
+     *   <li>提取 documentId 和 status 基础字段；</li>
+     *   <li>调用 {@link #parseProcessingMetadata(String)} 将 JSON 字符串解析为结构化对象，
+     *       确保 API 响应中 processingMetadata 以 JSON 对象形式呈现而非原始字符串。</li>
+     * </ol>
+     *
+     * @param result 应用层状态查询结果
+     * @return REST 响应 DTO
+     */
+    private DocumentStatusResponse toDocumentStatusResponse(DocumentStatusResult result) {
+        return new DocumentStatusResponse(
+                result.documentId().value(),
+                result.status().name(),
+                parseProcessingMetadata(result.processingMetadata()));
+    }
+
+    /**
+     * 将 processing_metadata JSON 字符串解析为 Jackson {@link JsonNode} 树结构。
+     *
+     * <p>解析策略：
+     * <ul>
+     *   <li>当字符串为 {@code null} 或空白时，返回 {@code null}（JSON 序列化时该字段不会被包含）；</li>
+     *   <li>正常 JSON 字符串通过 {@link ObjectMapper#readTree(String)} 解析为结构化节点；</li>
+     *   <li>解析失败时抛出 {@link IllegalStateException}，由上层统一异常处理转换为 500 响应。</li>
+     * </ul>
+     *
+     * @param processingMetadata 数据库中的 processing_metadata JSON 字符串
+     * @return 解析后的 JSON 树节点，可能为 null
+     * @throws IllegalStateException 当 JSON 格式非法时
+     */
+    private JsonNode parseProcessingMetadata(String processingMetadata) {
+        // 空值或空白字符串直接返回 null，不在响应体中输出该字段。
+        if (processingMetadata == null || processingMetadata.isBlank()) {
+            return null;
+        }
+        try {
+            // 使用 Jackson 将 JSON 字符串解析为树结构，便于后续序列化。
+            return objectMapper.readTree(processingMetadata);
+        } catch (IOException ex) {
+            // JSON 解析失败说明数据库中存在脏数据，属于严重异常，直接抛出。
+            throw new IllegalStateException("invalid processing metadata json", ex);
+        }
+    }
+
+    /**
      * 触发文档重处理。
      * 对于处于失败状态或需要重新切片的文档，调用此接口重新触发整套入库解析流程。
      *
@@ -329,7 +386,7 @@ public class DocumentIngestController {
         try {
             // 重处理只修改状态并进入队列，不在接口层做同步向量重建。
             DocumentStatusResult result = reprocessDocumentUseCase.handle(new ReprocessDocumentCommand(documentId));
-            return new DocumentStatusResponse(result.documentId().value(), result.status().name());
+            return toDocumentStatusResponse(result);
         } catch (DocumentNotFoundException ex) {
             // 如果找不到该文档标识，返回 404
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, ex.getMessage(), ex);

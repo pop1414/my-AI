@@ -73,6 +73,7 @@ class DeleteDocumentApplicationServiceTest {
                 0,
                 null,
                 "v1",
+                null,
                 Instant.now(),
                 Instant.now());
         when(repository.findById(anyString(), eq(documentId))).thenReturn(Optional.of(indexed));
@@ -149,6 +150,7 @@ class DeleteDocumentApplicationServiceTest {
                 0,
                 null,
                 "v1",
+                null,
                 Instant.now(),
                 Instant.now());
         when(repository.findById(anyString(), eq(documentId))).thenReturn(Optional.of(ingesting));
@@ -197,6 +199,7 @@ class DeleteDocumentApplicationServiceTest {
                 0,
                 null,
                 "v1",
+                null,
                 Instant.now(),
                 Instant.now());
         when(repository.findById(anyString(), eq(documentId))).thenReturn(Optional.of(failed));

@@ -50,6 +50,7 @@ class PgVectorDocumentVectorIndexerTest {
                 0,
                 null,
                 "v1",
+                null,
                 Instant.now(),
                 Instant.now());
         List<DocumentChunk> chunks = List.of(new DocumentChunk("chunk-a", null), new DocumentChunk("chunk-b", null));
