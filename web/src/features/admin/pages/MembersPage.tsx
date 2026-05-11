@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Button, Form, Modal, Select, Space, Table, Tag, Typography } from "antd";
+import { Button, Form, Modal, Select, Space, Table, Tag, Typography, message } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { useNavigate } from "react-router-dom";
 import {
@@ -54,6 +54,7 @@ export function MembersPage() {
 			queryClient.invalidateQueries({ queryKey: ["admin", "members"] });
 			setEditingMember(null);
 			roleForm.resetFields();
+			message.success("成员角色已更新");
 		},
 	});
 

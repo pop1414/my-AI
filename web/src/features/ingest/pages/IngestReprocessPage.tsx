@@ -1,6 +1,6 @@
 ﻿import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
-import { Alert, Button, Card, Form, Input, Space, Tag, Typography } from "antd";
+import { Alert, Button, Card, Form, Input, Space, Tag, Typography, message } from "antd";
 import { useNavigate, useParams } from "react-router-dom";
 import { z } from "zod";
 import {
@@ -42,6 +42,7 @@ export function IngestReprocessPage() {
 		onSuccess: (data) => {
 			setResult(data);
 			localStorage.setItem("myai:lastDocumentId", data.documentId);
+			message.success("文档已重新进入处理队列");
 		},
 	});
 

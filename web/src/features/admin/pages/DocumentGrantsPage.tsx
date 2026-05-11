@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { Button, Card, Checkbox, Select, Space, Table, Tag, Typography } from "antd";
+import { Button, Card, Checkbox, Select, Space, Table, Tag, Typography, message } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { useNavigate, useParams } from "react-router-dom";
 import {
@@ -84,6 +84,7 @@ export function DocumentGrantsPage() {
 				),
 			);
 			grantsQuery.refetch();
+			message.success("文档授权已保存");
 		},
 	});
 

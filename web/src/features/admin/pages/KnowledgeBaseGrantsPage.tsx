@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { Button, Card, Checkbox, Select, Space, Table, Tag, Typography } from "antd";
+import { Button, Card, Checkbox, Select, Space, Table, Tag, Typography, message } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { useNavigate, useParams } from "react-router-dom";
 import {
@@ -90,6 +90,7 @@ export function KnowledgeBaseGrantsPage() {
 				Object.fromEntries(data.map((item) => [item.userId, item.role])),
 			);
 			grantsQuery.refetch();
+			message.success("知识库授权已保存");
 		},
 	});
 

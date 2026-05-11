@@ -10,6 +10,7 @@ import {
 	Space,
 	Tag,
 	Typography,
+	message,
 } from "antd";
 import { useNavigate, useParams } from "react-router-dom";
 import { z } from "zod";
@@ -61,6 +62,7 @@ export function IngestDeletePage() {
 		onSuccess: async (_, documentId) => {
 			setDeletedDocumentId(documentId);
 			localStorage.setItem("myai:lastDocumentId", documentId);
+			message.success("文档删除请求已提交");
 			try {
 				const latestStatus = await getDocumentStatus(documentId);
 				setStatusSnapshot(latestStatus);

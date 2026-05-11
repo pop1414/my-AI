@@ -13,6 +13,7 @@ import {
 	Table,
 	Tag,
 	Typography,
+	message,
 } from "antd";
 import { PlusOutlined } from "@ant-design/icons";
 import type { ColumnsType } from "antd/es/table";
@@ -107,6 +108,7 @@ export function AccountAdminPage() {
 			queryClient.invalidateQueries({ queryKey: ["admin", "accounts"] });
 			setCreateAdminModalOpen(false);
 			adminForm.resetFields();
+			message.success("管理员账号已创建");
 		},
 	});
 
@@ -117,6 +119,7 @@ export function AccountAdminPage() {
 			queryClient.invalidateQueries({ queryKey: ["admin", "members"] });
 			setCreateMemberModalOpen(false);
 			resetMemberProvisionWizard();
+			message.success("成员开户成功，正在进入授权配置页");
 			navigate(
 				`/admin/members/${encodeURIComponent(created.userId)}/grants?tab=knowledge`,
 			);
@@ -130,6 +133,7 @@ export function AccountAdminPage() {
 		}) => updateManagedAccountStatus(params.userId, params.userStatus),
 		onSuccess: () => {
 			queryClient.invalidateQueries({ queryKey: ["admin", "accounts"] });
+			message.success("账号状态已更新");
 		},
 	});
 
@@ -140,6 +144,7 @@ export function AccountAdminPage() {
 			queryClient.invalidateQueries({ queryKey: ["admin", "accounts"] });
 			setPasswordModalAccount(null);
 			passwordForm.resetFields();
+			message.success("密码已重置");
 		},
 	});
 
@@ -147,6 +152,7 @@ export function AccountAdminPage() {
 		mutationFn: (userId: string) => removeManagedAccountMembership(userId),
 		onSuccess: () => {
 			queryClient.invalidateQueries({ queryKey: ["admin", "accounts"] });
+			message.success("成员关系已移除");
 		},
 	});
 

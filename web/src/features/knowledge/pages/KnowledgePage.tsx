@@ -12,6 +12,7 @@ import {
 	Table,
 	Tag,
 	Typography,
+	message,
 } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { useNavigate } from "react-router-dom";
@@ -128,6 +129,7 @@ export function KnowledgePage() {
 		onSuccess: () => {
 			createForm.resetFields();
 			queryClient.invalidateQueries({ queryKey: ["knowledge-bases"] });
+			message.success("知识库已创建");
 		},
 	});
 	const updateMutation = useMutation({
@@ -145,6 +147,7 @@ export function KnowledgePage() {
 		onSuccess: () => {
 			setEditingKnowledgeBase(null);
 			queryClient.invalidateQueries({ queryKey: ["knowledge-bases"] });
+			message.success("知识库已更新");
 		},
 	});
 
