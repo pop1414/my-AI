@@ -3,6 +3,7 @@ package io.github.spike.myai.auth.domain.port;
 import io.github.spike.myai.auth.domain.model.DocumentPermission;
 import io.github.spike.myai.auth.domain.model.KnowledgeBaseRole;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * 授权 grant 读取仓储端口（出站端口）。
@@ -42,6 +43,18 @@ public interface AuthorizationGrantRepository {
      * @return 有效知识库角色；无 ACTIVE 授权时返回 {@link Optional#empty()}
      */
     Optional<KnowledgeBaseRole> findKnowledgeBaseRole(String workspaceId, String kbId, String userId);
+
+    /**
+     * 查询用户在当前工作区内具备 ACTIVE 显式授权的知识库标识集合。
+     *
+     * <p>用于知识库列表可见性收紧场景：
+     * 普通成员仅可见自己具备显式知识库授权的知识库。
+     *
+     * @param workspaceId 工作空间标识
+     * @param userId      用户标识
+     * @return 具备 ACTIVE 知识库授权的知识库 ID 集合；无授权时返回空集合
+     */
+    Set<String> listGrantedKnowledgeBaseIds(String workspaceId, String userId);
 
     /**
      * 查询用户在指定文档上的有效权限覆盖。

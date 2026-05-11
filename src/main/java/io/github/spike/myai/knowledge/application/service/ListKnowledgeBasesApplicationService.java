@@ -2,10 +2,14 @@ package io.github.spike.myai.knowledge.application.service;
 
 import io.github.spike.myai.auth.application.context.CurrentUser;
 import io.github.spike.myai.auth.application.context.CurrentUserProvider;
+import io.github.spike.myai.auth.domain.model.WorkspaceRole;
+import io.github.spike.myai.auth.domain.port.AuthorizationGrantRepository;
 import io.github.spike.myai.knowledge.application.result.KnowledgeBaseResult;
 import io.github.spike.myai.knowledge.application.usecase.ListKnowledgeBasesUseCase;
+import io.github.spike.myai.knowledge.domain.model.KnowledgeBaseSummary;
 import io.github.spike.myai.knowledge.domain.port.KnowledgeBaseRepository;
 import java.util.List;
+import java.util.Set;
 import org.springframework.stereotype.Service;
 
 /**
@@ -35,6 +39,9 @@ public class ListKnowledgeBasesApplicationService implements ListKnowledgeBasesU
     /** 当前用户上下文提供器，用于获取工作区标识 */
     private final CurrentUserProvider currentUserProvider;
 
+    /** 授权 grant 读取仓储，用于按知识库授权收紧普通成员的可见范围 */
+    private final AuthorizationGrantRepository authorizationGrantRepository;
+
     /**
      * 构造器注入。
      *
@@ -43,9 +50,11 @@ public class ListKnowledgeBasesApplicationService implements ListKnowledgeBasesU
      */
     public ListKnowledgeBasesApplicationService(
             KnowledgeBaseRepository knowledgeBaseRepository,
-            CurrentUserProvider currentUserProvider) {
+            CurrentUserProvider currentUserProvider,
+            AuthorizationGrantRepository authorizationGrantRepository) {
         this.knowledgeBaseRepository = knowledgeBaseRepository;
         this.currentUserProvider = currentUserProvider;
+        this.authorizationGrantRepository = authorizationGrantRepository;
     }
 
     /**
@@ -65,11 +74,12 @@ public class ListKnowledgeBasesApplicationService implements ListKnowledgeBasesU
     public List<KnowledgeBaseResult> handle() {
         // 获取当前登录用户，确保已认证且可获取工作区标识
         CurrentUser currentUser = currentUserProvider.requireCurrentUser();
+        List<KnowledgeBaseSummary> visibleKnowledgeBases = resolveVisibleKnowledgeBases(currentUser);
 
         // 从仓库获取全量知识库视图列表，通过 Stream 流式转换为应用层 DTO
         // listKnowledgeBases() 返回的视图项已包含 indexedDocumentCount 聚合字段，
         // 无需额外的数据库查询即可获得完整的列表数据
-        return knowledgeBaseRepository.listKnowledgeBases(currentUser.workspaceId()).stream()
+        return visibleKnowledgeBases.stream()
                 .map(item -> new KnowledgeBaseResult(
                         item.kbId(),                     // 知识库唯一标识
                         item.name(),                     // 知识库名称
@@ -77,5 +87,36 @@ public class ListKnowledgeBasesApplicationService implements ListKnowledgeBasesU
                         item.status().name(),            // 枚举转字符串，解耦接口契约
                         item.indexedDocumentCount()))    // 已索引文档数（聚合统计）
                 .toList();  // 收集为不可变列表（Java 16+），替代 Collectors.toUnmodifiableList()
+    }
+
+    /**
+     * 解析当前用户可见的知识库列表。
+     *
+     * <p>规则：
+     * <ul>
+     *   <li>{@code WORKSPACE_OWNER / WORKSPACE_ADMIN} —— 可见当前工作区全部知识库；</li>
+     *   <li>{@code WORKSPACE_MEMBER} —— 仅可见自己具备 ACTIVE 显式知识库授权的知识库。</li>
+     * </ul>
+     *
+     * @param currentUser 当前登录用户
+     * @return 当前用户可见的知识库摘要列表
+     */
+    private List<KnowledgeBaseSummary> resolveVisibleKnowledgeBases(CurrentUser currentUser) {
+        List<KnowledgeBaseSummary> allKnowledgeBases = knowledgeBaseRepository.listKnowledgeBases(currentUser.workspaceId());
+        if (currentUser.workspaceRole() == WorkspaceRole.WORKSPACE_OWNER
+                || currentUser.workspaceRole() == WorkspaceRole.WORKSPACE_ADMIN) {
+            return allKnowledgeBases;
+        }
+
+        Set<String> grantedKnowledgeBaseIds = authorizationGrantRepository.listGrantedKnowledgeBaseIds(
+                currentUser.workspaceId(),
+                currentUser.userId());
+        if (grantedKnowledgeBaseIds.isEmpty()) {
+            return List.of();
+        }
+
+        return allKnowledgeBases.stream()
+                .filter(item -> grantedKnowledgeBaseIds.contains(item.kbId()))
+                .toList();
     }
 }

@@ -3,7 +3,9 @@ package io.github.spike.myai.auth.infrastructure.persistence;
 import io.github.spike.myai.auth.domain.model.DocumentPermission;
 import io.github.spike.myai.auth.domain.model.KnowledgeBaseRole;
 import io.github.spike.myai.auth.domain.port.AuthorizationGrantRepository;
+import java.util.LinkedHashSet;
 import java.util.Optional;
+import java.util.Set;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
@@ -59,6 +61,18 @@ public class JdbcAuthorizationGrantRepository implements AuthorizationGrantRepos
               AND document_id = ?
               AND user_id = ?
               AND status = 'ACTIVE'
+            """;
+
+    /**
+     * 查询用户在当前工作区内具备 ACTIVE 知识库授权的全部知识库标识。
+     */
+    private static final String LIST_GRANTED_KNOWLEDGE_BASE_IDS_SQL = """
+            SELECT kb_id
+            FROM knowledge_base_grants
+            WHERE workspace_id = ?
+              AND user_id = ?
+              AND status = 'ACTIVE'
+            ORDER BY created_at ASC, kb_id ASC
             """;
 
     /** Spring JDBC 模板，用于执行 SQL */
@@ -125,5 +139,14 @@ public class JdbcAuthorizationGrantRepository implements AuthorizationGrantRepos
                 .findFirst()
                 // 字符串 → 枚举映射（如 "DOC_DENY" → DocumentPermission.DOC_DENY）
                 .map(DocumentPermission::valueOf);
+    }
+
+    @Override
+    public Set<String> listGrantedKnowledgeBaseIds(String workspaceId, String userId) {
+        return new LinkedHashSet<>(jdbcTemplate.queryForList(
+                LIST_GRANTED_KNOWLEDGE_BASE_IDS_SQL,
+                String.class,
+                workspaceId,
+                userId));
     }
 }
