@@ -63,6 +63,30 @@ public class JdbcDocumentGrantManagementRepository implements DocumentGrantManag
             """;
 
     /**
+     * 查询指定用户当前拥有的所有活跃文档授权 SQL。
+     */
+    private static final String FIND_ACTIVE_GRANTS_BY_USER_SQL = """
+            SELECT g.workspace_id,
+                   g.document_id,
+                   g.user_id,
+                   u.username,
+                   u.display_name,
+                   g.permission,
+                   g.status
+            FROM document_grants g
+            JOIN users u ON u.user_id = g.user_id
+            JOIN workspace_memberships wm
+              ON wm.workspace_id = g.workspace_id
+             AND wm.user_id = g.user_id
+            WHERE g.workspace_id = ?
+              AND g.user_id = ?
+              AND g.status = 'ACTIVE'
+              AND u.status = 'ACTIVE'
+              AND wm.status = 'ACTIVE'
+            ORDER BY g.created_at ASC, g.document_id ASC
+            """;
+
+    /**
      * 查询单条活跃授权 SQL。
      * <p>
      * 两表联查（grants + users），通过工作区、文档、用户三维度定位，
@@ -145,6 +169,26 @@ public class JdbcDocumentGrantManagementRepository implements DocumentGrantManag
                 JdbcDocumentGrantManagementRepository::mapDocumentGrant,
                 workspaceId,
                 documentId);
+    }
+
+    /**
+     * 查询指定用户当前拥有的所有活跃文档授权。
+     * <p>
+     * 使用预编译的 {@link #FIND_ACTIVE_GRANTS_BY_USER_SQL}，
+     * 三表联查并三重 ACTIVE 过滤。与 {@link #findActiveGrants} 的
+     * 区别在于索引键为 {@code user_id} 而非 {@code document_id}。
+     *
+     * @param workspaceId 工作区 ID
+     * @param userId      用户 ID
+     * @return 活跃授权列表，无结果时返回空列表
+     */
+    @Override
+    public List<DocumentGrant> findActiveGrantsByUser(String workspaceId, String userId) {
+        return jdbcTemplate.query(
+                FIND_ACTIVE_GRANTS_BY_USER_SQL,
+                JdbcDocumentGrantManagementRepository::mapDocumentGrant,
+                workspaceId,
+                userId);
     }
 
     /**

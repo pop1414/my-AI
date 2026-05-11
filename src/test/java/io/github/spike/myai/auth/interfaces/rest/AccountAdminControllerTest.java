@@ -13,6 +13,7 @@ import io.github.spike.myai.auth.application.exception.ManagedAccountNotFoundExc
 import io.github.spike.myai.auth.application.exception.ManagedAccountUsernameConflictException;
 import io.github.spike.myai.auth.application.result.ManagedAccountResult;
 import io.github.spike.myai.auth.application.usecase.CreateManagedAccountUseCase;
+import io.github.spike.myai.auth.application.usecase.CreateManagedMemberUseCase;
 import io.github.spike.myai.auth.application.usecase.ListManagedAccountsUseCase;
 import io.github.spike.myai.auth.application.usecase.RemoveManagedAccountMembershipUseCase;
 import io.github.spike.myai.auth.application.usecase.ResetManagedAccountPasswordUseCase;
@@ -31,6 +32,7 @@ class AccountAdminControllerTest {
 
     private ListManagedAccountsUseCase listManagedAccountsUseCase;
     private CreateManagedAccountUseCase createManagedAccountUseCase;
+    private CreateManagedMemberUseCase createManagedMemberUseCase;
     private UpdateManagedAccountStatusUseCase updateManagedAccountStatusUseCase;
     private ResetManagedAccountPasswordUseCase resetManagedAccountPasswordUseCase;
     private RemoveManagedAccountMembershipUseCase removeManagedAccountMembershipUseCase;
@@ -40,12 +42,14 @@ class AccountAdminControllerTest {
     void setUp() {
         this.listManagedAccountsUseCase = Mockito.mock(ListManagedAccountsUseCase.class);
         this.createManagedAccountUseCase = Mockito.mock(CreateManagedAccountUseCase.class);
+        this.createManagedMemberUseCase = Mockito.mock(CreateManagedMemberUseCase.class);
         this.updateManagedAccountStatusUseCase = Mockito.mock(UpdateManagedAccountStatusUseCase.class);
         this.resetManagedAccountPasswordUseCase = Mockito.mock(ResetManagedAccountPasswordUseCase.class);
         this.removeManagedAccountMembershipUseCase = Mockito.mock(RemoveManagedAccountMembershipUseCase.class);
         AccountAdminController controller = new AccountAdminController(
                 listManagedAccountsUseCase,
                 createManagedAccountUseCase,
+                createManagedMemberUseCase,
                 updateManagedAccountStatusUseCase,
                 resetManagedAccountPasswordUseCase,
                 removeManagedAccountMembershipUseCase);

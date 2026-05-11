@@ -1,18 +1,22 @@
 package io.github.spike.myai.auth.interfaces.rest;
 
 import io.github.spike.myai.auth.application.command.CreateManagedAccountCommand;
+import io.github.spike.myai.auth.application.command.CreateManagedMemberCommand;
 import io.github.spike.myai.auth.application.command.RemoveManagedAccountMembershipCommand;
 import io.github.spike.myai.auth.application.command.ResetManagedAccountPasswordCommand;
 import io.github.spike.myai.auth.application.command.UpdateManagedAccountStatusCommand;
+import io.github.spike.myai.auth.application.exception.GovernanceAccessDeniedException;
 import io.github.spike.myai.auth.application.exception.ManagedAccountNotFoundException;
 import io.github.spike.myai.auth.application.exception.ManagedAccountUsernameConflictException;
 import io.github.spike.myai.auth.application.result.ManagedAccountResult;
 import io.github.spike.myai.auth.application.usecase.CreateManagedAccountUseCase;
+import io.github.spike.myai.auth.application.usecase.CreateManagedMemberUseCase;
 import io.github.spike.myai.auth.application.usecase.ListManagedAccountsUseCase;
 import io.github.spike.myai.auth.application.usecase.RemoveManagedAccountMembershipUseCase;
 import io.github.spike.myai.auth.application.usecase.ResetManagedAccountPasswordUseCase;
 import io.github.spike.myai.auth.application.usecase.UpdateManagedAccountStatusUseCase;
 import io.github.spike.myai.auth.interfaces.rest.dto.CreateManagedAccountRequest;
+import io.github.spike.myai.auth.interfaces.rest.dto.CreateManagedMemberRequest;
 import io.github.spike.myai.auth.interfaces.rest.dto.ManagedAccountResponse;
 import io.github.spike.myai.auth.interfaces.rest.dto.ResetManagedAccountPasswordRequest;
 import io.github.spike.myai.auth.interfaces.rest.dto.UpdateManagedAccountStatusRequest;
@@ -34,13 +38,15 @@ import org.springframework.web.server.ResponseStatusException;
  * 账号管理 REST 控制器。
  *
  * <p>提供工作区管理员对托管账号的 CRUD 操作接口，包括账号列表查询、
- * 创建账号、更新状态、重置密码和移除成员关系。所有接口均需要
- * {@code WORKSPACE_ADMIN} 角色权限，由用例层的授权服务统一校验。
+ * 创建账号（含成员开户一键授权）、更新状态、重置密码和移除成员关系。
+ * 所有接口均需要工作区管理权限，由用例层的授权服务统一校验，
+ * 治理边界由 {@link io.github.spike.myai.auth.application.service.WorkspaceGovernanceGuard} 守护。
  *
  * <p>异常映射规则：
  * <ul>
  *   <li>{@link ManagedAccountNotFoundException} → HTTP 404</li>
  *   <li>{@link ManagedAccountUsernameConflictException} → HTTP 409</li>
+ *   <li>{@link GovernanceAccessDeniedException} → HTTP 403（含 reasonCode）</li>
  *   <li>{@link IllegalArgumentException} → HTTP 400</li>
  * </ul>
  */
@@ -50,6 +56,7 @@ public class AccountAdminController {
 
     private final ListManagedAccountsUseCase listManagedAccountsUseCase;
     private final CreateManagedAccountUseCase createManagedAccountUseCase;
+    private final CreateManagedMemberUseCase createManagedMemberUseCase;
     private final UpdateManagedAccountStatusUseCase updateManagedAccountStatusUseCase;
     private final ResetManagedAccountPasswordUseCase resetManagedAccountPasswordUseCase;
     private final RemoveManagedAccountMembershipUseCase removeManagedAccountMembershipUseCase;
@@ -58,7 +65,8 @@ public class AccountAdminController {
      * 构造函数注入所有依赖的用例。
      *
      * @param listManagedAccountsUseCase            查询账号列表用例
-     * @param createManagedAccountUseCase           创建账号用例
+     * @param createManagedAccountUseCase           创建账号用例（支持指定工作区角色）
+     * @param createManagedMemberUseCase            创建成员用例（含初始知识库授权）
      * @param updateManagedAccountStatusUseCase     更新账号状态用例
      * @param resetManagedAccountPasswordUseCase    重置密码用例
      * @param removeManagedAccountMembershipUseCase 移除成员关系用例
@@ -66,11 +74,13 @@ public class AccountAdminController {
     public AccountAdminController(
             ListManagedAccountsUseCase listManagedAccountsUseCase,
             CreateManagedAccountUseCase createManagedAccountUseCase,
+            CreateManagedMemberUseCase createManagedMemberUseCase,
             UpdateManagedAccountStatusUseCase updateManagedAccountStatusUseCase,
             ResetManagedAccountPasswordUseCase resetManagedAccountPasswordUseCase,
             RemoveManagedAccountMembershipUseCase removeManagedAccountMembershipUseCase) {
         this.listManagedAccountsUseCase = listManagedAccountsUseCase;
         this.createManagedAccountUseCase = createManagedAccountUseCase;
+        this.createManagedMemberUseCase = createManagedMemberUseCase;
         this.updateManagedAccountStatusUseCase = updateManagedAccountStatusUseCase;
         this.resetManagedAccountPasswordUseCase = resetManagedAccountPasswordUseCase;
         this.removeManagedAccountMembershipUseCase = removeManagedAccountMembershipUseCase;
@@ -113,6 +123,48 @@ public class AccountAdminController {
                     request.displayName(),
                     request.password(),
                     request.workspaceRole())));
+        } catch (ManagedAccountUsernameConflictException ex) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, ex.getMessage(), ex);
+        } catch (IllegalArgumentException ex) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, ex.getMessage(), ex);
+        }
+    }
+
+    /**
+     * 创建工作区成员并初始化知识库授权（开户即授权）。
+     *
+     * <p>POST /api/v1/admin/accounts/member-provisions
+     *
+     * <p>与 {@link #createAccount} 的区别：
+     * <ul>
+     *   <li>角色固定为 WORKSPACE_MEMBER，无需传 workspaceRole；</li>
+     *   <li>要求提供初始知识库授权列表，实现一站式开户。</li>
+     * </ul>
+     *
+     * @param request 创建成员请求体，含用户名、密码和初始知识库授权列表
+     * @return 创建成功的账号信息
+     * @throws ResponseStatusException 参数非法（400）、用户名冲突（409）或治理拒绝（403）
+     */
+    @PostMapping(value = "/member-provisions", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
+    public ManagedAccountResponse createMemberProvision(
+            @RequestBody(required = false) CreateManagedMemberRequest request) {
+        // 校验请求体不能为空
+        if (request == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "request body is required");
+        }
+        try {
+            // 将请求 DTO 转换为命令对象（含初始授权列表），委托用例层执行
+            return toResponse(createManagedMemberUseCase.handle(new CreateManagedMemberCommand(
+                    request.username(),
+                    request.displayName(),
+                    request.password(),
+                    request.initialKnowledgeBaseGrants() == null
+                            ? List.of()
+                            : request.initialKnowledgeBaseGrants().stream()
+                                    .map(item -> new CreateManagedMemberCommand.InitialKnowledgeBaseGrantCommand(
+                                            item.kbId(),
+                                            item.role()))
+                                    .toList())));
         } catch (ManagedAccountUsernameConflictException ex) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, ex.getMessage(), ex);
         } catch (IllegalArgumentException ex) {

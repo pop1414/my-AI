@@ -1,5 +1,6 @@
 package io.github.spike.myai.auth.interfaces.rest;
 
+import io.github.spike.myai.auth.application.command.ReplaceDocumentMemberGrantsCommand;
 import io.github.spike.myai.auth.application.command.RevokeDocumentGrantCommand;
 import io.github.spike.myai.auth.application.command.UpsertDocumentGrantCommand;
 import io.github.spike.myai.auth.application.exception.DocumentGrantNotFoundException;
@@ -7,9 +8,11 @@ import io.github.spike.myai.auth.application.exception.ManagedDocumentNotFoundEx
 import io.github.spike.myai.auth.application.exception.WorkspaceMemberNotFoundException;
 import io.github.spike.myai.auth.application.result.DocumentGrantResult;
 import io.github.spike.myai.auth.application.usecase.ListDocumentGrantsUseCase;
+import io.github.spike.myai.auth.application.usecase.ReplaceDocumentMemberGrantsUseCase;
 import io.github.spike.myai.auth.application.usecase.RevokeDocumentGrantUseCase;
 import io.github.spike.myai.auth.application.usecase.UpsertDocumentGrantUseCase;
 import io.github.spike.myai.auth.interfaces.rest.dto.DocumentGrantResponse;
+import io.github.spike.myai.auth.interfaces.rest.dto.ReplaceDocumentMemberGrantsRequest;
 import io.github.spike.myai.auth.interfaces.rest.dto.UpsertDocumentGrantRequest;
 import java.util.List;
 import org.springframework.http.HttpStatus;
@@ -31,9 +34,11 @@ import org.springframework.web.server.ResponseStatusException;
  * <ul>
  *   <li>查询指定文档下所有活跃授权记录</li>
  *   <li>向指定用户授予或更新文档访问权限覆盖（Upsert）</li>
+ *   <li>以文档为维度批量覆盖成员授权（声明式同步）</li>
  *   <li>回收指定用户的文档访问权限覆盖（软删除）</li>
  * </ul>
  * 所有接口均要求调用方具备工作区管理权限，权限校验由下游用例层完成。
+ * 治理边界由 {@link io.github.spike.myai.auth.application.service.WorkspaceGovernanceGuard} 守护。
  * <p>
  * 路径中的 {@code documentId} 为文档唯一标识，作为所有操作的作用域限定。
  *
@@ -48,22 +53,27 @@ public class DocumentGrantAdminController {
     private final ListDocumentGrantsUseCase listDocumentGrantsUseCase;
     /** 授予或更新文档授权用例 */
     private final UpsertDocumentGrantUseCase upsertDocumentGrantUseCase;
+    /** 批量覆盖文档授权用例 */
+    private final ReplaceDocumentMemberGrantsUseCase replaceDocumentMemberGrantsUseCase;
     /** 回收文档授权用例 */
     private final RevokeDocumentGrantUseCase revokeDocumentGrantUseCase;
 
     /**
      * 构造器注入所需用例。
      *
-     * @param listDocumentGrantsUseCase   查询授权列表用例
-     * @param upsertDocumentGrantUseCase  授予/更新授权用例
-     * @param revokeDocumentGrantUseCase  回收授权用例
+     * @param listDocumentGrantsUseCase          查询授权列表用例
+     * @param upsertDocumentGrantUseCase         授予/更新授权用例
+     * @param replaceDocumentMemberGrantsUseCase 批量覆盖成员授权用例
+     * @param revokeDocumentGrantUseCase         回收授权用例
      */
     public DocumentGrantAdminController(
             ListDocumentGrantsUseCase listDocumentGrantsUseCase,
             UpsertDocumentGrantUseCase upsertDocumentGrantUseCase,
+            ReplaceDocumentMemberGrantsUseCase replaceDocumentMemberGrantsUseCase,
             RevokeDocumentGrantUseCase revokeDocumentGrantUseCase) {
         this.listDocumentGrantsUseCase = listDocumentGrantsUseCase;
         this.upsertDocumentGrantUseCase = upsertDocumentGrantUseCase;
+        this.replaceDocumentMemberGrantsUseCase = replaceDocumentMemberGrantsUseCase;
         this.revokeDocumentGrantUseCase = revokeDocumentGrantUseCase;
     }
 
@@ -128,6 +138,43 @@ public class DocumentGrantAdminController {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, ex.getMessage(), ex);
         } catch (IllegalArgumentException ex) {
             // 参数非法（如权限值无效），映射为 400
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, ex.getMessage(), ex);
+        }
+    }
+/**
+     * 以文档为维度批量覆盖成员授权（声明式同步）。
+     *
+     * <p>PUT /api/v1/admin/documents/{documentId}/grants:batch
+     *
+     * <p>将指定文档的成员授权集合整体替换为请求中的授权列表，
+     * 不在列表中的现有授权将被软删除。
+     *
+     * @param documentId 文档唯一标识
+     * @param request    期望的成员授权列表
+     * @return 替换后的完整授权列表
+     */
+    @PutMapping(value = ":batch", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
+    public List<DocumentGrantResponse> replaceDocumentGrants(
+            @PathVariable("documentId") String documentId,
+            @RequestBody(required = false) ReplaceDocumentMemberGrantsRequest request) {
+        if (request == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "request body is required");
+        }
+        // 将请求 DTO 转换为命令对象（含授权列表），委托用例层执行批量替换
+        try {
+            return replaceDocumentMemberGrantsUseCase.handle(new ReplaceDocumentMemberGrantsCommand(
+                            documentId,
+                            request.assignments() == null
+                                    ? List.of()
+                                    : request.assignments().stream()
+                                            .map(item -> new ReplaceDocumentMemberGrantsCommand.Assignment(item.userId(), item.permission()))
+                                            .toList()))
+                    .stream()
+                    .map(DocumentGrantAdminController::toResponse)
+                    .toList();
+        } catch (ManagedDocumentNotFoundException | WorkspaceMemberNotFoundException ex) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, ex.getMessage(), ex);
+        } catch (IllegalArgumentException ex) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, ex.getMessage(), ex);
         }
     }

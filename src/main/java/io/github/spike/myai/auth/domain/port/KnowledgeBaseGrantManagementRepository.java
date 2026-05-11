@@ -37,6 +37,15 @@ public interface KnowledgeBaseGrantManagementRepository {
     List<KnowledgeBaseGrant> findActiveGrants(String workspaceId, String kbId);
 
     /**
+     * 查询指定用户当前拥有的所有活跃知识库授权。
+     *
+     * @param workspaceId 工作区 ID，不能为空
+     * @param userId 用户 ID，不能为空
+     * @return 活跃授权列表，无授权记录时返回空列表（非 {@code null}）
+     */
+    List<KnowledgeBaseGrant> findActiveGrantsByUser(String workspaceId, String userId);
+
+    /**
      * 查询单条活跃授权记录。
      * <p>
      * 同时匹配工作区、知识库、用户三个维度及 {@code ACTIVE} 状态。

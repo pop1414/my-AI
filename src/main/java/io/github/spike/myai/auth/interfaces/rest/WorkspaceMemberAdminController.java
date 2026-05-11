@@ -1,10 +1,22 @@
 package io.github.spike.myai.auth.interfaces.rest;
 
+import io.github.spike.myai.auth.application.command.ReplaceMemberDocumentGrantsCommand;
+import io.github.spike.myai.auth.application.command.ReplaceMemberKnowledgeBaseGrantsCommand;
 import io.github.spike.myai.auth.application.command.UpdateWorkspaceMemberRoleCommand;
 import io.github.spike.myai.auth.application.exception.WorkspaceMemberNotFoundException;
+import io.github.spike.myai.auth.application.result.DocumentGrantResult;
+import io.github.spike.myai.auth.application.result.KnowledgeBaseGrantResult;
 import io.github.spike.myai.auth.application.result.WorkspaceMemberResult;
+import io.github.spike.myai.auth.application.usecase.ListMemberDocumentGrantsUseCase;
+import io.github.spike.myai.auth.application.usecase.ListMemberKnowledgeBaseGrantsUseCase;
 import io.github.spike.myai.auth.application.usecase.ListWorkspaceMembersUseCase;
+import io.github.spike.myai.auth.application.usecase.ReplaceMemberDocumentGrantsUseCase;
+import io.github.spike.myai.auth.application.usecase.ReplaceMemberKnowledgeBaseGrantsUseCase;
 import io.github.spike.myai.auth.application.usecase.UpdateWorkspaceMemberRoleUseCase;
+import io.github.spike.myai.auth.interfaces.rest.dto.DocumentGrantResponse;
+import io.github.spike.myai.auth.interfaces.rest.dto.KnowledgeBaseGrantResponse;
+import io.github.spike.myai.auth.interfaces.rest.dto.ReplaceMemberDocumentGrantsRequest;
+import io.github.spike.myai.auth.interfaces.rest.dto.ReplaceMemberKnowledgeBaseGrantsRequest;
 import io.github.spike.myai.auth.interfaces.rest.dto.UpdateWorkspaceMemberRoleRequest;
 import io.github.spike.myai.auth.interfaces.rest.dto.WorkspaceMemberResponse;
 import java.util.List;
@@ -13,6 +25,7 @@ import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -20,13 +33,8 @@ import org.springframework.web.server.ResponseStatusException;
 
 /**
  * 工作区成员治理 REST 控制器。
- * <p>
- * 提供工作区成员管理的 HTTP 接口，包括：
- * <ul>
- *   <li>查询当前工作区所有活跃成员列表</li>
- *   <li>更新指定成员的工作区角色</li>
- * </ul>
- * 所有接口均要求调用方具备工作区管理权限，权限校验由下游用例层完成。
+ *
+ * <p>提供成员列表、角色调整、成员维度知识库授权、成员维度文档授权的治理接口。
  *
  * @author spike
  * @since 1.0.0
@@ -35,84 +43,135 @@ import org.springframework.web.server.ResponseStatusException;
 @RequestMapping("/api/v1/admin/members")
 public class WorkspaceMemberAdminController {
 
-    /** 查询工作区成员列表用例 */
     private final ListWorkspaceMembersUseCase listWorkspaceMembersUseCase;
-    /** 更新工作区成员角色用例 */
+    private final ListMemberKnowledgeBaseGrantsUseCase listMemberKnowledgeBaseGrantsUseCase;
+    private final ReplaceMemberKnowledgeBaseGrantsUseCase replaceMemberKnowledgeBaseGrantsUseCase;
+    private final ListMemberDocumentGrantsUseCase listMemberDocumentGrantsUseCase;
+    private final ReplaceMemberDocumentGrantsUseCase replaceMemberDocumentGrantsUseCase;
     private final UpdateWorkspaceMemberRoleUseCase updateWorkspaceMemberRoleUseCase;
 
-    /**
-     * 构造器注入所需用例。
-     *
-     * @param listWorkspaceMembersUseCase   查询成员列表用例
-     * @param updateWorkspaceMemberRoleUseCase 更新成员角色用例
-     */
     public WorkspaceMemberAdminController(
             ListWorkspaceMembersUseCase listWorkspaceMembersUseCase,
+            ListMemberKnowledgeBaseGrantsUseCase listMemberKnowledgeBaseGrantsUseCase,
+            ReplaceMemberKnowledgeBaseGrantsUseCase replaceMemberKnowledgeBaseGrantsUseCase,
+            ListMemberDocumentGrantsUseCase listMemberDocumentGrantsUseCase,
+            ReplaceMemberDocumentGrantsUseCase replaceMemberDocumentGrantsUseCase,
             UpdateWorkspaceMemberRoleUseCase updateWorkspaceMemberRoleUseCase) {
         this.listWorkspaceMembersUseCase = listWorkspaceMembersUseCase;
+        this.listMemberKnowledgeBaseGrantsUseCase = listMemberKnowledgeBaseGrantsUseCase;
+        this.replaceMemberKnowledgeBaseGrantsUseCase = replaceMemberKnowledgeBaseGrantsUseCase;
+        this.listMemberDocumentGrantsUseCase = listMemberDocumentGrantsUseCase;
+        this.replaceMemberDocumentGrantsUseCase = replaceMemberDocumentGrantsUseCase;
         this.updateWorkspaceMemberRoleUseCase = updateWorkspaceMemberRoleUseCase;
     }
 
-    /**
-     * 查询当前工作区所有活跃成员。
-     * <p>
-     * 调用用例层获取当前用户所属工作区的活跃成员列表，
-     * 并将领域结果转换为 REST 响应 DTO 后返回。
-     *
-     * @return 工作区成员响应列表，若无成员则返回空列表
-     */
     @GetMapping(value = {"", "/"}, produces = MediaType.APPLICATION_JSON_VALUE)
     public List<WorkspaceMemberResponse> listMembers() {
-        // 调用用例层获取成员列表，并通过 Stream 映射为响应 DTO
         return listWorkspaceMembersUseCase.handle().stream()
-                .map(WorkspaceMemberAdminController::toResponse)
+                .map(WorkspaceMemberAdminController::toMemberResponse)
                 .toList();
     }
 
-    /**
-     * 更新指定成员的工作区角色。
-     * <p>
-     * 接收路径参数中的用户 ID 和请求体中的目标角色，
-     * 构造命令对象后交由用例层执行角色变更。
-     * 对业务异常进行统一转换为 HTTP 标准状态码：
-     * <ul>
-     *   <li>成员不存在 → 404</li>
-     *   <li>参数非法（如无效角色值）→ 400</li>
-     * </ul>
-     *
-     * @param userId  目标用户的唯一标识
-     * @param request 角色更新请求体，包含目标工作区角色
-     * @return 更新后的工作区成员信息
-     * @throws ResponseStatusException 当请求体为空、成员不存在或参数非法时抛出
-     */
     @PatchMapping(value = "/{userId}/role", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     public WorkspaceMemberResponse updateMemberRole(
             @PathVariable("userId") String userId,
             @RequestBody(required = false) UpdateWorkspaceMemberRoleRequest request) {
-        // 请求体为空时直接拒绝，避免 NPE
         if (request == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "request body is required");
         }
         try {
-            // 构造命令对象并委托用例层执行角色更新
-            return toResponse(updateWorkspaceMemberRoleUseCase.handle(
+            return toMemberResponse(updateWorkspaceMemberRoleUseCase.handle(
                     new UpdateWorkspaceMemberRoleCommand(userId, request.workspaceRole())));
         } catch (WorkspaceMemberNotFoundException ex) {
-            // 目标成员不存在，映射为 404
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, ex.getMessage(), ex);
         } catch (IllegalArgumentException ex) {
-            // 角色参数非法（如未知角色枚举值），映射为 400
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, ex.getMessage(), ex);
         }
     }
 
-    /**
-     * 将领域层返回的结果对象转换为 REST 响应 DTO。
-     *
-     * @param result 用例层返回的工作区成员结果
-     * @return 对应的 REST 响应对象
-     */
-    private static WorkspaceMemberResponse toResponse(WorkspaceMemberResult result) {
+    @GetMapping(value = "/{userId}/knowledge-base-grants", produces = MediaType.APPLICATION_JSON_VALUE)
+    public List<KnowledgeBaseGrantResponse> listMemberKnowledgeBaseGrants(
+            @PathVariable("userId") String userId) {
+        try {
+            return listMemberKnowledgeBaseGrantsUseCase.handle(userId).stream()
+                    .map(WorkspaceMemberAdminController::toKnowledgeBaseGrantResponse)
+                    .toList();
+        } catch (WorkspaceMemberNotFoundException ex) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, ex.getMessage(), ex);
+        } catch (IllegalArgumentException ex) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, ex.getMessage(), ex);
+        }
+    }
+
+    @PutMapping(value = "/{userId}/knowledge-base-grants:batch", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
+    public List<KnowledgeBaseGrantResponse> replaceMemberKnowledgeBaseGrants(
+            @PathVariable("userId") String userId,
+            @RequestBody(required = false) ReplaceMemberKnowledgeBaseGrantsRequest request) {
+        if (request == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "request body is required");
+        }
+        try {
+            return replaceMemberKnowledgeBaseGrantsUseCase.handle(new ReplaceMemberKnowledgeBaseGrantsCommand(
+                            userId,
+                            request.assignments() == null
+                                    ? List.of()
+                                    : request.assignments().stream()
+                                            .map(item -> new ReplaceMemberKnowledgeBaseGrantsCommand.Assignment(
+                                                    item.kbId(),
+                                                    item.role()))
+                                            .toList()))
+                    .stream()
+                    .map(WorkspaceMemberAdminController::toKnowledgeBaseGrantResponse)
+                    .toList();
+        } catch (WorkspaceMemberNotFoundException ex) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, ex.getMessage(), ex);
+        } catch (IllegalArgumentException ex) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, ex.getMessage(), ex);
+        }
+    }
+
+    @GetMapping(value = "/{userId}/document-grants", produces = MediaType.APPLICATION_JSON_VALUE)
+    public List<DocumentGrantResponse> listMemberDocumentGrants(
+            @PathVariable("userId") String userId) {
+        try {
+            return listMemberDocumentGrantsUseCase.handle(userId).stream()
+                    .map(WorkspaceMemberAdminController::toDocumentGrantResponse)
+                    .toList();
+        } catch (WorkspaceMemberNotFoundException ex) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, ex.getMessage(), ex);
+        } catch (IllegalArgumentException ex) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, ex.getMessage(), ex);
+        }
+    }
+
+    @PutMapping(value = "/{userId}/document-grants:batch", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
+    public List<DocumentGrantResponse> replaceMemberDocumentGrants(
+            @PathVariable("userId") String userId,
+            @RequestBody(required = false) ReplaceMemberDocumentGrantsRequest request) {
+        if (request == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "request body is required");
+        }
+        try {
+            return replaceMemberDocumentGrantsUseCase.handle(new ReplaceMemberDocumentGrantsCommand(
+                            userId,
+                            request.assignments() == null
+                                    ? List.of()
+                                    : request.assignments().stream()
+                                            .map(item -> new ReplaceMemberDocumentGrantsCommand.Assignment(
+                                                    item.documentId(),
+                                                    item.permission()))
+                                            .toList()))
+                    .stream()
+                    .map(WorkspaceMemberAdminController::toDocumentGrantResponse)
+                    .toList();
+        } catch (WorkspaceMemberNotFoundException ex) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, ex.getMessage(), ex);
+        } catch (IllegalArgumentException ex) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, ex.getMessage(), ex);
+        }
+    }
+
+    private static WorkspaceMemberResponse toMemberResponse(WorkspaceMemberResult result) {
         return new WorkspaceMemberResponse(
                 result.userId(),
                 result.username(),
@@ -120,5 +179,28 @@ public class WorkspaceMemberAdminController {
                 result.workspaceId(),
                 result.workspaceRole().name(),
                 result.membershipStatus());
+    }
+
+    private static KnowledgeBaseGrantResponse toKnowledgeBaseGrantResponse(
+            KnowledgeBaseGrantResult result) {
+        return new KnowledgeBaseGrantResponse(
+                result.workspaceId(),
+                result.kbId(),
+                result.userId(),
+                result.username(),
+                result.displayName(),
+                result.role().name(),
+                result.status());
+    }
+
+    private static DocumentGrantResponse toDocumentGrantResponse(DocumentGrantResult result) {
+        return new DocumentGrantResponse(
+                result.workspaceId(),
+                result.documentId(),
+                result.userId(),
+                result.username(),
+                result.displayName(),
+                result.permission().name(),
+                result.status());
     }
 }

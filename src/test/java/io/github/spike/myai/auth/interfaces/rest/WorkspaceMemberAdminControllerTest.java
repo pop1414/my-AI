@@ -9,7 +9,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import io.github.spike.myai.auth.application.exception.WorkspaceMemberNotFoundException;
 import io.github.spike.myai.auth.application.result.WorkspaceMemberResult;
+import io.github.spike.myai.auth.application.usecase.ListMemberDocumentGrantsUseCase;
+import io.github.spike.myai.auth.application.usecase.ListMemberKnowledgeBaseGrantsUseCase;
 import io.github.spike.myai.auth.application.usecase.ListWorkspaceMembersUseCase;
+import io.github.spike.myai.auth.application.usecase.ReplaceMemberDocumentGrantsUseCase;
+import io.github.spike.myai.auth.application.usecase.ReplaceMemberKnowledgeBaseGrantsUseCase;
 import io.github.spike.myai.auth.application.usecase.UpdateWorkspaceMemberRoleUseCase;
 import io.github.spike.myai.auth.domain.model.WorkspaceRole;
 import java.util.List;
@@ -24,15 +28,27 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 class WorkspaceMemberAdminControllerTest {
 
     private ListWorkspaceMembersUseCase listWorkspaceMembersUseCase;
+    private ListMemberKnowledgeBaseGrantsUseCase listMemberKnowledgeBaseGrantsUseCase;
+    private ReplaceMemberKnowledgeBaseGrantsUseCase replaceMemberKnowledgeBaseGrantsUseCase;
+    private ListMemberDocumentGrantsUseCase listMemberDocumentGrantsUseCase;
+    private ReplaceMemberDocumentGrantsUseCase replaceMemberDocumentGrantsUseCase;
     private UpdateWorkspaceMemberRoleUseCase updateWorkspaceMemberRoleUseCase;
     private MockMvc mockMvc;
 
     @BeforeEach
     void setUp() {
         this.listWorkspaceMembersUseCase = Mockito.mock(ListWorkspaceMembersUseCase.class);
+        this.listMemberKnowledgeBaseGrantsUseCase = Mockito.mock(ListMemberKnowledgeBaseGrantsUseCase.class);
+        this.replaceMemberKnowledgeBaseGrantsUseCase = Mockito.mock(ReplaceMemberKnowledgeBaseGrantsUseCase.class);
+        this.listMemberDocumentGrantsUseCase = Mockito.mock(ListMemberDocumentGrantsUseCase.class);
+        this.replaceMemberDocumentGrantsUseCase = Mockito.mock(ReplaceMemberDocumentGrantsUseCase.class);
         this.updateWorkspaceMemberRoleUseCase = Mockito.mock(UpdateWorkspaceMemberRoleUseCase.class);
         WorkspaceMemberAdminController controller = new WorkspaceMemberAdminController(
                 listWorkspaceMembersUseCase,
+                listMemberKnowledgeBaseGrantsUseCase,
+                replaceMemberKnowledgeBaseGrantsUseCase,
+                listMemberDocumentGrantsUseCase,
+                replaceMemberDocumentGrantsUseCase,
                 updateWorkspaceMemberRoleUseCase);
         this.mockMvc = MockMvcBuilders.standaloneSetup(controller).build();
     }
