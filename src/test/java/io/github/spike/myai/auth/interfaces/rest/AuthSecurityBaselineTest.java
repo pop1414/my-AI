@@ -144,13 +144,15 @@ class AuthSecurityBaselineTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.user.userId").value("user-1"))
                 .andExpect(jsonPath("$.user.workspaceRole").value("WORKSPACE_ADMIN"))
+                .andExpect(jsonPath("$.user.capabilities.canAccessAdmin").value(true))
                 .andReturn();
 
         MockHttpSession session = (MockHttpSession) loginResult.getRequest().getSession(false);
         mockMvc.perform(get("/api/v1/auth/me").session(session))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.username").value("alice"))
-                .andExpect(jsonPath("$.workspaceId").value("default"));
+                .andExpect(jsonPath("$.workspaceId").value("default"))
+                .andExpect(jsonPath("$.capabilities.canAccessAdmin").value(true));
     }
 
     @Test

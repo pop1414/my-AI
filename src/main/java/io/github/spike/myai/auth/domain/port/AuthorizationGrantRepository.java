@@ -45,6 +45,15 @@ public interface AuthorizationGrantRepository {
     Optional<KnowledgeBaseRole> findKnowledgeBaseRole(String workspaceId, String kbId, String userId);
 
     /**
+     * 查询用户在当前工作区内具备 ACTIVE 显式知识库授权的角色集合。
+     *
+     * @param workspaceId 工作空间标识
+     * @param userId      用户标识
+     * @return 当前用户显式知识库授权角色集合；无授权时返回空集合
+     */
+    Set<KnowledgeBaseRole> listGrantedKnowledgeBaseRoles(String workspaceId, String userId);
+
+    /**
      * 查询用户在当前工作区内具备 ACTIVE 显式授权的知识库标识集合。
      *
      * <p>用于知识库列表可见性收紧场景：

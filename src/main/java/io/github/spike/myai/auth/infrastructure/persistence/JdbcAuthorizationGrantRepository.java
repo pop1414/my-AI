@@ -115,6 +115,46 @@ public class JdbcAuthorizationGrantRepository implements AuthorizationGrantRepos
     }
 
     /**
+     * 查询用户在当前工作区内具备 ACTIVE 显式知识库授权的角色集合。
+     *
+     * <p>与 {@link #findKnowledgeBaseRole} 不同，本方法返回用户在
+     * <strong>所有</strong>知识库上的授权角色去重集合，用于能力位判定
+     * 等跨知识库场景。
+     *
+     * <p>实现要点：
+     * <ul>
+     *   <li>仅过滤 status = ACTIVE 的记录；</li>
+     *   <li>使用 {@link LinkedHashSet} 收集结果，保证插入顺序且自动去重；</li>
+     *   <li>角色字符串通过 {@link KnowledgeBaseRole#valueOf} 映射为枚举。</li>
+     * </ul>
+     *
+     * @param workspaceId 工作空间标识
+     * @param userId      用户标识
+     * @return 当前用户显式知识库授权角色集合；无授权时返回空集合
+     */
+    @Override
+    public Set<KnowledgeBaseRole> listGrantedKnowledgeBaseRoles(String workspaceId, String userId) {
+        // 查询用户在指定工作区所有 ACTIVE 知识库授权的角色列表
+        return jdbcTemplate.queryForList(
+                        """
+                                SELECT role
+                                FROM knowledge_base_grants
+                                WHERE workspace_id = ?
+                                  AND user_id = ?
+                                  AND status = 'ACTIVE'
+                                ORDER BY created_at ASC, kb_id ASC
+                                """,
+                        String.class,
+                        workspaceId,
+                        userId)
+                .stream()
+                // 将数据库角色字符串映射为 KnowledgeBaseRole 枚举
+                .map(KnowledgeBaseRole::valueOf)
+                // 使用 LinkedHashSet 收集：保持插入顺序 + 自动去重
+                .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
+    }
+
+    /**
      * 查询用户在指定文档上的 ACTIVE 权限覆盖。
      *
      * <p>执行流程：

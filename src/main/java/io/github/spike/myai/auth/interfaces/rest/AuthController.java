@@ -2,7 +2,10 @@ package io.github.spike.myai.auth.interfaces.rest;
 
 import io.github.spike.myai.auth.application.command.LoginCommand;
 import io.github.spike.myai.auth.application.result.CurrentUserResult;
+import io.github.spike.myai.auth.application.result.CurrentUserCapabilitiesResult;
+import io.github.spike.myai.auth.application.usecase.GetCurrentUserCapabilitiesUseCase;
 import io.github.spike.myai.auth.application.usecase.LoginUseCase;
+import io.github.spike.myai.auth.interfaces.rest.dto.CurrentUserCapabilitiesResponse;
 import io.github.spike.myai.auth.interfaces.rest.dto.CurrentUserResponse;
 import io.github.spike.myai.auth.interfaces.rest.dto.LoginRequest;
 import io.github.spike.myai.auth.interfaces.rest.dto.LoginResponse;
@@ -58,6 +61,9 @@ public class AuthController {
     /** 登录用例，由应用层提供 */
     private final LoginUseCase loginUseCase;
 
+    /** 当前用户能力位解析服务 */
+    private final GetCurrentUserCapabilitiesUseCase currentUserCapabilitiesUseCase;
+
     /** 安全上下文持久化仓库，用于将认证信息写入 HttpSession */
     private final SecurityContextRepository securityContextRepository;
 
@@ -68,11 +74,16 @@ public class AuthController {
     /**
      * 构造器注入。
      *
-     * @param loginUseCase               登录用例
-     * @param securityContextRepository  安全上下文存储
+     * @param loginUseCase                    登录用例
+     * @param currentUserCapabilitiesUseCase  当前用户能力位解析服务
+     * @param securityContextRepository       安全上下文存储
      */
-    public AuthController(LoginUseCase loginUseCase, SecurityContextRepository securityContextRepository) {
+    public AuthController(
+            LoginUseCase loginUseCase,
+            GetCurrentUserCapabilitiesUseCase currentUserCapabilitiesUseCase,
+            SecurityContextRepository securityContextRepository) {
         this.loginUseCase = loginUseCase;
+        this.currentUserCapabilitiesUseCase = currentUserCapabilitiesUseCase;
         this.securityContextRepository = securityContextRepository;
     }
 
@@ -179,12 +190,12 @@ public class AuthController {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "authentication is required");
         }
         // 从主体中提取用户身份信息并封装为响应 DTO
-        return new CurrentUserResponse(
+        return toResponse(new CurrentUserResult(
                 principal.userId(),
                 principal.username(),
                 principal.displayName(),
                 principal.workspaceId(),
-                principal.workspaceRole().name());
+                principal.workspaceRole()));
     }
 
     /**
@@ -220,15 +231,28 @@ public class AuthController {
     /**
      * 将应用层登录结果转换为 API 响应 DTO。
      *
+     * <p>便捷重载，从 {@link CurrentUserResult} 中提取字段后委托给
+     * {@link #toResponse(CurrentUserResult)} toResponse(String, String, String, String, String)}，
+     * 确保登录和获取当前用户接口使用统一的转换逻辑。
+     *
      * @param result 登录用例返回的用户结果
-     * @return 面向客户端的 {@link CurrentUserResponse}
+     * @return 面向客户端的 {@link CurrentUserResponse}，含能力位
      */
-    private static CurrentUserResponse toResponse(CurrentUserResult result) {
+    private CurrentUserResponse toResponse(CurrentUserResult result) {
+        // 将登录结果直接交给能力位用例，确保 login / me 复用同一套解析逻辑
+        CurrentUserCapabilitiesResult capabilitiesResult = currentUserCapabilitiesUseCase.resolve(result);
+        // 组装含能力位的响应 DTO
         return new CurrentUserResponse(
                 result.userId(),
                 result.username(),
                 result.displayName(),
                 result.workspaceId(),
-                result.workspaceRole().name());
+                result.workspaceRole().name(),
+                new CurrentUserCapabilitiesResponse(
+                        capabilitiesResult.canAccessDocumentList(),
+                        capabilitiesResult.canUploadDocument(),
+                        capabilitiesResult.canAccessKnowledge(),
+                        capabilitiesResult.canAskQuestion(),
+                        capabilitiesResult.canAccessAdmin()));
     }
 }
