@@ -34,7 +34,7 @@
 - 历史变化通过 ADR、Roadmap、Release Notes 留痕
 - 课程材料与长期工程文档分开维护，但课程内容主要整理自工程真源
 
-## 1. 当前能力（截至 2026-05-08，含 V1.1 管理基础收口）
+## 1. 当前能力（截至 2026-05-11，含权限治理基础落地）
 
 - 上传受理：`POST /api/v1/documents/upload`
     - 返回 `documentId + ACCEPTED`
@@ -70,16 +70,37 @@
     - 无命中场景：`200 + 兜底回答 + 空 references`
     - `references` 结构：`documentId/chunkIndex/contentPreview`
     - 上传/问答显式传入不存在知识库时返回 `400`，传入停用知识库时返回 `409`
+- 已实现 API（auth / governance）：
+    - `POST /api/v1/auth/login`
+    - `POST /api/v1/auth/logout`
+    - `GET /api/v1/auth/me`
+    - `GET /api/v1/admin/members`
+    - `PATCH /api/v1/admin/members/{userId}/role`
+    - `GET /api/v1/admin/knowledge-bases/{kbId}/grants`
+    - `PUT /api/v1/admin/knowledge-bases/{kbId}/grants/{userId}`
+    - `DELETE /api/v1/admin/knowledge-bases/{kbId}/grants/{userId}`
+    - `GET /api/v1/admin/documents/{documentId}/grants`
+    - `PUT /api/v1/admin/documents/{documentId}/grants/{userId}`
+    - `DELETE /api/v1/admin/documents/{documentId}/grants/{userId}`
+    - `GET /api/v1/admin/audit-events`
+- 已落地认证与授权基线：
+    - 本地账号登录 + 服务端 Session
+    - 空库启动可通过配置引导首个 `WORKSPACE_OWNER`
+    - 工作区角色、知识库角色、文档覆盖三层授权
+    - 登录失败锁定、审计日志、统一 JSON 401/403
+    - `/api/v1/**` 默认要求认证，写操作要求自定义 CSRF Header
 
 - 前端控制台（`web/`，截至 2026-05-08）：
     - React 19 + TypeScript 6 + Vite 8 + Ant Design 6
-    - 8 个功能页面，按路由懒加载代码拆分
+    - 登录页 + 控制台页，按路由懒加载代码拆分
     - 文档列表页作为默认落点与 `ingest` 管理主入口
     - 知识库主数据管理（创建、查看、编辑、停用）
     - 上传页与问答页改为知识库选择器驱动
     - 单轮问答（answer + references）
     - 文档列表 → 状态查询 / 分块预览 / 重处理 / 删除 统一管理链路
     - 上传 → 状态查询 → 分块预览 → 重处理 → 删除 完整链路
+    - 登录态恢复、401 自动跳转、管理员路由守卫
+    - 成员管理、知识库授权、文档授权、审计日志后台页面
     - TanStack Query 自动轮询 + 终态检测
     - Zod 运行时接口校验
 
@@ -144,6 +165,9 @@
 - `INGEST_CHUNK_SIZE`（默认 `500`）
 - `INGEST_CHUNK_OVERLAP`（默认 `100`）
 - `INGEST_SCHEMA_CHECK_ENABLED`（默认 `true`，启动时进行 ingest 表结构自检）
+- `MYAI_AUTH_BOOTSTRAP_ADMIN_USERNAME`（空库引导管理员用户名）
+- `MYAI_AUTH_BOOTSTRAP_ADMIN_PASSWORD`（空库引导管理员密码）
+- `MYAI_AUTH_BOOTSTRAP_ADMIN_DISPLAY_NAME`（空库引导管理员显示名，可选）
 
 ### 5.3 启动
 
