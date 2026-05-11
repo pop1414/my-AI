@@ -8,6 +8,23 @@ import type { ApiError } from "../../../shared/api/request";
 
 const { Title, Text } = Typography;
 
+function resolveDefaultLandingPath(user: {
+	capabilities: {
+		canAccessDocumentList: boolean;
+		canUploadDocument: boolean;
+		canAccessKnowledge: boolean;
+		canAskQuestion: boolean;
+		canAccessAdmin: boolean;
+	};
+}): string {
+	if (user.capabilities.canAccessDocumentList) return "/ingest/documents";
+	if (user.capabilities.canUploadDocument) return "/ingest/upload";
+	if (user.capabilities.canAccessKnowledge) return "/knowledge";
+	if (user.capabilities.canAskQuestion) return "/qa";
+	if (user.capabilities.canAccessAdmin) return "/admin";
+	return "/no-access";
+}
+
 function formatLockedUntilMessage(rawMessage: string): string | null {
 	const prefix = "account is locked until ";
 	if (!rawMessage.startsWith(prefix)) {
@@ -30,26 +47,26 @@ function formatLockedUntilMessage(rawMessage: string): string | null {
 }
 
 export function LoginPage() {
-	const { isAuthenticated, login } = useAuth();
+	const { isAuthenticated, login, defaultLandingPath } = useAuth();
 	const [searchParams] = useSearchParams();
 	const { token } = theme.useToken();
 
 	const redirect = useMemo(() => {
-		const fromParam = searchParams.get("redirect");
-		return fromParam || "/ingest/documents";
+		return searchParams.get("redirect");
 	}, [searchParams]);
 
 	const mutation = useMutation({
 		mutationFn: (values: { username: string; password: string }) =>
 			login(values.username, values.password),
-		onSuccess: () => {
-			window.location.href = redirect;
+		onSuccess: (user) => {
+			window.location.href =
+				redirect ?? resolveDefaultLandingPath(user);
 		},
 	});
 
 	// 已登录用户直接跳转
 	if (isAuthenticated) {
-		return <Navigate to={redirect} replace />;
+		return <Navigate to={redirect ?? defaultLandingPath} replace />;
 	}
 
 	const apiError = mutation.error as ApiError | null;

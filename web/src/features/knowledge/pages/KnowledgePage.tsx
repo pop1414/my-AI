@@ -44,7 +44,7 @@ function statusColor(status: KnowledgeBase["status"]): string {
 const columns = (
 	navigate: ReturnType<typeof useNavigate>,
 	onEdit: (record: KnowledgeBase) => void,
-	isAdmin: boolean,
+	canManageKnowledgeBases: boolean,
 ): ColumnsType<KnowledgeBase> => [
 	{ title: "知识库 ID", dataIndex: "id", width: 320 },
 	{ title: "名称", dataIndex: "name", width: 180 },
@@ -68,9 +68,11 @@ const columns = (
 		width: 220,
 		render: (_, record) => (
 			<Space>
-				<Button size="small" onClick={() => onEdit(record)}>
-					编辑
-				</Button>
+				{canManageKnowledgeBases && (
+					<Button size="small" onClick={() => onEdit(record)}>
+						编辑
+					</Button>
+				)}
 				<Button
 					type="primary"
 					size="small"
@@ -82,7 +84,7 @@ const columns = (
 				>
 					去问答
 				</Button>
-				{isAdmin && (
+				{canManageKnowledgeBases && (
 					<Button
 						size="small"
 						onClick={() =>
@@ -102,7 +104,8 @@ const columns = (
 export function KnowledgePage() {
 	const navigate = useNavigate();
 	const queryClient = useQueryClient();
-	const { isAdmin } = useAuth();
+	const { user } = useAuth();
+	const canManageKnowledgeBases = Boolean(user?.capabilities.canAccessAdmin);
 	const [createForm] = Form.useForm<{
 		name: string;
 		description?: string;
@@ -199,50 +202,56 @@ export function KnowledgePage() {
 				<ApiErrorAlert error={updateMutation.error} />
 			)}
 
-			<Card title="新建知识库">
-				<Form
-					form={createForm}
-					layout="vertical"
-					initialValues={{
-						name: "",
-						description: "",
-						status: "ACTIVE",
-					}}
-					onFinish={onCreate}
-				>
-					<Form.Item label="名称" name="name">
-						<Input
-							placeholder="例如：产品文档库"
-							maxLength={100}
-							showCount
-						/>
-					</Form.Item>
-					<Form.Item label="描述" name="description">
-						<Input.TextArea rows={3} maxLength={500} showCount />
-					</Form.Item>
-					<Form.Item label="状态" name="status">
-						<Select
-							options={[
-								{ label: "ACTIVE", value: "ACTIVE" },
-								{ label: "INACTIVE", value: "INACTIVE" },
-							]}
-						/>
-					</Form.Item>
-					<Button
-						type="primary"
-						htmlType="submit"
-						loading={createMutation.isPending}
+			{canManageKnowledgeBases && (
+				<Card title="新建知识库">
+					<Form
+						form={createForm}
+						layout="vertical"
+						initialValues={{
+							name: "",
+							description: "",
+							status: "ACTIVE",
+						}}
+						onFinish={onCreate}
 					>
-						创建知识库
-					</Button>
-				</Form>
-			</Card>
+						<Form.Item label="名称" name="name">
+							<Input
+								placeholder="例如：产品文档库"
+								maxLength={100}
+								showCount
+							/>
+						</Form.Item>
+						<Form.Item label="描述" name="description">
+							<Input.TextArea rows={3} maxLength={500} showCount />
+						</Form.Item>
+						<Form.Item label="状态" name="status">
+							<Select
+								options={[
+									{ label: "ACTIVE", value: "ACTIVE" },
+									{ label: "INACTIVE", value: "INACTIVE" },
+								]}
+							/>
+						</Form.Item>
+						<Button
+							type="primary"
+							htmlType="submit"
+							loading={createMutation.isPending}
+						>
+							创建知识库
+						</Button>
+					</Form>
+				</Card>
+			)}
 
 			<Card>
 				{knowledgeQuery.isLoading ? (
 					<Table
 						loading
-						columns={columns(navigate, onEdit, isAdmin)}
+						columns={columns(
+							navigate,
+							onEdit,
+							canManageKnowledgeBases,
+						)}
 						dataSource={[]}
 						rowKey="id"
 					/>
@@ -251,7 +260,11 @@ export function KnowledgePage() {
 				) : (
 					<Table
 						rowKey="id"
-						columns={columns(navigate, onEdit, isAdmin)}
+						columns={columns(
+							navigate,
+							onEdit,
+							canManageKnowledgeBases,
+						)}
 						dataSource={knowledgeQuery.data}
 						loading={knowledgeQuery.isFetching}
 						pagination={false}

@@ -88,7 +88,8 @@ function formatTime(iso: string): string {
 
 export function IngestListPage() {
 	const navigate = useNavigate();
-	const { isAdmin } = useAuth();
+	const { user } = useAuth();
+	const canAccessAdmin = Boolean(user?.capabilities.canAccessAdmin);
 	const [form] = Form.useForm<{
 		kbId?: string;
 		status?: string;
@@ -269,7 +270,7 @@ export function IngestListPage() {
 								/>
 							</Tooltip>
 						)}
-						{isAdmin && (
+						{canAccessAdmin && (
 							<Tooltip title="授权管理">
 								<Button
 									size="small"

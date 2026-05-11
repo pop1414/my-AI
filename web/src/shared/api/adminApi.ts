@@ -22,6 +22,26 @@ const workspaceMemberSchema = z.object({
 
 export type WorkspaceMember = z.infer<typeof workspaceMemberSchema>;
 
+// ── 账号治理 ──
+
+const managedAccountSchema = z.object({
+	userId: z.string().min(1),
+	username: z.string().min(1),
+	displayName: z.string(),
+	userStatus: z.enum(["ACTIVE", "DISABLED"]),
+	workspaceId: z.string().min(1),
+	workspaceRole: z.enum([
+		"WORKSPACE_OWNER",
+		"WORKSPACE_ADMIN",
+		"WORKSPACE_MEMBER",
+	]),
+	membershipStatus: z.enum(["ACTIVE", "INACTIVE"]),
+	failedLoginCount: z.number().int(),
+	lockedUntil: z.string().nullable().optional(),
+});
+
+export type ManagedAccount = z.infer<typeof managedAccountSchema>;
+
 // ── 知识库授权 ──
 
 const knowledgeBaseGrantSchema = z.object({
@@ -78,6 +98,65 @@ const auditEventPageResponseSchema = z.object({
 export type AuditEventPageResponse = z.infer<
 	typeof auditEventPageResponseSchema
 >;
+
+// ═══════════════════════════════════════════════════════════
+// 账号治理 API
+// ═══════════════════════════════════════════════════════════
+
+export async function listManagedAccounts(): Promise<ManagedAccount[]> {
+	const response = await requestJson<unknown>("/api/v1/admin/accounts");
+	return z.array(managedAccountSchema).parse(response);
+}
+
+export async function createManagedAccount(params: {
+	username: string;
+	displayName: string;
+	password: string;
+	workspaceRole: ManagedAccount["workspaceRole"];
+}): Promise<ManagedAccount> {
+	const response = await requestJson<unknown>("/api/v1/admin/accounts", {
+		method: "POST",
+		body: JSON.stringify(params),
+	});
+	return managedAccountSchema.parse(response);
+}
+
+export async function updateManagedAccountStatus(
+	userId: string,
+	userStatus: ManagedAccount["userStatus"],
+): Promise<ManagedAccount> {
+	const response = await requestJson<unknown>(
+		`/api/v1/admin/accounts/${encodeURIComponent(userId)}/status`,
+		{
+			method: "PATCH",
+			body: JSON.stringify({ userStatus }),
+		},
+	);
+	return managedAccountSchema.parse(response);
+}
+
+export async function resetManagedAccountPassword(
+	userId: string,
+	password: string,
+): Promise<ManagedAccount> {
+	const response = await requestJson<unknown>(
+		`/api/v1/admin/accounts/${encodeURIComponent(userId)}/password/reset`,
+		{
+			method: "POST",
+			body: JSON.stringify({ password }),
+		},
+	);
+	return managedAccountSchema.parse(response);
+}
+
+export async function removeManagedAccountMembership(
+	userId: string,
+): Promise<void> {
+	await requestJson<unknown>(
+		`/api/v1/admin/accounts/${encodeURIComponent(userId)}/membership`,
+		{ method: "DELETE" },
+	);
+}
 
 // ═══════════════════════════════════════════════════════════
 // 成员管理 API

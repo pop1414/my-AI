@@ -25,11 +25,41 @@ export interface AuthState {
 	user: CurrentUserResponse | null;
 	isAuthenticated: boolean;
 	isAdmin: boolean;
-	login: (username: string, password: string) => Promise<void>;
+	visibleMenuKeys: string[];
+	defaultLandingPath: string;
+	login: (username: string, password: string) => Promise<CurrentUserResponse>;
 	logout: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthState | null>(null);
+
+const MENU_ORDER = [
+	"/ingest/documents",
+	"/ingest/upload",
+	"/knowledge",
+	"/qa",
+	"/admin",
+] as const;
+
+function resolveVisibleMenuKeys(user: CurrentUserResponse | null): string[] {
+	if (!user) {
+		return [];
+	}
+
+	const keys: string[] = [];
+	const { capabilities } = user;
+	if (capabilities.canAccessDocumentList) keys.push("/ingest/documents");
+	if (capabilities.canUploadDocument) keys.push("/ingest/upload");
+	if (capabilities.canAccessKnowledge) keys.push("/knowledge");
+	if (capabilities.canAskQuestion) keys.push("/qa");
+	if (capabilities.canAccessAdmin) keys.push("/admin");
+	return keys;
+}
+
+function resolveDefaultLandingPath(visibleMenuKeys: string[]): string {
+	const firstVisible = MENU_ORDER.find((key) => visibleMenuKeys.includes(key));
+	return firstVisible ?? "/no-access";
+}
 
 // ── Hook ──
 
@@ -83,6 +113,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 		const res = await authLogin(username, password);
 		setUser(res.user);
 		setStatus("authenticated");
+		return res.user;
 	}, []);
 
 	const logout = useCallback(async () => {
@@ -96,6 +127,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 		window.location.href = "/login";
 	}, []);
 
+	const visibleMenuKeys = useMemo(() => resolveVisibleMenuKeys(user), [user]);
+	const defaultLandingPath = useMemo(
+		() => resolveDefaultLandingPath(visibleMenuKeys),
+		[visibleMenuKeys],
+	);
+
 	const value = useMemo<AuthState>(
 		() => ({
 			status,
@@ -103,15 +140,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 			isAuthenticated: status === "authenticated",
 			isAdmin:
 				status === "authenticated" &&
-				(user?.workspaceRole === "WORKSPACE_OWNER" ||
-					user?.workspaceRole === "WORKSPACE_ADMIN"),
+				Boolean(user?.capabilities.canAccessAdmin),
+			visibleMenuKeys,
+			defaultLandingPath,
 			login,
 			logout,
 		}),
-		[status, user, login, logout],
+		[status, user, visibleMenuKeys, defaultLandingPath, login, logout],
 	);
 
-	return (
-		<AuthContext.Provider value={value}>{children}</AuthContext.Provider>
-	);
+	return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

@@ -15,6 +15,7 @@ package io.github.spike.myai.auth.interfaces.rest.dto;
  * @param displayName   展示名称（如昵称）
  * @param workspaceId    所属工作空间 ID
  * @param workspaceRole  工作空间角色
+ * @param capabilities   当前用户能力位
  * @author spike
  * @since 1.0.0
  */
@@ -28,5 +29,7 @@ public record CurrentUserResponse(
         /** 所属工作空间 ID */
         String workspaceId,
         /** 工作空间角色，如 ADMIN / MEMBER 等 */
-        String workspaceRole) {
+        String workspaceRole,
+        /** 当前用户能力位 */
+        CurrentUserCapabilitiesResponse capabilities) {
 }

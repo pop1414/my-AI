@@ -13,6 +13,13 @@ const currentUserResponseSchema = z.object({
 		"WORKSPACE_ADMIN",
 		"WORKSPACE_MEMBER",
 	]),
+	capabilities: z.object({
+		canAccessDocumentList: z.boolean(),
+		canUploadDocument: z.boolean(),
+		canAccessKnowledge: z.boolean(),
+		canAskQuestion: z.boolean(),
+		canAccessAdmin: z.boolean(),
+	}),
 });
 
 export type CurrentUserResponse = z.infer<typeof currentUserResponseSchema>;

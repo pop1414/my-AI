@@ -36,6 +36,51 @@ export function ProtectedRoute() {
 	return <Outlet />;
 }
 
+export interface CapabilityRouteProps {
+	requiredCapability:
+		| "canAccessDocumentList"
+		| "canUploadDocument"
+		| "canAccessKnowledge"
+		| "canAskQuestion"
+		| "canAccessAdmin";
+}
+
+export function CapabilityRoute({ requiredCapability }: CapabilityRouteProps) {
+	const { status, isAuthenticated, user, defaultLandingPath } = useAuth();
+	const location = useLocation();
+
+	if (status === "loading") {
+		return (
+			<div
+				style={{
+					display: "flex",
+					justifyContent: "center",
+					alignItems: "center",
+					height: "100vh",
+				}}
+			>
+				<Spin size="large" tip="正在验证登录状态…" />
+			</div>
+		);
+	}
+
+	if (!isAuthenticated) {
+		const redirect = location.pathname + location.search;
+		return (
+			<Navigate
+				to={`/login?redirect=${encodeURIComponent(redirect)}`}
+				replace
+			/>
+		);
+	}
+
+	if (!user?.capabilities[requiredCapability]) {
+		return <Navigate to={defaultLandingPath} replace />;
+	}
+
+	return <Outlet />;
+}
+
 // ── AdminRoute：要求已登录且为管理员 ──
 
 export function AdminRoute() {
