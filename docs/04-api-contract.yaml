@@ -90,6 +90,13 @@ paths:
     get:
       tags: [auth]
       summary: 查询当前登录用户
+      description: |
+        返回当前登录用户的基础身份信息与前端菜单渲染所需的能力位。
+
+        当前能力位采用嵌套对象 `capabilities` 返回，前端据此决定：
+        - 一级菜单是否显示
+        - 登录后的默认落点
+        - 业务页无权限时跳转到哪个可访问页面
       x-stage: implemented
       security:
         - cookieAuth: []
@@ -1228,6 +1235,22 @@ components:
         workspaceRole:
           type: string
           enum: [WORKSPACE_OWNER, WORKSPACE_ADMIN, WORKSPACE_MEMBER]
+        capabilities:
+          $ref: '#/components/schemas/CurrentUserCapabilitiesResponse'
+
+    CurrentUserCapabilitiesResponse:
+      type: object
+      properties:
+        canAccessDocumentList:
+          type: boolean
+        canUploadDocument:
+          type: boolean
+        canAccessKnowledge:
+          type: boolean
+        canAskQuestion:
+          type: boolean
+        canAccessAdmin:
+          type: boolean
 
     WorkspaceMember:
       type: object
