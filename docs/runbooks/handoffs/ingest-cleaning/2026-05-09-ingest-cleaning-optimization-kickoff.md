@@ -143,6 +143,14 @@
 - `GET /api/v1/documents/{documentId}/status` 已支持在 `INDEXED` / `FAILED` 终态返回 `processingMetadata`
 - 相关单元测试、接口契约、执行设计文档与发布说明已同步更新
 
+已完成第二阶段主链收口：
+
+- 处理主链已升级为 `raw.xhtml -> cleaned.html -> cleaned.md -> chunk`
+- 文档目录中已强制生成 `cleaned.md`
+- `raw.xhtml`、`cleaned.html`、`parse-result.json` 已支持按配置保留
+- parser 已开始生成基础 `processing_metadata`，并在终态自动回填到数据库
+- 已修正源文件 fallback 读取逻辑，避免误读 `cleaned.md` 等中间产物
+
 下一步建议：
 
 - 进入 `cleaned.md` 主链改造

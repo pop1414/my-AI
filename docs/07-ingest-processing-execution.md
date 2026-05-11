@@ -23,6 +23,7 @@
 - 幂等策略：同一 `documentId` 重复处理最终一致
 - 状态可见性：V1 先不做百分比，保留阶段状态
 - 终态可观测性：`INDEXED` / `FAILED` 可通过 `processingMetadata` 返回文档级处理结果元数据
+- 中间产物主链：文档目录内强制生成 `cleaned.md`，并按配置保留 `raw.xhtml`、`cleaned.html`、`parse-result.json`
 
 ## 4. 文本拆分策略（V1 可执行规则）
 ### 4.1 拆分总原则
@@ -188,11 +189,12 @@
   - 上传受理幂等（`kbId + fileHash`）
   - 任务启动 `UPLOADED -> INGESTING` 的 CAS 抢占能力
   - 单进程异步 worker（轮询 + 抢占 + 调用处理用例）
-  - 处理主链路：源文件读取、Tika 文本解析（禁用嵌入资源）+ 二次清洗、分块、向量写入、状态推进到 `INDEXED/FAILED`
+  - 处理主链路：源文件读取、Tika XHTML 解析、HTML 语义清洗、`cleaned.md` 落盘、分块、向量写入、状态推进到 `INDEXED/FAILED`
   - 瞬时错误重试（3 次指数退避 + jitter）
   - reprocess 接口与重建流程（含 `splitVersion++`）
   - 删除接口与资产下线流程（`DELETING -> DELETED`）
   - `processing_metadata` 字段持久化、schema 自检与状态接口终态透传能力
+  - `processing_metadata` 的基础自动回填逻辑，当前由 parser 生成文档级基础元数据并在成功/失败终态写入数据库
 - 尚未实现：
   - OCR 场景与复杂排版优化（如扫描版 PDF、表格结构化提取）
-  - `processing_metadata` 的自动回填逻辑与 `cleaned.md` 主链产物
+  - 更精细的文档质量分级、页码提取与标题路径稳定化

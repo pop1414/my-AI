@@ -163,7 +163,8 @@ String markdown = FlexmarkHtmlConverter.builder().build().convert(cleanHtml);
 
 > 进度快照（2026-05-09）：
 > `processing_metadata` 的数据库字段、schema 自检以及状态接口终态返回基础能力已落地；
-> `cleaned.md` 主链产物与元数据自动回填逻辑仍待后续阶段继续实现。
+> `cleaned.md` 主链产物、`raw.xhtml -> cleaned.html -> cleaned.md` 中间产物链路与基础元数据自动回填已落地；
+> 更精细的文档质量分级、复杂页码/标题语义提取仍待后续阶段继续实现。
 
 ---
 
