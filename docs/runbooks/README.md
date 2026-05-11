@@ -20,6 +20,9 @@
 - [plans/rag-access-control/账号生命周期后端实施计划.md](./plans/rag-access-control/账号生命周期后端实施计划.md)
 - [plans/rag-access-control/账号生命周期后端完成概览.md](./plans/rag-access-control/账号生命周期后端完成概览.md)
 - [handoffs/rag-access-control/2026-05-11-auth-account-lifecycle-backend-handoff.md](./handoffs/rag-access-control/2026-05-11-auth-account-lifecycle-backend-handoff.md)
+- [plans/rag-access-control/知识库列表授权可见性收紧实施计划.md](./plans/rag-access-control/知识库列表授权可见性收紧实施计划.md)
+- [plans/rag-access-control/知识库列表授权可见性收紧完成概览.md](./plans/rag-access-control/知识库列表授权可见性收紧完成概览.md)
+- [handoffs/rag-access-control/2026-05-11-auth-knowledge-base-visibility-handoff.md](./handoffs/rag-access-control/2026-05-11-auth-knowledge-base-visibility-handoff.md)
 
 ## 适合放在这里的文档类型
 

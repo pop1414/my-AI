@@ -22,6 +22,8 @@
 - [rag-access-control/rag-access-control-plan.md](./rag-access-control/rag-access-control-plan.md)：成熟 RAG 权限体系专题计划
 - [rag-access-control/账号生命周期后端实施计划.md](./rag-access-control/账号生命周期后端实施计划.md)：账号治理后端实施计划
 - [rag-access-control/账号生命周期后端完成概览.md](./rag-access-control/账号生命周期后端完成概览.md)：账号治理后端完成摘要
+- [rag-access-control/知识库列表授权可见性收紧实施计划.md](./rag-access-control/知识库列表授权可见性收紧实施计划.md)：知识库列表可见性收紧实施计划
+- [rag-access-control/知识库列表授权可见性收紧完成概览.md](./rag-access-control/知识库列表授权可见性收紧完成概览.md)：知识库列表可见性收紧完成摘要
 
 ## 使用规则
 

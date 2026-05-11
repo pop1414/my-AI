@@ -27,12 +27,14 @@
 9. [runbooks/plans/rag-access-control/rag-access-control-plan.md](./runbooks/plans/rag-access-control/rag-access-control-plan.md)：成熟 RAG 权限体系专题计划
 10. [runbooks/plans/rag-access-control/账号生命周期后端实施计划.md](./runbooks/plans/rag-access-control/账号生命周期后端实施计划.md)：账号治理后端实施方案
 11. [runbooks/plans/rag-access-control/账号生命周期后端完成概览.md](./runbooks/plans/rag-access-control/账号生命周期后端完成概览.md)：账号治理后端完成状态摘要
-12. [06-ingest-acceptance-closure.md](./06-ingest-acceptance-closure.md)：上传受理闭环
-13. [07-ingest-processing-execution.md](./07-ingest-processing-execution.md)：处理执行闭环
-14. [adr/](./adr/)：关键技术决策和历史留痕（含 `ADR-0005` 权限体系基础决策）
-15. [runbooks/plans/v1/v1-closure-plan.md](./runbooks/plans/v1/v1-closure-plan.md)：V1 收口执行计划（历史记录）
-16. [runbooks/workflows/my-ai-document-workflow.md](./runbooks/workflows/my-ai-document-workflow.md)：项目文档工作流
-17. [runbooks/workflows/my-ai-git-workflow.md](./runbooks/workflows/my-ai-git-workflow.md)：项目 Git 工作流
+12. [runbooks/plans/rag-access-control/知识库列表授权可见性收紧实施计划.md](./runbooks/plans/rag-access-control/知识库列表授权可见性收紧实施计划.md)：知识库列表可见性收紧实施方案
+13. [runbooks/plans/rag-access-control/知识库列表授权可见性收紧完成概览.md](./runbooks/plans/rag-access-control/知识库列表授权可见性收紧完成概览.md)：知识库列表可见性收紧完成摘要
+14. [06-ingest-acceptance-closure.md](./06-ingest-acceptance-closure.md)：上传受理闭环
+15. [07-ingest-processing-execution.md](./07-ingest-processing-execution.md)：处理执行闭环
+16. [adr/](./adr/)：关键技术决策和历史留痕（含 `ADR-0005` 权限体系基础决策）
+17. [runbooks/plans/v1/v1-closure-plan.md](./runbooks/plans/v1/v1-closure-plan.md)：V1 收口执行计划（历史记录）
+18. [runbooks/workflows/my-ai-document-workflow.md](./runbooks/workflows/my-ai-document-workflow.md)：项目文档工作流
+19. [runbooks/workflows/my-ai-git-workflow.md](./runbooks/workflows/my-ai-git-workflow.md)：项目 Git 工作流
 
 ## 2. 当前目录职责
 
@@ -72,6 +74,8 @@
   - [runbooks/plans/rag-access-control/rag-access-control-plan.md](./runbooks/plans/rag-access-control/rag-access-control-plan.md)
   - [runbooks/plans/rag-access-control/账号生命周期后端实施计划.md](./runbooks/plans/rag-access-control/账号生命周期后端实施计划.md)
   - [runbooks/plans/rag-access-control/账号生命周期后端完成概览.md](./runbooks/plans/rag-access-control/账号生命周期后端完成概览.md)
+  - [runbooks/plans/rag-access-control/知识库列表授权可见性收紧实施计划.md](./runbooks/plans/rag-access-control/知识库列表授权可见性收紧实施计划.md)
+  - [runbooks/plans/rag-access-control/知识库列表授权可见性收紧完成概览.md](./runbooks/plans/rag-access-control/知识库列表授权可见性收紧完成概览.md)
 
 ## 3. 未来迁移方向
 

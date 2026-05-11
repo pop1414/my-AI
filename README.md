@@ -64,7 +64,7 @@
     - `DELETE /api/v1/documents/{documentId}`
 - 已实现 API（knowledge / qa）：
     - `POST /api/v1/knowledge-bases`（创建知识库，服务端生成 `kb_id`）
-    - `GET /api/v1/knowledge-bases`（知识库主数据 + `INDEXED` 统计）
+    - `GET /api/v1/knowledge-bases`（知识库主数据 + `INDEXED` 统计；普通成员仅可见自己具备显式知识库授权的知识库）
     - `PATCH /api/v1/knowledge-bases/{kbId}`（编辑 `name/description/status`）
     - `POST /api/v1/qa/ask`（同步返回）
     - 无命中场景：`200 + 兜底回答 + 空 references`
@@ -349,6 +349,7 @@ curl -sS "http://localhost:8080/actuator/metrics/myai.ingest.delete.success.tota
     - `description`
     - `status`
     - `indexedDocumentCount`（统计口径：`status=INDEXED`）
+    - 可见性：`WORKSPACE_OWNER / WORKSPACE_ADMIN` 看全部，`WORKSPACE_MEMBER` 仅看自己显式授权的知识库
 
 ### 6.8 文档问答（同步）
 
