@@ -1,223 +1,194 @@
-import { useState } from "react";
-import { useParams } from "react-router-dom";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import {
-	Button,
-	Form,
-	Modal,
-	Popconfirm,
-	Select,
-	Table,
-	Tag,
-	Typography,
-} from "antd";
-import { PlusOutlined } from "@ant-design/icons";
+import { useEffect, useState } from "react";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { Button, Card, Checkbox, Select, Space, Table, Tag, Typography } from "antd";
 import type { ColumnsType } from "antd/es/table";
+import { useNavigate, useParams } from "react-router-dom";
 import {
-	deleteDocumentGrant,
 	listDocumentGrants,
 	listMembers,
-	upsertDocumentGrant,
+	replaceDocumentMemberGrants,
 	type DocumentGrant,
+	type WorkspaceMember,
 } from "../../../shared/api/adminApi";
 import { ApiErrorAlert } from "../../../shared/ui/ApiErrorAlert";
-import type { ApiError } from "../../../shared/api/request";
 
 const { Title } = Typography;
 
-const permissionColorMap: Record<string, string> = {
-	DOC_ALLOW_READ: "green",
-	DOC_ALLOW_MANAGE: "blue",
-	DOC_DENY: "red",
-};
-
-const permissionOptions: {
+const permissionOptions: Array<{
 	value: DocumentGrant["permission"];
 	label: string;
-}[] = [
-	{ value: "DOC_ALLOW_READ", label: "DOC_ALLOW_READ" },
-	{ value: "DOC_ALLOW_MANAGE", label: "DOC_ALLOW_MANAGE" },
-	{ value: "DOC_DENY", label: "DOC_DENY" },
+}> = [
+	{ value: "DOC_ALLOW_READ", label: "可读" },
+	{ value: "DOC_ALLOW_MANAGE", label: "可管理" },
+	{ value: "DOC_DENY", label: "拒绝" },
 ];
 
 export function DocumentGrantsPage() {
+	const navigate = useNavigate();
 	const { documentId } = useParams<{ documentId: string }>();
-	const queryClient = useQueryClient();
-	const [modalOpen, setModalOpen] = useState(false);
-	const [grantForm] = Form.useForm<{
-		userId: string;
-		permission: DocumentGrant["permission"];
-	}>();
+	const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
+	const [permissionsByUserId, setPermissionsByUserId] = useState<
+		Record<string, DocumentGrant["permission"]>
+	>({});
 
-	// 查询授权列表
 	const grantsQuery = useQuery({
 		queryKey: ["admin", "document-grants", documentId],
 		queryFn: () => listDocumentGrants(documentId!),
 		enabled: !!documentId,
 	});
-
-	// 成员列表（作为成员选择器数据源）
 	const membersQuery = useQuery({
 		queryKey: ["admin", "members"],
 		queryFn: listMembers,
 	});
 
-	const upsertMutation = useMutation({
-		mutationFn: (params: {
+	useEffect(() => {
+		const grants = grantsQuery.data ?? [];
+		setSelectedUserIds(grants.map((item) => item.userId));
+		setPermissionsByUserId(
+			Object.fromEntries(grants.map((item) => [item.userId, item.permission])),
+		);
+	}, [grantsQuery.data, documentId]);
+
+	const replaceMutation = useMutation({
+		mutationFn: (assignments: Array<{
 			userId: string;
 			permission: DocumentGrant["permission"];
-		}) =>
-			upsertDocumentGrant(documentId!, params.userId, params.permission),
-		onSuccess: () => {
-			queryClient.invalidateQueries({
-				queryKey: ["admin", "document-grants", documentId],
-			});
-			setModalOpen(false);
-			grantForm.resetFields();
+		}>) => replaceDocumentMemberGrants(documentId!, assignments),
+		onSuccess: (data) => {
+			setSelectedUserIds(data.map((item) => item.userId));
+			setPermissionsByUserId(
+				Object.fromEntries(
+					data.map((item) => [item.userId, item.permission]),
+				),
+			);
+			grantsQuery.refetch();
 		},
 	});
 
-	const deleteMutation = useMutation({
-		mutationFn: (userId: string) =>
-			deleteDocumentGrant(documentId!, userId),
-		onSuccess: () => {
-			queryClient.invalidateQueries({
-				queryKey: ["admin", "document-grants", documentId],
-			});
-		},
-	});
+	const members = (membersQuery.data ?? []).filter(
+		(item) => item.workspaceRole === "WORKSPACE_MEMBER",
+	);
 
-	const columns: ColumnsType<DocumentGrant> = [
+	const columns: ColumnsType<WorkspaceMember> = [
+		{
+			title: "授权",
+			dataIndex: "userId",
+			width: 80,
+			render: (userId: string) => (
+				<Checkbox
+					checked={selectedUserIds.includes(userId)}
+					onChange={(event) => {
+						if (event.target.checked) {
+							setSelectedUserIds((prev) =>
+								prev.includes(userId) ? prev : [...prev, userId],
+							);
+							setPermissionsByUserId((prev) => ({
+								...prev,
+								[userId]: prev[userId] ?? "DOC_ALLOW_READ",
+							}));
+							return;
+						}
+						setSelectedUserIds((prev) =>
+							prev.filter((item) => item !== userId),
+						);
+					}}
+				/>
+			),
+		},
 		{ title: "用户名", dataIndex: "username", width: 160 },
-		{ title: "显示名", dataIndex: "displayName", width: 160 },
+		{ title: "显示名", dataIndex: "displayName", width: 180 },
+		{
+			title: "工作区角色",
+			dataIndex: "workspaceRole",
+			width: 140,
+			render: (value: WorkspaceMember["workspaceRole"]) => <Tag>{value}</Tag>,
+		},
 		{
 			title: "文档权限",
-			dataIndex: "permission",
+			dataIndex: "userId",
 			width: 180,
-			render: (value: string) => (
-				<Tag color={permissionColorMap[value] ?? "default"}>
-					{value}
-				</Tag>
+			render: (userId: string) => (
+				<Select
+					style={{ width: "100%" }}
+					disabled={!selectedUserIds.includes(userId)}
+					value={permissionsByUserId[userId] ?? "DOC_ALLOW_READ"}
+					options={permissionOptions}
+					onChange={(value: DocumentGrant["permission"]) =>
+						setPermissionsByUserId((prev) => ({ ...prev, [userId]: value }))
+					}
+				/>
 			),
 		},
 		{
-			title: "授权状态",
-			dataIndex: "status",
-			width: 120,
-			render: (value: string) => <Tag color="success">{value}</Tag>,
-		},
-		{
-			title: "操作",
-			key: "action",
-			width: 120,
-			render: (_, record) => (
-				<Popconfirm
-					title="确认回收授权？"
-					description={`将回收 ${record.displayName || record.username} 的文档授权`}
-					onConfirm={() => deleteMutation.mutate(record.userId)}
-					okText="确认回收"
-					cancelText="取消"
-				>
-					<a>回收授权</a>
-				</Popconfirm>
-			),
+			title: "当前状态",
+			dataIndex: "userId",
+			width: 140,
+			render: (userId: string) =>
+				selectedUserIds.includes(userId) ? (
+					<Tag color="processing">
+						{permissionsByUserId[userId] ?? "DOC_ALLOW_READ"}
+					</Tag>
+				) : (
+					<Tag>未授权</Tag>
+				),
 		},
 	];
 
-	const grantsError = grantsQuery.error as ApiError | null;
-
 	return (
-		<div>
-			<div
-				style={{
-					display: "flex",
-					justifyContent: "space-between",
-					alignItems: "center",
-					marginBottom: 16,
-				}}
-			>
-				<Title level={4} style={{ margin: 0 }}>
-					文档授权管理 · {documentId}
-				</Title>
-				<Button
-					type="primary"
-					icon={<PlusOutlined />}
-					onClick={() => {
-						grantForm.resetFields();
-						setModalOpen(true);
-					}}
+		<Space direction="vertical" size={16} style={{ width: "100%" }}>
+			<Card>
+				<Space
+					style={{ width: "100%", justifyContent: "space-between" }}
+					align="start"
 				>
-					新增授权
-				</Button>
-			</div>
+					<div>
+						<Title level={4} style={{ margin: 0 }}>
+							文档授权管理 · {documentId}
+						</Title>
+						<Typography.Paragraph
+							type="secondary"
+							style={{ marginBottom: 0 }}
+						>
+							当前已授权 {selectedUserIds.length} 名成员。
+						</Typography.Paragraph>
+					</div>
+					<Space>
+						<Button onClick={() => navigate("/ingest/documents")}>
+							返回文档列表
+						</Button>
+						<Button
+							type="primary"
+							loading={replaceMutation.isPending}
+							onClick={() =>
+								replaceMutation.mutate(
+									selectedUserIds.map((userId) => ({
+										userId,
+										permission:
+											permissionsByUserId[userId] ?? "DOC_ALLOW_READ",
+									})),
+								)
+							}
+						>
+							保存授权
+						</Button>
+					</Space>
+				</Space>
+			</Card>
 
-			{grantsError && (
-				<div style={{ marginBottom: 16 }}>
-					<ApiErrorAlert error={grantsError} />
-				</div>
+			{grantsQuery.isError && <ApiErrorAlert error={grantsQuery.error} />}
+			{membersQuery.isError && <ApiErrorAlert error={membersQuery.error} />}
+			{replaceMutation.isError && (
+				<ApiErrorAlert error={replaceMutation.error} />
 			)}
 
-			<Table<DocumentGrant>
-				columns={columns}
-				dataSource={grantsQuery.data ?? []}
+			<Table<WorkspaceMember>
 				rowKey="userId"
-				loading={grantsQuery.isLoading}
+				columns={columns}
+				dataSource={members}
+				loading={membersQuery.isLoading || grantsQuery.isLoading}
 				pagination={false}
-				locale={{ emptyText: "暂无授权记录" }}
+				locale={{ emptyText: "暂无可授权成员" }}
 			/>
-
-			<Modal
-				title="新增 / 编辑文档授权"
-				open={modalOpen}
-				onOk={() => grantForm.submit()}
-				onCancel={() => {
-					setModalOpen(false);
-					grantForm.resetFields();
-				}}
-				confirmLoading={upsertMutation.isPending}
-				destroyOnClose
-			>
-				<Form
-					form={grantForm}
-					layout="vertical"
-					onFinish={(values) => {
-						upsertMutation.mutate(values);
-					}}
-				>
-					<Form.Item
-						name="userId"
-						label="成员"
-						rules={[{ required: true, message: "请选择成员" }]}
-					>
-						<Select
-							showSearch
-							placeholder="搜索并选择成员"
-							filterOption={(input, option) =>
-								(option?.label as string)
-									?.toLowerCase()
-									.includes(input.toLowerCase()) ?? false
-							}
-							options={(membersQuery.data ?? []).map((m) => ({
-								value: m.userId,
-								label: `${m.displayName || m.username} (${m.username})`,
-							}))}
-							loading={membersQuery.isLoading}
-						/>
-					</Form.Item>
-					<Form.Item
-						name="permission"
-						label="文档权限"
-						rules={[{ required: true, message: "请选择权限" }]}
-					>
-						<Select options={permissionOptions} />
-					</Form.Item>
-					{upsertMutation.error && (
-						<Form.Item>
-							<ApiErrorAlert error={upsertMutation.error} />
-						</Form.Item>
-					)}
-				</Form>
-			</Modal>
-		</div>
+		</Space>
 	);
 }

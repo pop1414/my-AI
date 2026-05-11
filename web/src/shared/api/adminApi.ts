@@ -121,6 +121,25 @@ export async function createManagedAccount(params: {
 	return managedAccountSchema.parse(response);
 }
 
+export async function createManagedMember(params: {
+	username: string;
+	displayName: string;
+	password: string;
+	initialKnowledgeBaseGrants: Array<{
+		kbId: string;
+		role: KnowledgeBaseGrant["role"];
+	}>;
+}): Promise<ManagedAccount> {
+	const response = await requestJson<unknown>(
+		"/api/v1/admin/accounts/member-provisions",
+		{
+			method: "POST",
+			body: JSON.stringify(params),
+		},
+	);
+	return managedAccountSchema.parse(response);
+}
+
 export async function updateManagedAccountStatus(
 	userId: string,
 	userStatus: ManagedAccount["userStatus"],
@@ -183,6 +202,55 @@ export async function updateMemberRole(
 	return workspaceMemberSchema.parse(response);
 }
 
+export async function listMemberKnowledgeBaseGrants(
+	userId: string,
+): Promise<KnowledgeBaseGrant[]> {
+	const response = await requestJson<unknown>(
+		`/api/v1/admin/members/${encodeURIComponent(userId)}/knowledge-base-grants`,
+	);
+	return z.array(knowledgeBaseGrantSchema).parse(response);
+}
+
+export async function replaceMemberKnowledgeBaseGrants(
+	userId: string,
+	assignments: Array<{ kbId: string; role: KnowledgeBaseGrant["role"] }>,
+): Promise<KnowledgeBaseGrant[]> {
+	const response = await requestJson<unknown>(
+		`/api/v1/admin/members/${encodeURIComponent(userId)}/knowledge-base-grants:batch`,
+		{
+			method: "PUT",
+			body: JSON.stringify({ assignments }),
+		},
+	);
+	return z.array(knowledgeBaseGrantSchema).parse(response);
+}
+
+export async function listMemberDocumentGrants(
+	userId: string,
+): Promise<DocumentGrant[]> {
+	const response = await requestJson<unknown>(
+		`/api/v1/admin/members/${encodeURIComponent(userId)}/document-grants`,
+	);
+	return z.array(documentGrantSchema).parse(response);
+}
+
+export async function replaceMemberDocumentGrants(
+	userId: string,
+	assignments: Array<{
+		documentId: string;
+		permission: DocumentGrant["permission"];
+	}>,
+): Promise<DocumentGrant[]> {
+	const response = await requestJson<unknown>(
+		`/api/v1/admin/members/${encodeURIComponent(userId)}/document-grants:batch`,
+		{
+			method: "PUT",
+			body: JSON.stringify({ assignments }),
+		},
+	);
+	return z.array(documentGrantSchema).parse(response);
+}
+
 // ═══════════════════════════════════════════════════════════
 // 知识库授权 API
 // ═══════════════════════════════════════════════════════════
@@ -211,6 +279,20 @@ export async function upsertKnowledgeBaseGrant(
 		},
 	);
 	return knowledgeBaseGrantSchema.parse(response);
+}
+
+export async function replaceKnowledgeBaseMemberGrants(
+	kbId: string,
+	assignments: Array<{ userId: string; role: KnowledgeBaseGrant["role"] }>,
+): Promise<KnowledgeBaseGrant[]> {
+	const response = await requestJson<unknown>(
+		`/api/v1/admin/knowledge-bases/${encodeURIComponent(kbId)}/grants:batch`,
+		{
+			method: "PUT",
+			body: JSON.stringify({ assignments }),
+		},
+	);
+	return z.array(knowledgeBaseGrantSchema).parse(response);
 }
 
 /** 回收知识库授权（DISABLED）。 */
@@ -252,6 +334,23 @@ export async function upsertDocumentGrant(
 		},
 	);
 	return documentGrantSchema.parse(response);
+}
+
+export async function replaceDocumentMemberGrants(
+	documentId: string,
+	assignments: Array<{
+		userId: string;
+		permission: DocumentGrant["permission"];
+	}>,
+): Promise<DocumentGrant[]> {
+	const response = await requestJson<unknown>(
+		`/api/v1/admin/documents/${encodeURIComponent(documentId)}/grants:batch`,
+		{
+			method: "PUT",
+			body: JSON.stringify({ assignments }),
+		},
+	);
+	return z.array(documentGrantSchema).parse(response);
 }
 
 /** 回收文档授权（DISABLED）。 */

@@ -88,6 +88,9 @@ function resolveTitle(pathname: string): string {
 	if (pathname.startsWith("/admin/documents/")) {
 		return "文档授权管理";
 	}
+	if (pathname.startsWith("/admin/members/") && pathname.endsWith("/grants")) {
+		return "成员授权配置";
+	}
 	if (pathname === "/admin") {
 		return "系统管理";
 	}

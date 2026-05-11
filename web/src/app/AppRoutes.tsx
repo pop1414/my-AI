@@ -31,6 +31,11 @@ const DocumentGrantsPage = lazy(() =>
 		default: m.DocumentGrantsPage,
 	})),
 );
+const MemberGrantsPage = lazy(() =>
+	import("../features/admin/pages/MemberGrantsPage").then((m) => ({
+		default: m.MemberGrantsPage,
+	})),
+);
 
 const IngestListPage = lazy(() =>
 	import("../features/ingest/pages/IngestListPage").then((m) => ({
@@ -183,6 +188,10 @@ export function AppRoutes() {
 						<Route
 							path="admin/documents/:documentId/grants"
 							element={<DocumentGrantsPage />}
+						/>
+						<Route
+							path="admin/members/:userId/grants"
+							element={<MemberGrantsPage />}
 						/>
 					</Route>
 

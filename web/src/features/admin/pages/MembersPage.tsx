@@ -2,11 +2,13 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Form, Modal, Select, Table, Tag, Typography } from "antd";
 import type { ColumnsType } from "antd/es/table";
+import { useNavigate } from "react-router-dom";
 import {
 	listMembers,
 	updateMemberRole,
 	type WorkspaceMember,
 } from "../../../shared/api/adminApi";
+import { useAuth } from "../../../shared/auth/AuthContext";
 import { ApiErrorAlert } from "../../../shared/ui/ApiErrorAlert";
 import type { ApiError } from "../../../shared/api/request";
 
@@ -28,7 +30,9 @@ const roleOptions: {
 ];
 
 export function MembersPage() {
+	const navigate = useNavigate();
 	const queryClient = useQueryClient();
+	const { user } = useAuth();
 	const [editingMember, setEditingMember] = useState<WorkspaceMember | null>(
 		null,
 	);
@@ -53,6 +57,20 @@ export function MembersPage() {
 		},
 	});
 
+	const currentRole = user?.workspaceRole;
+	const canEditRole = (record: WorkspaceMember) => {
+		if (record.workspaceRole === "WORKSPACE_OWNER") {
+			return false;
+		}
+		if (currentRole === "WORKSPACE_OWNER") {
+			return true;
+		}
+		return record.workspaceRole === "WORKSPACE_MEMBER";
+	};
+
+	const canConfigureGrants = (record: WorkspaceMember) =>
+		record.workspaceRole === "WORKSPACE_MEMBER";
+
 	const columns: ColumnsType<WorkspaceMember> = [
 		{ title: "用户名", dataIndex: "username", width: 160 },
 		{ title: "显示名", dataIndex: "displayName", width: 160 },
@@ -73,18 +91,35 @@ export function MembersPage() {
 		{
 			title: "操作",
 			key: "action",
-			width: 120,
+			width: 220,
 			render: (_, record) => (
-				<a
-					onClick={() => {
-						setEditingMember(record);
-						roleForm.setFieldsValue({
-							workspaceRole: record.workspaceRole,
-						});
-					}}
-				>
-					编辑角色
-				</a>
+				<>
+					{canEditRole(record) && (
+						<a
+							onClick={() => {
+								setEditingMember(record);
+								roleForm.setFieldsValue({
+									workspaceRole: record.workspaceRole,
+								});
+							}}
+						>
+							编辑角色
+						</a>
+					)}
+					{canEditRole(record) && canConfigureGrants(record) && " · "}
+					{canConfigureGrants(record) && (
+						<a
+							onClick={() =>
+								navigate(
+									`/admin/members/${encodeURIComponent(record.userId)}/grants?tab=knowledge`,
+								)
+							}
+						>
+							授权配置
+						</a>
+					)}
+					{!canEditRole(record) && !canConfigureGrants(record) && "-"}
+				</>
 			),
 		},
 	];

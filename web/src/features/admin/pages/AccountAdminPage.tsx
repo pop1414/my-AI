@@ -2,38 +2,45 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
 	Button,
+	Checkbox,
 	Form,
 	Input,
 	Modal,
 	Popconfirm,
 	Select,
 	Space,
+	Steps,
 	Table,
 	Tag,
 	Typography,
 } from "antd";
 import { PlusOutlined } from "@ant-design/icons";
 import type { ColumnsType } from "antd/es/table";
+import { useNavigate } from "react-router-dom";
 import {
 	createManagedAccount,
+	createManagedMember,
 	listManagedAccounts,
 	removeManagedAccountMembership,
 	resetManagedAccountPassword,
 	updateManagedAccountStatus,
 	type ManagedAccount,
 } from "../../../shared/api/adminApi";
+import {
+	listKnowledgeBases,
+	type KnowledgeBase,
+} from "../../../shared/api/knowledgeApi";
+import { useAuth } from "../../../shared/auth/AuthContext";
 import { ApiErrorAlert } from "../../../shared/ui/ApiErrorAlert";
 
 const { Title } = Typography;
 
-const roleOptions: {
-	value: ManagedAccount["workspaceRole"];
-	label: string;
-}[] = [
-	{ value: "WORKSPACE_OWNER", label: "WORKSPACE_OWNER" },
-	{ value: "WORKSPACE_ADMIN", label: "WORKSPACE_ADMIN" },
-	{ value: "WORKSPACE_MEMBER", label: "WORKSPACE_MEMBER" },
-];
+const knowledgeRoleOptions = [
+	{ value: "KB_MANAGER", label: "管理者" },
+	{ value: "KB_CONTRIBUTOR", label: "贡献者" },
+	{ value: "KB_READER", label: "读者" },
+	{ value: "KB_ASKER", label: "问答者" },
+] as const;
 
 function formatTime(iso?: string | null): string {
 	if (!iso) {
@@ -54,15 +61,29 @@ function formatTime(iso?: string | null): string {
 }
 
 export function AccountAdminPage() {
+	const navigate = useNavigate();
 	const queryClient = useQueryClient();
-	const [createModalOpen, setCreateModalOpen] = useState(false);
+	const { user } = useAuth();
+	const [createAdminModalOpen, setCreateAdminModalOpen] = useState(false);
+	const [createMemberModalOpen, setCreateMemberModalOpen] = useState(false);
+	const [memberProvisionStep, setMemberProvisionStep] = useState(0);
+	const [selectedKnowledgeBaseIds, setSelectedKnowledgeBaseIds] = useState<string[]>(
+		[],
+	);
+	const [knowledgeBaseRoles, setKnowledgeBaseRoles] = useState<
+		Record<string, (typeof knowledgeRoleOptions)[number]["value"]>
+	>({});
 	const [passwordModalAccount, setPasswordModalAccount] =
 		useState<ManagedAccount | null>(null);
-	const [createForm] = Form.useForm<{
+	const [adminForm] = Form.useForm<{
 		username: string;
 		displayName: string;
 		password: string;
-		workspaceRole: ManagedAccount["workspaceRole"];
+	}>();
+	const [memberForm] = Form.useForm<{
+		username: string;
+		displayName: string;
+		password: string;
 	}>();
 	const [passwordForm] = Form.useForm<{ password: string }>();
 
@@ -70,13 +91,30 @@ export function AccountAdminPage() {
 		queryKey: ["admin", "accounts"],
 		queryFn: listManagedAccounts,
 	});
+	const knowledgeQuery = useQuery({
+		queryKey: ["knowledge-bases"],
+		queryFn: listKnowledgeBases,
+	});
 
-	const createMutation = useMutation({
+	const createAdminMutation = useMutation({
 		mutationFn: createManagedAccount,
 		onSuccess: () => {
 			queryClient.invalidateQueries({ queryKey: ["admin", "accounts"] });
-			setCreateModalOpen(false);
-			createForm.resetFields();
+			setCreateAdminModalOpen(false);
+			adminForm.resetFields();
+		},
+	});
+
+	const createMemberMutation = useMutation({
+		mutationFn: createManagedMember,
+		onSuccess: (created) => {
+			queryClient.invalidateQueries({ queryKey: ["admin", "accounts"] });
+			queryClient.invalidateQueries({ queryKey: ["admin", "members"] });
+			setCreateMemberModalOpen(false);
+			resetMemberProvisionWizard();
+			navigate(
+				`/admin/members/${encodeURIComponent(created.userId)}/grants?tab=knowledge`,
+			);
 		},
 	});
 
@@ -107,6 +145,29 @@ export function AccountAdminPage() {
 		},
 	});
 
+	const currentRole = user?.workspaceRole;
+	const canCreateAdmin = currentRole === "WORKSPACE_OWNER";
+	const canManageAccount = (record: ManagedAccount) => {
+		if (record.workspaceRole === "WORKSPACE_OWNER") {
+			return false;
+		}
+		if (currentRole === "WORKSPACE_OWNER") {
+			return true;
+		}
+		return record.workspaceRole === "WORKSPACE_MEMBER";
+	};
+
+	const activeKnowledgeBases = (knowledgeQuery.data ?? []).filter(
+		(item) => item.status === "ACTIVE",
+	);
+
+	const resetMemberProvisionWizard = () => {
+		memberForm.resetFields();
+		setSelectedKnowledgeBaseIds([]);
+		setKnowledgeBaseRoles({});
+		setMemberProvisionStep(0);
+	};
+
 	const columns: ColumnsType<ManagedAccount> = [
 		{ title: "用户名", dataIndex: "username", width: 160 },
 		{ title: "显示名", dataIndex: "displayName", width: 160 },
@@ -124,9 +185,7 @@ export function AccountAdminPage() {
 			title: "工作区角色",
 			dataIndex: "workspaceRole",
 			width: 180,
-			render: (value: ManagedAccount["workspaceRole"]) => (
-				<Tag>{value}</Tag>
-			),
+			render: (value: ManagedAccount["workspaceRole"]) => <Tag>{value}</Tag>,
 		},
 		{
 			title: "成员状态",
@@ -152,11 +211,12 @@ export function AccountAdminPage() {
 		{
 			title: "操作",
 			key: "action",
-			width: 280,
+			width: 320,
 			render: (_, record) => (
 				<Space size="small" wrap>
 					<Button
 						size="small"
+						disabled={!canManageAccount(record)}
 						onClick={() =>
 							statusMutation.mutate({
 								userId: record.userId,
@@ -175,6 +235,7 @@ export function AccountAdminPage() {
 					</Button>
 					<Button
 						size="small"
+						disabled={!canManageAccount(record)}
 						onClick={() => {
 							setPasswordModalAccount(record);
 							passwordForm.resetFields();
@@ -187,13 +248,19 @@ export function AccountAdminPage() {
 						description={`将移除 ${record.displayName || record.username} 的工作区成员关系`}
 						okText="确认移除"
 						cancelText="取消"
-						disabled={record.membershipStatus !== "ACTIVE"}
+						disabled={
+							record.membershipStatus !== "ACTIVE" ||
+							!canManageAccount(record)
+						}
 						onConfirm={() => removeMutation.mutate(record.userId)}
 					>
 						<Button
 							size="small"
 							danger
-							disabled={record.membershipStatus !== "ACTIVE"}
+							disabled={
+								record.membershipStatus !== "ACTIVE" ||
+								!canManageAccount(record)
+							}
 						>
 							移除成员
 						</Button>
@@ -216,16 +283,29 @@ export function AccountAdminPage() {
 				<Title level={4} style={{ margin: 0 }}>
 					账号管理
 				</Title>
-				<Button
-					type="primary"
-					icon={<PlusOutlined />}
-					onClick={() => {
-						createForm.resetFields();
-						setCreateModalOpen(true);
-					}}
-				>
-					新增账号
-				</Button>
+				<Space>
+					<Button
+						type="primary"
+						icon={<PlusOutlined />}
+						onClick={() => {
+							resetMemberProvisionWizard();
+							setCreateMemberModalOpen(true);
+						}}
+					>
+						新增成员
+					</Button>
+					{canCreateAdmin && (
+						<Button
+							icon={<PlusOutlined />}
+							onClick={() => {
+								adminForm.resetFields();
+								setCreateAdminModalOpen(true);
+							}}
+						>
+							新增管理员
+						</Button>
+					)}
+				</Space>
 			</div>
 
 			{accountsQuery.isError && (
@@ -254,21 +334,25 @@ export function AccountAdminPage() {
 			/>
 
 			<Modal
-				title="新增账号"
-				open={createModalOpen}
-				onOk={() => createForm.submit()}
+				title="新增管理员"
+				open={createAdminModalOpen}
+				onOk={() => adminForm.submit()}
 				onCancel={() => {
-					setCreateModalOpen(false);
-					createForm.resetFields();
+					setCreateAdminModalOpen(false);
+					adminForm.resetFields();
 				}}
-				confirmLoading={createMutation.isPending}
+				confirmLoading={createAdminMutation.isPending}
 				destroyOnClose
 			>
 				<Form
-					form={createForm}
+					form={adminForm}
 					layout="vertical"
-					initialValues={{ workspaceRole: "WORKSPACE_MEMBER" }}
-					onFinish={(values) => createMutation.mutate(values)}
+					onFinish={(values) =>
+						createAdminMutation.mutate({
+							...values,
+							workspaceRole: "WORKSPACE_ADMIN",
+						})
+					}
 				>
 					<Form.Item
 						name="username"
@@ -291,19 +375,180 @@ export function AccountAdminPage() {
 					>
 						<Input.Password />
 					</Form.Item>
-					<Form.Item
-						name="workspaceRole"
-						label="工作区角色"
-						rules={[{ required: true, message: "请选择工作区角色" }]}
-					>
-						<Select options={roleOptions} />
+					<Form.Item label="工作区角色">
+						<Input value="WORKSPACE_ADMIN" disabled />
 					</Form.Item>
-					{createMutation.isError && (
+					{createAdminMutation.isError && (
 						<Form.Item>
-							<ApiErrorAlert error={createMutation.error} />
+							<ApiErrorAlert error={createAdminMutation.error} />
 						</Form.Item>
 					)}
 				</Form>
+			</Modal>
+
+			<Modal
+				title="新增成员"
+				open={createMemberModalOpen}
+				onCancel={() => {
+					setCreateMemberModalOpen(false);
+					resetMemberProvisionWizard();
+				}}
+				destroyOnClose
+				width={900}
+				footer={
+					memberProvisionStep === 0 ? (
+						<Space>
+							<Button
+								onClick={() => {
+									setCreateMemberModalOpen(false);
+									resetMemberProvisionWizard();
+								}}
+							>
+								取消
+							</Button>
+							<Button
+								type="primary"
+								onClick={async () => {
+									await memberForm.validateFields();
+									setMemberProvisionStep(1);
+								}}
+							>
+								下一步
+							</Button>
+						</Space>
+					) : (
+						<Space>
+							<Button onClick={() => setMemberProvisionStep(0)}>上一步</Button>
+							<Button
+								type="primary"
+								loading={createMemberMutation.isPending}
+								disabled={selectedKnowledgeBaseIds.length === 0}
+								onClick={async () => {
+									const values = await memberForm.validateFields();
+									await createMemberMutation.mutateAsync({
+										username: values.username,
+										displayName: values.displayName,
+										password: values.password,
+										initialKnowledgeBaseGrants: selectedKnowledgeBaseIds.map(
+											(kbId) => ({
+												kbId,
+												role: knowledgeBaseRoles[kbId] ?? "KB_READER",
+											}),
+										),
+									});
+								}}
+							>
+								创建成员
+							</Button>
+						</Space>
+					)
+				}
+			>
+				<Steps
+					current={memberProvisionStep}
+					items={[
+						{ title: "基础信息" },
+						{ title: "初始知识库授权" },
+					]}
+					style={{ marginBottom: 24 }}
+				/>
+				{memberProvisionStep === 0 ? (
+					<Form form={memberForm} layout="vertical">
+						<Form.Item
+							name="username"
+							label="用户名"
+							rules={[{ required: true, message: "请输入用户名" }]}
+						>
+							<Input />
+						</Form.Item>
+						<Form.Item
+							name="displayName"
+							label="显示名"
+							rules={[{ required: true, message: "请输入显示名" }]}
+						>
+							<Input />
+						</Form.Item>
+						<Form.Item
+							name="password"
+							label="初始密码"
+							rules={[{ required: true, message: "请输入初始密码" }]}
+						>
+							<Input.Password />
+						</Form.Item>
+					</Form>
+				) : (
+					<Space direction="vertical" size={16} style={{ width: "100%" }}>
+						<Typography.Paragraph type="secondary" style={{ margin: 0 }}>
+							至少选择一个知识库，并为成员指定初始角色。
+						</Typography.Paragraph>
+						{selectedKnowledgeBaseIds.length === 0 && (
+							<Typography.Text type="danger">
+								请至少选择一个知识库授权后再创建成员。
+							</Typography.Text>
+						)}
+						{createMemberMutation.isError && (
+							<ApiErrorAlert error={createMemberMutation.error} />
+						)}
+						<Table<KnowledgeBase>
+							rowKey="id"
+							pagination={false}
+							loading={knowledgeQuery.isLoading}
+							dataSource={activeKnowledgeBases}
+							columns={[
+								{
+									title: "授权",
+									dataIndex: "id",
+									width: 80,
+									render: (kbId: string) => (
+										<Checkbox
+											checked={selectedKnowledgeBaseIds.includes(kbId)}
+											onChange={(event) => {
+												if (event.target.checked) {
+													setSelectedKnowledgeBaseIds((prev) =>
+														prev.includes(kbId) ? prev : [...prev, kbId],
+													);
+													setKnowledgeBaseRoles((prev) => ({
+														...prev,
+														[kbId]: prev[kbId] ?? "KB_READER",
+													}));
+													return;
+												}
+												setSelectedKnowledgeBaseIds((prev) =>
+													prev.filter((item) => item !== kbId),
+												);
+											}}
+										/>
+									),
+								},
+								{ title: "知识库名称", dataIndex: "name", width: 220 },
+								{ title: "知识库 ID", dataIndex: "id", width: 220 },
+								{
+									title: "初始角色",
+									dataIndex: "id",
+									render: (kbId: string) => (
+										<Select
+											style={{ width: "100%" }}
+											disabled={!selectedKnowledgeBaseIds.includes(kbId)}
+											value={knowledgeBaseRoles[kbId] ?? "KB_READER"}
+											options={knowledgeRoleOptions.map((item) => ({
+												value: item.value,
+												label: item.label,
+											}))}
+											onChange={(
+												value: (typeof knowledgeRoleOptions)[number]["value"],
+											) =>
+												setKnowledgeBaseRoles((prev) => ({
+													...prev,
+													[kbId]: value,
+												}))
+											}
+										/>
+									),
+								},
+							]}
+						/>
+					</Space>
+				)}
 			</Modal>
 
 			<Modal

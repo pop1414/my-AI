@@ -1,28 +1,17 @@
-import { useState } from "react";
-import { useParams } from "react-router-dom";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import {
-	Button,
-	Form,
-	Modal,
-	Popconfirm,
-	Select,
-	Table,
-	Tag,
-	Typography,
-} from "antd";
-import { PlusOutlined } from "@ant-design/icons";
+import { useEffect, useState } from "react";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { Button, Card, Checkbox, Select, Space, Table, Tag, Typography } from "antd";
 import type { ColumnsType } from "antd/es/table";
+import { useNavigate, useParams } from "react-router-dom";
 import {
-	deleteKnowledgeBaseGrant,
 	listKnowledgeBaseGrants,
 	listMembers,
-	upsertKnowledgeBaseGrant,
+	replaceKnowledgeBaseMemberGrants,
 	type KnowledgeBaseGrant,
+	type WorkspaceMember,
 } from "../../../shared/api/adminApi";
 import { listKnowledgeBases } from "../../../shared/api/knowledgeApi";
 import { ApiErrorAlert } from "../../../shared/ui/ApiErrorAlert";
-import type { ApiError } from "../../../shared/api/request";
 
 const { Title } = Typography;
 
@@ -33,195 +22,181 @@ const roleColorMap: Record<string, string> = {
 	KB_ASKER: "default",
 };
 
-const roleOptions: { value: KnowledgeBaseGrant["role"]; label: string }[] = [
-	{ value: "KB_MANAGER", label: "KB_MANAGER" },
-	{ value: "KB_CONTRIBUTOR", label: "KB_CONTRIBUTOR" },
-	{ value: "KB_READER", label: "KB_READER" },
-	{ value: "KB_ASKER", label: "KB_ASKER" },
+const roleOptions: Array<{ value: KnowledgeBaseGrant["role"]; label: string }> = [
+	{ value: "KB_MANAGER", label: "管理者" },
+	{ value: "KB_CONTRIBUTOR", label: "贡献者" },
+	{ value: "KB_READER", label: "读者" },
+	{ value: "KB_ASKER", label: "问答者" },
 ];
 
 export function KnowledgeBaseGrantsPage() {
+	const navigate = useNavigate();
 	const { kbId } = useParams<{ kbId: string }>();
-	const queryClient = useQueryClient();
-	const [modalOpen, setModalOpen] = useState(false);
-	const [grantForm] = Form.useForm<{
-		userId: string;
-		role: KnowledgeBaseGrant["role"];
-	}>();
+	const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
+	const [rolesByUserId, setRolesByUserId] = useState<
+		Record<string, KnowledgeBaseGrant["role"]>
+	>({});
 
-	// 查询知识库名称
 	const kbQuery = useQuery({
 		queryKey: ["knowledge-bases"],
 		queryFn: listKnowledgeBases,
 		select: (data) => data.find((kb) => kb.id === kbId),
 	});
-
-	// 查询授权列表
 	const grantsQuery = useQuery({
 		queryKey: ["admin", "knowledge-base-grants", kbId],
 		queryFn: () => listKnowledgeBaseGrants(kbId!),
 		enabled: !!kbId,
 	});
-
-	// 成员列表（作为成员选择器数据源）
 	const membersQuery = useQuery({
 		queryKey: ["admin", "members"],
 		queryFn: listMembers,
 	});
 
-	const upsertMutation = useMutation({
-		mutationFn: (params: {
+	useEffect(() => {
+		const grants = grantsQuery.data ?? [];
+		setSelectedUserIds(grants.map((item) => item.userId));
+		setRolesByUserId(
+			Object.fromEntries(grants.map((item) => [item.userId, item.role])),
+		);
+	}, [grantsQuery.data, kbId]);
+
+	const replaceMutation = useMutation({
+		mutationFn: (assignments: Array<{
 			userId: string;
 			role: KnowledgeBaseGrant["role"];
-		}) => upsertKnowledgeBaseGrant(kbId!, params.userId, params.role),
-		onSuccess: () => {
-			queryClient.invalidateQueries({
-				queryKey: ["admin", "knowledge-base-grants", kbId],
-			});
-			setModalOpen(false);
-			grantForm.resetFields();
+		}>) => replaceKnowledgeBaseMemberGrants(kbId!, assignments),
+		onSuccess: (data) => {
+			setSelectedUserIds(data.map((item) => item.userId));
+			setRolesByUserId(
+				Object.fromEntries(data.map((item) => [item.userId, item.role])),
+			);
+			grantsQuery.refetch();
 		},
 	});
 
-	const deleteMutation = useMutation({
-		mutationFn: (userId: string) => deleteKnowledgeBaseGrant(kbId!, userId),
-		onSuccess: () => {
-			queryClient.invalidateQueries({
-				queryKey: ["admin", "knowledge-base-grants", kbId],
-			});
-		},
-	});
+	const members = (membersQuery.data ?? []).filter(
+		(item) => item.workspaceRole === "WORKSPACE_MEMBER",
+	);
+	const kbName = kbQuery.data?.name ?? kbId;
 
-	const columns: ColumnsType<KnowledgeBaseGrant> = [
+	const columns: ColumnsType<WorkspaceMember> = [
+		{
+			title: "授权",
+			dataIndex: "userId",
+			width: 80,
+			render: (userId: string) => (
+				<Checkbox
+					checked={selectedUserIds.includes(userId)}
+					onChange={(event) => {
+						if (event.target.checked) {
+							setSelectedUserIds((prev) =>
+								prev.includes(userId) ? prev : [...prev, userId],
+							);
+							setRolesByUserId((prev) => ({
+								...prev,
+								[userId]: prev[userId] ?? "KB_READER",
+							}));
+							return;
+						}
+						setSelectedUserIds((prev) =>
+							prev.filter((item) => item !== userId),
+						);
+					}}
+				/>
+			),
+		},
 		{ title: "用户名", dataIndex: "username", width: 160 },
-		{ title: "显示名", dataIndex: "displayName", width: 160 },
+		{ title: "显示名", dataIndex: "displayName", width: 180 },
+		{
+			title: "工作区角色",
+			dataIndex: "workspaceRole",
+			width: 140,
+			render: (value: WorkspaceMember["workspaceRole"]) => <Tag>{value}</Tag>,
+		},
 		{
 			title: "知识库角色",
-			dataIndex: "role",
+			dataIndex: "userId",
 			width: 180,
-			render: (value: string) => (
-				<Tag color={roleColorMap[value] ?? "default"}>{value}</Tag>
+			render: (userId: string) => (
+				<Select
+					style={{ width: "100%" }}
+					disabled={!selectedUserIds.includes(userId)}
+					value={rolesByUserId[userId] ?? "KB_READER"}
+					options={roleOptions}
+					onChange={(value: KnowledgeBaseGrant["role"]) =>
+						setRolesByUserId((prev) => ({ ...prev, [userId]: value }))
+					}
+				/>
 			),
 		},
 		{
-			title: "授权状态",
-			dataIndex: "status",
-			width: 120,
-			render: (value: string) => <Tag color="success">{value}</Tag>,
-		},
-		{
-			title: "操作",
-			key: "action",
-			width: 120,
-			render: (_, record) => (
-				<Popconfirm
-					title="确认回收授权？"
-					description={`将回收 ${record.displayName || record.username} 的知识库授权`}
-					onConfirm={() => deleteMutation.mutate(record.userId)}
-					okText="确认回收"
-					cancelText="取消"
-				>
-					<a>回收授权</a>
-				</Popconfirm>
-			),
+			title: "当前状态",
+			dataIndex: "userId",
+			width: 140,
+			render: (userId: string) =>
+				selectedUserIds.includes(userId) ? (
+					<Tag color={roleColorMap[rolesByUserId[userId] ?? "KB_READER"]}>
+						{rolesByUserId[userId] ?? "KB_READER"}
+					</Tag>
+				) : (
+					<Tag>未授权</Tag>
+				),
 		},
 	];
 
-	const grantsError = grantsQuery.error as ApiError | null;
-	const kbName = kbQuery.data?.name ?? kbId;
-
 	return (
-		<div>
-			<div
-				style={{
-					display: "flex",
-					justifyContent: "space-between",
-					alignItems: "center",
-					marginBottom: 16,
-				}}
-			>
-				<Title level={4} style={{ margin: 0 }}>
-					知识库授权管理 · {kbName}
-				</Title>
-				<Button
-					type="primary"
-					icon={<PlusOutlined />}
-					onClick={() => {
-						grantForm.resetFields();
-						setModalOpen(true);
-					}}
+		<Space direction="vertical" size={16} style={{ width: "100%" }}>
+			<Card>
+				<Space
+					style={{ width: "100%", justifyContent: "space-between" }}
+					align="start"
 				>
-					新增授权
-				</Button>
-			</div>
+					<div>
+						<Title level={4} style={{ margin: 0 }}>
+							知识库授权管理 · {kbName}
+						</Title>
+						<Typography.Paragraph
+							type="secondary"
+							style={{ marginBottom: 0 }}
+						>
+							当前已授权 {selectedUserIds.length} 名成员。
+						</Typography.Paragraph>
+					</div>
+					<Space>
+						<Button onClick={() => navigate("/knowledge")}>返回知识库</Button>
+						<Button
+							type="primary"
+							loading={replaceMutation.isPending}
+							onClick={() =>
+								replaceMutation.mutate(
+									selectedUserIds.map((userId) => ({
+										userId,
+										role: rolesByUserId[userId] ?? "KB_READER",
+									})),
+								)
+							}
+						>
+							保存授权
+						</Button>
+					</Space>
+				</Space>
+			</Card>
 
-			{grantsError && (
-				<div style={{ marginBottom: 16 }}>
-					<ApiErrorAlert error={grantsError} />
-				</div>
+			{kbQuery.isError && <ApiErrorAlert error={kbQuery.error} />}
+			{membersQuery.isError && <ApiErrorAlert error={membersQuery.error} />}
+			{grantsQuery.isError && <ApiErrorAlert error={grantsQuery.error} />}
+			{replaceMutation.isError && (
+				<ApiErrorAlert error={replaceMutation.error} />
 			)}
 
-			<Table<KnowledgeBaseGrant>
-				columns={columns}
-				dataSource={grantsQuery.data ?? []}
+			<Table<WorkspaceMember>
 				rowKey="userId"
-				loading={grantsQuery.isLoading}
+				columns={columns}
+				dataSource={members}
+				loading={membersQuery.isLoading || grantsQuery.isLoading}
 				pagination={false}
-				locale={{ emptyText: "暂无授权记录" }}
+				locale={{ emptyText: "暂无可授权成员" }}
 			/>
-
-			<Modal
-				title="新增 / 编辑知识库授权"
-				open={modalOpen}
-				onOk={() => grantForm.submit()}
-				onCancel={() => {
-					setModalOpen(false);
-					grantForm.resetFields();
-				}}
-				confirmLoading={upsertMutation.isPending}
-				destroyOnClose
-			>
-				<Form
-					form={grantForm}
-					layout="vertical"
-					onFinish={(values) => {
-						upsertMutation.mutate(values);
-					}}
-				>
-					<Form.Item
-						name="userId"
-						label="成员"
-						rules={[{ required: true, message: "请选择成员" }]}
-					>
-						<Select
-							showSearch
-							placeholder="搜索并选择成员"
-							filterOption={(input, option) =>
-								(option?.label as string)
-									?.toLowerCase()
-									.includes(input.toLowerCase()) ?? false
-							}
-							options={(membersQuery.data ?? []).map((m) => ({
-								value: m.userId,
-								label: `${m.displayName || m.username} (${m.username})`,
-							}))}
-							loading={membersQuery.isLoading}
-						/>
-					</Form.Item>
-					<Form.Item
-						name="role"
-						label="知识库角色"
-						rules={[{ required: true, message: "请选择角色" }]}
-					>
-						<Select options={roleOptions} />
-					</Form.Item>
-					{upsertMutation.error && (
-						<Form.Item>
-							<ApiErrorAlert error={upsertMutation.error} />
-						</Form.Item>
-					)}
-				</Form>
-			</Modal>
-		</div>
+		</Space>
 	);
 }
