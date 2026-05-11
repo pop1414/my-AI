@@ -1046,7 +1046,12 @@ paths:
       summary: 查询知识库列表
       description: |
         归属 knowledge 子域；
-        返回当前用户工作区内的知识库主数据与已索引文档数量，统计口径固定为 status=INDEXED。
+        返回当前用户可见的知识库主数据与已索引文档数量，统计口径固定为 status=INDEXED。
+
+        当前可见性规则固定为：
+        - `WORKSPACE_OWNER / WORKSPACE_ADMIN`：返回当前工作区全部知识库
+        - `WORKSPACE_MEMBER`：仅返回当前用户存在 `knowledge_base_grants.status = ACTIVE`
+          显式授权的知识库
       x-stage: implemented
       security:
         - cookieAuth: []
