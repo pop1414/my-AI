@@ -5,8 +5,10 @@ import io.github.spike.myai.ingest.application.usecase.ProcessDocumentUseCase;
 import io.github.spike.myai.ingest.domain.model.Document;
 import io.github.spike.myai.ingest.domain.model.DocumentChunk;
 import io.github.spike.myai.ingest.domain.model.DocumentId;
+import io.github.spike.myai.ingest.domain.model.DocumentParseResult;
 import io.github.spike.myai.ingest.domain.model.UploadStatus;
 import io.github.spike.myai.ingest.domain.port.DocumentChunker;
+import io.github.spike.myai.ingest.domain.port.DocumentProcessingArtifactStorage;
 import io.github.spike.myai.ingest.domain.port.DocumentRepository;
 import io.github.spike.myai.ingest.domain.port.DocumentSourceStorage;
 import io.github.spike.myai.ingest.domain.port.DocumentTextParser;
@@ -64,6 +66,8 @@ public class ProcessDocumentApplicationService implements ProcessDocumentUseCase
     private final DocumentTextParser documentTextParser;
     /** 文本分块器 */
     private final DocumentChunker documentChunker;
+    /** 文档处理中间产物存储 */
+    private final DocumentProcessingArtifactStorage documentProcessingArtifactStorage;
     /** 矢量索引器 */
     private final DocumentVectorIndexer documentVectorIndexer;
     /** 重试策略判断器 */
@@ -78,6 +82,7 @@ public class ProcessDocumentApplicationService implements ProcessDocumentUseCase
      * @param sourceStorage          源文件存储
      * @param documentTextParser     文本解析器
      * @param documentChunker        文本分块器
+     * @param documentProcessingArtifactStorage 文档处理中间产物存储
      * @param documentVectorIndexer  矢量索引器
      * @param retryPolicy            重试策略判断器
      * @param ingestMetrics          业务指标监控
@@ -87,6 +92,7 @@ public class ProcessDocumentApplicationService implements ProcessDocumentUseCase
             DocumentSourceStorage sourceStorage,
             DocumentTextParser documentTextParser,
             DocumentChunker documentChunker,
+            DocumentProcessingArtifactStorage documentProcessingArtifactStorage,
             DocumentVectorIndexer documentVectorIndexer,
             RetryPolicy retryPolicy,
             IngestMetrics ingestMetrics) {
@@ -94,6 +100,7 @@ public class ProcessDocumentApplicationService implements ProcessDocumentUseCase
         this.sourceStorage = sourceStorage;
         this.documentTextParser = documentTextParser;
         this.documentChunker = documentChunker;
+        this.documentProcessingArtifactStorage = documentProcessingArtifactStorage;
         this.documentVectorIndexer = documentVectorIndexer;
         this.retryPolicy = retryPolicy;
         this.ingestMetrics = ingestMetrics;
@@ -125,16 +132,19 @@ public class ProcessDocumentApplicationService implements ProcessDocumentUseCase
             return;
         }
 
+        DocumentParseResult parseResult = null;
         try {
             // 步骤 1: 从存储系统中调取原始文件字节数组。
             byte[] sourceBytes = sourceStorage
                     .load(documentId, document.filename())
                     .orElseThrow(() -> new IllegalStateException("source file not found"));
 
-            // 步骤 2: 将不同格式的文件解析为纯文本字符串。
-            String text = documentTextParser.parse(document.filename(), sourceBytes);
+            // 步骤 2: 解析出一期中间产物，并将 cleaned.md 主链结果落盘。
+            parseResult = documentTextParser.parse(document.filename(), sourceBytes);
+            documentProcessingArtifactStorage.save(documentId, parseResult);
+
             // 步骤 3: 分块（结构优先 + 长度兜底）。
-            List<DocumentChunk> chunks = documentChunker.chunk(text);
+            List<DocumentChunk> chunks = documentChunker.chunk(parseResult.cleanedMarkdown());
             if (chunks.isEmpty()) {
                 throw new IllegalStateException("no chunks generated");
             }
@@ -144,10 +154,12 @@ public class ProcessDocumentApplicationService implements ProcessDocumentUseCase
 
             // 步骤 5: 状态收口：仅当当前仍是 INGESTING 时，才允许推进到最终成功态 INDEXED。
             // 使用 CAS 确保在处理期间文档没有被外部（如删除操作）修改。
-            // 当前阶段 processing_metadata 的自动回填逻辑尚未实现，传入 null 表示暂不写入元数据。
-            // 后续在 cleaned.md 主链改造完成后，此处应改为传入实际的 processingMetadata JSON 字符串。
             boolean updated = documentRepository.markIndexed(
-                    workspaceId, documentId, UploadStatus.INGESTING, null, Instant.now());
+                    workspaceId,
+                    documentId,
+                    UploadStatus.INGESTING,
+                    parseResult.processingMetadata(),
+                    Instant.now());
             if (!updated) {
                 log.warn("Status update to INDEXED skipped by CAS. documentId={}", documentId.value());
                 return;
@@ -193,13 +205,12 @@ public class ProcessDocumentApplicationService implements ProcessDocumentUseCase
             // 如果不可重试或已达上限，则标记为最终失败态 FAILED。
             String reason = trimFailureReason(decision.errorMessage());
             // 非瞬时错误或超过最大重试次数时，直接进入 FAILED 并保留错误信息。
-            // 失败场景下 processing_metadata 同样暂不写入，待后续主链改造完成后统一补齐。
             boolean updated = documentRepository.markFailed(
                     workspaceId,
                     documentId,
                     UploadStatus.INGESTING,
                     reason,
-                    null,
+                    parseResult != null ? parseResult.processingMetadata() : null,
                     decision.errorCode(),
                     decision.errorMessage(),
                     now,

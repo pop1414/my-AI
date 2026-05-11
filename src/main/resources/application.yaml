@@ -59,6 +59,13 @@ myai:
     storage:
       # 上传源文件本地落盘目录（可替换为对象存储适配器）
       root-dir: ${INGEST_STORAGE_ROOT_DIR:data/ingest}
+      artifacts:
+        # 是否保留 Tika 原始 XHTML 调试产物
+        keep-raw-xhtml: ${INGEST_STORAGE_KEEP_RAW_XHTML:false}
+        # 是否保留 cleaned.html 调试产物
+        keep-cleaned-html: ${INGEST_STORAGE_KEEP_CLEANED_HTML:false}
+        # 是否保留 processing_metadata 的文件化载体 parse-result.json
+        keep-parse-result-json: ${INGEST_STORAGE_KEEP_PARSE_RESULT_JSON:true}
     chunk:
       # 文本分块参数（结构优先 + 长度兜底）
       chunk-size: ${INGEST_CHUNK_SIZE:500}
