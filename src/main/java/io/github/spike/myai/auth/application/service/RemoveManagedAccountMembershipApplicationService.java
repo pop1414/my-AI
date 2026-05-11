@@ -24,21 +24,25 @@ import org.springframework.stereotype.Service;
 public class RemoveManagedAccountMembershipApplicationService implements RemoveManagedAccountMembershipUseCase {
 
     private final AuthorizationService authorizationService;
+    private final WorkspaceGovernanceGuard workspaceGovernanceGuard;
     private final ManagedAccountRepository managedAccountRepository;
     private final AuditEventRepository auditEventRepository;
 
     /**
      * 构造函数注入依赖。
      *
-     * @param authorizationService     授权服务
-     * @param managedAccountRepository 托管账号仓储
-     * @param auditEventRepository     审计事件仓储
+     * @param authorizationService        授权服务
+     * @param workspaceGovernanceGuard    工作区治理边界守卫
+     * @param managedAccountRepository    托管账号仓储
+     * @param auditEventRepository        审计事件仓储
      */
     public RemoveManagedAccountMembershipApplicationService(
             AuthorizationService authorizationService,
+            WorkspaceGovernanceGuard workspaceGovernanceGuard,
             ManagedAccountRepository managedAccountRepository,
             AuditEventRepository auditEventRepository) {
         this.authorizationService = authorizationService;
+        this.workspaceGovernanceGuard = workspaceGovernanceGuard;
         this.managedAccountRepository = managedAccountRepository;
         this.auditEventRepository = auditEventRepository;
     }
@@ -50,6 +54,7 @@ public class RemoveManagedAccountMembershipApplicationService implements RemoveM
      * <ol>
      *   <li>校验权限：确保当前用户是工作区管理员</li>
      *   <li>查询目标账号：定位当前工作区下的目标用户</li>
+     *   <li>治理边界校验：ADMIN 不可移除 OWNER 或其他 ADMIN</li>
      *   <li>幂等判断：如果成员已是 INACTIVE 状态，直接返回</li>
      *   <li>持久化：将成员关系状态置为 INACTIVE</li>
      *   <li>审计记录：记录成员移除事件</li>
@@ -69,6 +74,10 @@ public class RemoveManagedAccountMembershipApplicationService implements RemoveM
                         command.normalizedUserId())
                 .orElseThrow(() -> new ManagedAccountNotFoundException(
                         "managed account not found: " + command.normalizedUserId()));
+        // 2.1 治理边界校验：ADMIN 不可移除 OWNER 或其他 ADMIN 的成员关系
+        workspaceGovernanceGuard.requireCanManageManagedAccount(
+                currentUser,
+                account.workspaceRole());
 
         // 3. 幂等保护：已经是 INACTIVE 则无需操作
         if (!"ACTIVE".equals(account.membershipStatus())) {

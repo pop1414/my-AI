@@ -25,21 +25,25 @@ import org.springframework.stereotype.Service;
 public class UpdateManagedAccountStatusApplicationService implements UpdateManagedAccountStatusUseCase {
 
     private final AuthorizationService authorizationService;
+    private final WorkspaceGovernanceGuard workspaceGovernanceGuard;
     private final ManagedAccountRepository managedAccountRepository;
     private final AuditEventRepository auditEventRepository;
 
     /**
      * 构造函数注入依赖。
      *
-     * @param authorizationService     授权服务
-     * @param managedAccountRepository 托管账号仓储
-     * @param auditEventRepository     审计事件仓储
+     * @param authorizationService        授权服务
+     * @param workspaceGovernanceGuard    工作区治理边界守卫
+     * @param managedAccountRepository    托管账号仓储
+     * @param auditEventRepository        审计事件仓储
      */
     public UpdateManagedAccountStatusApplicationService(
             AuthorizationService authorizationService,
+            WorkspaceGovernanceGuard workspaceGovernanceGuard,
             ManagedAccountRepository managedAccountRepository,
             AuditEventRepository auditEventRepository) {
         this.authorizationService = authorizationService;
+        this.workspaceGovernanceGuard = workspaceGovernanceGuard;
         this.managedAccountRepository = managedAccountRepository;
         this.auditEventRepository = auditEventRepository;
     }
@@ -51,6 +55,7 @@ public class UpdateManagedAccountStatusApplicationService implements UpdateManag
      * <ol>
      *   <li>校验权限：确保当前用户是工作区管理员</li>
      *   <li>查询目标账号 + 状态白名单校验</li>
+     *   <li>治理边界校验：ADMIN 不可操作 OWNER 或其他 ADMIN</li>
      *   <li>幂等判断：目标状态与当前状态一致则直接返回</li>
      *   <li>持久化：更新用户状态</li>
      *   <li>审计记录：记录状态变更事件（含前后状态）</li>
@@ -72,6 +77,10 @@ public class UpdateManagedAccountStatusApplicationService implements UpdateManag
                         command.normalizedUserId())
                 .orElseThrow(() -> new ManagedAccountNotFoundException(
                         "managed account not found: " + command.normalizedUserId()));
+        // 2.1 治理边界校验：ADMIN 不可停用/启用 OWNER 或其他 ADMIN
+        workspaceGovernanceGuard.requireCanManageManagedAccount(
+                currentUser,
+                account.workspaceRole());
 
         // 3. 解析目标状态（命令层已完成白名单校验）
         String targetStatus = command.resolvedUserStatus();

@@ -29,6 +29,7 @@ class UpdateWorkspaceMemberRoleApplicationServiceTest {
     @DisplayName("管理员调整成员角色时应更新成员关系并写入审计")
     void handle_shouldUpdateWorkspaceRoleAndWriteAudit() {
         AuthorizationService authorizationService = Mockito.mock(AuthorizationService.class);
+        WorkspaceGovernanceGuard workspaceGovernanceGuard = Mockito.mock(WorkspaceGovernanceGuard.class);
         WorkspaceMemberRepository repository = Mockito.mock(WorkspaceMemberRepository.class);
         AuditEventRepository auditEventRepository = Mockito.mock(AuditEventRepository.class);
         when(authorizationService.requireCanManageWorkspace())
@@ -43,7 +44,11 @@ class UpdateWorkspaceMemberRoleApplicationServiceTest {
                 any()))
                 .thenReturn(true);
         UpdateWorkspaceMemberRoleApplicationService service =
-                new UpdateWorkspaceMemberRoleApplicationService(authorizationService, repository, auditEventRepository);
+                new UpdateWorkspaceMemberRoleApplicationService(
+                        authorizationService,
+                        workspaceGovernanceGuard,
+                        repository,
+                        auditEventRepository);
 
         var result = service.handle(new UpdateWorkspaceMemberRoleCommand("user-2", "WORKSPACE_ADMIN"));
 
@@ -59,6 +64,7 @@ class UpdateWorkspaceMemberRoleApplicationServiceTest {
     @DisplayName("角色未变化时应直接返回且不写审计")
     void handle_shouldReturnCurrentMember_whenRoleUnchanged() {
         AuthorizationService authorizationService = Mockito.mock(AuthorizationService.class);
+        WorkspaceGovernanceGuard workspaceGovernanceGuard = Mockito.mock(WorkspaceGovernanceGuard.class);
         WorkspaceMemberRepository repository = Mockito.mock(WorkspaceMemberRepository.class);
         AuditEventRepository auditEventRepository = Mockito.mock(AuditEventRepository.class);
         when(authorizationService.requireCanManageWorkspace())
@@ -67,7 +73,11 @@ class UpdateWorkspaceMemberRoleApplicationServiceTest {
                 .thenReturn(Optional.of(new WorkspaceMember(
                         "user-2", "bob", "Bob", "workspace-a", WorkspaceRole.WORKSPACE_MEMBER, "ACTIVE")));
         UpdateWorkspaceMemberRoleApplicationService service =
-                new UpdateWorkspaceMemberRoleApplicationService(authorizationService, repository, auditEventRepository);
+                new UpdateWorkspaceMemberRoleApplicationService(
+                        authorizationService,
+                        workspaceGovernanceGuard,
+                        repository,
+                        auditEventRepository);
 
         var result = service.handle(new UpdateWorkspaceMemberRoleCommand("user-2", "WORKSPACE_MEMBER"));
 
@@ -80,13 +90,18 @@ class UpdateWorkspaceMemberRoleApplicationServiceTest {
     @DisplayName("目标成员不存在时应返回 404 语义异常")
     void handle_shouldThrowNotFound_whenTargetMemberMissing() {
         AuthorizationService authorizationService = Mockito.mock(AuthorizationService.class);
+        WorkspaceGovernanceGuard workspaceGovernanceGuard = Mockito.mock(WorkspaceGovernanceGuard.class);
         WorkspaceMemberRepository repository = Mockito.mock(WorkspaceMemberRepository.class);
         AuditEventRepository auditEventRepository = Mockito.mock(AuditEventRepository.class);
         when(authorizationService.requireCanManageWorkspace())
                 .thenReturn(new CurrentUser("user-admin", "alice", "workspace-a", WorkspaceRole.WORKSPACE_ADMIN));
         when(repository.findActiveMember("workspace-a", "user-missing")).thenReturn(Optional.empty());
         UpdateWorkspaceMemberRoleApplicationService service =
-                new UpdateWorkspaceMemberRoleApplicationService(authorizationService, repository, auditEventRepository);
+                new UpdateWorkspaceMemberRoleApplicationService(
+                        authorizationService,
+                        workspaceGovernanceGuard,
+                        repository,
+                        auditEventRepository);
 
         assertThrows(
                 WorkspaceMemberNotFoundException.class,
@@ -100,12 +115,17 @@ class UpdateWorkspaceMemberRoleApplicationServiceTest {
     @DisplayName("无工作区管理权限时调整成员角色应被拒绝")
     void handle_shouldDeny_whenUserCannotManageWorkspace() {
         AuthorizationService authorizationService = Mockito.mock(AuthorizationService.class);
+        WorkspaceGovernanceGuard workspaceGovernanceGuard = Mockito.mock(WorkspaceGovernanceGuard.class);
         WorkspaceMemberRepository repository = Mockito.mock(WorkspaceMemberRepository.class);
         AuditEventRepository auditEventRepository = Mockito.mock(AuditEventRepository.class);
         when(authorizationService.requireCanManageWorkspace())
                 .thenThrow(new AccessDeniedException("workspace manage access denied"));
         UpdateWorkspaceMemberRoleApplicationService service =
-                new UpdateWorkspaceMemberRoleApplicationService(authorizationService, repository, auditEventRepository);
+                new UpdateWorkspaceMemberRoleApplicationService(
+                        authorizationService,
+                        workspaceGovernanceGuard,
+                        repository,
+                        auditEventRepository);
 
         assertThrows(
                 AccessDeniedException.class,

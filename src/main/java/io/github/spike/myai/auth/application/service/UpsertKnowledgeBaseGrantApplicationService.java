@@ -39,6 +39,7 @@ public class UpsertKnowledgeBaseGrantApplicationService implements UpsertKnowled
 
     /** 授权服务，用于校验工作区管理权限 */
     private final AuthorizationService authorizationService;
+    private final WorkspaceGovernanceGuard workspaceGovernanceGuard;
     /** 知识库仓储，用于校验知识库存在性 */
     private final KnowledgeBaseRepository knowledgeBaseRepository;
     /** 工作区成员仓储，用于校验目标用户是否为活跃成员 */
@@ -59,11 +60,13 @@ public class UpsertKnowledgeBaseGrantApplicationService implements UpsertKnowled
      */
     public UpsertKnowledgeBaseGrantApplicationService(
             AuthorizationService authorizationService,
+            WorkspaceGovernanceGuard workspaceGovernanceGuard,
             KnowledgeBaseRepository knowledgeBaseRepository,
             WorkspaceMemberRepository workspaceMemberRepository,
             KnowledgeBaseGrantManagementRepository grantRepository,
             AuditEventRepository auditEventRepository) {
         this.authorizationService = authorizationService;
+        this.workspaceGovernanceGuard = workspaceGovernanceGuard;
         this.knowledgeBaseRepository = knowledgeBaseRepository;
         this.workspaceMemberRepository = workspaceMemberRepository;
         this.grantRepository = grantRepository;
@@ -106,6 +109,9 @@ public class UpsertKnowledgeBaseGrantApplicationService implements UpsertKnowled
                         command.normalizedUserId())
                 .orElseThrow(() -> new WorkspaceMemberNotFoundException(
                         "workspace member not found: " + command.normalizedUserId()));
+        workspaceGovernanceGuard.requireCanManageGrantTarget(
+                currentUser,
+                member.workspaceRole());
 
         // Step 4: 解析目标角色枚举值
         KnowledgeBaseRole targetRole = command.resolvedRole();

@@ -7,8 +7,11 @@ import io.github.spike.myai.auth.application.exception.ManagedKnowledgeBaseNotFo
 import io.github.spike.myai.auth.application.usecase.RevokeKnowledgeBaseGrantUseCase;
 import io.github.spike.myai.auth.domain.model.AuditEvent;
 import io.github.spike.myai.auth.domain.model.KnowledgeBaseGrant;
+import io.github.spike.myai.auth.domain.model.WorkspaceMember;
+import io.github.spike.myai.auth.domain.model.WorkspaceRole;
 import io.github.spike.myai.auth.domain.port.AuditEventRepository;
 import io.github.spike.myai.auth.domain.port.KnowledgeBaseGrantManagementRepository;
+import io.github.spike.myai.auth.domain.port.WorkspaceMemberRepository;
 import io.github.spike.myai.knowledge.domain.port.KnowledgeBaseRepository;
 import java.time.Instant;
 import org.springframework.stereotype.Service;
@@ -33,8 +36,11 @@ public class RevokeKnowledgeBaseGrantApplicationService implements RevokeKnowled
 
     /** 授权服务，用于校验工作区管理权限 */
     private final AuthorizationService authorizationService;
+    private final WorkspaceGovernanceGuard workspaceGovernanceGuard;
     /** 知识库仓储，用于校验知识库存在性 */
     private final KnowledgeBaseRepository knowledgeBaseRepository;
+    /** 工作区成员仓储，用于校验目标用户当前角色 */
+    private final WorkspaceMemberRepository workspaceMemberRepository;
     /** 知识库授权治理仓储 */
     private final KnowledgeBaseGrantManagementRepository grantRepository;
     /** 审计事件持久化仓储 */
@@ -50,11 +56,15 @@ public class RevokeKnowledgeBaseGrantApplicationService implements RevokeKnowled
      */
     public RevokeKnowledgeBaseGrantApplicationService(
             AuthorizationService authorizationService,
+            WorkspaceGovernanceGuard workspaceGovernanceGuard,
             KnowledgeBaseRepository knowledgeBaseRepository,
+            WorkspaceMemberRepository workspaceMemberRepository,
             KnowledgeBaseGrantManagementRepository grantRepository,
             AuditEventRepository auditEventRepository) {
         this.authorizationService = authorizationService;
+        this.workspaceGovernanceGuard = workspaceGovernanceGuard;
         this.knowledgeBaseRepository = knowledgeBaseRepository;
+        this.workspaceMemberRepository = workspaceMemberRepository;
         this.grantRepository = grantRepository;
         this.auditEventRepository = auditEventRepository;
     }
@@ -91,6 +101,12 @@ public class RevokeKnowledgeBaseGrantApplicationService implements RevokeKnowled
                         command.normalizedUserId())
                 .orElseThrow(() -> new KnowledgeBaseGrantNotFoundException(
                         "knowledge base grant not found: " + command.normalizedKbId() + "/" + command.normalizedUserId()));
+        WorkspaceMember targetMember = workspaceMemberRepository.findActiveMember(
+                        currentUser.workspaceId(),
+                        command.normalizedUserId())
+                .orElseThrow(() -> new KnowledgeBaseGrantNotFoundException(
+                        "knowledge base grant not found: " + command.normalizedKbId() + "/" + command.normalizedUserId()));
+        workspaceGovernanceGuard.requireCanManageGrantTarget(currentUser, targetMember.workspaceRole());
 
         // Step 4: 获取当前时间戳，用于统一标记操作时间
         Instant now = Instant.now();

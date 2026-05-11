@@ -41,6 +41,7 @@ public class UpsertDocumentGrantApplicationService implements UpsertDocumentGran
 
     /** 授权服务，用于校验工作区管理权限 */
     private final AuthorizationService authorizationService;
+    private final WorkspaceGovernanceGuard workspaceGovernanceGuard;
     /** 文档仓储，用于校验文档存在性并获取关联信息 */
     private final DocumentRepository documentRepository;
     /** 工作区成员仓储，用于校验目标用户是否为活跃成员 */
@@ -61,11 +62,13 @@ public class UpsertDocumentGrantApplicationService implements UpsertDocumentGran
      */
     public UpsertDocumentGrantApplicationService(
             AuthorizationService authorizationService,
+            WorkspaceGovernanceGuard workspaceGovernanceGuard,
             DocumentRepository documentRepository,
             WorkspaceMemberRepository workspaceMemberRepository,
             DocumentGrantManagementRepository grantRepository,
             AuditEventRepository auditEventRepository) {
         this.authorizationService = authorizationService;
+        this.workspaceGovernanceGuard = workspaceGovernanceGuard;
         this.documentRepository = documentRepository;
         this.workspaceMemberRepository = workspaceMemberRepository;
         this.grantRepository = grantRepository;
@@ -112,6 +115,9 @@ public class UpsertDocumentGrantApplicationService implements UpsertDocumentGran
                         command.normalizedUserId())
                 .orElseThrow(() -> new WorkspaceMemberNotFoundException(
                         "workspace member not found: " + command.normalizedUserId()));
+        workspaceGovernanceGuard.requireCanManageGrantTarget(
+                currentUser,
+                member.workspaceRole());
 
         // Step 4: 解析目标权限枚举值
         DocumentPermission targetPermission = command.resolvedPermission();

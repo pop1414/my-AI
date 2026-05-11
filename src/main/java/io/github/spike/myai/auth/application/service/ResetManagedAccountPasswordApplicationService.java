@@ -30,6 +30,7 @@ import org.springframework.stereotype.Service;
 public class ResetManagedAccountPasswordApplicationService implements ResetManagedAccountPasswordUseCase {
 
     private final AuthorizationService authorizationService;
+    private final WorkspaceGovernanceGuard workspaceGovernanceGuard;
     private final ManagedAccountRepository managedAccountRepository;
     private final PasswordEncoder passwordEncoder;
     private final AuditEventRepository auditEventRepository;
@@ -37,17 +38,20 @@ public class ResetManagedAccountPasswordApplicationService implements ResetManag
     /**
      * 构造函数注入依赖。
      *
-     * @param authorizationService     授权服务
-     * @param managedAccountRepository 托管账号仓储
-     * @param passwordEncoder          密码编码器（BCrypt）
-     * @param auditEventRepository     审计事件仓储
+     * @param authorizationService        授权服务
+     * @param workspaceGovernanceGuard    工作区治理边界守卫
+     * @param managedAccountRepository    托管账号仓储
+     * @param passwordEncoder             密码编码器（BCrypt）
+     * @param auditEventRepository        审计事件仓储
      */
     public ResetManagedAccountPasswordApplicationService(
             AuthorizationService authorizationService,
+            WorkspaceGovernanceGuard workspaceGovernanceGuard,
             ManagedAccountRepository managedAccountRepository,
             PasswordEncoder passwordEncoder,
             AuditEventRepository auditEventRepository) {
         this.authorizationService = authorizationService;
+        this.workspaceGovernanceGuard = workspaceGovernanceGuard;
         this.managedAccountRepository = managedAccountRepository;
         this.passwordEncoder = passwordEncoder;
         this.auditEventRepository = auditEventRepository;
@@ -55,6 +59,16 @@ public class ResetManagedAccountPasswordApplicationService implements ResetManag
 
     /**
      * 执行密码重置操作。
+     *
+     * <p>业务流程：
+     * <ol>
+     *   <li>权限校验：确保当前用户是工作区管理员</li>
+     *   <li>查询目标账号：定位当前工作区下的目标用户</li>
+     *   <li>治理边界校验：ADMIN 不可重置 OWNER 或其他 ADMIN 的密码</li>
+     *   <li>密码编码 + 重置：更新凭据密码哈希并清除登录锁定状态</li>
+     *   <li>审计记录：记录密码重置事件</li>
+     *   <li>回查返回：重新查询最新账号信息（含清零后的锁定状态）</li>
+     * </ol>
      *
      * @param command 重置密码命令，包含目标用户 ID 和新密码
      * @return 重置后的账号信息（锁定状态已清零）
@@ -71,6 +85,10 @@ public class ResetManagedAccountPasswordApplicationService implements ResetManag
                         command.normalizedUserId())
                 .orElseThrow(() -> new ManagedAccountNotFoundException(
                         "managed account not found: " + command.normalizedUserId()));
+        // 2.1 治理边界校验：ADMIN 不可重置 OWNER 或其他 ADMIN 的密码
+        workspaceGovernanceGuard.requireCanManageManagedAccount(
+                currentUser,
+                account.workspaceRole());
 
         // 3. 重置密码：更新密码哈希 + 清除锁定状态（failedLoginCount 归零、lockedUntil 置空）
         Instant now = Instant.now();

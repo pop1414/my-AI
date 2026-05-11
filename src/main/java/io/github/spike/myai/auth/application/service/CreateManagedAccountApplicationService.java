@@ -29,6 +29,7 @@ import org.springframework.stereotype.Service;
 public class CreateManagedAccountApplicationService implements CreateManagedAccountUseCase {
 
     private final AuthorizationService authorizationService;
+    private final WorkspaceGovernanceGuard workspaceGovernanceGuard;
     private final ManagedAccountRepository managedAccountRepository;
     private final PasswordEncoder passwordEncoder;
     private final AuditEventRepository auditEventRepository;
@@ -36,17 +37,20 @@ public class CreateManagedAccountApplicationService implements CreateManagedAcco
     /**
      * 构造函数注入依赖。
      *
-     * @param authorizationService     授权服务
-     * @param managedAccountRepository 托管账号仓储
-     * @param passwordEncoder          密码编码器（BCrypt）
-     * @param auditEventRepository     审计事件仓储
+     * @param authorizationService        授权服务
+     * @param workspaceGovernanceGuard    工作区治理边界守卫
+     * @param managedAccountRepository    托管账号仓储
+     * @param passwordEncoder             密码编码器（BCrypt）
+     * @param auditEventRepository        审计事件仓储
      */
     public CreateManagedAccountApplicationService(
             AuthorizationService authorizationService,
+            WorkspaceGovernanceGuard workspaceGovernanceGuard,
             ManagedAccountRepository managedAccountRepository,
             PasswordEncoder passwordEncoder,
             AuditEventRepository auditEventRepository) {
         this.authorizationService = authorizationService;
+        this.workspaceGovernanceGuard = workspaceGovernanceGuard;
         this.managedAccountRepository = managedAccountRepository;
         this.passwordEncoder = passwordEncoder;
         this.auditEventRepository = auditEventRepository;
@@ -63,6 +67,10 @@ public class CreateManagedAccountApplicationService implements CreateManagedAcco
     public ManagedAccountResult handle(CreateManagedAccountCommand command) {
         // 1. 权限校验：确保当前用户是工作区管理员
         CurrentUser currentUser = authorizationService.requireCanManageWorkspace();
+        // 1.1 治理边界校验：ADMIN 不可创建 OWNER/ADMIN 账号
+        workspaceGovernanceGuard.requireCanCreateManagedAccount(
+                currentUser,
+                command.resolvedWorkspaceRole());
 
         // 2. 冲突检测：检查用户名是否已被占用
         if (managedAccountRepository.existsUsername(command.normalizedUsername())) {

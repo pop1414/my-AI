@@ -13,9 +13,11 @@ import io.github.spike.myai.auth.application.exception.DocumentGrantNotFoundExce
 import io.github.spike.myai.auth.domain.model.AuditEvent;
 import io.github.spike.myai.auth.domain.model.DocumentGrant;
 import io.github.spike.myai.auth.domain.model.DocumentPermission;
+import io.github.spike.myai.auth.domain.model.WorkspaceMember;
 import io.github.spike.myai.auth.domain.model.WorkspaceRole;
 import io.github.spike.myai.auth.domain.port.AuditEventRepository;
 import io.github.spike.myai.auth.domain.port.DocumentGrantManagementRepository;
+import io.github.spike.myai.auth.domain.port.WorkspaceMemberRepository;
 import io.github.spike.myai.ingest.domain.model.Document;
 import io.github.spike.myai.ingest.domain.model.DocumentId;
 import io.github.spike.myai.ingest.domain.model.UploadStatus;
@@ -33,7 +35,9 @@ class RevokeDocumentGrantApplicationServiceTest {
     @DisplayName("回收文档授权时应更新状态并写入审计")
     void handle_shouldDisableGrantAndWriteAudit() {
         AuthorizationService authorizationService = Mockito.mock(AuthorizationService.class);
+        WorkspaceGovernanceGuard workspaceGovernanceGuard = Mockito.mock(WorkspaceGovernanceGuard.class);
         DocumentRepository documentRepository = Mockito.mock(DocumentRepository.class);
+        WorkspaceMemberRepository workspaceMemberRepository = Mockito.mock(WorkspaceMemberRepository.class);
         DocumentGrantManagementRepository grantRepository = Mockito.mock(DocumentGrantManagementRepository.class);
         AuditEventRepository auditEventRepository = Mockito.mock(AuditEventRepository.class);
         when(authorizationService.requireCanManageWorkspace())
@@ -42,10 +46,14 @@ class RevokeDocumentGrantApplicationServiceTest {
                 .thenReturn(Optional.of(document()));
         when(grantRepository.findActiveGrant("default", "doc-1", "user-2"))
                 .thenReturn(Optional.of(new DocumentGrant("default", "doc-1", "user-2", "bob", "Bob", DocumentPermission.DOC_ALLOW_MANAGE, "ACTIVE")));
+        when(workspaceMemberRepository.findActiveMember("default", "user-2"))
+                .thenReturn(Optional.of(new WorkspaceMember("user-2", "bob", "Bob", "default", WorkspaceRole.WORKSPACE_MEMBER, "ACTIVE")));
         when(grantRepository.disableGrant(eq("default"), eq("doc-1"), eq("user-2"), any())).thenReturn(true);
         RevokeDocumentGrantApplicationService service = new RevokeDocumentGrantApplicationService(
                 authorizationService,
+                workspaceGovernanceGuard,
                 documentRepository,
+                workspaceMemberRepository,
                 grantRepository,
                 auditEventRepository);
 
@@ -61,7 +69,9 @@ class RevokeDocumentGrantApplicationServiceTest {
     @DisplayName("授权不存在时回收应返回 404 语义异常")
     void handle_shouldThrowNotFound_whenGrantMissing() {
         AuthorizationService authorizationService = Mockito.mock(AuthorizationService.class);
+        WorkspaceGovernanceGuard workspaceGovernanceGuard = Mockito.mock(WorkspaceGovernanceGuard.class);
         DocumentRepository documentRepository = Mockito.mock(DocumentRepository.class);
+        WorkspaceMemberRepository workspaceMemberRepository = Mockito.mock(WorkspaceMemberRepository.class);
         DocumentGrantManagementRepository grantRepository = Mockito.mock(DocumentGrantManagementRepository.class);
         AuditEventRepository auditEventRepository = Mockito.mock(AuditEventRepository.class);
         when(authorizationService.requireCanManageWorkspace())
@@ -71,7 +81,9 @@ class RevokeDocumentGrantApplicationServiceTest {
         when(grantRepository.findActiveGrant("default", "doc-1", "user-missing")).thenReturn(Optional.empty());
         RevokeDocumentGrantApplicationService service = new RevokeDocumentGrantApplicationService(
                 authorizationService,
+                workspaceGovernanceGuard,
                 documentRepository,
+                workspaceMemberRepository,
                 grantRepository,
                 auditEventRepository);
 

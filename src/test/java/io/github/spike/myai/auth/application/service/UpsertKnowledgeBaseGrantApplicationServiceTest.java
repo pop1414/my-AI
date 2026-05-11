@@ -36,6 +36,7 @@ class UpsertKnowledgeBaseGrantApplicationServiceTest {
     @DisplayName("授予知识库授权时应写入 grant 与审计")
     void handle_shouldSaveGrantAndWriteAudit() {
         AuthorizationService authorizationService = Mockito.mock(AuthorizationService.class);
+        WorkspaceGovernanceGuard workspaceGovernanceGuard = Mockito.mock(WorkspaceGovernanceGuard.class);
         KnowledgeBaseRepository knowledgeBaseRepository = Mockito.mock(KnowledgeBaseRepository.class);
         WorkspaceMemberRepository workspaceMemberRepository = Mockito.mock(WorkspaceMemberRepository.class);
         KnowledgeBaseGrantManagementRepository grantRepository = Mockito.mock(KnowledgeBaseGrantManagementRepository.class);
@@ -49,6 +50,7 @@ class UpsertKnowledgeBaseGrantApplicationServiceTest {
         when(grantRepository.findActiveGrant("default", "kb-1", "user-2")).thenReturn(Optional.empty());
         UpsertKnowledgeBaseGrantApplicationService service = new UpsertKnowledgeBaseGrantApplicationService(
                 authorizationService,
+                workspaceGovernanceGuard,
                 knowledgeBaseRepository,
                 workspaceMemberRepository,
                 grantRepository,
@@ -67,6 +69,7 @@ class UpsertKnowledgeBaseGrantApplicationServiceTest {
     @DisplayName("授权角色未变化时应直接返回且不重复写入")
     void handle_shouldReturnExistingGrant_whenRoleUnchanged() {
         AuthorizationService authorizationService = Mockito.mock(AuthorizationService.class);
+        WorkspaceGovernanceGuard workspaceGovernanceGuard = Mockito.mock(WorkspaceGovernanceGuard.class);
         KnowledgeBaseRepository knowledgeBaseRepository = Mockito.mock(KnowledgeBaseRepository.class);
         WorkspaceMemberRepository workspaceMemberRepository = Mockito.mock(WorkspaceMemberRepository.class);
         KnowledgeBaseGrantManagementRepository grantRepository = Mockito.mock(KnowledgeBaseGrantManagementRepository.class);
@@ -81,6 +84,7 @@ class UpsertKnowledgeBaseGrantApplicationServiceTest {
                 .thenReturn(Optional.of(new KnowledgeBaseGrant("default", "kb-1", "user-2", "bob", "Bob", KnowledgeBaseRole.KB_READER, "ACTIVE")));
         UpsertKnowledgeBaseGrantApplicationService service = new UpsertKnowledgeBaseGrantApplicationService(
                 authorizationService,
+                workspaceGovernanceGuard,
                 knowledgeBaseRepository,
                 workspaceMemberRepository,
                 grantRepository,
@@ -97,6 +101,7 @@ class UpsertKnowledgeBaseGrantApplicationServiceTest {
     @DisplayName("知识库不存在时授予授权应返回 404 语义异常")
     void handle_shouldThrowNotFound_whenKnowledgeBaseMissing() {
         AuthorizationService authorizationService = Mockito.mock(AuthorizationService.class);
+        WorkspaceGovernanceGuard workspaceGovernanceGuard = Mockito.mock(WorkspaceGovernanceGuard.class);
         KnowledgeBaseRepository knowledgeBaseRepository = Mockito.mock(KnowledgeBaseRepository.class);
         WorkspaceMemberRepository workspaceMemberRepository = Mockito.mock(WorkspaceMemberRepository.class);
         KnowledgeBaseGrantManagementRepository grantRepository = Mockito.mock(KnowledgeBaseGrantManagementRepository.class);
@@ -106,6 +111,7 @@ class UpsertKnowledgeBaseGrantApplicationServiceTest {
         when(knowledgeBaseRepository.findByKbId("default", "kb-missing")).thenReturn(Optional.empty());
         UpsertKnowledgeBaseGrantApplicationService service = new UpsertKnowledgeBaseGrantApplicationService(
                 authorizationService,
+                workspaceGovernanceGuard,
                 knowledgeBaseRepository,
                 workspaceMemberRepository,
                 grantRepository,
@@ -120,6 +126,7 @@ class UpsertKnowledgeBaseGrantApplicationServiceTest {
     @DisplayName("目标成员不存在时授予授权应返回 404 语义异常")
     void handle_shouldThrowNotFound_whenMemberMissing() {
         AuthorizationService authorizationService = Mockito.mock(AuthorizationService.class);
+        WorkspaceGovernanceGuard workspaceGovernanceGuard = Mockito.mock(WorkspaceGovernanceGuard.class);
         KnowledgeBaseRepository knowledgeBaseRepository = Mockito.mock(KnowledgeBaseRepository.class);
         WorkspaceMemberRepository workspaceMemberRepository = Mockito.mock(WorkspaceMemberRepository.class);
         KnowledgeBaseGrantManagementRepository grantRepository = Mockito.mock(KnowledgeBaseGrantManagementRepository.class);
@@ -131,6 +138,7 @@ class UpsertKnowledgeBaseGrantApplicationServiceTest {
         when(workspaceMemberRepository.findActiveMember("default", "user-missing")).thenReturn(Optional.empty());
         UpsertKnowledgeBaseGrantApplicationService service = new UpsertKnowledgeBaseGrantApplicationService(
                 authorizationService,
+                workspaceGovernanceGuard,
                 knowledgeBaseRepository,
                 workspaceMemberRepository,
                 grantRepository,

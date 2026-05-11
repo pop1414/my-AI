@@ -28,6 +28,7 @@ class UpdateManagedAccountStatusApplicationServiceTest {
     @DisplayName("更新账号状态成功时应写入审计")
     void handle_shouldUpdateUserStatus() {
         AuthorizationService authorizationService = Mockito.mock(AuthorizationService.class);
+        WorkspaceGovernanceGuard workspaceGovernanceGuard = Mockito.mock(WorkspaceGovernanceGuard.class);
         ManagedAccountRepository repository = Mockito.mock(ManagedAccountRepository.class);
         AuditEventRepository auditEventRepository = Mockito.mock(AuditEventRepository.class);
         when(authorizationService.requireCanManageWorkspace())
@@ -38,6 +39,7 @@ class UpdateManagedAccountStatusApplicationServiceTest {
         when(repository.updateUserStatus(eq("default"), eq("user-2"), eq("DISABLED"), any())).thenReturn(true);
         UpdateManagedAccountStatusApplicationService service = new UpdateManagedAccountStatusApplicationService(
                 authorizationService,
+                workspaceGovernanceGuard,
                 repository,
                 auditEventRepository);
 
@@ -53,6 +55,7 @@ class UpdateManagedAccountStatusApplicationServiceTest {
     @DisplayName("账号不存在时应抛出未找到异常")
     void handle_shouldThrowNotFound_whenAccountMissing() {
         AuthorizationService authorizationService = Mockito.mock(AuthorizationService.class);
+        WorkspaceGovernanceGuard workspaceGovernanceGuard = Mockito.mock(WorkspaceGovernanceGuard.class);
         ManagedAccountRepository repository = Mockito.mock(ManagedAccountRepository.class);
         AuditEventRepository auditEventRepository = Mockito.mock(AuditEventRepository.class);
         when(authorizationService.requireCanManageWorkspace())
@@ -60,6 +63,7 @@ class UpdateManagedAccountStatusApplicationServiceTest {
         when(repository.findWorkspaceAccount("default", "user-2")).thenReturn(Optional.empty());
         UpdateManagedAccountStatusApplicationService service = new UpdateManagedAccountStatusApplicationService(
                 authorizationService,
+                workspaceGovernanceGuard,
                 repository,
                 auditEventRepository);
 

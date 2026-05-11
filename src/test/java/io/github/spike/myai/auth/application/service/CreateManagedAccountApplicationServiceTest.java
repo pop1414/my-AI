@@ -28,6 +28,7 @@ class CreateManagedAccountApplicationServiceTest {
     @DisplayName("创建账号成功时应写入用户并记录审计")
     void handle_shouldCreateManagedAccount() {
         AuthorizationService authorizationService = Mockito.mock(AuthorizationService.class);
+        WorkspaceGovernanceGuard workspaceGovernanceGuard = Mockito.mock(WorkspaceGovernanceGuard.class);
         ManagedAccountRepository repository = Mockito.mock(ManagedAccountRepository.class);
         PasswordEncoder passwordEncoder = Mockito.mock(PasswordEncoder.class);
         AuditEventRepository auditEventRepository = Mockito.mock(AuditEventRepository.class);
@@ -48,6 +49,7 @@ class CreateManagedAccountApplicationServiceTest {
                         null));
         CreateManagedAccountApplicationService service = new CreateManagedAccountApplicationService(
                 authorizationService,
+                workspaceGovernanceGuard,
                 repository,
                 passwordEncoder,
                 auditEventRepository);
@@ -65,6 +67,7 @@ class CreateManagedAccountApplicationServiceTest {
     @DisplayName("用户名已存在时应返回冲突语义异常")
     void handle_shouldThrowConflict_whenUsernameExists() {
         AuthorizationService authorizationService = Mockito.mock(AuthorizationService.class);
+        WorkspaceGovernanceGuard workspaceGovernanceGuard = Mockito.mock(WorkspaceGovernanceGuard.class);
         ManagedAccountRepository repository = Mockito.mock(ManagedAccountRepository.class);
         PasswordEncoder passwordEncoder = Mockito.mock(PasswordEncoder.class);
         AuditEventRepository auditEventRepository = Mockito.mock(AuditEventRepository.class);
@@ -73,6 +76,7 @@ class CreateManagedAccountApplicationServiceTest {
         when(repository.existsUsername("bob")).thenReturn(true);
         CreateManagedAccountApplicationService service = new CreateManagedAccountApplicationService(
                 authorizationService,
+                workspaceGovernanceGuard,
                 repository,
                 passwordEncoder,
                 auditEventRepository);

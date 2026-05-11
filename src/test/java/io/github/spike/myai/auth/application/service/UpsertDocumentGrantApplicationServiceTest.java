@@ -37,6 +37,7 @@ class UpsertDocumentGrantApplicationServiceTest {
     @DisplayName("授予文档授权时应写入 grant 与审计")
     void handle_shouldSaveGrantAndWriteAudit() {
         AuthorizationService authorizationService = Mockito.mock(AuthorizationService.class);
+        WorkspaceGovernanceGuard workspaceGovernanceGuard = Mockito.mock(WorkspaceGovernanceGuard.class);
         DocumentRepository documentRepository = Mockito.mock(DocumentRepository.class);
         WorkspaceMemberRepository workspaceMemberRepository = Mockito.mock(WorkspaceMemberRepository.class);
         DocumentGrantManagementRepository grantRepository = Mockito.mock(DocumentGrantManagementRepository.class);
@@ -50,6 +51,7 @@ class UpsertDocumentGrantApplicationServiceTest {
         when(grantRepository.findActiveGrant("default", "doc-1", "user-2")).thenReturn(Optional.empty());
         UpsertDocumentGrantApplicationService service = new UpsertDocumentGrantApplicationService(
                 authorizationService,
+                workspaceGovernanceGuard,
                 documentRepository,
                 workspaceMemberRepository,
                 grantRepository,
@@ -68,6 +70,7 @@ class UpsertDocumentGrantApplicationServiceTest {
     @DisplayName("授权权限未变化时应直接返回且不重复写入")
     void handle_shouldReturnExistingGrant_whenPermissionUnchanged() {
         AuthorizationService authorizationService = Mockito.mock(AuthorizationService.class);
+        WorkspaceGovernanceGuard workspaceGovernanceGuard = Mockito.mock(WorkspaceGovernanceGuard.class);
         DocumentRepository documentRepository = Mockito.mock(DocumentRepository.class);
         WorkspaceMemberRepository workspaceMemberRepository = Mockito.mock(WorkspaceMemberRepository.class);
         DocumentGrantManagementRepository grantRepository = Mockito.mock(DocumentGrantManagementRepository.class);
@@ -82,6 +85,7 @@ class UpsertDocumentGrantApplicationServiceTest {
                 .thenReturn(Optional.of(new DocumentGrant("default", "doc-1", "user-2", "bob", "Bob", DocumentPermission.DOC_ALLOW_READ, "ACTIVE")));
         UpsertDocumentGrantApplicationService service = new UpsertDocumentGrantApplicationService(
                 authorizationService,
+                workspaceGovernanceGuard,
                 documentRepository,
                 workspaceMemberRepository,
                 grantRepository,
@@ -98,6 +102,7 @@ class UpsertDocumentGrantApplicationServiceTest {
     @DisplayName("文档不存在时授予授权应返回 404 语义异常")
     void handle_shouldThrowNotFound_whenDocumentMissing() {
         AuthorizationService authorizationService = Mockito.mock(AuthorizationService.class);
+        WorkspaceGovernanceGuard workspaceGovernanceGuard = Mockito.mock(WorkspaceGovernanceGuard.class);
         DocumentRepository documentRepository = Mockito.mock(DocumentRepository.class);
         WorkspaceMemberRepository workspaceMemberRepository = Mockito.mock(WorkspaceMemberRepository.class);
         DocumentGrantManagementRepository grantRepository = Mockito.mock(DocumentGrantManagementRepository.class);
@@ -107,6 +112,7 @@ class UpsertDocumentGrantApplicationServiceTest {
         when(documentRepository.findById("default", new DocumentId("doc-missing"))).thenReturn(Optional.empty());
         UpsertDocumentGrantApplicationService service = new UpsertDocumentGrantApplicationService(
                 authorizationService,
+                workspaceGovernanceGuard,
                 documentRepository,
                 workspaceMemberRepository,
                 grantRepository,
@@ -121,6 +127,7 @@ class UpsertDocumentGrantApplicationServiceTest {
     @DisplayName("目标成员不存在时授予授权应返回 404 语义异常")
     void handle_shouldThrowNotFound_whenMemberMissing() {
         AuthorizationService authorizationService = Mockito.mock(AuthorizationService.class);
+        WorkspaceGovernanceGuard workspaceGovernanceGuard = Mockito.mock(WorkspaceGovernanceGuard.class);
         DocumentRepository documentRepository = Mockito.mock(DocumentRepository.class);
         WorkspaceMemberRepository workspaceMemberRepository = Mockito.mock(WorkspaceMemberRepository.class);
         DocumentGrantManagementRepository grantRepository = Mockito.mock(DocumentGrantManagementRepository.class);
@@ -132,6 +139,7 @@ class UpsertDocumentGrantApplicationServiceTest {
         when(workspaceMemberRepository.findActiveMember("default", "user-missing")).thenReturn(Optional.empty());
         UpsertDocumentGrantApplicationService service = new UpsertDocumentGrantApplicationService(
                 authorizationService,
+                workspaceGovernanceGuard,
                 documentRepository,
                 workspaceMemberRepository,
                 grantRepository,

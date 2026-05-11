@@ -7,8 +7,11 @@ import io.github.spike.myai.auth.application.exception.ManagedDocumentNotFoundEx
 import io.github.spike.myai.auth.application.usecase.RevokeDocumentGrantUseCase;
 import io.github.spike.myai.auth.domain.model.AuditEvent;
 import io.github.spike.myai.auth.domain.model.DocumentGrant;
+import io.github.spike.myai.auth.domain.model.WorkspaceMember;
+import io.github.spike.myai.auth.domain.model.WorkspaceRole;
 import io.github.spike.myai.auth.domain.port.AuditEventRepository;
 import io.github.spike.myai.auth.domain.port.DocumentGrantManagementRepository;
+import io.github.spike.myai.auth.domain.port.WorkspaceMemberRepository;
 import io.github.spike.myai.ingest.domain.model.Document;
 import io.github.spike.myai.ingest.domain.model.DocumentId;
 import io.github.spike.myai.ingest.domain.port.DocumentRepository;
@@ -35,8 +38,11 @@ public class RevokeDocumentGrantApplicationService implements RevokeDocumentGran
 
     /** 授权服务，用于校验工作区管理权限 */
     private final AuthorizationService authorizationService;
+    private final WorkspaceGovernanceGuard workspaceGovernanceGuard;
     /** 文档仓储，用于校验文档存在性 */
     private final DocumentRepository documentRepository;
+    /** 工作区成员仓储，用于校验目标用户当前角色 */
+    private final WorkspaceMemberRepository workspaceMemberRepository;
     /** 文档授权治理仓储 */
     private final DocumentGrantManagementRepository grantRepository;
     /** 审计事件持久化仓储 */
@@ -52,11 +58,15 @@ public class RevokeDocumentGrantApplicationService implements RevokeDocumentGran
      */
     public RevokeDocumentGrantApplicationService(
             AuthorizationService authorizationService,
+            WorkspaceGovernanceGuard workspaceGovernanceGuard,
             DocumentRepository documentRepository,
+            WorkspaceMemberRepository workspaceMemberRepository,
             DocumentGrantManagementRepository grantRepository,
             AuditEventRepository auditEventRepository) {
         this.authorizationService = authorizationService;
+        this.workspaceGovernanceGuard = workspaceGovernanceGuard;
         this.documentRepository = documentRepository;
+        this.workspaceMemberRepository = workspaceMemberRepository;
         this.grantRepository = grantRepository;
         this.auditEventRepository = auditEventRepository;
     }
@@ -97,6 +107,12 @@ public class RevokeDocumentGrantApplicationService implements RevokeDocumentGran
                         command.normalizedUserId())
                 .orElseThrow(() -> new DocumentGrantNotFoundException(
                         "document grant not found: " + command.normalizedDocumentId() + "/" + command.normalizedUserId()));
+        WorkspaceMember targetMember = workspaceMemberRepository.findActiveMember(
+                        currentUser.workspaceId(),
+                        command.normalizedUserId())
+                .orElseThrow(() -> new DocumentGrantNotFoundException(
+                        "document grant not found: " + command.normalizedDocumentId() + "/" + command.normalizedUserId()));
+        workspaceGovernanceGuard.requireCanManageGrantTarget(currentUser, targetMember.workspaceRole());
 
         // Step 4: 获取当前时间戳
         Instant now = Instant.now();

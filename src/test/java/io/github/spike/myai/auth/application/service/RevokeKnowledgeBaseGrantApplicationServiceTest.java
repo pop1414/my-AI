@@ -12,9 +12,11 @@ import io.github.spike.myai.auth.application.exception.KnowledgeBaseGrantNotFoun
 import io.github.spike.myai.auth.domain.model.AuditEvent;
 import io.github.spike.myai.auth.domain.model.KnowledgeBaseGrant;
 import io.github.spike.myai.auth.domain.model.KnowledgeBaseRole;
+import io.github.spike.myai.auth.domain.model.WorkspaceMember;
 import io.github.spike.myai.auth.domain.model.WorkspaceRole;
 import io.github.spike.myai.auth.domain.port.AuditEventRepository;
 import io.github.spike.myai.auth.domain.port.KnowledgeBaseGrantManagementRepository;
+import io.github.spike.myai.auth.domain.port.WorkspaceMemberRepository;
 import io.github.spike.myai.knowledge.domain.model.KnowledgeBase;
 import io.github.spike.myai.knowledge.domain.model.KnowledgeBaseStatus;
 import io.github.spike.myai.knowledge.domain.port.KnowledgeBaseRepository;
@@ -31,7 +33,9 @@ class RevokeKnowledgeBaseGrantApplicationServiceTest {
     @DisplayName("回收知识库授权时应更新状态并写入审计")
     void handle_shouldDisableGrantAndWriteAudit() {
         AuthorizationService authorizationService = Mockito.mock(AuthorizationService.class);
+        WorkspaceGovernanceGuard workspaceGovernanceGuard = Mockito.mock(WorkspaceGovernanceGuard.class);
         KnowledgeBaseRepository knowledgeBaseRepository = Mockito.mock(KnowledgeBaseRepository.class);
+        WorkspaceMemberRepository workspaceMemberRepository = Mockito.mock(WorkspaceMemberRepository.class);
         KnowledgeBaseGrantManagementRepository grantRepository = Mockito.mock(KnowledgeBaseGrantManagementRepository.class);
         AuditEventRepository auditEventRepository = Mockito.mock(AuditEventRepository.class);
         when(authorizationService.requireCanManageWorkspace())
@@ -40,10 +44,14 @@ class RevokeKnowledgeBaseGrantApplicationServiceTest {
                 .thenReturn(Optional.of(new KnowledgeBase("kb-1", "default", "知识库", "", KnowledgeBaseStatus.ACTIVE, Instant.now(), Instant.now())));
         when(grantRepository.findActiveGrant("default", "kb-1", "user-2"))
                 .thenReturn(Optional.of(new KnowledgeBaseGrant("default", "kb-1", "user-2", "bob", "Bob", KnowledgeBaseRole.KB_READER, "ACTIVE")));
+        when(workspaceMemberRepository.findActiveMember("default", "user-2"))
+                .thenReturn(Optional.of(new WorkspaceMember("user-2", "bob", "Bob", "default", WorkspaceRole.WORKSPACE_MEMBER, "ACTIVE")));
         when(grantRepository.disableGrant(eq("default"), eq("kb-1"), eq("user-2"), any())).thenReturn(true);
         RevokeKnowledgeBaseGrantApplicationService service = new RevokeKnowledgeBaseGrantApplicationService(
                 authorizationService,
+                workspaceGovernanceGuard,
                 knowledgeBaseRepository,
+                workspaceMemberRepository,
                 grantRepository,
                 auditEventRepository);
 
@@ -59,7 +67,9 @@ class RevokeKnowledgeBaseGrantApplicationServiceTest {
     @DisplayName("授权不存在时回收应返回 404 语义异常")
     void handle_shouldThrowNotFound_whenGrantMissing() {
         AuthorizationService authorizationService = Mockito.mock(AuthorizationService.class);
+        WorkspaceGovernanceGuard workspaceGovernanceGuard = Mockito.mock(WorkspaceGovernanceGuard.class);
         KnowledgeBaseRepository knowledgeBaseRepository = Mockito.mock(KnowledgeBaseRepository.class);
+        WorkspaceMemberRepository workspaceMemberRepository = Mockito.mock(WorkspaceMemberRepository.class);
         KnowledgeBaseGrantManagementRepository grantRepository = Mockito.mock(KnowledgeBaseGrantManagementRepository.class);
         AuditEventRepository auditEventRepository = Mockito.mock(AuditEventRepository.class);
         when(authorizationService.requireCanManageWorkspace())
@@ -69,7 +79,9 @@ class RevokeKnowledgeBaseGrantApplicationServiceTest {
         when(grantRepository.findActiveGrant("default", "kb-1", "user-missing")).thenReturn(Optional.empty());
         RevokeKnowledgeBaseGrantApplicationService service = new RevokeKnowledgeBaseGrantApplicationService(
                 authorizationService,
+                workspaceGovernanceGuard,
                 knowledgeBaseRepository,
+                workspaceMemberRepository,
                 grantRepository,
                 auditEventRepository);
 

@@ -25,6 +25,7 @@ class RemoveManagedAccountMembershipApplicationServiceTest {
     @DisplayName("移除成员关系成功时应更新成员状态并写审计")
     void handle_shouldDeactivateMembership() {
         AuthorizationService authorizationService = Mockito.mock(AuthorizationService.class);
+        WorkspaceGovernanceGuard workspaceGovernanceGuard = Mockito.mock(WorkspaceGovernanceGuard.class);
         ManagedAccountRepository repository = Mockito.mock(ManagedAccountRepository.class);
         AuditEventRepository auditEventRepository = Mockito.mock(AuditEventRepository.class);
         when(authorizationService.requireCanManageWorkspace())
@@ -35,6 +36,7 @@ class RemoveManagedAccountMembershipApplicationServiceTest {
         when(repository.deactivateMembership(eq("default"), eq("user-2"), any())).thenReturn(true);
         RemoveManagedAccountMembershipApplicationService service = new RemoveManagedAccountMembershipApplicationService(
                 authorizationService,
+                workspaceGovernanceGuard,
                 repository,
                 auditEventRepository);
 
@@ -48,6 +50,7 @@ class RemoveManagedAccountMembershipApplicationServiceTest {
     @DisplayName("成员已被移除时应幂等返回")
     void handle_shouldReturnSilently_whenMembershipInactive() {
         AuthorizationService authorizationService = Mockito.mock(AuthorizationService.class);
+        WorkspaceGovernanceGuard workspaceGovernanceGuard = Mockito.mock(WorkspaceGovernanceGuard.class);
         ManagedAccountRepository repository = Mockito.mock(ManagedAccountRepository.class);
         AuditEventRepository auditEventRepository = Mockito.mock(AuditEventRepository.class);
         when(authorizationService.requireCanManageWorkspace())
@@ -57,6 +60,7 @@ class RemoveManagedAccountMembershipApplicationServiceTest {
                         "user-2", "bob", "Bob", "ACTIVE", "default", WorkspaceRole.WORKSPACE_MEMBER, "INACTIVE", 0, null)));
         RemoveManagedAccountMembershipApplicationService service = new RemoveManagedAccountMembershipApplicationService(
                 authorizationService,
+                workspaceGovernanceGuard,
                 repository,
                 auditEventRepository);
 
@@ -70,6 +74,7 @@ class RemoveManagedAccountMembershipApplicationServiceTest {
     @DisplayName("目标账号不存在时移除成员关系应失败")
     void handle_shouldThrowNotFound_whenAccountMissing() {
         AuthorizationService authorizationService = Mockito.mock(AuthorizationService.class);
+        WorkspaceGovernanceGuard workspaceGovernanceGuard = Mockito.mock(WorkspaceGovernanceGuard.class);
         ManagedAccountRepository repository = Mockito.mock(ManagedAccountRepository.class);
         AuditEventRepository auditEventRepository = Mockito.mock(AuditEventRepository.class);
         when(authorizationService.requireCanManageWorkspace())
@@ -77,6 +82,7 @@ class RemoveManagedAccountMembershipApplicationServiceTest {
         when(repository.findWorkspaceAccount("default", "user-2")).thenReturn(Optional.empty());
         RemoveManagedAccountMembershipApplicationService service = new RemoveManagedAccountMembershipApplicationService(
                 authorizationService,
+                workspaceGovernanceGuard,
                 repository,
                 auditEventRepository);
 

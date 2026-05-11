@@ -27,6 +27,7 @@ class ResetManagedAccountPasswordApplicationServiceTest {
     @DisplayName("重置密码成功后应清空锁定状态并返回最新账号信息")
     void handle_shouldResetPassword() {
         AuthorizationService authorizationService = Mockito.mock(AuthorizationService.class);
+        WorkspaceGovernanceGuard workspaceGovernanceGuard = Mockito.mock(WorkspaceGovernanceGuard.class);
         ManagedAccountRepository repository = Mockito.mock(ManagedAccountRepository.class);
         PasswordEncoder passwordEncoder = Mockito.mock(PasswordEncoder.class);
         AuditEventRepository auditEventRepository = Mockito.mock(AuditEventRepository.class);
@@ -41,6 +42,7 @@ class ResetManagedAccountPasswordApplicationServiceTest {
         when(repository.resetPassword(eq("default"), eq("user-2"), eq("encoded-new-secret"), any())).thenReturn(true);
         ResetManagedAccountPasswordApplicationService service = new ResetManagedAccountPasswordApplicationService(
                 authorizationService,
+                workspaceGovernanceGuard,
                 repository,
                 passwordEncoder,
                 auditEventRepository);
@@ -56,6 +58,7 @@ class ResetManagedAccountPasswordApplicationServiceTest {
     @DisplayName("目标账号不存在时重置密码应失败")
     void handle_shouldThrowNotFound_whenAccountMissing() {
         AuthorizationService authorizationService = Mockito.mock(AuthorizationService.class);
+        WorkspaceGovernanceGuard workspaceGovernanceGuard = Mockito.mock(WorkspaceGovernanceGuard.class);
         ManagedAccountRepository repository = Mockito.mock(ManagedAccountRepository.class);
         PasswordEncoder passwordEncoder = Mockito.mock(PasswordEncoder.class);
         AuditEventRepository auditEventRepository = Mockito.mock(AuditEventRepository.class);
@@ -64,6 +67,7 @@ class ResetManagedAccountPasswordApplicationServiceTest {
         when(repository.findWorkspaceAccount("default", "user-2")).thenReturn(Optional.empty());
         ResetManagedAccountPasswordApplicationService service = new ResetManagedAccountPasswordApplicationService(
                 authorizationService,
+                workspaceGovernanceGuard,
                 repository,
                 passwordEncoder,
                 auditEventRepository);

@@ -32,6 +32,8 @@ public class UpdateWorkspaceMemberRoleApplicationService implements UpdateWorksp
 
     /** 授权服务，用于校验工作区管理权限 */
     private final AuthorizationService authorizationService;
+    /** 工作区治理边界守卫，校验角色变更的层级约束 */
+    private final WorkspaceGovernanceGuard workspaceGovernanceGuard;
     /** 工作区成员持久化仓储 */
     private final WorkspaceMemberRepository workspaceMemberRepository;
     /** 审计事件持久化仓储 */
@@ -41,14 +43,17 @@ public class UpdateWorkspaceMemberRoleApplicationService implements UpdateWorksp
      * 构造器注入所需依赖。
      *
      * @param authorizationService      授权服务
+     * @param workspaceGovernanceGuard  工作区治理边界守卫
      * @param workspaceMemberRepository 工作区成员仓储
      * @param auditEventRepository      审计事件仓储
      */
     public UpdateWorkspaceMemberRoleApplicationService(
             AuthorizationService authorizationService,
+            WorkspaceGovernanceGuard workspaceGovernanceGuard,
             WorkspaceMemberRepository workspaceMemberRepository,
             AuditEventRepository auditEventRepository) {
         this.authorizationService = authorizationService;
+        this.workspaceGovernanceGuard = workspaceGovernanceGuard;
         this.workspaceMemberRepository = workspaceMemberRepository;
         this.auditEventRepository = auditEventRepository;
     }
@@ -61,6 +66,7 @@ public class UpdateWorkspaceMemberRoleApplicationService implements UpdateWorksp
      *   <li>校验当前用户是否具备工作区管理权限</li>
      *   <li>根据命令中的用户 ID 查找目标活跃成员，不存在则抛出 {@link WorkspaceMemberNotFoundException}</li>
      *   <li>解析命令中的目标角色枚举值</li>
+     *   <li>治理边界校验：ADMIN 不可修改 OWNER 或其他 ADMIN 的角色</li>
      *   <li>若目标角色与当前角色一致，直接返回（幂等处理）</li>
      *   <li>调用仓储层更新角色，若更新失败（并发场景下记录可能已被删除）则抛出异常</li>
      *   <li>记录审计事件，持久化角色变更前后的元数据</li>
@@ -85,6 +91,11 @@ public class UpdateWorkspaceMemberRoleApplicationService implements UpdateWorksp
 
         // Step 3: 解析目标角色枚举值
         WorkspaceRole targetRole = command.resolvedWorkspaceRole();
+        // Step 3.1 治理边界校验：ADMIN 不可修改 OWNER 或其他 ADMIN 的角色
+        workspaceGovernanceGuard.requireCanUpdateWorkspaceRole(
+                currentUser,
+                targetMember.workspaceRole(),
+                targetRole);
 
         // Step 4: 幂等检查——角色未变更则直接返回，避免无意义的写操作和审计记录
         if (targetMember.workspaceRole() == targetRole) {
