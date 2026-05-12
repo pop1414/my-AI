@@ -102,6 +102,10 @@
 
 - 现在不要把它理解为“未来才会有的概念”
 - 也不要把整个系统简单等同于“无边界的全局空间”
+- `workspace` 是底层治理单元，主要承载成员归属、权限范围、审计范围与配置范围
+- 普通用户在 UI 中只感知自己当前所属的 `workspace`，不需要看到其他 `workspace`
+- 普通用户不能直接修改 `workspace`，`workspace` 相关变更只应由治理路径处理
+- 当前用户模型按单归属处理：一个用户只隶属于一个 `workspace`
 
 ### 5.2 knowledge base
 
@@ -110,6 +114,7 @@
 - 对外稳定标识是 `kbId`
 - 文档上传、列表、问答、授权大多围绕知识库展开
 - 不要把 knowledge base 混叫成“目录”“分组”“项目空间”
+- 每个 `knowledge base` 只隶属于一个 `workspace`
 
 ### 5.3 document
 
@@ -117,6 +122,7 @@
 
 - 同一未删除资产集合内，重复上传可复用既有 `documentId`
 - 删除后允许重新上传，形成新的 `documentId`
+- 每个 `document` 只归属于一个 `knowledge base`
 
 理解处理流程时，要区分：
 
