@@ -214,10 +214,25 @@
 - 同内容未创建新版本的成功结果应返回当前仍停留的版本号，例如 `reusedLatestVersionNumber`
 - 版本治理相关成功结果应返回显式结果类型字段，例如 `versionResultType = CREATED | REUSED_IDENTICAL_CONTENT`
 - 版本治理相关错误响应除 HTTP 状态与消息外，还应补充机器可判定的业务错误码
+- “上传新版本”权限拒绝时，前端提示应明确表达为“你没有管理该文档版本的权限”一类文案，而不是泛化为“没有权限”
+- “版本回退”权限拒绝时，前端提示应单独对应回退动作，例如“你没有回退该文档版本的权限”，而不是复用上传新版本的拒绝文案
+- 版本治理权限拒绝时，当前阶段应提供“联系管理员”作为后续指引，不引入复杂申请流
 - “上传新版本”相关错误响应至少应覆盖：`VERSION_UPLOAD_NOT_ALLOWED_STATUS`、`VERSION_UPLOAD_NO_MANAGE_PERMISSION`、`VERSION_UPLOAD_DOCUMENT_NOT_FOUND`
 - “版本回退”相关错误响应至少应覆盖：`VERSION_ROLLBACK_NOT_ALLOWED_STATUS`、`VERSION_ROLLBACK_NO_MANAGE_PERMISSION`、`VERSION_ROLLBACK_TARGET_NOT_INDEXED`、`VERSION_ROLLBACK_TARGET_IS_LATEST`、`VERSION_ROLLBACK_DOCUMENT_NOT_FOUND`、`VERSION_ROLLBACK_VERSION_NOT_FOUND`
 - 版本治理相关错误响应应覆盖乐观并发校验失败场景，例如 `VERSION_CONFLICT_STALE_LATEST_VERSION`
 - 同内容未创建新版本不应建模为错误响应，而应建模为成功结果中的专用分支
+- “上传新版本”因当前最新版本状态不允许而被拒绝时，前端提示应明确写出当前仅允许在 `INDEXED`、`FAILED` 状态下发起
+- “版本回退”因目标版本不满足回退条件而被拒绝时，前端提示应明确写出只能回退到已形成可用内容的版本
+- 乐观并发校验失败时，前端提示应明确引导“当前最新版本已变化，请刷新详情后重试”
+- “上传新版本”与“版本回退”都应记录独立审计事件，而不是复用泛化的文档更新事件
+- 版本治理审计事件名优先采用动作导向命名，成功/失败/复用等结果通过结果字段单独表达
+- 同内容未创建新版本也应记录审计事件，但仍归属于“上传新版本请求”事件族，并通过结果码表达“复用成功未创建新版本”
+- 版本治理审计事件至少应携带 `documentId`、`versionNumber`（若已创建）、`targetVersionNumber`（回退目标版本）等版本定位字段
+- 版本治理审计事件应记录 `expectedLatestVersionNumber` 与校验时实际看到的 `latestVersionNumber`，用于表达乐观并发校验上下文
+- 版本治理审计事件应记录 `versionOriginType` 与 `versionResultType`
+- `documentId`、`versionNumber`、`targetVersionNumber`、`versionOriginType`、`versionResultType` 更适合作为审计表正式列持久化
+- `expectedLatestVersionNumber` 与校验时实际看到的 `latestVersionNumber` 当前阶段更适合存入审计扩展 JSON
+- 版本治理失败时的业务错误码与服务端 message 应同步进入审计扩展 JSON，而不只停留在接口响应或运行日志中
 - 版本回退仅允许选择曾经成功形成可用内容的历史版本作为回退目标，即至少已 `INDEXED` 的版本
 - 当前最新版本不允许再次被选择为“回退为最新版本”的目标
 - 版本回退执行前应进行二次确认，明确提示该操作将改变当前最新版本
