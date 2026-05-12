@@ -371,6 +371,7 @@ export async function deleteDocumentGrant(
 export interface AuditEventListParams {
 	eventType?: string;
 	actorUserId?: string;
+	actorKeyword?: string;
 	targetType?: string;
 	targetId?: string;
 	outcome?: "SUCCESS" | "FAILURE" | "DENIED";
@@ -389,6 +390,8 @@ export async function listAuditEvents(
 		if (params.eventType) searchParams.set("eventType", params.eventType);
 		if (params.actorUserId)
 			searchParams.set("actorUserId", params.actorUserId);
+		if (params.actorKeyword)
+			searchParams.set("actorKeyword", params.actorKeyword);
 		if (params.targetType)
 			searchParams.set("targetType", params.targetType);
 		if (params.targetId) searchParams.set("targetId", params.targetId);

@@ -821,6 +821,12 @@ paths:
           schema:
             type: string
           description: 操作者用户 ID 过滤
+        - name: actorKeyword
+          in: query
+          required: false
+          schema:
+            type: string
+          description: 操作者关键词过滤，支持用户名或用户 ID 模糊匹配
         - name: targetType
           in: query
           required: false

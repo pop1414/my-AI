@@ -81,6 +81,7 @@ public class AuditEventAdminController {
     public AuditEventPageResponse listAuditEvents(
             @RequestParam(value = "eventType", required = false) String eventType,
             @RequestParam(value = "actorUserId", required = false) String actorUserId,
+            @RequestParam(value = "actorKeyword", required = false) String actorKeyword,
             @RequestParam(value = "targetType", required = false) String targetType,
             @RequestParam(value = "targetId", required = false) String targetId,
             @RequestParam(value = "outcome", required = false) String outcome,
@@ -93,6 +94,7 @@ public class AuditEventAdminController {
             var result = listAuditEventsUseCase.handle(new ListAuditEventsQuery(
                     eventType,
                     actorUserId,
+                    actorKeyword,
                     targetType,
                     targetId,
                     outcome,

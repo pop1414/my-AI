@@ -53,7 +53,7 @@ function formatTime(iso: string): string {
 export function AuditEventsPage() {
 	const [filters, setFilters] = useState<{
 		eventType?: string;
-		actorUserId?: string;
+		actorKeyword?: string;
 		targetType?: string;
 		targetId?: string;
 		outcome?: "SUCCESS" | "FAILURE" | "DENIED";
@@ -68,7 +68,7 @@ export function AuditEventsPage() {
 			offset: (page - 1) * PAGE_SIZE,
 		};
 		if (filters.eventType) params.eventType = filters.eventType;
-		if (filters.actorUserId) params.actorUserId = filters.actorUserId;
+		if (filters.actorKeyword) params.actorKeyword = filters.actorKeyword;
 		if (filters.targetType) params.targetType = filters.targetType;
 		if (filters.targetId) params.targetId = filters.targetId;
 		if (filters.outcome) params.outcome = filters.outcome;
@@ -151,7 +151,7 @@ export function AuditEventsPage() {
 		const values = form.getFieldsValue();
 		setFilters({
 			eventType: values.eventType || undefined,
-			actorUserId: values.actorUserId || undefined,
+			actorKeyword: values.actorKeyword || undefined,
 			targetType: values.targetType || undefined,
 			targetId: values.targetId || undefined,
 			outcome: values.outcome || undefined,
@@ -183,8 +183,8 @@ export function AuditEventsPage() {
 					<Form.Item name="eventType" style={{ minWidth: 180 }}>
 						<Input allowClear placeholder="事件类型" />
 					</Form.Item>
-					<Form.Item name="actorUserId" style={{ minWidth: 160 }}>
-						<Input allowClear placeholder="操作者用户ID" />
+					<Form.Item name="actorKeyword" style={{ minWidth: 200 }}>
+						<Input allowClear placeholder="操作者用户名或ID" />
 					</Form.Item>
 					<Form.Item name="targetType" style={{ minWidth: 160 }}>
 						<Input allowClear placeholder="目标类型" />
@@ -242,7 +242,12 @@ export function AuditEventsPage() {
 					showSizeChanger: false,
 					onChange: (p) => setPage(p),
 				}}
-				locale={{ emptyText: "暂无审计记录" }}
+				locale={{
+					emptyText:
+						Object.values(filters).some(Boolean)
+							? "未找到符合当前筛选条件的审计记录，请尝试放宽条件。"
+							: "暂无审计记录",
+				}}
 			/>
 		</div>
 	);

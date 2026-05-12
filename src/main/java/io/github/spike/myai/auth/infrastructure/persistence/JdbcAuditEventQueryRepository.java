@@ -150,6 +150,12 @@ public class JdbcAuditEventQueryRepository implements AuditEventQueryRepository 
             sql.append(" AND actor_user_id = ?");
             params.add(criteria.actorUserId());
         }
+        if (criteria.actorKeyword() != null) {
+            sql.append(" AND (actor_user_id ILIKE ? OR actor_username ILIKE ?)");
+            String keyword = "%" + criteria.actorKeyword() + "%";
+            params.add(keyword);
+            params.add(keyword);
+        }
         if (criteria.targetType() != null) {
             sql.append(" AND target_type = ?");
             params.add(criteria.targetType());

@@ -12,6 +12,7 @@ import java.time.Instant;
  *
  * @param eventType    事件类型过滤（如 WORKSPACE_MEMBER_ROLE_UPDATED），{@code null} 表示不过滤
  * @param actorUserId  操作者用户 ID 过滤，{@code null} 表示不过滤
+ * @param actorKeyword 操作者关键词过滤（用户名或用户 ID），{@code null} 表示不过滤
  * @param targetType   目标类型过滤（如 WORKSPACE_MEMBERSHIP），{@code null} 表示不过滤
  * @param targetId     目标 ID 过滤，{@code null} 表示不过滤
  * @param outcome      结果代码过滤（SUCCESS / FAILURE / DENIED），{@code null} 表示不过滤
@@ -25,6 +26,7 @@ import java.time.Instant;
 public record AuditEventSearchCriteria(
         String eventType,
         String actorUserId,
+        String actorKeyword,
         String targetType,
         String targetId,
         String outcome,

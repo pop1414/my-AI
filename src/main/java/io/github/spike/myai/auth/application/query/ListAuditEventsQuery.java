@@ -22,6 +22,7 @@ import java.util.Set;
  *
  * @param eventType    事件类型过滤，可为 {@code null}
  * @param actorUserId  操作者用户 ID 过滤，可为 {@code null}
+ * @param actorKeyword 操作者关键词过滤（用户名或用户 ID），可为 {@code null}
  * @param targetType   目标类型过滤，可为 {@code null}
  * @param targetId     目标 ID 过滤，可为 {@code null}
  * @param outcome      结果代码过滤（SUCCESS / FAILURE / DENIED），可为 {@code null}
@@ -35,6 +36,7 @@ import java.util.Set;
 public record ListAuditEventsQuery(
         String eventType,
         String actorUserId,
+        String actorKeyword,
         String targetType,
         String targetId,
         String outcome,
@@ -85,6 +87,7 @@ public record ListAuditEventsQuery(
         return new AuditEventSearchCriteria(
                 blankToNull(eventType),
                 blankToNull(actorUserId),
+                blankToNull(actorKeyword),
                 blankToNull(targetType),
                 blankToNull(targetId),
                 blankToNull(outcome),
