@@ -81,9 +81,18 @@
 - 默认只在当前选中的 `knowledge base` 内检索
 - 默认只检索 `document` 的最新版本
 - 当最新版本尚未 `INDEXED` 时，问答应继续检索该 `document` 最近一个已 `INDEXED` 的版本，直到新最新版本可检索
+- 问答基线按 `document` 独立决定，不定义“整次回答唯一全局版本”
+- 一次问答若同时命中多个 `document`，每个 `document` 都应按自己的当前可问答版本参与检索与引用
 - 问答引用应显示来源版本
 - 问答引用的来源版本信息应展示版本号与更新时间
+- 每条问答引用都应显式返回自己的来源版本字段，而不是只返回 `documentId`
+- 问答引用应至少返回 `documentId`、`chunkIndex`、`contentPreview`、`sourceVersionNumber`、`sourceUpdatedAt`、`isLatestVersion`、`latestVersionNumber`、`sourceFilename`
+- 所有问答引用都应展示来源版本号；当引用不是对应 `document` 的最新版本时，还应显式提示当前最新版本号
+- 问答响应顶层应提供“是否存在非最新版本引用”的汇总结果，例如 `hasStaleReferences` 与 `staleReferenceCount`
+- 问答页顶部的版本提示只在至少一条引用不是对应 `document` 最新版本时显示
 - 答案正文不默认展示版本更新时间，仅在引用卡片中展示
+- 当一次问答完全未命中文档引用、仅返回模型兜底回复时，不展示版本提示
+- 某个 `document` 的新最新版本一旦成功 `INDEXED`，后续新发起的问答应直接切换到该最新版本；已返回的历史问答结果不静默改写
 
 `qa` 的职责不是拥有文档，而是消费 `ingest` 产出的可检索内容，并受 `knowledge` 和授权规则约束。
 
