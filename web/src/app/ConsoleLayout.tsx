@@ -184,7 +184,7 @@ export function ConsoleLayout() {
 	);
 
 	return (
-		<Layout className="console-root">
+		<Layout className="console-root" data-testid="console-layout">
 			{showSidebar && (
 				<Sider width={250} breakpoint="lg" collapsedWidth="0">
 					<div className="console-logo">my-AI / Web Console</div>
@@ -200,7 +200,11 @@ export function ConsoleLayout() {
 			<Layout>
 				<Header className="console-header">
 					<div>
-						<Title level={4} style={{ margin: 0 }}>
+						<Title
+							level={4}
+							style={{ margin: 0 }}
+							data-testid="console-title"
+						>
 							{resolveTitle(location.pathname)}
 						</Title>
 						<Text type="secondary">

@@ -64,11 +64,6 @@ export function LoginPage() {
 		},
 	});
 
-	// 已登录用户直接跳转
-	if (isAuthenticated) {
-		return <Navigate to={redirect ?? defaultLandingPath} replace />;
-	}
-
 	const apiError = mutation.error as ApiError | null;
 	const errorMessage = useMemo(() => {
 		if (!apiError) {
@@ -89,8 +84,14 @@ export function LoginPage() {
 		return `登录失败：${apiError.message}`;
 	}, [apiError]);
 
+	// 已登录用户直接跳转
+	if (isAuthenticated) {
+		return <Navigate to={redirect ?? defaultLandingPath} replace />;
+	}
+
 	return (
 		<div
+			data-testid="login-page"
 			style={{
 				display: "flex",
 				justifyContent: "center",
@@ -100,6 +101,7 @@ export function LoginPage() {
 			}}
 		>
 			<Card
+				data-testid="login-card"
 				style={{
 					width: 400,
 					boxShadow: token.boxShadow,
@@ -124,6 +126,7 @@ export function LoginPage() {
 						rules={[{ required: true, message: "请输入用户名" }]}
 					>
 						<Input
+							data-testid="login-username-input"
 							prefix={<UserOutlined />}
 							placeholder="用户名"
 							autoFocus
@@ -135,6 +138,7 @@ export function LoginPage() {
 						rules={[{ required: true, message: "请输入密码" }]}
 					>
 						<Input.Password
+							data-testid="login-password-input"
 							prefix={<LockOutlined />}
 							placeholder="密码"
 						/>
@@ -142,12 +146,18 @@ export function LoginPage() {
 
 					{errorMessage && (
 						<Form.Item>
-							<Alert type="error" showIcon message={errorMessage} />
+							<Alert
+								data-testid="login-error-alert"
+								type="error"
+								showIcon
+								message={errorMessage}
+							/>
 						</Form.Item>
 					)}
 
 					<Form.Item style={{ marginBottom: 0 }}>
 						<Button
+							data-testid="login-submit-button"
 							type="primary"
 							htmlType="submit"
 							loading={mutation.isPending}
