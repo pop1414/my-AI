@@ -112,6 +112,7 @@ class RevokeDocumentGrantApplicationServiceTest {
                 0,
                 null,
                 "v1",
+                null,
                 now,
                 now);
     }
