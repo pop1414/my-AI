@@ -42,11 +42,13 @@ public interface KnowledgeBaseRepository {
      * 根据业务键查询知识库聚合根。
      *
      * <p>用于更新操作前的实体查找，或详情查询。
+     * 查询时需同时匹配 {@code workspaceId}，确保多工作区数据隔离。
      *
-     * @param kbId 知识库业务键（不可为 {@code null}）
+     * @param workspaceId 工作区标识
+     * @param kbId        知识库业务键（不可为 {@code null}）
      * @return 包含知识库聚合根的 {@link Optional}，不存在时为 {@link Optional#empty()}
      */
-    Optional<KnowledgeBase> findByKbId(String kbId);
+    Optional<KnowledgeBase> findByKbId(String workspaceId, String kbId);
 
     /**
      * 查询全量知识库列表（含聚合统计）。
@@ -54,8 +56,10 @@ public interface KnowledgeBaseRepository {
      * <p>返回的是读模型 {@link KnowledgeBaseSummary}，而非完整聚合根。
      * 视图项包含 {@code indexedDocumentCount} 聚合字段，
      * 由仓库实现通过关联查询或缓存计算得出。
+     * 查询限定在指定工作区范围内。
      *
+     * @param workspaceId 工作区标识
      * @return 知识库摘要视图列表（可能为空列表，不会返回 {@code null}）
      */
-    List<KnowledgeBaseSummary> listKnowledgeBases();
+    List<KnowledgeBaseSummary> listKnowledgeBases(String workspaceId);
 }

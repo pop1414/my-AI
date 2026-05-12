@@ -3,11 +3,16 @@ package io.github.spike.myai.ingest.application.service;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import io.github.spike.myai.auth.application.context.CurrentUser;
+import io.github.spike.myai.auth.application.context.CurrentUserProvider;
+import io.github.spike.myai.auth.application.service.AuthorizationService;
+import io.github.spike.myai.auth.domain.model.WorkspaceRole;
 import io.github.spike.myai.ingest.application.command.ReprocessDocumentCommand;
 import io.github.spike.myai.ingest.application.exception.DocumentNotFoundException;
 import io.github.spike.myai.ingest.application.result.DocumentStatusResult;
@@ -32,11 +37,18 @@ class ReprocessDocumentApplicationServiceTest {
     void handle_shouldThrow_whenIngesting() {
         DocumentRepository repository = Mockito.mock(DocumentRepository.class);
         DocumentVectorIndexer vectorIndexer = Mockito.mock(DocumentVectorIndexer.class);
-        ReprocessDocumentApplicationService service = new ReprocessDocumentApplicationService(repository, vectorIndexer);
+        CurrentUserProvider currentUserProvider = currentUserProvider();
+        AuthorizationService authorizationService = Mockito.mock(AuthorizationService.class);
+        ReprocessDocumentApplicationService service = new ReprocessDocumentApplicationService(
+                repository,
+                vectorIndexer,
+                currentUserProvider,
+                authorizationService);
 
         DocumentId documentId = new DocumentId("doc-rep-1");
         Document ingesting = new Document(
                 documentId,
+                "workspace-a",
                 "kb-1",
                 "hash-1",
                 "a.txt",
@@ -52,12 +64,14 @@ class ReprocessDocumentApplicationServiceTest {
                 0,
                 null,
                 "v1",
+                null,
                 Instant.now(),
                 Instant.now());
-        when(repository.findById(documentId)).thenReturn(Optional.of(ingesting));
+        when(repository.findById(anyString(), eq(documentId))).thenReturn(Optional.of(ingesting));
 
         assertThrows(IllegalStateException.class, () -> service.handle(new ReprocessDocumentCommand("doc-rep-1")));
-        verify(repository, times(1)).findById(documentId);
+        verify(repository, times(1)).findById(anyString(), eq(documentId));
+        verify(authorizationService).requireCanContributeKnowledgeBase(any(CurrentUser.class), eq("kb-1"));
     }
 
     @Test
@@ -65,11 +79,18 @@ class ReprocessDocumentApplicationServiceTest {
     void handle_shouldRequestReprocess_whenAllowed() {
         DocumentRepository repository = Mockito.mock(DocumentRepository.class);
         DocumentVectorIndexer vectorIndexer = Mockito.mock(DocumentVectorIndexer.class);
-        ReprocessDocumentApplicationService service = new ReprocessDocumentApplicationService(repository, vectorIndexer);
+        CurrentUserProvider currentUserProvider = currentUserProvider();
+        AuthorizationService authorizationService = Mockito.mock(AuthorizationService.class);
+        ReprocessDocumentApplicationService service = new ReprocessDocumentApplicationService(
+                repository,
+                vectorIndexer,
+                currentUserProvider,
+                authorizationService);
 
         DocumentId documentId = new DocumentId("doc-rep-2");
         Document failed = new Document(
                 documentId,
+                "workspace-a",
                 "kb-1",
                 "hash-2",
                 "b.txt",
@@ -85,10 +106,11 @@ class ReprocessDocumentApplicationServiceTest {
                 0,
                 null,
                 "v1",
+                null,
                 Instant.now(),
                 Instant.now());
-        when(repository.findById(documentId)).thenReturn(Optional.of(failed));
-        when(repository.requestReprocess(eq(documentId), eq(UploadStatus.FAILED), eq("v2"), any(Instant.class)))
+        when(repository.findById(anyString(), eq(documentId))).thenReturn(Optional.of(failed));
+        when(repository.requestReprocess(anyString(), eq(documentId), eq(UploadStatus.FAILED), eq("v2"), any(Instant.class)))
                 .thenReturn(true);
 
         DocumentStatusResult result = service.handle(new ReprocessDocumentCommand("doc-rep-2"));
@@ -103,9 +125,22 @@ class ReprocessDocumentApplicationServiceTest {
     void handle_shouldThrow_whenMissing() {
         DocumentRepository repository = Mockito.mock(DocumentRepository.class);
         DocumentVectorIndexer vectorIndexer = Mockito.mock(DocumentVectorIndexer.class);
-        ReprocessDocumentApplicationService service = new ReprocessDocumentApplicationService(repository, vectorIndexer);
-        when(repository.findById(new DocumentId("doc-missing"))).thenReturn(Optional.empty());
+        CurrentUserProvider currentUserProvider = currentUserProvider();
+        AuthorizationService authorizationService = Mockito.mock(AuthorizationService.class);
+        ReprocessDocumentApplicationService service = new ReprocessDocumentApplicationService(
+                repository,
+                vectorIndexer,
+                currentUserProvider,
+                authorizationService);
+        when(repository.findById(anyString(), eq(new DocumentId("doc-missing")))).thenReturn(Optional.empty());
 
         assertThrows(DocumentNotFoundException.class, () -> service.handle(new ReprocessDocumentCommand("doc-missing")));
+    }
+
+    private static CurrentUserProvider currentUserProvider() {
+        CurrentUserProvider provider = Mockito.mock(CurrentUserProvider.class);
+        when(provider.requireCurrentUser()).thenReturn(
+                new CurrentUser("user-1", "alice", "workspace-a", WorkspaceRole.WORKSPACE_MEMBER));
+        return provider;
     }
 }

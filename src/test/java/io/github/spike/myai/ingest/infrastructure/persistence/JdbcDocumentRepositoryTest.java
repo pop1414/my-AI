@@ -5,12 +5,15 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import io.github.spike.myai.ingest.domain.model.Document;
 import io.github.spike.myai.ingest.domain.model.DocumentId;
 import io.github.spike.myai.ingest.domain.model.UploadStatus;
+import io.github.spike.myai.shared.workspace.WorkspaceConstants;
 import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
@@ -26,15 +29,56 @@ import org.springframework.jdbc.core.RowMapper;
 class JdbcDocumentRepositoryTest {
 
     @Test
-    @DisplayName("构造初始化应替换唯一索引并保留 DELETED 过滤策略")
-    void constructor_shouldRecreateUniqueIndexWithDeletedFilter() {
+    @DisplayName("构造初始化不应再执行隐式 DDL")
+    void constructor_shouldNotExecuteImplicitDdl() {
         JdbcTemplate jdbcTemplate = Mockito.mock(JdbcTemplate.class);
 
         new JdbcDocumentRepository(jdbcTemplate);
 
-        verify(jdbcTemplate, atLeastOnce()).execute(contains("DROP INDEX IF EXISTS uk_ingest_documents_kb_file_hash"));
-        verify(jdbcTemplate, atLeastOnce())
-                .execute(contains("WHERE file_hash IS NOT NULL AND status <> 'DELETED'"));
+        verify(jdbcTemplate, never()).execute(any(String.class));
+    }
+
+    @Test
+    @DisplayName("save 与 markIndexed 应透传 processing_metadata 字段")
+    void processingMetadataMethods_shouldIncludeJsonbColumn() {
+        JdbcTemplate jdbcTemplate = Mockito.mock(JdbcTemplate.class);
+        JdbcDocumentRepository repository = new JdbcDocumentRepository(jdbcTemplate);
+        Instant now = Instant.now();
+        Document document = new Document(
+                new DocumentId("doc-meta-1"),
+                WorkspaceConstants.DEFAULT_WORKSPACE_ID,
+                "kb-1",
+                "hash-meta-1",
+                "demo.pdf",
+                256L,
+                UploadStatus.INDEXED,
+                null,
+                0,
+                3,
+                null,
+                null,
+                null,
+                null,
+                0,
+                null,
+                "v1",
+                "{\"schema_version\":\"v1\"}",
+                now,
+                now);
+
+        repository.save(document);
+        repository.markIndexed(
+                WorkspaceConstants.DEFAULT_WORKSPACE_ID,
+                new DocumentId("doc-meta-1"),
+                UploadStatus.INGESTING,
+                "{\"schema_version\":\"v1\"}",
+                now);
+
+        ArgumentCaptor<String> sqlCaptor = ArgumentCaptor.forClass(String.class);
+        verify(jdbcTemplate, times(2)).update(sqlCaptor.capture(), any(Object[].class));
+        assertTrue(sqlCaptor.getAllValues().get(0).contains("processing_metadata"));
+        assertTrue(sqlCaptor.getAllValues().get(0).contains("CAST(? AS JSONB)"));
+        assertTrue(sqlCaptor.getAllValues().get(1).contains("processing_metadata = CAST(? AS JSONB)"));
     }
 
     @Test
@@ -42,14 +86,15 @@ class JdbcDocumentRepositoryTest {
     void findByKbIdAndFileHash_shouldExcludeDeletedStatus() {
         JdbcTemplate jdbcTemplate = Mockito.mock(JdbcTemplate.class);
         JdbcDocumentRepository repository = new JdbcDocumentRepository(jdbcTemplate);
-        when(jdbcTemplate.query(any(String.class), any(RowMapper.class), eq("kb-1"), eq("hash-1")))
+        when(jdbcTemplate.query(any(String.class), any(RowMapper.class), eq(WorkspaceConstants.DEFAULT_WORKSPACE_ID), eq("kb-1"), eq("hash-1")))
                 .thenReturn(List.of());
 
-        repository.findByKbIdAndFileHash("kb-1", "hash-1");
+        repository.findByKbIdAndFileHash(WorkspaceConstants.DEFAULT_WORKSPACE_ID, "kb-1", "hash-1");
 
         ArgumentCaptor<String> sqlCaptor = ArgumentCaptor.forClass(String.class);
-        verify(jdbcTemplate).query(sqlCaptor.capture(), any(RowMapper.class), eq("kb-1"), eq("hash-1"));
+        verify(jdbcTemplate).query(sqlCaptor.capture(), any(RowMapper.class), eq(WorkspaceConstants.DEFAULT_WORKSPACE_ID), eq("kb-1"), eq("hash-1"));
         assertTrue(sqlCaptor.getValue().contains("status <> 'DELETED'"));
+        assertTrue(sqlCaptor.getValue().contains("workspace_id = ?"));
     }
 
     @Test
@@ -60,15 +105,20 @@ class JdbcDocumentRepositoryTest {
         DocumentId documentId = new DocumentId("doc-1");
         Instant now = Instant.now();
 
-        when(jdbcTemplate.update(contains("SET status = 'DELETING'"), any(), eq("doc-1"), eq("INDEXED")))
+        when(jdbcTemplate.update(contains("SET status = 'DELETING'"), any(), eq(WorkspaceConstants.DEFAULT_WORKSPACE_ID), eq("doc-1"), eq("INDEXED")))
                 .thenReturn(1);
-        when(jdbcTemplate.update(contains("SET status = 'DELETED'"), any(), eq("doc-1")))
+        when(jdbcTemplate.update(contains("SET status = 'DELETED'"), any(), eq(WorkspaceConstants.DEFAULT_WORKSPACE_ID), eq("doc-1")))
                 .thenReturn(0);
-        when(jdbcTemplate.update(contains("WHERE document_id = ? AND status = 'DELETING'"), eq("FAILED"), any(), eq("doc-1")))
+        when(jdbcTemplate.update(
+                        contains("WHERE workspace_id = ? AND document_id = ? AND status = 'DELETING'"),
+                        eq("FAILED"),
+                        any(),
+                        eq(WorkspaceConstants.DEFAULT_WORKSPACE_ID),
+                        eq("doc-1")))
                 .thenReturn(1);
 
-        assertTrue(repository.markDeleting(documentId, UploadStatus.INDEXED, now));
-        assertFalse(repository.markDeleted(documentId, now));
-        assertTrue(repository.rollbackDeleting(documentId, UploadStatus.FAILED, now));
+        assertTrue(repository.markDeleting(WorkspaceConstants.DEFAULT_WORKSPACE_ID, documentId, UploadStatus.INDEXED, now));
+        assertFalse(repository.markDeleted(WorkspaceConstants.DEFAULT_WORKSPACE_ID, documentId, now));
+        assertTrue(repository.rollbackDeleting(WorkspaceConstants.DEFAULT_WORKSPACE_ID, documentId, UploadStatus.FAILED, now));
     }
 }

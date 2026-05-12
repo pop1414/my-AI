@@ -29,6 +29,8 @@ import {
 } from "../../../shared/api/ingestApi";
 import { listKnowledgeBases } from "../../../shared/api/knowledgeApi";
 import { ApiErrorAlert } from "../../../shared/ui/ApiErrorAlert";
+import { useAuth } from "../../../shared/auth/AuthContext";
+import { SafetyOutlined } from "@ant-design/icons";
 
 const filterSchema = z.object({
 	kbId: z.string().optional(),
@@ -86,6 +88,8 @@ function formatTime(iso: string): string {
 
 export function IngestListPage() {
 	const navigate = useNavigate();
+	const { user } = useAuth();
+	const canAccessAdmin = Boolean(user?.capabilities.canAccessAdmin);
 	const [form] = Form.useForm<{
 		kbId?: string;
 		status?: string;
@@ -261,6 +265,19 @@ export function IngestListPage() {
 									onClick={() =>
 										navigate(
 											`/ingest/documents/${encodeURIComponent(record.documentId)}/delete`,
+										)
+									}
+								/>
+							</Tooltip>
+						)}
+						{canAccessAdmin && (
+							<Tooltip title="授权管理">
+								<Button
+									size="small"
+									icon={<SafetyOutlined />}
+									onClick={() =>
+										navigate(
+											`/admin/documents/${encodeURIComponent(record.documentId)}/grants`,
 										)
 									}
 								/>

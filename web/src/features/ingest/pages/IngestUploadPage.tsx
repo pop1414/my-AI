@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { Button, Card, Form, Select, Space, Typography, Upload } from "antd";
+import { Button, Card, Form, Select, Space, Typography, Upload, message } from "antd";
 import type { UploadFile } from "antd/es/upload/interface";
 import { InboxOutlined } from "@ant-design/icons";
 import { z } from "zod";
@@ -50,6 +50,7 @@ export function IngestUploadPage() {
 			setResult(data);
 			localStorage.setItem("myai:lastDocumentId", data.documentId);
 			localStorage.setItem("myai:lastKbId", form.getFieldValue("kbId"));
+			message.success("文档上传已受理");
 		},
 	});
 

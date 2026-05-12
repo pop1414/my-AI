@@ -3,11 +3,16 @@ package io.github.spike.myai.qa.application.service;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import io.github.spike.myai.auth.application.context.CurrentUser;
+import io.github.spike.myai.auth.application.context.CurrentUserProvider;
+import io.github.spike.myai.auth.application.service.AuthorizationService;
+import io.github.spike.myai.auth.domain.model.WorkspaceRole;
 import io.github.spike.myai.qa.application.command.AskQuestionCommand;
 import io.github.spike.myai.knowledge.application.exception.KnowledgeBaseInactiveException;
 import io.github.spike.myai.knowledge.application.exception.KnowledgeBaseNotFoundException;
@@ -21,6 +26,7 @@ import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
+import org.springframework.security.access.AccessDeniedException;
 
 /**
  * AskQuestionApplicationService 单元测试。
@@ -33,10 +39,17 @@ class AskQuestionApplicationServiceTest {
         ChunkRetrievalPort chunkRetrievalPort = Mockito.mock(ChunkRetrievalPort.class);
         AnswerGenerationPort answerGenerationPort = Mockito.mock(AnswerGenerationPort.class);
         KnowledgeBaseRepository knowledgeBaseRepository = Mockito.mock(KnowledgeBaseRepository.class);
+        CurrentUserProvider currentUserProvider = currentUserProvider();
+        AuthorizationService authorizationService = Mockito.mock(AuthorizationService.class);
         AskQuestionApplicationService service =
-                new AskQuestionApplicationService(chunkRetrievalPort, answerGenerationPort, knowledgeBaseRepository);
-        when(knowledgeBaseRepository.findByKbId(eq("kb-1")))
-                .thenReturn(java.util.Optional.of(new KnowledgeBase("kb-1", "知识库1", "", KnowledgeBaseStatus.ACTIVE, java.time.Instant.now(), java.time.Instant.now())));
+                new AskQuestionApplicationService(
+                        chunkRetrievalPort,
+                        answerGenerationPort,
+                        knowledgeBaseRepository,
+                        currentUserProvider,
+                        authorizationService);
+        when(knowledgeBaseRepository.findByKbId(eq("workspace-a"), eq("kb-1")))
+                .thenReturn(java.util.Optional.of(new KnowledgeBase("kb-1", "workspace-a", "知识库1", "", KnowledgeBaseStatus.ACTIVE, java.time.Instant.now(), java.time.Instant.now())));
 
         when(chunkRetrievalPort.similaritySearch(eq("什么是 RAG"), anyInt()))
                 .thenReturn(List.of(
@@ -53,22 +66,35 @@ class AskQuestionApplicationServiceTest {
         assertEquals("doc-1", result.references().get(0).documentId());
         assertEquals(0, result.references().get(0).chunkIndex());
         assertEquals("doc-3", result.references().get(1).documentId());
+        verify(authorizationService).requireCanAskKnowledgeBase(org.mockito.ArgumentMatchers.any(CurrentUser.class), eq("kb-1"));
+        verify(authorizationService).requireCanAskDocument(org.mockito.ArgumentMatchers.any(CurrentUser.class), eq("doc-1"), eq("kb-1"));
+        verify(authorizationService).requireCanAskDocument(org.mockito.ArgumentMatchers.any(CurrentUser.class), eq("doc-3"), eq("kb-1"));
         verify(answerGenerationPort).generateAnswer(org.mockito.ArgumentMatchers.anyString());
     }
 
     @Test
-    @DisplayName("无命中时应返回兜底回答且不调用模型")
-    void handle_shouldReturnFallback_whenNoChunkMatched() {
+    @DisplayName("召回结果全部被文档权限过滤时应返回兜底回答且不调用模型")
+    void handle_shouldReturnFallback_whenAllChunksFilteredByDocumentAccess() {
         ChunkRetrievalPort chunkRetrievalPort = Mockito.mock(ChunkRetrievalPort.class);
         AnswerGenerationPort answerGenerationPort = Mockito.mock(AnswerGenerationPort.class);
         KnowledgeBaseRepository knowledgeBaseRepository = Mockito.mock(KnowledgeBaseRepository.class);
+        CurrentUserProvider currentUserProvider = currentUserProvider();
+        AuthorizationService authorizationService = Mockito.mock(AuthorizationService.class);
         AskQuestionApplicationService service =
-                new AskQuestionApplicationService(chunkRetrievalPort, answerGenerationPort, knowledgeBaseRepository);
-        when(knowledgeBaseRepository.findByKbId(eq("default")))
-                .thenReturn(java.util.Optional.of(new KnowledgeBase("default", "default", "", KnowledgeBaseStatus.ACTIVE, java.time.Instant.now(), java.time.Instant.now())));
+                new AskQuestionApplicationService(
+                        chunkRetrievalPort,
+                        answerGenerationPort,
+                        knowledgeBaseRepository,
+                        currentUserProvider,
+                        authorizationService);
+        when(knowledgeBaseRepository.findByKbId(eq("workspace-a"), eq("default")))
+                .thenReturn(java.util.Optional.of(new KnowledgeBase("default", "workspace-a", "default", "", KnowledgeBaseStatus.ACTIVE, java.time.Instant.now(), java.time.Instant.now())));
 
         when(chunkRetrievalPort.similaritySearch(eq("找不到"), eq(20)))
-                .thenReturn(List.of(new RetrievedChunk("doc-2", "kb-other", 1, "other kb")));
+                .thenReturn(List.of(new RetrievedChunk("doc-2", "default", 1, "deny")));
+        Mockito.doThrow(new AccessDeniedException("document ask access denied"))
+                .when(authorizationService)
+                .requireCanAskDocument(org.mockito.ArgumentMatchers.any(CurrentUser.class), eq("doc-2"), eq("default"));
 
         var result = service.handle(new AskQuestionCommand("找不到", null, null));
 
@@ -78,14 +104,47 @@ class AskQuestionApplicationServiceTest {
     }
 
     @Test
+    @DisplayName("无知识库问答权限时应直接拒绝且不执行召回")
+    void handle_shouldDeny_whenUserCannotAskKnowledgeBase() {
+        ChunkRetrievalPort chunkRetrievalPort = Mockito.mock(ChunkRetrievalPort.class);
+        AnswerGenerationPort answerGenerationPort = Mockito.mock(AnswerGenerationPort.class);
+        KnowledgeBaseRepository knowledgeBaseRepository = Mockito.mock(KnowledgeBaseRepository.class);
+        CurrentUserProvider currentUserProvider = currentUserProvider();
+        AuthorizationService authorizationService = Mockito.mock(AuthorizationService.class);
+        AskQuestionApplicationService service =
+                new AskQuestionApplicationService(
+                        chunkRetrievalPort,
+                        answerGenerationPort,
+                        knowledgeBaseRepository,
+                        currentUserProvider,
+                        authorizationService);
+        when(knowledgeBaseRepository.findByKbId(eq("workspace-a"), eq("kb-1")))
+                .thenReturn(java.util.Optional.of(new KnowledgeBase("kb-1", "workspace-a", "知识库1", "", KnowledgeBaseStatus.ACTIVE, java.time.Instant.now(), java.time.Instant.now())));
+        Mockito.doThrow(new AccessDeniedException("knowledge base ask access denied"))
+                .when(authorizationService)
+                .requireCanAskKnowledgeBase(org.mockito.ArgumentMatchers.any(CurrentUser.class), eq("kb-1"));
+
+        assertThrows(AccessDeniedException.class, () -> service.handle(new AskQuestionCommand("问题", "kb-1", 2)));
+        verify(chunkRetrievalPort, never()).similaritySearch(anyString(), anyInt());
+        verify(answerGenerationPort, never()).generateAnswer(anyString());
+    }
+
+    @Test
     @DisplayName("知识库不存在时应抛出未找到异常")
     void handle_shouldThrow_whenKnowledgeBaseMissing() {
         ChunkRetrievalPort chunkRetrievalPort = Mockito.mock(ChunkRetrievalPort.class);
         AnswerGenerationPort answerGenerationPort = Mockito.mock(AnswerGenerationPort.class);
         KnowledgeBaseRepository knowledgeBaseRepository = Mockito.mock(KnowledgeBaseRepository.class);
+        CurrentUserProvider currentUserProvider = currentUserProvider();
+        AuthorizationService authorizationService = Mockito.mock(AuthorizationService.class);
         AskQuestionApplicationService service =
-                new AskQuestionApplicationService(chunkRetrievalPort, answerGenerationPort, knowledgeBaseRepository);
-        when(knowledgeBaseRepository.findByKbId(eq("kb-missing"))).thenReturn(java.util.Optional.empty());
+                new AskQuestionApplicationService(
+                        chunkRetrievalPort,
+                        answerGenerationPort,
+                        knowledgeBaseRepository,
+                        currentUserProvider,
+                        authorizationService);
+        when(knowledgeBaseRepository.findByKbId(eq("workspace-a"), eq("kb-missing"))).thenReturn(java.util.Optional.empty());
 
         assertThrows(KnowledgeBaseNotFoundException.class, () -> service.handle(new AskQuestionCommand("问题", "kb-missing", 1)));
     }
@@ -96,11 +155,25 @@ class AskQuestionApplicationServiceTest {
         ChunkRetrievalPort chunkRetrievalPort = Mockito.mock(ChunkRetrievalPort.class);
         AnswerGenerationPort answerGenerationPort = Mockito.mock(AnswerGenerationPort.class);
         KnowledgeBaseRepository knowledgeBaseRepository = Mockito.mock(KnowledgeBaseRepository.class);
+        CurrentUserProvider currentUserProvider = currentUserProvider();
+        AuthorizationService authorizationService = Mockito.mock(AuthorizationService.class);
         AskQuestionApplicationService service =
-                new AskQuestionApplicationService(chunkRetrievalPort, answerGenerationPort, knowledgeBaseRepository);
-        when(knowledgeBaseRepository.findByKbId(eq("kb-inactive")))
-                .thenReturn(java.util.Optional.of(new KnowledgeBase("kb-inactive", "禁用库", "", KnowledgeBaseStatus.INACTIVE, java.time.Instant.now(), java.time.Instant.now())));
+                new AskQuestionApplicationService(
+                        chunkRetrievalPort,
+                        answerGenerationPort,
+                        knowledgeBaseRepository,
+                        currentUserProvider,
+                        authorizationService);
+        when(knowledgeBaseRepository.findByKbId(eq("workspace-a"), eq("kb-inactive")))
+                .thenReturn(java.util.Optional.of(new KnowledgeBase("kb-inactive", "workspace-a", "禁用库", "", KnowledgeBaseStatus.INACTIVE, java.time.Instant.now(), java.time.Instant.now())));
 
         assertThrows(KnowledgeBaseInactiveException.class, () -> service.handle(new AskQuestionCommand("问题", "kb-inactive", 1)));
+    }
+
+    private static CurrentUserProvider currentUserProvider() {
+        CurrentUserProvider provider = Mockito.mock(CurrentUserProvider.class);
+        when(provider.requireCurrentUser()).thenReturn(
+                new CurrentUser("user-1", "alice", "workspace-a", WorkspaceRole.WORKSPACE_MEMBER));
+        return provider;
     }
 }

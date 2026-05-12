@@ -86,9 +86,14 @@ export function IngestStatusPage() {
 			<Card
 				title="查询文档状态"
 				extra={
-					<Typography.Text type="secondary">
-						GET /api/v1/documents/{"{documentId}"}/status
-					</Typography.Text>
+					<Space>
+						<Button onClick={() => navigate("/ingest/documents")}>
+							返回文档列表
+						</Button>
+						<Typography.Text type="secondary">
+							GET /api/v1/documents/{"{documentId}"}/status
+						</Typography.Text>
+					</Space>
 				}
 			>
 				<Form

@@ -1,6 +1,7 @@
 package io.github.spike.myai.ingest.application.service;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -11,8 +12,10 @@ import io.github.spike.myai.ingest.application.monitoring.IngestMetrics;
 import io.github.spike.myai.ingest.domain.model.Document;
 import io.github.spike.myai.ingest.domain.model.DocumentChunk;
 import io.github.spike.myai.ingest.domain.model.DocumentId;
+import io.github.spike.myai.ingest.domain.model.DocumentParseResult;
 import io.github.spike.myai.ingest.domain.model.UploadStatus;
 import io.github.spike.myai.ingest.domain.port.DocumentChunker;
+import io.github.spike.myai.ingest.domain.port.DocumentProcessingArtifactStorage;
 import io.github.spike.myai.ingest.domain.port.DocumentRepository;
 import io.github.spike.myai.ingest.domain.port.DocumentSourceStorage;
 import io.github.spike.myai.ingest.domain.port.DocumentTextParser;
@@ -38,6 +41,7 @@ class ProcessDocumentApplicationServiceTest {
         DocumentSourceStorage sourceStorage = Mockito.mock(DocumentSourceStorage.class);
         DocumentTextParser parser = Mockito.mock(DocumentTextParser.class);
         DocumentChunker chunker = Mockito.mock(DocumentChunker.class);
+        DocumentProcessingArtifactStorage artifactStorage = Mockito.mock(DocumentProcessingArtifactStorage.class);
         DocumentVectorIndexer vectorIndexer = Mockito.mock(DocumentVectorIndexer.class);
         SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
         ProcessDocumentApplicationService service =
@@ -46,6 +50,7 @@ class ProcessDocumentApplicationServiceTest {
                         sourceStorage,
                         parser,
                         chunker,
+                        artifactStorage,
                         vectorIndexer,
                         new RetryPolicy(),
                         new IngestMetrics(meterRegistry));
@@ -68,22 +73,39 @@ class ProcessDocumentApplicationServiceTest {
                 0,
                 null,
                 "v1",
+                null,
                 Instant.now(),
                 Instant.now());
-        when(repository.findById(documentId)).thenReturn(Optional.of(ingesting));
+        when(repository.findById(anyString(), eq(documentId))).thenReturn(Optional.of(ingesting));
         when(sourceStorage.load(documentId, "a.txt")).thenReturn(Optional.of("hello world".getBytes()));
-        when(parser.parse(eq("a.txt"), any(byte[].class))).thenReturn("hello world");
+        DocumentParseResult parseResult = new DocumentParseResult(
+                "<html><body><p>hello world</p></body></html>",
+                "<p>hello world</p>",
+                "hello world",
+                "{\"schema_version\":\"v1\"}");
+        when(parser.parse(eq("a.txt"), any(byte[].class))).thenReturn(parseResult);
         when(chunker.chunk("hello world")).thenReturn(List.of(new DocumentChunk("hello world", null)));
-        when(repository.markIndexed(eq(documentId), eq(UploadStatus.INGESTING), any(Instant.class)))
+        when(repository.markIndexed(
+                        anyString(),
+                        eq(documentId),
+                        eq(UploadStatus.INGESTING),
+                        eq("{\"schema_version\":\"v1\"}"),
+                        any(Instant.class)))
                 .thenReturn(true);
 
         service.handle(documentId);
 
         verify(vectorIndexer, times(1)).index(eq(ingesting), eq(List.of(new DocumentChunk("hello world", null))));
+        verify(artifactStorage, times(1)).save(eq(documentId), eq(parseResult));
         verify(repository, times(1))
-                .markIndexed(eq(documentId), eq(UploadStatus.INGESTING), any(Instant.class));
+                .markIndexed(
+                        anyString(),
+                        eq(documentId),
+                        eq(UploadStatus.INGESTING),
+                        eq("{\"schema_version\":\"v1\"}"),
+                        any(Instant.class));
         verify(repository, never())
-                .markFailed(eq(documentId), eq(UploadStatus.INGESTING), any(), any(), any(), any(), any(Instant.class));
+                .markFailed(anyString(), eq(documentId), eq(UploadStatus.INGESTING), any(), any(), any(), any(), any(), any(Instant.class));
         org.junit.jupiter.api.Assertions.assertEquals(
                 1.0, meterRegistry.get("myai.ingest.process.success.total").counter().count());
     }
@@ -95,6 +117,7 @@ class ProcessDocumentApplicationServiceTest {
         DocumentSourceStorage sourceStorage = Mockito.mock(DocumentSourceStorage.class);
         DocumentTextParser parser = Mockito.mock(DocumentTextParser.class);
         DocumentChunker chunker = Mockito.mock(DocumentChunker.class);
+        DocumentProcessingArtifactStorage artifactStorage = Mockito.mock(DocumentProcessingArtifactStorage.class);
         DocumentVectorIndexer vectorIndexer = Mockito.mock(DocumentVectorIndexer.class);
         SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
         ProcessDocumentApplicationService service =
@@ -103,6 +126,7 @@ class ProcessDocumentApplicationServiceTest {
                         sourceStorage,
                         parser,
                         chunker,
+                        artifactStorage,
                         vectorIndexer,
                         new RetryPolicy(),
                         new IngestMetrics(meterRegistry));
@@ -125,14 +149,17 @@ class ProcessDocumentApplicationServiceTest {
                 0,
                 null,
                 "v1",
+                null,
                 Instant.now(),
                 Instant.now());
-        when(repository.findById(documentId)).thenReturn(Optional.of(ingesting));
+        when(repository.findById(anyString(), eq(documentId))).thenReturn(Optional.of(ingesting));
         when(sourceStorage.load(documentId, "b.txt")).thenReturn(Optional.empty());
         when(repository.markFailed(
+                        anyString(),
                         eq(documentId),
                         eq(UploadStatus.INGESTING),
                         any(String.class),
+                        eq(null),
                         any(),
                         any(),
                         any(),
@@ -142,7 +169,7 @@ class ProcessDocumentApplicationServiceTest {
         service.handle(documentId);
 
         verify(repository, times(1))
-                .markFailed(eq(documentId), eq(UploadStatus.INGESTING), any(String.class), any(), any(), any(), any(Instant.class));
+                .markFailed(anyString(), eq(documentId), eq(UploadStatus.INGESTING), any(String.class), eq(null), any(), any(), any(), any(Instant.class));
         verify(vectorIndexer, never()).index(any(Document.class), any(List.class));
         org.junit.jupiter.api.Assertions.assertEquals(
                 1.0, meterRegistry.get("myai.ingest.process.failed.total").counter().count());
@@ -155,6 +182,7 @@ class ProcessDocumentApplicationServiceTest {
         DocumentSourceStorage sourceStorage = Mockito.mock(DocumentSourceStorage.class);
         DocumentTextParser parser = Mockito.mock(DocumentTextParser.class);
         DocumentChunker chunker = Mockito.mock(DocumentChunker.class);
+        DocumentProcessingArtifactStorage artifactStorage = Mockito.mock(DocumentProcessingArtifactStorage.class);
         DocumentVectorIndexer vectorIndexer = Mockito.mock(DocumentVectorIndexer.class);
         SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
         ProcessDocumentApplicationService service =
@@ -163,6 +191,7 @@ class ProcessDocumentApplicationServiceTest {
                         sourceStorage,
                         parser,
                         chunker,
+                        artifactStorage,
                         vectorIndexer,
                         new RetryPolicy(),
                         new IngestMetrics(meterRegistry));
@@ -185,12 +214,14 @@ class ProcessDocumentApplicationServiceTest {
                 0,
                 null,
                 "v1",
+                null,
                 Instant.now(),
                 Instant.now());
-        when(repository.findById(documentId)).thenReturn(Optional.of(ingesting));
+        when(repository.findById(anyString(), eq(documentId))).thenReturn(Optional.of(ingesting));
         when(sourceStorage.load(documentId, "c.txt"))
                 .thenThrow(new RuntimeException(new SocketTimeoutException("timeout")));
         when(repository.markRetry(
+                        anyString(),
                         eq(documentId),
                         eq(UploadStatus.INGESTING),
                         eq(1),
@@ -205,6 +236,7 @@ class ProcessDocumentApplicationServiceTest {
 
         verify(repository, times(1))
                 .markRetry(
+                        anyString(),
                         eq(documentId),
                         eq(UploadStatus.INGESTING),
                         eq(1),

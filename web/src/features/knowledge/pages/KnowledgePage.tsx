@@ -12,6 +12,7 @@ import {
 	Table,
 	Tag,
 	Typography,
+	message,
 } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { useNavigate } from "react-router-dom";
@@ -23,9 +24,14 @@ import {
 	updateKnowledgeBase,
 } from "../../../shared/api/knowledgeApi";
 import { ApiErrorAlert } from "../../../shared/ui/ApiErrorAlert";
+import { useAuth } from "../../../shared/auth/AuthContext";
 
 const knowledgeBaseCreateSchema = z.object({
-	name: z.string().trim().min(1, "知识库名称不能为空").max(100, "名称最长 100 字符"),
+	name: z
+		.string()
+		.trim()
+		.min(1, "知识库名称不能为空")
+		.max(100, "名称最长 100 字符"),
 	description: z.string().trim().max(500, "描述最长 500 字符").optional(),
 	status: z.enum(["ACTIVE", "INACTIVE"]).default("ACTIVE"),
 });
@@ -39,6 +45,7 @@ function statusColor(status: KnowledgeBase["status"]): string {
 const columns = (
 	navigate: ReturnType<typeof useNavigate>,
 	onEdit: (record: KnowledgeBase) => void,
+	canManageKnowledgeBases: boolean,
 ): ColumnsType<KnowledgeBase> => [
 	{ title: "知识库 ID", dataIndex: "id", width: 320 },
 	{ title: "名称", dataIndex: "name", width: 180 },
@@ -62,9 +69,11 @@ const columns = (
 		width: 220,
 		render: (_, record) => (
 			<Space>
-				<Button size="small" onClick={() => onEdit(record)}>
-					编辑
-				</Button>
+				{canManageKnowledgeBases && (
+					<Button size="small" onClick={() => onEdit(record)}>
+						编辑
+					</Button>
+				)}
 				<Button
 					type="primary"
 					size="small"
@@ -76,6 +85,18 @@ const columns = (
 				>
 					去问答
 				</Button>
+				{canManageKnowledgeBases && (
+					<Button
+						size="small"
+						onClick={() =>
+							navigate(
+								`/admin/knowledge-bases/${encodeURIComponent(record.id)}/grants`,
+							)
+						}
+					>
+						授权管理
+					</Button>
+				)}
 			</Space>
 		),
 	},
@@ -84,6 +105,8 @@ const columns = (
 export function KnowledgePage() {
 	const navigate = useNavigate();
 	const queryClient = useQueryClient();
+	const { user } = useAuth();
+	const canManageKnowledgeBases = Boolean(user?.capabilities.canAccessAdmin);
 	const [createForm] = Form.useForm<{
 		name: string;
 		description?: string;
@@ -106,6 +129,7 @@ export function KnowledgePage() {
 		onSuccess: () => {
 			createForm.resetFields();
 			queryClient.invalidateQueries({ queryKey: ["knowledge-bases"] });
+			message.success("知识库已创建");
 		},
 	});
 	const updateMutation = useMutation({
@@ -123,11 +147,14 @@ export function KnowledgePage() {
 		onSuccess: () => {
 			setEditingKnowledgeBase(null);
 			queryClient.invalidateQueries({ queryKey: ["knowledge-bases"] });
+			message.success("知识库已更新");
 		},
 	});
 
 	const onCreate = async () => {
-		const values = knowledgeBaseCreateSchema.parse(createForm.getFieldsValue());
+		const values = knowledgeBaseCreateSchema.parse(
+			createForm.getFieldsValue(),
+		);
 		await createMutation.mutateAsync(values);
 	};
 
@@ -144,7 +171,9 @@ export function KnowledgePage() {
 		if (!editingKnowledgeBase) {
 			return;
 		}
-		const values = knowledgeBaseUpdateSchema.parse(editForm.getFieldsValue());
+		const values = knowledgeBaseUpdateSchema.parse(
+			editForm.getFieldsValue(),
+		);
 		await updateMutation.mutateAsync({
 			kbId: editingKnowledgeBase.id,
 			values,
@@ -166,46 +195,66 @@ export function KnowledgePage() {
 				</Typography.Paragraph>
 			</Card>
 
-			{knowledgeQuery.isError && <ApiErrorAlert error={knowledgeQuery.error} />}
-			{createMutation.isError && <ApiErrorAlert error={createMutation.error} />}
-			{updateMutation.isError && <ApiErrorAlert error={updateMutation.error} />}
+			{knowledgeQuery.isError && (
+				<ApiErrorAlert error={knowledgeQuery.error} />
+			)}
+			{createMutation.isError && (
+				<ApiErrorAlert error={createMutation.error} />
+			)}
+			{updateMutation.isError && (
+				<ApiErrorAlert error={updateMutation.error} />
+			)}
 
-			<Card title="新建知识库">
-				<Form
-					form={createForm}
-					layout="vertical"
-					initialValues={{ name: "", description: "", status: "ACTIVE" }}
-					onFinish={onCreate}
-				>
-					<Form.Item label="名称" name="name">
-						<Input placeholder="例如：产品文档库" maxLength={100} showCount />
-					</Form.Item>
-					<Form.Item label="描述" name="description">
-						<Input.TextArea rows={3} maxLength={500} showCount />
-					</Form.Item>
-					<Form.Item label="状态" name="status">
-						<Select
-							options={[
-								{ label: "ACTIVE", value: "ACTIVE" },
-								{ label: "INACTIVE", value: "INACTIVE" },
-							]}
-						/>
-					</Form.Item>
-					<Button
-						type="primary"
-						htmlType="submit"
-						loading={createMutation.isPending}
+			{canManageKnowledgeBases && (
+				<Card title="新建知识库">
+					<Form
+						form={createForm}
+						layout="vertical"
+						initialValues={{
+							name: "",
+							description: "",
+							status: "ACTIVE",
+						}}
+						onFinish={onCreate}
 					>
-						创建知识库
-					</Button>
-				</Form>
-			</Card>
+						<Form.Item label="名称" name="name">
+							<Input
+								placeholder="例如：产品文档库"
+								maxLength={100}
+								showCount
+							/>
+						</Form.Item>
+						<Form.Item label="描述" name="description">
+							<Input.TextArea rows={3} maxLength={500} showCount />
+						</Form.Item>
+						<Form.Item label="状态" name="status">
+							<Select
+								options={[
+									{ label: "ACTIVE", value: "ACTIVE" },
+									{ label: "INACTIVE", value: "INACTIVE" },
+								]}
+							/>
+						</Form.Item>
+						<Button
+							type="primary"
+							htmlType="submit"
+							loading={createMutation.isPending}
+						>
+							创建知识库
+						</Button>
+					</Form>
+				</Card>
+			)}
 
 			<Card>
 				{knowledgeQuery.isLoading ? (
 					<Table
 						loading
-						columns={columns(navigate, onEdit)}
+						columns={columns(
+							navigate,
+							onEdit,
+							canManageKnowledgeBases,
+						)}
 						dataSource={[]}
 						rowKey="id"
 					/>
@@ -214,7 +263,11 @@ export function KnowledgePage() {
 				) : (
 					<Table
 						rowKey="id"
-						columns={columns(navigate, onEdit)}
+						columns={columns(
+							navigate,
+							onEdit,
+							canManageKnowledgeBases,
+						)}
 						dataSource={knowledgeQuery.data}
 						loading={knowledgeQuery.isFetching}
 						pagination={false}

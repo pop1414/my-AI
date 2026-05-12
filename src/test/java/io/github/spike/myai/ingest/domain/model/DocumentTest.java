@@ -19,6 +19,7 @@ class DocumentTest {
 
         assertEquals(UploadStatus.UPLOADED, document.status());
         assertEquals("hash-u1", document.fileHash());
+        assertEquals(null, document.processingMetadata());
         assertEquals(now, document.createdAt());
         assertEquals(now, document.updatedAt());
     }

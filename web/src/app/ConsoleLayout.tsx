@@ -1,36 +1,72 @@
-﻿import { Suspense } from "react";
+import { Suspense } from "react";
 import {
-	DeleteOutlined,
-	FileSearchOutlined,
-	FileSyncOutlined,
+	DownOutlined,
 	FileTextOutlined,
+	LogoutOutlined,
 	SearchOutlined,
+	TeamOutlined,
 	UploadOutlined,
+	UserOutlined,
 } from "@ant-design/icons";
-import { Breadcrumb, Layout, Menu, Spin, Typography } from "antd";
+import {
+	Breadcrumb,
+	Dropdown,
+	Layout,
+	Menu,
+	Space,
+	Spin,
+	Tag,
+	Typography,
+} from "antd";
 import type { MenuProps } from "antd";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
+import { useAuth } from "../shared/auth/AuthContext";
 
 const { Header, Sider, Content } = Layout;
 const { Title, Text } = Typography;
 
 type MenuItem = Required<MenuProps>["items"][number];
 
-const menuItems: MenuItem[] = [
-	{ key: "/ingest/documents", icon: <FileTextOutlined />, label: "文档列表" },
-	{ key: "/ingest/upload", icon: <UploadOutlined />, label: "文档上传" },
-	{ key: "/ingest/status", icon: <FileSyncOutlined />, label: "状态查询" },
-	{
-		key: "/ingest/chunks-preview",
-		icon: <FileSearchOutlined />,
-		label: "分块预览",
-	},
-	{ key: "/ingest/reprocess", icon: <FileSyncOutlined />, label: "重处理" },
-	{ key: "/ingest/delete", icon: <DeleteOutlined />, label: "删除文档" },
-	{ type: "divider" },
-	{ key: "/knowledge", icon: <FileTextOutlined />, label: "知识库" },
-	{ key: "/qa", icon: <SearchOutlined />, label: "问答" },
-];
+function buildMenuItems(visibleMenuKeys: string[]): MenuItem[] {
+	const items: MenuItem[] = [];
+
+	if (visibleMenuKeys.includes("/ingest/documents")) {
+		items.push({
+			key: "/ingest/documents",
+			icon: <FileTextOutlined />,
+			label: "文档列表",
+		});
+	}
+	if (visibleMenuKeys.includes("/ingest/upload")) {
+		items.push({
+			key: "/ingest/upload",
+			icon: <UploadOutlined />,
+			label: "文档上传",
+		});
+	}
+	if (visibleMenuKeys.includes("/knowledge")) {
+		items.push({
+			key: "/knowledge",
+			icon: <FileTextOutlined />,
+			label: "知识库",
+		});
+	}
+	if (visibleMenuKeys.includes("/qa")) {
+		items.push({
+			key: "/qa",
+			icon: <SearchOutlined />,
+			label: "问答",
+		});
+	}
+	if (visibleMenuKeys.includes("/admin")) {
+		if (items.length > 0) {
+			items.push({ type: "divider" });
+		}
+		items.push({ key: "/admin", icon: <TeamOutlined />, label: "系统管理" });
+	}
+
+	return items;
+}
 
 function resolveTitle(pathname: string): string {
 	if (pathname.startsWith("/ingest/documents/")) {
@@ -41,11 +77,25 @@ function resolveTitle(pathname: string): string {
 			reprocess: "文档重处理",
 			delete: "删除文档资产",
 		};
-		// 提取纯操作名（去掉 documentId 段）
 		const action = suffix.includes("/")
 			? suffix.split("/").slice(1).join("/")
 			: suffix;
 		return map[action] ?? "文档详情";
+	}
+	if (pathname.startsWith("/admin/knowledge-bases/")) {
+		return "知识库授权管理";
+	}
+	if (pathname.startsWith("/admin/documents/")) {
+		return "文档授权管理";
+	}
+	if (pathname.startsWith("/admin/members/") && pathname.endsWith("/grants")) {
+		return "成员授权配置";
+	}
+	if (pathname === "/admin") {
+		return "系统管理";
+	}
+	if (pathname === "/no-access") {
+		return "访问受限";
 	}
 	const map: Record<string, string> = {
 		"/ingest/documents": "文档列表与管理台",
@@ -61,9 +111,17 @@ function resolveTitle(pathname: string): string {
 }
 
 function resolveMenuSelectedKey(pathname: string): string {
-	// 所有 /ingest/documents/... 嵌套路由都高亮"文档列表"
 	if (pathname.startsWith("/ingest/documents/")) {
 		return "/ingest/documents";
+	}
+	if (pathname.startsWith("/admin/documents/")) {
+		return "/ingest/documents";
+	}
+	if (
+		pathname.startsWith("/admin/knowledge-bases/") ||
+		pathname.startsWith("/admin")
+	) {
+		return "/admin";
 	}
 	return pathname;
 }
@@ -71,55 +129,104 @@ function resolveMenuSelectedKey(pathname: string): string {
 export function ConsoleLayout() {
 	const navigate = useNavigate();
 	const location = useLocation();
+	const { user, visibleMenuKeys, logout } = useAuth();
+
+	const menuItems = buildMenuItems(visibleMenuKeys);
+	const showSidebar = menuItems.length > 0;
+
+	const roleColorMap: Record<string, string> = {
+		WORKSPACE_OWNER: "gold",
+		WORKSPACE_ADMIN: "blue",
+		WORKSPACE_MEMBER: "default",
+	};
+
+	const userMenuItems: MenuProps["items"] = [
+		{
+			key: "info",
+			label: user?.displayName ?? user?.username ?? "未登录",
+			disabled: true,
+		},
+		{ type: "divider" },
+		{
+			key: "logout",
+			icon: <LogoutOutlined />,
+			label: "退出登录",
+			onClick: () => logout(),
+		},
+	];
+
+	const content = (
+		<>
+			<Breadcrumb
+				items={[
+					{ title: "控制台" },
+					{ title: resolveTitle(location.pathname) },
+				]}
+				style={{ marginBottom: 16 }}
+			/>
+			<Suspense
+				fallback={
+					<div
+						style={{
+							display: "flex",
+							justifyContent: "center",
+							alignItems: "center",
+							minHeight: 300,
+						}}
+					>
+						<Spin size="large" />
+					</div>
+				}
+			>
+				<Outlet />
+			</Suspense>
+		</>
+	);
 
 	return (
-		<Layout className="console-root">
-			<Sider width={250} breakpoint="lg" collapsedWidth="0">
-				<div className="console-logo">my-AI / Web Console</div>
-				<Menu
-					theme="dark"
-					mode="inline"
-					selectedKeys={[resolveMenuSelectedKey(location.pathname)]}
-					items={menuItems}
-					onClick={({ key }) => navigate(key)}
-				/>
-			</Sider>
+		<Layout className="console-root" data-testid="console-layout">
+			{showSidebar && (
+				<Sider width={250} breakpoint="lg" collapsedWidth="0">
+					<div className="console-logo">my-AI / Web Console</div>
+					<Menu
+						theme="dark"
+						mode="inline"
+						selectedKeys={[resolveMenuSelectedKey(location.pathname)]}
+						items={menuItems}
+						onClick={({ key }) => navigate(String(key))}
+					/>
+				</Sider>
+			)}
 			<Layout>
 				<Header className="console-header">
 					<div>
-						<Title level={4} style={{ margin: 0 }}>
+						<Title
+							level={4}
+							style={{ margin: 0 }}
+							data-testid="console-title"
+						>
 							{resolveTitle(location.pathname)}
 						</Title>
 						<Text type="secondary">
 							V1 闭环：文档上传 · 分块检索 · 知识库统计 · 单轮问答
 						</Text>
 					</div>
+					<Dropdown menu={{ items: userMenuItems }} placement="bottomRight">
+						<Space style={{ cursor: "pointer" }}>
+							<UserOutlined />
+							<span>{user?.displayName ?? ""}</span>
+							{user?.workspaceRole && (
+								<Tag
+									color={roleColorMap[user.workspaceRole] ?? "default"}
+								>
+									{user.workspaceRole}
+								</Tag>
+							)}
+							<DownOutlined />
+						</Space>
+					</Dropdown>
 				</Header>
-				<Content className="console-content">
-					<Breadcrumb
-						items={[
-							{ title: "控制台" },
-							{ title: resolveTitle(location.pathname) },
-						]}
-						style={{ marginBottom: 16 }}
-					/>
-					<Suspense
-						fallback={
-							<div
-								style={{
-									display: "flex",
-									justifyContent: "center",
-									alignItems: "center",
-									minHeight: 300,
-								}}
-							>
-								<Spin size="large" />
-							</div>
-						}
-					>
-						<Outlet />
-					</Suspense>
-				</Content>
+				<Content className="console-content">{content}</Content>
 			</Layout>
 		</Layout>
 	);

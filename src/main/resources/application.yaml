@@ -9,6 +9,10 @@ spring:
     url: ${PGVECTOR_DATASOURCE_URL:jdbc:postgresql://localhost:5432/myai}
     username: ${PGVECTOR_DATASOURCE_USERNAME:admin}
     password: ${PGVECTOR_DATASOURCE_PASSWORD:admin}
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+    baseline-version: 0
   ai:
     dashscope:
       # 通过环境变量注入，避免把密钥写入仓库
@@ -21,8 +25,8 @@ spring:
           model: ${DASHSCOPE_EMBEDDING_MODEL:text-embedding-v4}
     vectorstore:
       pgvector:
-        # Spring AI 启动时会自动在 PG 中创建 vector 插件和相关的数据表
-        initialize-schema: true
+        # 表结构由 Flyway 统一管理，避免与应用启动时的自动建表逻辑冲突
+        initialize-schema: false
         # 自动校验表结构
         schema-validation: true
         schema-name: public
@@ -40,6 +44,12 @@ spring:
         remove-existing-vector-store-table: false
 
 myai:
+  auth:
+    bootstrap-admin:
+      # 空库启动时创建第一个默认工作区管理员；未配置用户名或密码时自动跳过
+      username: ${MYAI_AUTH_BOOTSTRAP_ADMIN_USERNAME:}
+      password: ${MYAI_AUTH_BOOTSTRAP_ADMIN_PASSWORD:}
+      display-name: ${MYAI_AUTH_BOOTSTRAP_ADMIN_DISPLAY_NAME:}
   ingest:
     parser:
       # Tika 解析最大文本长度，防止异常文档输出过长文本导致内存风险
@@ -49,6 +59,13 @@ myai:
     storage:
       # 上传源文件本地落盘目录（可替换为对象存储适配器）
       root-dir: ${INGEST_STORAGE_ROOT_DIR:data/ingest}
+      artifacts:
+        # 是否保留 Tika 原始 XHTML 调试产物
+        keep-raw-xhtml: ${INGEST_STORAGE_KEEP_RAW_XHTML:false}
+        # 是否保留 cleaned.html 调试产物
+        keep-cleaned-html: ${INGEST_STORAGE_KEEP_CLEANED_HTML:false}
+        # 是否保留 processing_metadata 的文件化载体 parse-result.json
+        keep-parse-result-json: ${INGEST_STORAGE_KEEP_PARSE_RESULT_JSON:true}
     chunk:
       # 文本分块参数（结构优先 + 长度兜底）
       chunk-size: ${INGEST_CHUNK_SIZE:500}

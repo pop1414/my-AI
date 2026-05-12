@@ -6,21 +6,38 @@
 - 新增知识库创建接口：`POST /api/v1/knowledge-bases`
 - 新增知识库编辑接口：`PATCH /api/v1/knowledge-bases/{kbId}`
 - 新增文档分页列表接口：`GET /api/v1/documents`
+- 新增文档处理结果元数据字段：`ingest_documents.processing_metadata`（JSONB）
+- 新增文档处理中间产物落地能力：`cleaned.md` 主链文件，以及可配置保留的 `raw.xhtml` / `cleaned.html` / `parse-result.json`
 - 新增前端文档列表主入口：`/ingest/documents`
 - 新增文档列表统一跳转链路：状态 / 分块预览 / 重处理 / 删除
+- 新增账号治理接口组：`/api/v1/admin/accounts/**`
+- 新增账号生命周期后端能力：账号列表、创建账号、账号启用/停用、密码重置、成员移除
+- 新增知识库列表授权可见性收紧：工作区管理员看全部，普通成员仅看自己显式授权的知识库
+- 新增 `auth/me` 能力位返回：`capabilities.{canAccessDocumentList,canUploadDocument,canAccessKnowledge,canAskQuestion,canAccessAdmin}`
 
 ### Changed
 - 知识库列表接口升级为“主数据 + `INDEXED` 统计”视图，保留既有 `id/name/indexedDocumentCount` 字段并新增 `description/status`
+- 文档状态查询接口升级为可在 `INDEXED` / `FAILED` 终态返回 `processingMetadata`
+- 文档处理主链从“纯文本直接分块”升级为“`raw.xhtml -> cleaned.html -> cleaned.md -> chunk`”的中间产物链路
 - 上传与问答链路增加知识库存在性/状态校验：显式传入不存在知识库返回 `400`，传入停用知识库返回 `409`
 - 上传页与问答页改为以知识库选择器为主，知识库页升级为可创建、可编辑的管理台
 - 控制台默认落点从上传页切换为文档列表页，旧路由 `/ingest/list` 改为兼容重定向
 - 文档列表页行为与执行计划对齐：URL 路径参数传递 `documentId`、`kbId` 仅展示 `ACTIVE`、状态筛选与按钮显隐规则收紧
 - V1.1 范围调整：原“轻量认证与访问控制”从收口范围中拆出，转为独立的成熟 RAG 权限体系规划
+- 前端导航收口为能力位驱动模型：一级菜单按能力位显示，`系统管理` 收口为单一入口 `/admin`
+- 旧的无 `documentId` ingest 独立入口从侧边栏移除，仅保留兼容重定向
+- 顶部账号区保留并增强统一退出登录入口
+- 管理台授权交互收口：新增成员改为两步开户向导，开户成功后直接跳转成员授权配置页
+- 成员维度授权配置页升级为知识库 / 文档双 Tab 的集中授权入口，支持按成员批量覆盖保存
+- 资源维度知识库授权页与文档授权页统一为批量勾选交互，但保存实现收口为单成员差量提交，不再依赖未稳定的 `grants:batch`
+- 文档授权管理页导航归属调整为文档列表链路，文档状态、分块预览、重处理、删除、授权管理页面统一提供“返回文档列表”按钮
 
 ### Notes
 - 启动迁移会自动补齐 `default` 知识库，并从 `ingest_documents` 回填历史 `kb_id`，避免旧数据升级后失联
 - 当前 `Unreleased` 阶段的重点，已从“补一个轻量权限入口”调整为“先完成 V1.1 管理基础收口，再独立规划权限体系”
 - 文档治理（2026-05-08）：新增成熟 RAG 权限体系专题计划与 `ADR-0005`，将权限方向从路线级描述升级为可引用的正式规划与决策留痕
+- 权限治理进展（2026-05-11）：账号生命周期后端与知识库列表授权可见性收紧已完成，动态 CSRF token 仍在后续范围内
+- 权限治理联调收口（2026-05-11）：资源维度授权最终以单成员授权接口作为稳定保存链路，成员维度继续保留 `:batch` 批量覆盖接口
 
 ---
 

@@ -1,5 +1,8 @@
 package io.github.spike.myai.qa.application.service;
 
+import io.github.spike.myai.auth.application.context.CurrentUser;
+import io.github.spike.myai.auth.application.context.CurrentUserProvider;
+import io.github.spike.myai.auth.application.service.AuthorizationService;
 import io.github.spike.myai.qa.application.command.AskQuestionCommand;
 import io.github.spike.myai.qa.application.result.AskQuestionResult;
 import io.github.spike.myai.qa.application.result.AskReferenceResult;
@@ -13,6 +16,7 @@ import io.github.spike.myai.qa.domain.port.AnswerGenerationPort;
 import io.github.spike.myai.qa.domain.port.ChunkRetrievalPort;
 import java.util.List;
 import java.util.stream.Collectors;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 
 /**
@@ -55,21 +59,31 @@ public class AskQuestionApplicationService implements AskQuestionUseCase {
     private final AnswerGenerationPort answerGenerationPort;
     /** 知识库仓储端口：用于校验目标知识库的存在性与状态 */
     private final KnowledgeBaseRepository knowledgeBaseRepository;
+    /** 当前用户上下文提供器：用于限定工作区和读取登录态 */
+    private final CurrentUserProvider currentUserProvider;
+    /** 授权服务：用于知识库问答权限和文档级覆盖过滤 */
+    private final AuthorizationService authorizationService;
 
     /**
      * 构造器注入。
      *
-     * @param chunkRetrievalPort      向量检索端口
-     * @param answerGenerationPort    LLM 回答生成端口
-     * @param knowledgeBaseRepository 知识库仓储端口
+     * @param chunkRetrievalPort      向量检索端口（语义召回）
+     * @param answerGenerationPort    LLM 回答生成端口（调用大模型）
+     * @param knowledgeBaseRepository 知识库仓储端口（校验存在性与状态）
+     * @param currentUserProvider     当前用户上下文提供器（获取登录态与工作区）
+     * @param authorizationService    授权服务（知识库问答权限与文档级覆盖过滤）
      */
     public AskQuestionApplicationService(
             ChunkRetrievalPort chunkRetrievalPort,
             AnswerGenerationPort answerGenerationPort,
-            KnowledgeBaseRepository knowledgeBaseRepository) {
+            KnowledgeBaseRepository knowledgeBaseRepository,
+            CurrentUserProvider currentUserProvider,
+            AuthorizationService authorizationService) {
         this.chunkRetrievalPort = chunkRetrievalPort;
         this.answerGenerationPort = answerGenerationPort;
         this.knowledgeBaseRepository = knowledgeBaseRepository;
+        this.currentUserProvider = currentUserProvider;
+        this.authorizationService = authorizationService;
     }
 
     /**
@@ -91,9 +105,11 @@ public class AskQuestionApplicationService implements AskQuestionUseCase {
     @Override
     public AskQuestionResult handle(AskQuestionCommand command) {
         // 1. 统一由命令对象完成输入规范化，避免重复逻辑
+        CurrentUser currentUser = currentUserProvider.requireCurrentUser();
         String question = command.normalizedQuestion();
         String kbId = command.resolvedKbId();
-        validateKnowledgeBase(kbId);
+        validateKnowledgeBase(currentUser, kbId);
+        authorizationService.requireCanAskKnowledgeBase(currentUser, kbId);
         int topK = command.resolvedTopK();
 
         // 2. 扩大召回数量后按 kbId 过滤，可提升目标知识库的命中率
@@ -101,6 +117,7 @@ public class AskQuestionApplicationService implements AskQuestionUseCase {
         int retrievalTopK = Math.max(MIN_RETRIEVAL_CANDIDATES, topK * RETRIEVAL_CANDIDATE_MULTIPLIER);
         List<RetrievedChunk> matchedChunks = chunkRetrievalPort.similaritySearch(question, retrievalTopK).stream()
                 .filter(chunk -> kbId.equals(chunk.kbId()))  // 只保留目标知识库的检索结果
+                .filter(chunk -> canAskChunk(currentUser, chunk))
                 .limit(topK)                                   // 截取实际需要的数量
                 .toList();
 
@@ -133,8 +150,13 @@ public class AskQuestionApplicationService implements AskQuestionUseCase {
      * 构造最小可用提示词。
      *
      * <p>通过显式约束“仅基于参考片段回答”，降低模型幻觉风险。
+     *
+     * @param question 用户原始问题
+     * @param chunks   检索命中的参考片段列表
+     * @return 格式化后的提示词字符串
      */
     private static String buildPrompt(String question, List<RetrievedChunk> chunks) {
+        // 将每个参考片段格式化为 "[文档ID#片段序号] 内容预览" 的形式，换行拼接
         String context = chunks.stream()
                 .map(chunk -> "[" + chunk.documentId() + "#" + chunk.chunkIndex() + "] " + trimPreview(chunk.content()))
                 .collect(Collectors.joining("\n"));
@@ -157,14 +179,20 @@ public class AskQuestionApplicationService implements AskQuestionUseCase {
      * 统一截断引用预览长度。
      *
      * <p>该方法仅用于输出展示，不改变检索和生成阶段使用的原始内容。
+     *
+     * @param content 原始内容文本
+     * @return 截断后的预览文本；空值返回空字符串
      */
     private static String trimPreview(String content) {
+        // 空值或空白内容直接返回空串，避免 NPE
         if (content == null || content.isBlank()) {
             return "";
         }
+        // 长度未超限则原样返回
         if (content.length() <= PREVIEW_MAX_LENGTH) {
             return content;
         }
+        // 超出上限则截取前 PREVIEW_MAX_LENGTH 个字符
         return content.substring(0, PREVIEW_MAX_LENGTH);
     }
 
@@ -178,14 +206,39 @@ public class AskQuestionApplicationService implements AskQuestionUseCase {
      * @throws KnowledgeBaseNotFoundException 当知识库不存在时
      * @throws KnowledgeBaseInactiveException 当知识库处于非启用状态时
      */
-    private void validateKnowledgeBase(String kbId) {
+    private void validateKnowledgeBase(CurrentUser currentUser, String kbId) {
         // 1. 查找知识库，不存在则快速失败
-        var knowledgeBase = knowledgeBaseRepository.findByKbId(kbId)
+        var knowledgeBase = knowledgeBaseRepository.findByKbId(currentUser.workspaceId(), kbId)
                 .orElseThrow(() -> new KnowledgeBaseNotFoundException("knowledge base not found: " + kbId));
 
         // 2. 状态校验：仅 ACTIVE 状态允许问答
         if (knowledgeBase.status() != KnowledgeBaseStatus.ACTIVE) {
             throw new KnowledgeBaseInactiveException("knowledge base is inactive: " + kbId);
+        }
+    }
+
+    /**
+     * 判断当前用户是否可在问答场景使用指定检索片段对应的文档。
+     *
+     * <p>该方法将授权检查结果转换为布尔值，用于流式过滤——
+     * 权限不足的文档片段会被静默排除，而非中断整个问答流程。
+     *
+     * <p>判定逻辑委托给 {@link AuthorizationService#requireCanAskDocument}，
+     * 遵循三级授权模型（工作区 → 文档覆盖 → 知识库回退）。
+     *
+     * @param currentUser 当前登录用户上下文
+     * @param chunk       检索命中的片段（包含所属文档 ID 与知识库 ID）
+     * @return {@code true} 当前用户有权限基于该片段所属文档进行问答
+     */
+    private boolean canAskChunk(CurrentUser currentUser, RetrievedChunk chunk) {
+        try {
+            // 委托授权服务进行文档级问答权限校验（含 DOC_DENY、DOC_ALLOW_* 与知识库回退）
+            authorizationService.requireCanAskDocument(currentUser, chunk.documentId(), chunk.kbId());
+            // 权限校验通过，该片段可用于问答
+            return true;
+        } catch (AccessDeniedException ex) {
+            // 权限不足时静默排除该片段，不中断整体问答流程
+            return false;
         }
     }
 }

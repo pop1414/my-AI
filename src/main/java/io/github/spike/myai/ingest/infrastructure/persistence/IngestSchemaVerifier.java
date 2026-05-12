@@ -48,33 +48,28 @@ public class IngestSchemaVerifier implements ApplicationRunner {
     private static final Set<String> REQUIRED_COLUMNS = Set.of(
             "document_id",
             "kb_id",
+            "workspace_id",
             "file_hash",
             "filename",
             "status",
             "retry_count",
             "retry_max",
             "split_version",
+            "processing_metadata",
             "created_at",
             "updated_at");
 
     private final JdbcTemplate jdbcTemplate;
     private final IngestProperties ingestProperties;
 
-    @SuppressWarnings("unused")
-    private final JdbcDocumentRepository jdbcDocumentRepository;
-
     /**
      * 构造函数。
-     * 这里注入了 JdbcDocumentRepository 是为了建立 Bean 的初始化顺序依赖，
-     * 确保在自检运行前，Repository 可能触发的初始化逻辑已经完成。
+     *
+     * <p>表结构初始化已切换为 Flyway，此处仅保留只读校验职责。
      */
-    public IngestSchemaVerifier(
-            JdbcTemplate jdbcTemplate,
-            IngestProperties ingestProperties,
-            JdbcDocumentRepository jdbcDocumentRepository) {
+    public IngestSchemaVerifier(JdbcTemplate jdbcTemplate, IngestProperties ingestProperties) {
         this.jdbcTemplate = jdbcTemplate;
         this.ingestProperties = ingestProperties;
-        this.jdbcDocumentRepository = jdbcDocumentRepository;
     }
 
     /**
@@ -122,7 +117,7 @@ public class IngestSchemaVerifier implements ApplicationRunner {
                     """
                             -- 参考修复：确认表结构与当前代码一致
                             -- 核心表：ingest_documents
-                            -- 缺失列需按 JdbcDocumentRepository INIT_SQL/升级 SQL 补齐
+                            -- 缺失列需通过 Flyway 迁移补齐
                             """);
         }
     }
