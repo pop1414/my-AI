@@ -128,6 +128,9 @@
 - “上传新版本”入口只保留在文档详情页，不放在通用上传页或文档列表页
 - “上传新版本”入口仅对具备目标 `document` 管理权限的用户显示
 - 当前用户不具备“上传新版本”权限时，详情页隐藏该入口，不使用置灰展示
+- “上传新版本”后端应提供独立接口，而不是复用通用上传接口；接口语义应绑定已有 `document` 上下文，例如 `POST /api/v1/documents/{documentId}/versions`
+- “上传新版本”独立接口除文件本身外，不再额外要求业务字段；目标 `document` 上下文由路径参数承载
+- “上传新版本”接口应携带 `expectedLatestVersionNumber` 一类乐观并发校验字段，用于防止用户基于过期详情页对旧最新版本发起新版本上传
 - 从文档详情页发起“上传新版本”时，目标 `document` 所属 `knowledge base` 必须锁定，不允许在该流程中切换到其他 `knowledge base`
 - “上传新版本”允许来源文件名变化，文件名变化不打断同一 `document` 的版本链
 - 当前最新版本即使是“回退产生的版本”，后续仍允许继续作为“上传新版本”的基线版本
@@ -188,6 +191,9 @@
 - 版本回退应创建一个新的最新版本，其内容等同于被选中的历史版本，而不是直接改写既有版本链或回拨版本指针
 - 版本回退仅对具备目标 `document` 管理权限的用户开放
 - 版本回退入口只放在文档详情页的版本历史列表中，针对具体历史版本提供“回退为最新版本”动作
+- 版本回退后端应对具体历史版本发起动作，而不是对整个 `document` 做模糊回退；接口语义应绑定目标历史版本，例如 `POST /api/v1/documents/{documentId}/versions/{versionNumber}/rollback`
+- 版本回退接口请求体可为空，不额外要求业务字段；回退目标上下文由路径参数承载
+- 版本回退接口也应携带 `expectedLatestVersionNumber` 一类乐观并发校验字段，用于防止用户基于过期版本视图发起回退
 - 版本回退创建的新最新版本应在版本历史中明确标记为“回退产生的版本”
 - 回退产生的新最新版本应明确显示其回退自哪个历史版本
 - 回退产生的新最新版本在版本历史中应同时显示“最新”与“回退产生”标记
@@ -197,6 +203,21 @@
 - 版本回退成功后的稳定结果提示应同时展示新最新版本号与回退目标版本号
 - 版本回退成功后的稳定结果提示应提供“查看版本历史”快捷入口
 - 版本回退成功后的稳定结果提示可提供“去问答”快捷入口，但前提是回退后的当前最新版本或当前可问答基线存在可问答版本
+- “上传新版本”与“版本回退”的成功响应不应继续沿用仅含 `documentId` 与 `status` 的最小返回；应提供包含版本号上下文的专用结果 DTO
+- “上传新版本”成功响应至少应返回 `documentId`、`versionNumber`、`previousVersionNumber`、`status`
+- “版本回退”成功响应至少应返回 `documentId`、`versionNumber`、`rollbackFromVersionNumber`、`status`
+- 版本治理相关成功响应应显式返回当前是否存在可问答版本的结果字段，例如 `canAskNow`
+- 版本治理相关成功响应应返回 `latestVersionNumber`，显式表达系统当前认定的最新版本号
+- 版本治理相关成功响应应返回 `askableVersionNumber`，用于明确当前问答基线实际落在哪个版本
+- 版本治理相关成功响应应返回显式版本来源类型字段，例如 `versionOriginType = UPLOAD | ROLLBACK`
+- “上传新版本”命中同内容复用时，成功结果应显式返回 `versionCreated = false`
+- 同内容未创建新版本的成功结果应返回当前仍停留的版本号，例如 `reusedLatestVersionNumber`
+- 版本治理相关成功结果应返回显式结果类型字段，例如 `versionResultType = CREATED | REUSED_IDENTICAL_CONTENT`
+- 版本治理相关错误响应除 HTTP 状态与消息外，还应补充机器可判定的业务错误码
+- “上传新版本”相关错误响应至少应覆盖：`VERSION_UPLOAD_NOT_ALLOWED_STATUS`、`VERSION_UPLOAD_NO_MANAGE_PERMISSION`、`VERSION_UPLOAD_DOCUMENT_NOT_FOUND`
+- “版本回退”相关错误响应至少应覆盖：`VERSION_ROLLBACK_NOT_ALLOWED_STATUS`、`VERSION_ROLLBACK_NO_MANAGE_PERMISSION`、`VERSION_ROLLBACK_TARGET_NOT_INDEXED`、`VERSION_ROLLBACK_TARGET_IS_LATEST`、`VERSION_ROLLBACK_DOCUMENT_NOT_FOUND`、`VERSION_ROLLBACK_VERSION_NOT_FOUND`
+- 版本治理相关错误响应应覆盖乐观并发校验失败场景，例如 `VERSION_CONFLICT_STALE_LATEST_VERSION`
+- 同内容未创建新版本不应建模为错误响应，而应建模为成功结果中的专用分支
 - 版本回退仅允许选择曾经成功形成可用内容的历史版本作为回退目标，即至少已 `INDEXED` 的版本
 - 当前最新版本不允许再次被选择为“回退为最新版本”的目标
 - 版本回退执行前应进行二次确认，明确提示该操作将改变当前最新版本
