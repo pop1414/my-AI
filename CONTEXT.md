@@ -276,6 +276,30 @@
 
 `documentId` 表示 **文档资产 ID**，不是一次性的任务 ID。
 
+- 版本信息应从当前单一 `document` 记录中拆出，形成 `document` 主表与 `document version` 子表的结构
+- `document` 主表应保留当前最新版本的轻量投影，而不是继续承载全部版本级处理字段
+- `document` 主表轻量投影至少应保留 `latestVersionNumber`
+- `document` 主表轻量投影至少应保留 `latestStatus`
+- `document` 主表轻量投影至少应保留 `latestFilename`
+- 当前阶段 `document` 主表只保留 `latestVersionNumber` 作为版本头指针，不持久化 `askableVersionNumber`
+- `document` 主表中的 `latestStatus` 应严格镜像 `latestVersionNumber` 指向版本的真实状态，而不是聚合态
+- `document` 主表轻量投影应保留 `latestVersionOriginType`
+- `document version` 应以 `documentId + versionNumber` 作为业务主键，必要时可增加内部 surrogate key
+- `versionNumber` 应从 `1` 开始递增
+- 版本回退产生的新版本也应占用下一个递增 `versionNumber`，而不是复用被回退目标的编号
+- 同内容复用、未创建新版本时，不消耗新的 `versionNumber`
+- `document version` 应持久化显式的 `versionOriginType` 字段，例如 `UPLOAD`、`ROLLBACK`
+- `document version` 应持久化可空的 `rollbackFromVersionNumber` 字段，用于表达回退产生的新版本源自哪个历史版本
+- `document version` 应持久化 `createdAt` 与 `updatedAt`
+- `document version` 应持久化版本级创建人/上传人字段
+- 回退操作者等更细粒度动作信息当前阶段优先通过审计事件查询，不额外在 `document version` 中单独持久化
+- 当前阶段“可问答”能力仍由处理状态与问答基线规则推导，不在 `document version` 中单独持久化 `askable` / `askableAt` 字段
+- 来源文件级字段如 `fileHash`、`filename`、`fileSize` 应下沉到 `document version`
+- 处理结果级字段如 `status`、`failureReason`、`processingMetadata` 应下沉到 `document version`
+- 重试与错误上下文字段如 `retryCount`、`retryMax`、`nextRetryAt`、`lastErrorCode`、`lastErrorMessage`、`lastErrorAt` 应下沉到 `document version`
+- 长期看，重试与错误上下文字段还应继续从 `document version` 拆分到独立的处理尝试表，用于承载执行轨迹而非版本终态
+- `processingMetadata` 当前阶段先保留在 `document version`
+- `reprocessCount`、`reprocessRequestedAt` 更适合进入独立处理尝试表，而不是长期停留在 `document version`
 - 同一未删除资产集合内，重复上传可复用既有 `documentId`
 - 删除后允许重新上传，形成新的 `documentId`
 - 不同内容是否归属同一 `document`，不能由系统仅凭文件名、上传人或路径等弱信号自动判断
