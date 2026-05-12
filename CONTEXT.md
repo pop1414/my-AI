@@ -78,6 +78,7 @@
 - 构建问答输入
 - 调用模型生成回答
 - 返回结构化引用
+- 默认只在当前选中的 `knowledge base` 内检索
 
 `qa` 的职责不是拥有文档，而是消费 `ingest` 产出的可检索内容，并受 `knowledge` 和授权规则约束。
 
@@ -115,6 +116,7 @@
 - 文档上传、列表、问答、授权大多围绕知识库展开
 - 不要把 knowledge base 混叫成“目录”“分组”“项目空间”
 - 每个 `knowledge base` 只隶属于一个 `workspace`
+- 上传文档时必须先选定 `knowledge base`，再创建或复用对应的 `document`
 
 ### 5.3 document
 
@@ -123,6 +125,7 @@
 - 同一未删除资产集合内，重复上传可复用既有 `documentId`
 - 删除后允许重新上传，形成新的 `documentId`
 - 每个 `document` 只归属于一个 `knowledge base`
+- `reprocess` 只针对当前 `document` 资产重新执行处理，不创建新的 `document`
 
 理解处理流程时，要区分：
 
@@ -164,6 +167,8 @@ chunk 是向量检索与引用展示的基本文本单元。
 - `FAILED`
 - `DELETING`
 - `DELETED`
+
+删除语义采用软删除：保留 `documentId`、状态轨迹与审计上下文，删除后仍应能查询到该文档的终态信息。
 
 这些状态是系统级事实，不要在讨论中自行发明近义状态名。
 
