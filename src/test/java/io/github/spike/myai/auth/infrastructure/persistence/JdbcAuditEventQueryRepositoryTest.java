@@ -37,6 +37,7 @@ class JdbcAuditEventQueryRepositoryTest {
         AuditEventSearchCriteria criteria = new AuditEventSearchCriteria(
                 "DOCUMENT_GRANT_UPSERTED",
                 "user-admin",
+                "alice",
                 "DOCUMENT_GRANT",
                 "doc-1:user-2",
                 "SUCCESS",
@@ -55,6 +56,8 @@ class JdbcAuditEventQueryRepositoryTest {
         assertTrue(countSqlCaptor.getValue().contains("workspace_id = ?"));
         assertTrue(countSqlCaptor.getValue().contains("event_type = ?"));
         assertTrue(countSqlCaptor.getValue().contains("actor_user_id = ?"));
+        assertTrue(countSqlCaptor.getValue().contains("actor_user_id ILIKE ?"));
+        assertTrue(countSqlCaptor.getValue().contains("actor_username ILIKE ?"));
         assertTrue(countSqlCaptor.getValue().contains("target_type = ?"));
         assertTrue(countSqlCaptor.getValue().contains("target_id = ?"));
         assertTrue(countSqlCaptor.getValue().contains("outcome = ?"));

@@ -47,7 +47,7 @@ class ListAuditEventsApplicationServiceTest {
                 authorizationService,
                 repository);
 
-        var result = service.handle(new ListAuditEventsQuery(null, null, null, null, null, null, null, 20, 0));
+        var result = service.handle(new ListAuditEventsQuery(null, null, null, null, null, null, null, null, 20, 0));
 
         assertEquals(1, result.items().size());
         assertEquals(1001L, result.items().getFirst().auditEventId());
@@ -68,6 +68,6 @@ class ListAuditEventsApplicationServiceTest {
 
         assertThrows(
                 AccessDeniedException.class,
-                () -> service.handle(new ListAuditEventsQuery(null, null, null, null, null, null, null, 20, 0)));
+                () -> service.handle(new ListAuditEventsQuery(null, null, null, null, null, null, null, null, 20, 0)));
     }
 }
