@@ -34,3 +34,5 @@ build/
 
 ### Data ###
 data/
+.agents/
+skills-lock.json
