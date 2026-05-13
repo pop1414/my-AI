@@ -2,7 +2,7 @@
 
 日期：2026-05-13
 
-状态：已发布 GitHub Issues
+状态：已发布 GitHub Issues；#14 已关闭，#15 后端验收完成可关闭
 
 关联 PRD：
 
@@ -41,11 +41,20 @@
 - 类型：AFK
 - 依赖：#13
 - 覆盖用户故事：9, 10, 17, 18, 19
+- 当前状态：GitHub 已关闭（CLOSED）
 
 目标：
 
 - 避免原生 Markdown 因无谓进入 Tika / HTML 转换链而破坏结构。
 - 保持标题、代码块、表格、列表和空行结构稳定进入 `cleaned.md`。
+
+完成同步：
+
+- 原生 Markdown 按 `md` / `markdown` / `mdown` / `mkd` 扩展名进入最小破坏路径，跳过 Tika 与 HTML 重解析链。
+- `cleaned.md` 保留标题、代码块围栏、表格、列表缩进和 Setext 标题等 Markdown 原生结构。
+- Markdown 清洗仅做换行、不可见字符、明显噪音、危险 raw HTML 与独立图片/本地文件噪音规整。
+- 黄金样本与边界样本已覆盖标题、代码块、表格、列表、URL/文件噪音和代码块内 HTML 示例保留。
+- chunk preview 已覆盖 Markdown 标题 `sourceHint` 与结构边界回归。
 
 ### 3. 原生 HTML 正文抽取与噪音清洗路径
 
@@ -53,11 +62,20 @@
 - 类型：AFK
 - 依赖：#13
 - 覆盖用户故事：11, 12, 17, 18, 19
+- 当前状态：后端验收完成，可关闭；GitHub 当前仍为 OPEN + `ready-for-agent`
 
 目标：
 
 - 保留 HTML 主正文结构。
 - 清理导航、页脚、脚本、样式、元数据等非正文噪音。
+
+完成同步：
+
+- 原生 HTML 按 `html` / `htm` 扩展名绕过 Tika 主链，直接进入 HTML 语义清洗与 Markdown 转换。
+- `cleaned.md` 已保留 `main` 正文中的标题、段落和列表文本语义。
+- `nav`、`aside`、`footer`、`script`、`style`、`meta`、`link`、`iframe` 等非正文噪音已通过行为断言排除。
+- HTML 黄金样本 `html-001/support-workflow.html` 已串联真实解析与分块，覆盖正文保留、噪音排除和结构保真。
+- chunk preview 已验证 HTML 清洗后的独立短标题能生成精确 `sourceHint`，并补充普通短正文不应覆盖标题上下文的负向断言。
 
 ### 4. Word 文档结构保真清洗
 
@@ -98,7 +116,7 @@
 ## 推荐执行顺序
 
 1. 先完成 #13，确保黄金样本输入和验收锚点可靠。
-2. 并行推进 #14、#15、#16、#17。
+2. #14 已关闭，#15 可关闭；继续推进 #16、#17。
 3. 最后执行 #18，形成统一回归闭环。
 
 ## 与版本治理 Issues 的关系
