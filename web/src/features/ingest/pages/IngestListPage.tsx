@@ -219,13 +219,13 @@ export function IngestListPage() {
 
 				return (
 					<Space size="small" wrap>
-						<Tooltip title="查看状态">
+						<Tooltip title="查看详情">
 							<Button
 								size="small"
 								icon={<SearchOutlined />}
 								onClick={() =>
 									navigate(
-										`/ingest/documents/${encodeURIComponent(record.documentId)}/status`,
+										`/ingest/documents/${encodeURIComponent(record.documentId)}`,
 									)
 								}
 							/>

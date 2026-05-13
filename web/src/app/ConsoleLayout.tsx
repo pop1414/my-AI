@@ -69,10 +69,17 @@ function buildMenuItems(visibleMenuKeys: string[]): MenuItem[] {
 }
 
 function resolveTitle(pathname: string): string {
+	if (pathname.includes("/prototype-read")) {
+		return "版本内容阅读原型";
+	}
+	if (pathname.includes("/versions/") && pathname.endsWith("/read")) {
+		return "版本内容阅读";
+	}
 	if (pathname.startsWith("/ingest/documents/")) {
 		const suffix = pathname.split("/").slice(3).join("/");
 		const map: Record<string, string> = {
 			status: "文档状态查询",
+			prototype: "文档详情原型",
 			"chunks-preview": "文档分块预览",
 			reprocess: "文档重处理",
 			delete: "删除文档资产",
