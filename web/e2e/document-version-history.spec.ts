@@ -149,6 +149,7 @@ test.describe("文档详情页版本历史只读视图", () => {
 
 		await page.getByText("展开更早版本（1）").click();
 
+		await expect(page).toHaveURL(/history=expanded/);
 		await expect(page.getByTestId("version-card-1")).toContainText(
 			"曾回退为最新版本",
 		);

@@ -17,9 +17,9 @@ import {
 	Tag,
 	Typography,
 } from "antd";
-import { useMemo, useState } from "react";
+import { type ReactNode, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { Link, type To, useParams, useSearchParams } from "react-router-dom";
 import {
 	getDocumentVersionHistory,
 	type DocumentVersionHistoryItem,
@@ -28,6 +28,9 @@ import { ApiErrorAlert } from "../../../shared/ui/ApiErrorAlert";
 import "./IngestDocumentDetailPage.css";
 
 const defaultVisibleVersionCount = 5;
+const fileSizeFormatter = new Intl.NumberFormat("zh-CN", {
+	maximumFractionDigits: 1,
+});
 
 function formatTime(iso: string): string {
 	return new Date(iso).toLocaleString("zh-CN", {
@@ -41,12 +44,12 @@ function formatTime(iso: string): string {
 
 function formatFileSize(fileSize: number): string {
 	if (fileSize >= 1024 * 1024) {
-		return `${(fileSize / (1024 * 1024)).toFixed(1)} MB`;
+		return `${fileSizeFormatter.format(fileSize / (1024 * 1024))}\u00a0MB`;
 	}
 	if (fileSize >= 1024) {
-		return `${(fileSize / 1024).toFixed(0)} KB`;
+		return `${fileSizeFormatter.format(fileSize / 1024)}\u00a0KB`;
 	}
-	return `${fileSize} B`;
+	return `${fileSizeFormatter.format(fileSize)}\u00a0B`;
 }
 
 function statusColor(status: string): string {
@@ -227,11 +230,44 @@ function ReadUnavailableButton({ size }: { size?: "small" }) {
 	);
 }
 
+function RouterButtonLink({
+	children,
+	icon,
+	to,
+	tone = "default",
+	size,
+	block,
+	testId,
+}: {
+	children: ReactNode;
+	icon?: ReactNode;
+	to: To;
+	tone?: "default" | "primary" | "text";
+	size?: "small";
+	block?: boolean;
+	testId?: string;
+}) {
+	const className = [
+		"detail-page__button-link",
+		`detail-page__button-link--${tone}`,
+		size ? `detail-page__button-link--${size}` : "",
+		block ? "detail-page__button-link--block" : "",
+	]
+		.filter(Boolean)
+		.join(" ");
+
+	return (
+		<Link className={className} data-testid={testId} to={to}>
+			{icon}
+			<span>{children}</span>
+		</Link>
+	);
+}
+
 export function IngestDocumentDetailPage() {
-	const navigate = useNavigate();
 	const { documentId = "" } = useParams<{ documentId?: string }>();
-	const [searchParams] = useSearchParams();
-	const [expandedHistory, setExpandedHistory] = useState(false);
+	const [searchParams, setSearchParams] = useSearchParams();
+	const expandedHistory = searchParams.get("history") === "expanded";
 
 	const historyQuery = useQuery({
 		queryKey: ["document-version-history", documentId],
@@ -270,6 +306,13 @@ export function IngestDocumentDetailPage() {
 	);
 	const hiddenVersionCount = versions.length - visibleVersions.length;
 	const errorStatus = (historyQuery.error as { status?: number } | null)?.status;
+	const expandHistory = () => {
+		setSearchParams((current) => {
+			const next = new URLSearchParams(current);
+			next.set("history", "expanded");
+			return next;
+		});
+	};
 
 	if (historyQuery.isLoading) {
 		return (
@@ -288,9 +331,9 @@ export function IngestDocumentDetailPage() {
 				title="旧版本视图不可见"
 				subTitle="版本历史仅对具备目标 document 管理权限的用户开放。当前用户可以继续从文档列表进入自己有权限的文档。"
 				extra={
-					<Button onClick={() => navigate("/ingest/documents")}>
+					<RouterButtonLink to="/ingest/documents">
 						返回文档列表
-					</Button>
+					</RouterButtonLink>
 				}
 			/>
 		);
@@ -325,12 +368,12 @@ export function IngestDocumentDetailPage() {
 					</Typography.Paragraph>
 				</div>
 				<Space wrap>
-					<Button
+					<RouterButtonLink
 						icon={<ArrowLeftOutlined />}
-						onClick={() => navigate("/ingest/documents")}
+						to="/ingest/documents"
 					>
 						返回文档列表
-					</Button>
+					</RouterButtonLink>
 					<Button
 						icon={<ReloadOutlined />}
 						loading={historyQuery.isFetching}
@@ -350,16 +393,14 @@ export function IngestDocumentDetailPage() {
 					message={`正在查看历史版本 v${viewingVersion.versionNumber}`}
 					description="此视图仅用于审计与治理查看，不会改变当前最新版本与问答基线。"
 					action={
-						<Button
+						<RouterButtonLink
 							size="small"
-							type="primary"
-							data-testid="return-latest"
-							onClick={() =>
-								navigate(buildDetailPath(historyData!.documentId))
-							}
+							tone="primary"
+							testId="return-latest"
+							to={buildDetailPath(historyData!.documentId)}
 						>
 							返回最新版本
-						</Button>
+						</RouterButtonLink>
 					}
 				/>
 			)}
@@ -424,14 +465,12 @@ export function IngestDocumentDetailPage() {
 
 						<div className="detail-page__actions">
 							{!isViewingLatest && (
-								<Button
-									type="primary"
-									onClick={() =>
-										navigate(buildDetailPath(historyData!.documentId))
-									}
+								<RouterButtonLink
+									tone="primary"
+									to={buildDetailPath(historyData!.documentId)}
 								>
 									返回最新版本
-								</Button>
+								</RouterButtonLink>
 							)}
 							<ReadUnavailableButton />
 						</div>
@@ -500,19 +539,14 @@ export function IngestDocumentDetailPage() {
 										}`}
 										data-testid={`version-card-${version.versionNumber}`}
 									>
-										<button
-											type="button"
+										<Link
 											className="detail-page__version-card-button"
-											onClick={() =>
-												navigate(
-													buildDetailPath(
-														historyData!.documentId,
-														version.isLatestVersion
-															? undefined
-															: version.versionNumber,
-													),
-												)
-											}
+											to={buildDetailPath(
+												historyData!.documentId,
+												version.isLatestVersion
+													? undefined
+													: version.versionNumber,
+											)}
 										>
 											<span className="detail-page__version-number">
 												v{version.versionNumber}
@@ -529,25 +563,21 @@ export function IngestDocumentDetailPage() {
 													回退自 v{version.rollbackFromVersionNumber}
 												</span>
 											)}
-										</button>
+										</Link>
 										<div className="detail-page__version-actions">
-											<Button
+											<RouterButtonLink
 												size="small"
-												type="text"
+												tone="text"
 												icon={<EyeOutlined />}
-												onClick={() =>
-													navigate(
-														buildDetailPath(
-														historyData!.documentId,
-															version.isLatestVersion
-																? undefined
-																: version.versionNumber,
-														),
-													)
-												}
+												to={buildDetailPath(
+													historyData!.documentId,
+													version.isLatestVersion
+														? undefined
+														: version.versionNumber,
+												)}
 											>
 												查看详情
-											</Button>
+											</RouterButtonLink>
 											<Button
 												size="small"
 												type="text"
@@ -566,7 +596,7 @@ export function IngestDocumentDetailPage() {
 					{hiddenVersionCount > 0 && (
 						<Button
 							block
-							onClick={() => setExpandedHistory(true)}
+							onClick={expandHistory}
 						>
 							展开更早版本（{hiddenVersionCount}）
 						</Button>
