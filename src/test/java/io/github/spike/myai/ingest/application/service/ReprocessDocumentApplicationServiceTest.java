@@ -18,6 +18,7 @@ import io.github.spike.myai.ingest.application.exception.DocumentNotFoundExcepti
 import io.github.spike.myai.ingest.application.result.DocumentStatusResult;
 import io.github.spike.myai.ingest.domain.model.Document;
 import io.github.spike.myai.ingest.domain.model.DocumentId;
+import io.github.spike.myai.ingest.domain.model.DocumentVersionOriginType;
 import io.github.spike.myai.ingest.domain.model.UploadStatus;
 import io.github.spike.myai.ingest.domain.port.DocumentRepository;
 import io.github.spike.myai.ingest.domain.port.DocumentVectorIndexer;
@@ -92,6 +93,8 @@ class ReprocessDocumentApplicationServiceTest {
                 documentId,
                 "workspace-a",
                 "kb-1",
+                3,
+                DocumentVersionOriginType.ROLLBACK,
                 "hash-2",
                 "b.txt",
                 1L,
@@ -116,6 +119,9 @@ class ReprocessDocumentApplicationServiceTest {
         DocumentStatusResult result = service.handle(new ReprocessDocumentCommand("doc-rep-2"));
 
         assertEquals("doc-rep-2", result.documentId().value());
+        assertEquals(3, result.latestVersionNumber());
+        assertEquals("b.txt", result.latestFilename());
+        assertEquals(DocumentVersionOriginType.ROLLBACK, result.latestVersionOriginType());
         assertEquals(UploadStatus.UPLOADED, result.status());
         verify(vectorIndexer, times(1)).deleteByDocumentIdAndSplitVersion(documentId, "v1");
     }

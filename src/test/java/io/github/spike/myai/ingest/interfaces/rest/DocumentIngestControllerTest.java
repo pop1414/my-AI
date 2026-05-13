@@ -339,11 +339,20 @@ class DocumentIngestControllerTest {
     @DisplayName("重处理触发成功时，应返回 200")
     void reprocess_shouldReturnAccepted_whenAllowed() throws Exception {
         when(reprocessDocumentUseCase.handle(any()))
-                .thenReturn(new DocumentStatusResult(new DocumentId("doc-900"), UploadStatus.UPLOADED, null));
+                .thenReturn(new DocumentStatusResult(
+                        new DocumentId("doc-900"),
+                        6,
+                        "rollback-source.txt",
+                        DocumentVersionOriginType.ROLLBACK,
+                        UploadStatus.UPLOADED,
+                        null));
 
         mockMvc.perform(post("/api/v1/documents/{documentId}/reprocess", "doc-900"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.documentId").value("doc-900"))
+                .andExpect(jsonPath("$.latestVersionNumber").value(6))
+                .andExpect(jsonPath("$.latestFilename").value("rollback-source.txt"))
+                .andExpect(jsonPath("$.latestVersionOriginType").value("ROLLBACK"))
                 .andExpect(jsonPath("$.status").value("UPLOADED"));
     }
 

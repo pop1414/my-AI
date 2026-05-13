@@ -21,8 +21,4 @@ public record DocumentStatusResult(
         DocumentVersionOriginType latestVersionOriginType,
         UploadStatus status,
         String processingMetadata) {
-
-    public DocumentStatusResult(DocumentId documentId, UploadStatus status, String processingMetadata) {
-        this(documentId, 1, null, DocumentVersionOriginType.UPLOAD, status, processingMetadata);
-    }
 }
