@@ -4,10 +4,13 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.spike.myai.ingest.domain.model.DocumentChunk;
 import io.github.spike.myai.ingest.domain.model.DocumentParseResult;
+import io.github.spike.myai.ingest.infrastructure.chunking.StructuredFallbackDocumentChunker;
 import io.github.spike.myai.ingest.infrastructure.config.IngestProperties;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -131,6 +134,27 @@ class IngestCleaningGoldenSamplesTest {
         assertFalse(markdown.contains("相关阅读"), markdown);
         assertFalse(markdown.contains("页脚热线：400-100-2000"), markdown);
         assertFalse(markdown.contains("更新时间：2026-05-13"), markdown);
+    }
+
+    @Test
+    @DisplayName("HTML 黄金样本分块预览应保留正文标题 sourceHint")
+    void htmlGoldenInput_shouldKeepChunkSourceHintForMainHeadings() throws Exception {
+        TikaDocumentTextParser parser =
+                new TikaDocumentTextParser(new TextCleaningService(), new ObjectMapper(), properties());
+        StructuredFallbackDocumentChunker chunker = new StructuredFallbackDocumentChunker(properties());
+        Path input = GOLDEN_ROOT.resolve("html-001").resolve("support-workflow.html");
+
+        DocumentParseResult result = parser.parse("support-workflow.html", Files.readAllBytes(input));
+        List<DocumentChunk> chunks = chunker.chunk(result.cleanedMarkdown());
+
+        assertTrue(chunks.stream().anyMatch(chunk ->
+                chunk.sourceHint() != null
+                        && chunk.sourceHint().contains("分流目标")
+                        && chunk.content().contains("区分普通文本清洗问题")), result.cleanedMarkdown());
+        assertTrue(chunks.stream().anyMatch(chunk ->
+                chunk.sourceHint() != null
+                        && chunk.sourceHint().contains("人工复核触发条件")
+                        && chunk.content().contains("同一段正文被错误切成三段以上")), result.cleanedMarkdown());
     }
 
     @Test

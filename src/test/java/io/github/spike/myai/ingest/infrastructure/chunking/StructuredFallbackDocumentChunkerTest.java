@@ -45,6 +45,37 @@ class StructuredFallbackDocumentChunkerTest {
                         && chunk.content().contains("curl")));
     }
 
+    @Test
+    @DisplayName("HTML 清洗后的独立短标题应生成可解释 sourceHint")
+    void chunk_shouldKeepSourceHintForPlainHtmlHeadings() {
+        StructuredFallbackDocumentChunker chunker = new StructuredFallbackDocumentChunker(properties());
+        String cleanedMarkdown = """
+                支持工单分流说明
+
+                面向文档回归值班同学的内部说明页
+
+                分流目标
+
+                这份页面用于说明值班同学如何区分普通文本清洗问题、结构退化问题和需要人工升级的问题。
+
+                人工复核触发条件
+
+                * 同一段正文被错误切成三段以上，影响后续问答连续性。
+                * 列表或表格被拍平成普通文本，导致关键信息位置无法稳定引用。
+                """;
+
+        List<DocumentChunk> chunks = chunker.chunk(cleanedMarkdown);
+
+        assertTrue(chunks.stream().anyMatch(chunk ->
+                chunk.sourceHint() != null
+                        && chunk.sourceHint().contains("分流目标")
+                        && chunk.content().contains("区分普通文本清洗问题")));
+        assertTrue(chunks.stream().anyMatch(chunk ->
+                chunk.sourceHint() != null
+                        && chunk.sourceHint().contains("人工复核触发条件")
+                        && chunk.content().contains("同一段正文被错误切成三段以上")));
+    }
+
     private static IngestProperties properties() {
         IngestProperties properties = new IngestProperties();
         properties.getChunk().setChunkSize(80);

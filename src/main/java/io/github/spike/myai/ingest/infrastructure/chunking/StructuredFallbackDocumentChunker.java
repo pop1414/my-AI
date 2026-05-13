@@ -31,6 +31,9 @@ public class StructuredFallbackDocumentChunker implements DocumentChunker {
     private static final Pattern CHINESE_HEADING = Pattern.compile("^(第[\\p{IsHan}0-9]+[章节篇])\\s*(.*)$");
     // 数字标题：1. / 1.1 / 1.1.1
     private static final Pattern NUMBER_HEADING = Pattern.compile("^\\d+(?:\\.\\d+)*\\s+.+$");
+    // HTML 清洗后常见的独立短标题：无 Markdown #，但独占一段。
+    private static final Pattern PLAIN_STANDALONE_HEADING =
+            Pattern.compile("^[\\p{IsHan}A-Za-z0-9][\\p{IsHan}A-Za-z0-9\\s/（）()：:-]{1,47}$");
 
     public StructuredFallbackDocumentChunker(IngestProperties ingestProperties) {
         this.chunkSize = ingestProperties.getChunk().getChunkSize();
@@ -256,7 +259,29 @@ public class StructuredFallbackDocumentChunker implements DocumentChunker {
         if (number.matches()) {
             return firstLine.trim();
         }
+        if (isPlainStandaloneHeading(segment, firstLine)) {
+            return firstLine.trim();
+        }
         return null;
+    }
+
+    private static boolean isPlainStandaloneHeading(String segment, String firstLine) {
+        String trimmed = segment.strip();
+        if (!trimmed.equals(firstLine) || firstLine.length() > 48) {
+            return false;
+        }
+        if (firstLine.startsWith("* ")
+                || firstLine.startsWith("- ")
+                || firstLine.startsWith("|")
+                || firstLine.startsWith("```")
+                || firstLine.endsWith("。")
+                || firstLine.endsWith("！")
+                || firstLine.endsWith("？")
+                || firstLine.endsWith(".")
+                || firstLine.endsWith(",")) {
+            return false;
+        }
+        return PLAIN_STANDALONE_HEADING.matcher(firstLine).matches();
     }
 
     /**
