@@ -24,6 +24,13 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional
 public class JdbcDocumentRepository implements DocumentRepository {
 
+    /**
+     * 主表旧版本事实列仍做迁移兼容镜像写入。
+     *
+     * <p>{@code file_hash/filename/file_size/status/processing_metadata} 的真实事实源已经迁入
+     * {@code ingest_document_versions}；这里保留写入仅服务旧索引、旧报表或灰度期人工排障，
+     * 新生产读取路径不得再从这些旧列推导版本语义。
+     */
     private static final String UPSERT_DOCUMENT_SQL = """
             INSERT INTO ingest_documents
               (document_id, workspace_id, kb_id, file_hash, filename, file_size, status,
@@ -130,7 +137,7 @@ public class JdbcDocumentRepository implements DocumentRepository {
             """;
 
     private static final String FIND_BY_KB_ID_AND_FILE_HASH_SQL = DOCUMENT_PROJECTION_SELECT + """
-            WHERE d.workspace_id = ? AND d.kb_id = ? AND d.file_hash = ? AND d.status <> 'DELETED'
+            WHERE d.workspace_id = ? AND d.kb_id = ? AND v.file_hash = ? AND d.latest_status <> 'DELETED'
             ORDER BY d.created_at DESC
             LIMIT 1
             """;
@@ -144,6 +151,10 @@ public class JdbcDocumentRepository implements DocumentRepository {
             LIMIT 1
             """;
 
+    /**
+     * 以下主表状态/错误字段更新仅维护 latest projection 与旧兼容镜像。
+     * 版本级处理事实必须同步写入 {@code ingest_document_versions}。
+     */
     private static final String COMPARE_AND_SET_DOCUMENT_STATUS_SQL = """
             UPDATE ingest_documents
             SET status = ?, latest_status = ?, failure_reason = ?, updated_at = ?

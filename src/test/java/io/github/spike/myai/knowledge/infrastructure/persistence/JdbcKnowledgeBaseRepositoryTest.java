@@ -29,7 +29,7 @@ class JdbcKnowledgeBaseRepositoryTest {
     }
 
     @Test
-    @DisplayName("listKnowledgeBases 应基于主数据 left join INDEXED 文档统计")
+    @DisplayName("listKnowledgeBases 应基于 latest projection 统计 INDEXED 文档")
     void listKnowledgeBases_shouldUseLeftJoinAggregation() {
         JdbcTemplate jdbcTemplate = Mockito.mock(JdbcTemplate.class);
         JdbcKnowledgeBaseRepository repository = new JdbcKnowledgeBaseRepository(jdbcTemplate);
@@ -42,7 +42,7 @@ class JdbcKnowledgeBaseRepositoryTest {
         assertTrue(sqlCaptor.getValue().contains("kb.workspace_id = ?"));
         assertTrue(sqlCaptor.getValue().contains("LEFT JOIN ingest_documents"));
         assertTrue(sqlCaptor.getValue().contains("doc.workspace_id = kb.workspace_id"));
-        assertTrue(sqlCaptor.getValue().contains("doc.status = 'INDEXED'"));
+        assertTrue(sqlCaptor.getValue().contains("doc.latest_status = 'INDEXED'"));
         assertTrue(sqlCaptor.getValue().contains("GROUP BY kb.kb_id, kb.workspace_id, kb.name, kb.description, kb.status, kb.created_at"));
         assertTrue(sqlCaptor.getValue().contains("ORDER BY kb.created_at ASC, kb.kb_id ASC"));
     }
