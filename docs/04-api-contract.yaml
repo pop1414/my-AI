@@ -1093,7 +1093,8 @@ paths:
         响应按 `versionNumber DESC` 稳定排序。
 
         `isLatestVersion` 由 `ingest_documents.latest_version_number` 与版本号比较推导；
-        `isAskableVersion` 不持久化，当前规则为：仅 latest 且状态为 `INDEXED` 的版本可用于现有 QA 基线。
+        `isAskableVersion` 不持久化，由当前 QA 基线推导：优先使用已 `INDEXED` 的最新版本；
+        当最新版本尚未 `INDEXED` 时，回退到最近一个已 `INDEXED` 的历史版本；若不存在已 `INDEXED` 版本则全部为 false。
         历史版本查询只读取版本事实，不修改 latest projection，也不改变 QA 可问答基线。
       security:
         - cookieAuth: []
@@ -1810,7 +1811,7 @@ components:
           description: 是否为当前 latest projection 指向版本
         isAskableVersion:
           type: boolean
-          description: 是否可用于当前 QA 基线；由 latest + INDEXED 规则推导，不持久化
+          description: 是否为当前 QA 基线使用的版本；优先 latest + INDEXED，否则回退到最近一个已 INDEXED 的历史版本；不持久化
 
     ProcessingMetadata:
       type: object

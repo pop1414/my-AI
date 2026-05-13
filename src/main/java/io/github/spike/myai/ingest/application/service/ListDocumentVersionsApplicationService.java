@@ -14,6 +14,8 @@ import io.github.spike.myai.ingest.domain.model.DocumentVersionHistoryItem;
 import io.github.spike.myai.ingest.domain.model.UploadStatus;
 import io.github.spike.myai.ingest.domain.port.DocumentRepository;
 import io.github.spike.myai.ingest.domain.port.DocumentVersionHistoryRepository;
+import java.util.Comparator;
+import java.util.List;
 import org.springframework.stereotype.Service;
 
 /**
@@ -106,15 +108,18 @@ public class ListDocumentVersionsApplicationService implements ListDocumentVersi
         // 步骤 4：校验用户对该文档的读取权限（无权限时内部抛出异常）
         authorizationService.requireCanReadDocument(currentUser, documentId.value(), document.kbId());
 
-        // 步骤 5：查询版本历史 → 领域模型映射为应用层结果 → 组装返回
+        // 步骤 5：查询版本历史 → 推导问答基线 → 领域模型映射为应用层结果 → 组装返回
+        List<DocumentVersionHistoryItem> historyItems =
+                documentVersionHistoryRepository.findByDocumentIdOrderByVersionNumberDesc(
+                        currentUser.workspaceId(),
+                        documentId);
+        int askableVersionNumber = resolveAskableVersionNumber(historyItems);
+
         return new DocumentVersionHistoryResult(
                 documentId.value(),
                 SORT_VERSION_NUMBER_DESC,
-                documentVersionHistoryRepository.findByDocumentIdOrderByVersionNumberDesc(
-                                currentUser.workspaceId(),
-                                documentId)
-                        .stream()
-                        .map(ListDocumentVersionsApplicationService::toResult)
+                historyItems.stream()
+                        .map(item -> toResult(item, askableVersionNumber))
                         .toList());
     }
 
@@ -126,15 +131,15 @@ public class ListDocumentVersionsApplicationService implements ListDocumentVersi
      *   <li><b>isLatestVersion</b> —— 当 item.versionNumber 等于 latestVersionNumber 时为 true；</li>
      *   <li><b>failureReason</b> —— 仅当 status 为 FAILED 时返回原始值，
      *       其余状态返回 null（避免无关失败原因污染正常状态的版本记录）；</li>
-     *   <li><b>isAskableVersion</b> —— 仅当 isLatestVersion 为 true
-     *       <em>且</em> status 为 INDEXED 时为 true，
-     *       表示该版本可被 RAG 问答系统检索。</li>
+     *   <li><b>isAskableVersion</b> —— 当该版本命中当前问答基线时为 true；
+     *       当前问答基线优先使用已 INDEXED 的最新版本，否则回退到最近一个已 INDEXED 的历史版本。</li>
      * </ul>
      *
      * @param item 领域层版本历史项
+     * @param askableVersionNumber 当前可问答版本号，无可问答版本时为 0
      * @return 应用层版本历史项返回结果
      */
-    private static DocumentVersionHistoryItemResult toResult(DocumentVersionHistoryItem item) {
+    private static DocumentVersionHistoryItemResult toResult(DocumentVersionHistoryItem item, int askableVersionNumber) {
         // 判定当前版本是否为最新版本（通过比较 versionNumber 与 latestVersionNumber）
         boolean isLatestVersion = item.versionNumber() == item.latestVersionNumber();
 
@@ -153,7 +158,14 @@ public class ListDocumentVersionsApplicationService implements ListDocumentVersi
                 item.createdAt(),
                 item.updatedAt(),
                 isLatestVersion,
-                // 可问答版本 = 最新版本 + 已索引完成
-                isLatestVersion && item.status() == UploadStatus.INDEXED);
+                item.versionNumber() == askableVersionNumber);
+    }
+
+    private static int resolveAskableVersionNumber(List<DocumentVersionHistoryItem> historyItems) {
+        return historyItems.stream()
+                .filter(item -> item.status() == UploadStatus.INDEXED)
+                .map(DocumentVersionHistoryItem::versionNumber)
+                .max(Comparator.naturalOrder())
+                .orElse(0);
     }
 }

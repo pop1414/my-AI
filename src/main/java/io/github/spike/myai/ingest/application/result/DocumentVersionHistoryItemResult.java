@@ -20,7 +20,7 @@ import java.time.Instant;
  * @param createdAt                创建时间
  * @param updatedAt                最后更新时间
  * @param isLatestVersion          是否为当前最新版本
- * @param isAskableVersion         是否为可问答版本（最新版本且状态为 INDEXED）
+ * @param isAskableVersion         是否为当前问答基线使用的版本；最新版本未 INDEXED 时回退到最近一个 INDEXED 版本
  */
 public record DocumentVersionHistoryItemResult(
         String documentId,

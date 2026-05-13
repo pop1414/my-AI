@@ -98,6 +98,37 @@ class ListDocumentVersionsApplicationServiceTest {
     }
 
     @Test
+    @DisplayName("最新版本不可问答时，应将最近一个已索引历史版本标记为可问答")
+    void handle_shouldMarkNewestIndexedHistoryVersionAskable_whenLatestVersionIsNotIndexed() {
+        DocumentRepository documentRepository = Mockito.mock(DocumentRepository.class);
+        DocumentVersionHistoryRepository historyRepository = Mockito.mock(DocumentVersionHistoryRepository.class);
+        CurrentUserProvider currentUserProvider = currentUserProvider();
+        AuthorizationService authorizationService = Mockito.mock(AuthorizationService.class);
+        ListDocumentVersionsApplicationService service = new ListDocumentVersionsApplicationService(
+                documentRepository,
+                historyRepository,
+                currentUserProvider,
+                authorizationService);
+        DocumentId documentId = new DocumentId("doc-201");
+        when(documentRepository.findById(eq("workspace-a"), eq(documentId)))
+                .thenReturn(Optional.of(document(documentId, UploadStatus.FAILED)));
+        when(historyRepository.findByDocumentIdOrderByVersionNumberDesc(eq("workspace-a"), eq(documentId)))
+                .thenReturn(List.of(
+                        historyItem(documentId, 3, DocumentVersionOriginType.UPLOAD, null, UploadStatus.FAILED),
+                        historyItem(documentId, 2, DocumentVersionOriginType.UPLOAD, null, UploadStatus.INDEXED),
+                        historyItem(documentId, 1, DocumentVersionOriginType.UPLOAD, null, UploadStatus.INDEXED)));
+
+        DocumentVersionHistoryResult result = service.handle(new ListDocumentVersionsQuery("doc-201"));
+
+        assertTrue(result.versions().get(0).isLatestVersion());
+        assertFalse(result.versions().get(0).isAskableVersion());
+        assertFalse(result.versions().get(1).isLatestVersion());
+        assertTrue(result.versions().get(1).isAskableVersion());
+        assertFalse(result.versions().get(2).isLatestVersion());
+        assertFalse(result.versions().get(2).isAskableVersion());
+    }
+
+    @Test
     @DisplayName("文档存在但版本事实为空时，应返回空版本列表")
     void handle_shouldReturnEmptyVersions_whenHistoryIsEmpty() {
         DocumentRepository documentRepository = Mockito.mock(DocumentRepository.class);
