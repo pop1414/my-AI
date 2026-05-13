@@ -14,7 +14,7 @@ import io.github.spike.myai.ingest.application.exception.DocumentNotFoundExcepti
  * <ul>
  *   <li>当前用户已认证（通过安全上下文获取）；</li>
  *   <li>目标文档在当前用户的工作区内存在；</li>
- *   <li>当前用户对该文档具备读取权限。</li>
+ *   <li>当前用户对该文档具备管理权限。</li>
  * </ul>
  *
  * @author Spike

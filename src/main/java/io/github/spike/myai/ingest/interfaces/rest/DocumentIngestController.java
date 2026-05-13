@@ -270,7 +270,7 @@ public class DocumentIngestController {
      * <ul>
      *     <li>路径：GET /api/v1/documents/{documentId}/versions</li>
      *     <li>排序：versionNumber DESC</li>
-     *     <li>权限：当前用户必须对目标文档具备读取权限</li>
+     *     <li>权限：当前用户必须对目标文档具备管理权限</li>
      * </ul>
      *
      * @param documentId 文档资产 ID

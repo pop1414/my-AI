@@ -24,7 +24,7 @@ import org.springframework.stereotype.Service;
  * <ol>
  *   <li>获取当前用户身份；</li>
  *   <li>校验目标文档是否存在；</li>
- *   <li>校验当前用户对该文档的读取权限；</li>
+ *   <li>校验当前用户对该文档的管理权限；</li>
  *   <li>调取版本历史读模型并组装返回结果。</li>
  * </ol>
  *
@@ -46,7 +46,7 @@ public class ListDocumentVersionsApplicationService implements ListDocumentVersi
     private final DocumentVersionHistoryRepository documentVersionHistoryRepository;
     /** 当前用户提供器：获取请求上下文中的用户信息 */
     private final CurrentUserProvider currentUserProvider;
-    /** 授权服务：校验当前用户对目标文档的读取权限 */
+    /** 授权服务：校验当前用户对目标文档的管理权限 */
     private final AuthorizationService authorizationService;
 
     /**
@@ -81,7 +81,7 @@ public class ListDocumentVersionsApplicationService implements ListDocumentVersi
      *   <li><b>文档定位</b> —— 将标准化后的 documentId 转为领域标识，
      *       在当前用户工作区内查找文档主记录，不存在则抛出
      *       {@link DocumentNotFoundException}；</li>
-     *   <li><b>权限校验</b> —— 调用授权服务确认当前用户对该文档具有读取权限；</li>
+     *   <li><b>权限校验</b> —— 调用授权服务确认当前用户对该文档具有管理权限；</li>
      *   <li><b>数据查询</b> —— 从版本历史仓储中拉取该文档的版本历史读模型；</li>
      *   <li><b>结果组装</b> —— 逐条映射领域模型为应用层返回结果。</li>
      * </ol>
@@ -102,8 +102,8 @@ public class ListDocumentVersionsApplicationService implements ListDocumentVersi
         Document document = documentRepository.findById(currentUser.workspaceId(), documentId)
                 .orElseThrow(() -> new DocumentNotFoundException("document not found: " + documentId.value()));
 
-        // 步骤 4：校验用户对该文档的读取权限（无权限时内部抛出异常）
-        authorizationService.requireCanReadDocument(currentUser, documentId.value(), document.kbId());
+        // 步骤 4：校验用户对该文档的管理权限（无权限时内部抛出异常）
+        authorizationService.requireCanManageDocument(currentUser, documentId.value(), document.kbId());
 
         // 步骤 5：查询版本历史 → 领域模型映射为应用层结果 → 组装返回
         DocumentVersionHistory history =

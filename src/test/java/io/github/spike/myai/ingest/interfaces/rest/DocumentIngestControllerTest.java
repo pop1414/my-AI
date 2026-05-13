@@ -372,15 +372,15 @@ class DocumentIngestControllerTest {
     }
 
     @Test
-    @DisplayName("版本历史查询无读取权限时，应返回 403")
-    void listVersions_shouldReturnForbidden_whenReadAccessDenied() throws Exception {
+    @DisplayName("版本历史查询无管理权限时，应返回 403")
+    void listVersions_shouldReturnForbidden_whenManageAccessDenied() throws Exception {
         when(listDocumentVersionsUseCase.handle(any(ListDocumentVersionsQuery.class)))
-                .thenThrow(new AccessDeniedException("document read access denied"));
+                .thenThrow(new AccessDeniedException("document manage access denied"));
 
         mockMvc.perform(get("/api/v1/documents/{documentId}/versions", "doc-denied"))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("FORBIDDEN"))
-                .andExpect(jsonPath("$.message").value("document read access denied"));
+                .andExpect(jsonPath("$.message").value("document manage access denied"));
     }
 
     @Test

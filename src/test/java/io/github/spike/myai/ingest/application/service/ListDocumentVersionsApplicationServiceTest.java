@@ -36,7 +36,7 @@ import org.springframework.security.access.AccessDeniedException;
 class ListDocumentVersionsApplicationServiceTest {
 
     @Test
-    @DisplayName("查询版本历史时，应校验读取权限并返回版本号倒序结果")
+    @DisplayName("查询版本历史时，应校验管理权限并返回版本号倒序结果")
     void handle_shouldReturnVersionHistory_whenDocumentExists() {
         DocumentRepository documentRepository = Mockito.mock(DocumentRepository.class);
         DocumentVersionHistoryRepository historyRepository = Mockito.mock(DocumentVersionHistoryRepository.class);
@@ -70,7 +70,7 @@ class ListDocumentVersionsApplicationServiceTest {
         assertFalse(result.versions().get(1).isLatestVersion());
         assertFalse(result.versions().get(1).isAskableVersion());
         assertEquals("parse failed", result.versions().get(2).failureReason());
-        verify(authorizationService).requireCanReadDocument(any(CurrentUser.class), eq("doc-100"), eq("kb-1"));
+        verify(authorizationService).requireCanManageDocument(any(CurrentUser.class), eq("doc-100"), eq("kb-1"));
     }
 
     @Test
@@ -155,8 +155,8 @@ class ListDocumentVersionsApplicationServiceTest {
     }
 
     @Test
-    @DisplayName("读取权限不足时，应抛出 AccessDeniedException 且不查询版本历史")
-    void handle_shouldThrowAccessDeniedAndSkipHistoryQuery_whenReadAccessDenied() {
+    @DisplayName("管理权限不足时，应抛出 AccessDeniedException 且不查询版本历史")
+    void handle_shouldThrowAccessDeniedAndSkipHistoryQuery_whenManageAccessDenied() {
         DocumentRepository documentRepository = Mockito.mock(DocumentRepository.class);
         DocumentVersionHistoryRepository historyRepository = Mockito.mock(DocumentVersionHistoryRepository.class);
         CurrentUserProvider currentUserProvider = currentUserProvider();
@@ -169,9 +169,9 @@ class ListDocumentVersionsApplicationServiceTest {
         DocumentId documentId = new DocumentId("doc-denied");
         when(documentRepository.findById(eq("workspace-a"), eq(documentId)))
                 .thenReturn(Optional.of(document(documentId, UploadStatus.INDEXED)));
-        Mockito.doThrow(new AccessDeniedException("document read access denied"))
+        Mockito.doThrow(new AccessDeniedException("document manage access denied"))
                 .when(authorizationService)
-                .requireCanReadDocument(any(CurrentUser.class), eq("doc-denied"), eq("kb-1"));
+                .requireCanManageDocument(any(CurrentUser.class), eq("doc-denied"), eq("kb-1"));
 
         assertThrows(
                 AccessDeniedException.class,
