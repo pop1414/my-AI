@@ -32,12 +32,43 @@ const documentChunksPreviewResponseSchema = z.object({
 	chunks: z.array(documentChunkPreviewItemSchema),
 });
 
+const documentVersionHistoryItemSchema = z.object({
+	documentId: z.string().min(1),
+	versionNumber: z.number().int().positive(),
+	versionOriginType: z.string().min(1),
+	rollbackFromVersionNumber: z.number().int().positive().nullable().optional(),
+	filename: z.string().min(1),
+	fileSize: z.number().int().nonnegative(),
+	status: z.string().min(1),
+	failureReason: z.string().nullable().optional(),
+	createdAt: z.string().min(1),
+	updatedAt: z.string().min(1),
+	isLatestVersion: z.boolean(),
+	isAskableVersion: z.boolean(),
+	createdByUserId: z.string().nullable().optional(),
+	createdByDisplayName: z.string().nullable().optional(),
+	hasBeenRolledBackAsLatest: z.boolean().optional(),
+	canRollback: z.boolean().optional(),
+});
+
+const documentVersionHistoryResponseSchema = z.object({
+	documentId: z.string().min(1),
+	sort: z.string().min(1),
+	versions: z.array(documentVersionHistoryItemSchema),
+});
+
 export type UploadResponse = z.infer<typeof uploadResponseSchema>;
 export type DocumentStatusResponse = z.infer<
 	typeof documentStatusResponseSchema
 >;
 export type DocumentChunksPreviewResponse = z.infer<
 	typeof documentChunksPreviewResponseSchema
+>;
+export type DocumentVersionHistoryItem = z.infer<
+	typeof documentVersionHistoryItemSchema
+>;
+export type DocumentVersionHistoryResponse = z.infer<
+	typeof documentVersionHistoryResponseSchema
 >;
 
 // ── Document List ────────────────────────────────────────────────
@@ -128,6 +159,15 @@ export async function getDocumentChunksPreview(params: {
 		`/api/v1/documents/${encodeURIComponent(params.documentId)}/chunks/preview?${query}`,
 	);
 	return documentChunksPreviewResponseSchema.parse(response);
+}
+
+export async function getDocumentVersionHistory(
+	documentId: string,
+): Promise<DocumentVersionHistoryResponse> {
+	const response = await requestJson<unknown>(
+		`/api/v1/documents/${encodeURIComponent(documentId)}/versions`,
+	);
+	return documentVersionHistoryResponseSchema.parse(response);
 }
 
 export async function reprocessDocument(
