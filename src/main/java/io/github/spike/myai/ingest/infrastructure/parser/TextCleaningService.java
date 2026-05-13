@@ -105,6 +105,14 @@ public class TextCleaningService {
      */
     private static final Pattern FILE_URL_LINE = Pattern.compile("(?im)^\\s*file:///\\S+\\s*$");
     /**
+     * 常见页眉页脚噪音行匹配模式。
+     *
+     * <p>覆盖弱结构 PDF 中常见的“内部评审稿”和“第 N 页 / 质检热线 ...”样式，
+     * 只在整行匹配时删除，避免误伤正文中的解释性描述。
+     */
+    private static final Pattern PAGE_CHROME_NOISE_LINE =
+            Pattern.compile("(?im)^\\s*(内部评审稿|第\\s*\\d+\\s*页\\s*(?:/\\s*质检热线\\s*[-0-9]+)?)\\s*$");
+    /**
      * 分隔线匹配模式，匹配由连续横线、下划线或等号组成的装饰性分隔线，
      * 这些线条在 Markdown 中可能被误解析为标题或分割标记
      */
@@ -151,8 +159,8 @@ public class TextCleaningService {
         if (body == null) {
             body = document.appendElement("body");
         }
-        // 移除导航栏和页脚等噪声区域
-        body.select("nav, footer").remove();
+        // 移除导航栏、侧边栏和页脚等噪声区域
+        body.select("nav, aside, footer").remove();
         // 移除所有空块级元素（无文本且无子元素的段落/div/span）
         removeEmptyBlocks(body);
         // 返回清洗后的 HTML 片段（仅 body 内部内容）
@@ -190,7 +198,7 @@ public class TextCleaningService {
             return "";
         }
         // 第 1 步：归一化换行符（CRLF/CR → LF）
-        String text = rawMarkdown.replace("\r\n", "\n").replace("\r", "\n");
+        String text = normalizeCompatibilityChars(rawMarkdown.replace("\r\n", "\n").replace("\r", "\n"));
         // 第 2 步：去除控制字符（保留 \n 和 \t）
         text = CONTROL_CHARS.matcher(text).replaceAll("");
         // 第 3 步：去除零宽空格/BOM 等不可见格式化字符
@@ -246,7 +254,7 @@ public class TextCleaningService {
             return "";
         }
         // 第 1 步：统一换行符为 Unix 风格（\n）
-        String text = rawText.replace("\r\n", "\n").replace("\r", "\n");
+        String text = normalizeCompatibilityChars(rawText.replace("\r\n", "\n").replace("\r", "\n"));
         // 第 2 步：去除除换行/制表外的所有控制字符
         text = CONTROL_CHARS.matcher(text).replaceAll("");
 
@@ -296,6 +304,7 @@ public class TextCleaningService {
         String cleaned = IMAGE_FILENAME_LINE.matcher(line).replaceAll("");
         cleaned = IMAGE_URL.matcher(cleaned).replaceAll("");
         cleaned = FILE_URL.matcher(cleaned).replaceAll("");
+        cleaned = PAGE_CHROME_NOISE_LINE.matcher(cleaned).replaceAll("");
         cleaned = SEPARATOR_LINE.matcher(cleaned).replaceAll("");
         cleaned = MULTI_SPACE.matcher(cleaned).replaceAll(" ");
         return stripTrailingWhitespace(cleaned);
@@ -318,7 +327,27 @@ public class TextCleaningService {
         String cleaned = IMAGE_FILENAME_LINE.matcher(line).replaceAll("");
         cleaned = IMAGE_URL_LINE.matcher(cleaned).replaceAll("");
         cleaned = FILE_URL_LINE.matcher(cleaned).replaceAll("");
+        cleaned = PAGE_CHROME_NOISE_LINE.matcher(cleaned).replaceAll("");
         return stripTrailingWhitespace(cleaned);
+    }
+
+    private static String normalizeCompatibilityChars(String text) {
+        return text
+                .replace('⼀', '一')
+                .replace('⼆', '二')
+                .replace('⼈', '人')
+                .replace('⼊', '入')
+                .replace('⼯', '工')
+                .replace('⼦', '子')
+                .replace('⽂', '文')
+                .replace('⾳', '音')
+                .replace('⽤', '用')
+                .replace('⾏', '行')
+                .replace('⾃', '自')
+                .replace('⾝', '身')
+                .replace('⽗', '父')
+                .replace('⽽', '而')
+                .replace('⻚', '页');
     }
 
     /**

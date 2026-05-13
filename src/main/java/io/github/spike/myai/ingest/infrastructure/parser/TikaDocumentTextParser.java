@@ -119,6 +119,13 @@ public class TikaDocumentTextParser implements DocumentTextParser {
                 // 非 UTF-8 且无可识别 BOM 时，回退 Tika 让其执行字符集检测。
             }
         }
+        if (isNativeHtml(filename)) {
+            try {
+                return parseNativeHtml(filename, content);
+            } catch (CharacterCodingException ignored) {
+                // 非 UTF-8 且无可识别 BOM 时，回退 Tika 让其执行字符集检测。
+            }
+        }
         return parseWithTika(filename, content);
     }
 
@@ -193,7 +200,7 @@ public class TikaDocumentTextParser implements DocumentTextParser {
      */
     private DocumentParseResult parseNativeMarkdown(String filename, byte[] content) throws CharacterCodingException {
         // 第 1 步：按 BOM 或严格 UTF-8 解码为原始 Markdown 文本
-        DecodedMarkdown decodedMarkdown = decodeNativeMarkdown(content);
+        DecodedText decodedMarkdown = decodeTextContent(content);
         String rawMarkdown = decodedMarkdown.text();
         // 第 2 步：委托 TextCleaningService 执行最小破坏清洗（保留代码块/缩进/表格等结构）
         String cleanedMarkdown = textCleaningService.cleanNativeMarkdown(rawMarkdown);
@@ -213,8 +220,25 @@ public class TikaDocumentTextParser implements DocumentTextParser {
                 buildProcessingMetadata(filename, metadata, cleanedMarkdown));
     }
 
+    private DocumentParseResult parseNativeHtml(String filename, byte[] content) throws CharacterCodingException {
+        DecodedText decodedHtml = decodeTextContent(content);
+        String cleanedHtml = textCleaningService.cleanHtml(decodedHtml.text());
+        String cleanedMarkdown = textCleaningService.toMarkdown(cleanedHtml);
+        validateCleanedMarkdown(cleanedMarkdown);
+
+        Metadata metadata = new Metadata();
+        metadata.set(TikaCoreProperties.RESOURCE_NAME_KEY, filename);
+        metadata.set(Metadata.CONTENT_TYPE, "text/html; charset=" + decodedHtml.charset().name());
+
+        return new DocumentParseResult(
+                decodedHtml.text(),
+                cleanedHtml,
+                cleanedMarkdown,
+                buildProcessingMetadata(filename, metadata, cleanedMarkdown));
+    }
+
     /**
-     * 按 BOM 或严格 UTF-8 解码原生 Markdown 文件的字节内容。
+     * 按 BOM 或严格 UTF-8 解码原生文本文件的字节内容。
      *
      * <p>解码策略按优先级：
      * <ol>
@@ -232,29 +256,29 @@ public class TikaDocumentTextParser implements DocumentTextParser {
      * @return 解码后的文本及所用字符集
      * @throws CharacterCodingException 严格解码失败时抛出（非 UTF-8/UTF-16 文件）
      */
-    private static DecodedMarkdown decodeNativeMarkdown(byte[] content) throws CharacterCodingException {
+    private static DecodedText decodeTextContent(byte[] content) throws CharacterCodingException {
         // 第 1 步：检测 UTF-8 BOM（EF BB BF）
         if (content.length >= 3
                 && (content[0] & 0xFF) == 0xEF
                 && (content[1] & 0xFF) == 0xBB
                 && (content[2] & 0xFF) == 0xBF) {
             // 跳过前 3 字节 BOM，按严格 UTF-8 解码
-            return new DecodedMarkdown(decodeStrict(StandardCharsets.UTF_8, content, 3), StandardCharsets.UTF_8);
+            return new DecodedText(decodeStrict(StandardCharsets.UTF_8, content, 3), StandardCharsets.UTF_8);
         }
         // 第 2 步：检测 UTF-16LE BOM（FF FE）
         if (content.length >= 2
                 && (content[0] & 0xFF) == 0xFF
                 && (content[1] & 0xFF) == 0xFE) {
-            return new DecodedMarkdown(decodeStrict(StandardCharsets.UTF_16LE, content, 2), StandardCharsets.UTF_16LE);
+            return new DecodedText(decodeStrict(StandardCharsets.UTF_16LE, content, 2), StandardCharsets.UTF_16LE);
         }
         // 第 3 步：检测 UTF-16BE BOM（FE FF）
         if (content.length >= 2
                 && (content[0] & 0xFF) == 0xFE
                 && (content[1] & 0xFF) == 0xFF) {
-            return new DecodedMarkdown(decodeStrict(StandardCharsets.UTF_16BE, content, 2), StandardCharsets.UTF_16BE);
+            return new DecodedText(decodeStrict(StandardCharsets.UTF_16BE, content, 2), StandardCharsets.UTF_16BE);
         }
         // 第 4 步：无 BOM，按严格 UTF-8 解码
-        return new DecodedMarkdown(decodeStrict(StandardCharsets.UTF_8, content, 0), StandardCharsets.UTF_8);
+        return new DecodedText(decodeStrict(StandardCharsets.UTF_8, content, 0), StandardCharsets.UTF_8);
     }
 
     /**
@@ -531,6 +555,11 @@ public class TikaDocumentTextParser implements DocumentTextParser {
                 || extension.equals("mkd");
     }
 
+    private static boolean isNativeHtml(String filename) {
+        String extension = fileExtension(filename);
+        return extension.equals("html") || extension.equals("htm");
+    }
+
     /**
      * 返回第一个非空字符串。
      *
@@ -557,18 +586,18 @@ public class TikaDocumentTextParser implements DocumentTextParser {
     }
 
     /**
-     * 原生 Markdown 解码结果（内部 Record）。
+     * 原生文本解码结果（内部 Record）。
      *
-     * <p>封装 {@link #decodeNativeMarkdown} 的两项输出：
+     * <p>封装 {@link #decodeTextContent} 的两项输出：
      * <ul>
-     *   <li>{@code text}：按 BOM 检测或严格 UTF-8 解码后的 Markdown 文本；</li>
+     *   <li>{@code text}：按 BOM 检测或严格 UTF-8 解码后的文本；</li>
      *   <li>{@code charset}：实际使用的字符集，用于构造 MIME 类型的
      *       charset 参数（如 {@code text/markdown; charset=UTF-8}）。</li>
      * </ul>
      *
-     * @param text    解码后的 Markdown 文本
+     * @param text    解码后的文本
      * @param charset 解码使用的字符集
      */
-    private record DecodedMarkdown(String text, Charset charset) {
+    private record DecodedText(String text, Charset charset) {
     }
 }

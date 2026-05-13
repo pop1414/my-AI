@@ -108,6 +108,79 @@ class IngestCleaningGoldenSamplesTest {
         assertFalse(markdown.contains("页脚热线"), markdown);
     }
 
+    @Test
+    @DisplayName("HTML 黄金样本应保留 main 正文并清理导航、侧栏和页脚噪音")
+    void htmlGoldenInput_shouldKeepMainContentAndRemovePageChrome() throws Exception {
+        TikaDocumentTextParser parser =
+                new TikaDocumentTextParser(new TextCleaningService(), new ObjectMapper(), properties());
+        Path input = GOLDEN_ROOT.resolve("html-001").resolve("support-workflow.html");
+
+        DocumentParseResult result = parser.parse("support-workflow.html", Files.readAllBytes(input));
+        String markdown = result.cleanedMarkdown();
+
+        assertTrue(markdown.contains("支持工单分流说明"), markdown);
+        assertTrue(markdown.contains("分流目标"), markdown);
+        assertTrue(markdown.contains("人工复核触发条件"), markdown);
+        assertTrue(markdown.contains("同一段正文被错误切成三段以上"), markdown);
+        assertTrue(markdown.contains("列表或表格被拍平成普通文本"), markdown);
+        assertTrue(markdown.contains("正文抽取和噪音清理边界出了问题"), markdown);
+
+        assertFalse(markdown.contains("控制台首页"), markdown);
+        assertFalse(markdown.contains("队列总览"), markdown);
+        assertFalse(markdown.contains("运行指标"), markdown);
+        assertFalse(markdown.contains("相关阅读"), markdown);
+        assertFalse(markdown.contains("页脚热线：400-100-2000"), markdown);
+        assertFalse(markdown.contains("更新时间：2026-05-13"), markdown);
+    }
+
+    @Test
+    @DisplayName("Word 黄金样本应保留标题、列表、表格和图片说明并排除 OpenXML 元数据噪音")
+    void wordGoldenInput_shouldPreserveOfficeStructureAndRemovePackageNoise() throws Exception {
+        TikaDocumentTextParser parser =
+                new TikaDocumentTextParser(new TextCleaningService(), new ObjectMapper(), properties());
+        Path input = GOLDEN_ROOT.resolve("word-001").resolve("knowledge-base-review-checklist.docx");
+
+        DocumentParseResult result = parser.parse("knowledge-base-review-checklist.docx", Files.readAllBytes(input));
+        String markdown = result.cleanedMarkdown();
+
+        assertTrue(markdown.contains("知识库文档上线前核对清单"), markdown);
+        assertTrue(markdown.contains("上线前核对项"), markdown);
+        assertTrue(markdown.contains("确认知识库名称与文档主题一致"), markdown);
+        assertTrue(markdown.contains("确认文档中的敏感信息已经脱敏"), markdown);
+        assertTrue(markdown.contains("图片说明保留建议"), markdown);
+        assertTrue(markdown.contains("图示说明：当原文中存在流程图或示意图时"), markdown);
+        assertTrue(markdown.contains("回归风险对照"), markdown);
+        assertTrue(markdown.contains("表格被拍平"), markdown);
+        assertTrue(markdown.contains("documents/chunks/preview 是否仍能给出结构化上下文"), markdown);
+
+        assertFalse(markdown.contains("Codex sample generator"), markdown);
+        assertFalse(markdown.contains("ingest-cleaning, golden, docx"), markdown);
+        assertFalse(markdown.contains("docProps"), markdown);
+        assertFalse(markdown.contains("word/_rels"), markdown);
+    }
+
+    @Test
+    @DisplayName("弱结构 PDF 黄金样本应保留正文锚点并清理页眉页脚页码噪音")
+    void weakPdfGoldenInput_shouldKeepBodyAnchorsAndRemoveHeaderFooterNoise() throws Exception {
+        TikaDocumentTextParser parser =
+                new TikaDocumentTextParser(new TextCleaningService(), new ObjectMapper(), properties());
+        Path input = GOLDEN_ROOT.resolve("weak-pdf-001").resolve("weak-pdf-regression-sample.pdf");
+
+        DocumentParseResult result = parser.parse("weak-pdf-regression-sample.pdf", Files.readAllBytes(input));
+        String markdown = result.cleanedMarkdown();
+
+        assertTrue(markdown.contains("第一节 可分块文本基底"), markdown);
+        assertTrue(markdown.contains("在进入 chunking 之前，已经尽量消除了噪音"), markdown);
+        assertTrue(markdown.contains("第二节 人工复核建议"), markdown);
+        assertTrue(markdown.contains("不要先去调向量参数"), markdown);
+        assertTrue(markdown.contains("第三节 回归观察点"), markdown);
+
+        assertFalse(markdown.contains("内部评审稿"), markdown);
+        assertFalse(markdown.contains("第 1 页"), markdown);
+        assertFalse(markdown.contains("第 2 页"), markdown);
+        assertFalse(markdown.contains("质检热线 400-900-1200"), markdown);
+    }
+
     private static Stream<Arguments> readmeCases() {
         return Stream.of(
                 Arguments.of("weak-pdf-001", "weak-pdf-regression-sample.pdf", "第一节 可分块文本基底", "内部评审稿"),
