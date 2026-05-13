@@ -207,6 +207,8 @@ public class ListDocumentsApplicationService implements ListDocumentsUseCase {
         return new DocumentListItemResult(
                 item.documentId().value(),
                 item.kbId(),
+                item.latestVersionNumber(),
+                item.latestVersionOriginType().name(),
                 item.filename(),
                 item.fileSize(),
                 item.status().name(),                                       // 枚举 → 字符串

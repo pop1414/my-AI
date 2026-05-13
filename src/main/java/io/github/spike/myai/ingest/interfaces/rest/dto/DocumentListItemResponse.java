@@ -12,7 +12,9 @@ import java.time.Instant;
  * <ul>
  *   <li>{@code documentId} —— 文档全局唯一标识（UUID 格式），前端可用于详情查询与操作；</li>
  *   <li>{@code kbId} —— 所属知识库业务键，用于前端归类展示与知识库过滤；</li>
- *   <li>{@code filename} —— 原始上传文件名，用于前端列表的主要展示字段；</li>
+ *   <li>{@code latestVersionNumber} —— 当前最新版本号；</li>
+ *   <li>{@code latestVersionOriginType} —— 当前最新版本来源类型；</li>
+ *   <li>{@code filename} —— 当前最新版本来源文件名，用于前端列表的主要展示字段；</li>
  *   <li>{@code fileSize} —— 文件大小（字节），前端可格式化为 KB/MB 展示；</li>
  *   <li>{@code status} —— 文档处理状态（如 UPLOADED / PARSING / INDEXED / FAILED），
  *       前端据此渲染不同的状态标签；</li>
@@ -39,6 +41,8 @@ import java.time.Instant;
 public record DocumentListItemResponse(
         String documentId,
         String kbId,
+        int latestVersionNumber,
+        String latestVersionOriginType,
         String filename,
         long fileSize,
         String status,

@@ -95,6 +95,9 @@ public class GetDocumentStatusApplicationService implements GetDocumentStatusUse
         // processing_metadata 只在终态暴露，避免处理中状态出现半成品视图。
         return new DocumentStatusResult(
                 document.documentId(),
+                document.latestVersionNumber(),
+                document.filename(),
+                document.latestVersionOriginType(),
                 document.status(),
                 shouldExposeProcessingMetadata(document.status()) ? document.processingMetadata() : null);
     }

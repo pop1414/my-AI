@@ -18,6 +18,7 @@ import io.github.spike.myai.ingest.application.query.GetDocumentStatusQuery;
 import io.github.spike.myai.ingest.application.result.DocumentStatusResult;
 import io.github.spike.myai.ingest.domain.model.Document;
 import io.github.spike.myai.ingest.domain.model.DocumentId;
+import io.github.spike.myai.ingest.domain.model.DocumentVersionOriginType;
 import io.github.spike.myai.ingest.domain.model.UploadStatus;
 import io.github.spike.myai.ingest.domain.port.DocumentRepository;
 import java.time.Instant;
@@ -66,6 +67,9 @@ class GetDocumentStatusApplicationServiceTest {
         DocumentStatusResult result = service.handle(new GetDocumentStatusQuery("doc-100"));
 
         assertEquals("doc-100", result.documentId().value());
+        assertEquals(1, result.latestVersionNumber());
+        assertEquals("a.txt", result.latestFilename());
+        assertEquals(DocumentVersionOriginType.UPLOAD, result.latestVersionOriginType());
         assertEquals(UploadStatus.INDEXED, result.status());
         assertEquals("{\"schema_version\":\"v1\"}", result.processingMetadata());
         verify(repository, times(1)).findById(eq("workspace-a"), eq(documentId));

@@ -316,6 +316,8 @@ public class DocumentIngestController {
         return new DocumentListItemResponse(
                 item.documentId(),
                 item.kbId(),
+                item.latestVersionNumber(),
+                item.latestVersionOriginType(),
                 item.filename(),
                 item.fileSize(),
                 item.status(),
@@ -340,6 +342,9 @@ public class DocumentIngestController {
     private DocumentStatusResponse toDocumentStatusResponse(DocumentStatusResult result) {
         return new DocumentStatusResponse(
                 result.documentId().value(),
+                result.latestVersionNumber(),
+                result.latestFilename(),
+                result.latestVersionOriginType().name(),
                 result.status().name(),
                 parseProcessingMetadata(result.processingMetadata()));
     }

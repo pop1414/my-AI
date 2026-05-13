@@ -31,6 +31,7 @@ import io.github.spike.myai.ingest.application.usecase.GetDocumentStatusUseCase;
 import io.github.spike.myai.ingest.application.usecase.ListDocumentsUseCase;
 import io.github.spike.myai.ingest.application.usecase.ReprocessDocumentUseCase;
 import io.github.spike.myai.ingest.domain.model.DocumentId;
+import io.github.spike.myai.ingest.domain.model.DocumentVersionOriginType;
 import io.github.spike.myai.ingest.domain.model.UploadStatus;
 import io.github.spike.myai.ingest.domain.model.UploadTicket;
 import io.github.spike.myai.ingest.domain.port.DocumentSourceStorage;
@@ -98,6 +99,8 @@ class DocumentIngestControllerTest {
                         new DocumentListItemResult(
                                 "doc-1",
                                 "kb-1",
+                                2,
+                                "UPLOAD",
                                 "alpha.txt",
                                 128L,
                                 "FAILED",
@@ -107,6 +110,8 @@ class DocumentIngestControllerTest {
                         new DocumentListItemResult(
                                 "doc-2",
                                 "kb-1",
+                                3,
+                                "ROLLBACK",
                                 "beta.txt",
                                 64L,
                                 "INDEXED",
@@ -124,8 +129,12 @@ class DocumentIngestControllerTest {
                 .andExpect(jsonPath("$.total").value(2))
                 .andExpect(jsonPath("$.limit").value(20))
                 .andExpect(jsonPath("$.items[0].documentId").value("doc-1"))
+                .andExpect(jsonPath("$.items[0].latestVersionNumber").value(2))
+                .andExpect(jsonPath("$.items[0].latestVersionOriginType").value("UPLOAD"))
                 .andExpect(jsonPath("$.items[0].failureReason").value("parse failed"))
                 .andExpect(jsonPath("$.items[1].documentId").value("doc-2"))
+                .andExpect(jsonPath("$.items[1].latestVersionNumber").value(3))
+                .andExpect(jsonPath("$.items[1].latestVersionOriginType").value("ROLLBACK"))
                 .andExpect(jsonPath("$.items[1].failureReason").value(Matchers.nullValue()));
 
         ArgumentCaptor<ListDocumentsQuery> captor = ArgumentCaptor.forClass(ListDocumentsQuery.class);
@@ -215,12 +224,18 @@ class DocumentIngestControllerTest {
         when(getDocumentStatusUseCase.handle(any(GetDocumentStatusQuery.class)))
                 .thenReturn(new DocumentStatusResult(
                         new DocumentId("doc-200"),
+                        4,
+                        "latest.pdf",
+                        DocumentVersionOriginType.UPLOAD,
                         UploadStatus.UPLOADED,
                         null));
 
         mockMvc.perform(get("/api/v1/documents/{documentId}/status", "doc-200"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.documentId").value("doc-200"))
+                .andExpect(jsonPath("$.latestVersionNumber").value(4))
+                .andExpect(jsonPath("$.latestFilename").value("latest.pdf"))
+                .andExpect(jsonPath("$.latestVersionOriginType").value("UPLOAD"))
                 .andExpect(jsonPath("$.status").value("UPLOADED"))
                 .andExpect(jsonPath("$.processingMetadata").doesNotExist());
 
@@ -235,12 +250,18 @@ class DocumentIngestControllerTest {
         when(getDocumentStatusUseCase.handle(any(GetDocumentStatusQuery.class)))
                 .thenReturn(new DocumentStatusResult(
                         new DocumentId("doc-201"),
+                        5,
+                        "indexed.pdf",
+                        DocumentVersionOriginType.ROLLBACK,
                         UploadStatus.INDEXED,
                         "{\"schema_version\":\"v1\",\"stable\":{\"source_file\":\"demo.pdf\"}}"));
 
         mockMvc.perform(get("/api/v1/documents/{documentId}/status", "doc-201"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.documentId").value("doc-201"))
+                .andExpect(jsonPath("$.latestVersionNumber").value(5))
+                .andExpect(jsonPath("$.latestFilename").value("indexed.pdf"))
+                .andExpect(jsonPath("$.latestVersionOriginType").value("ROLLBACK"))
                 .andExpect(jsonPath("$.status").value("INDEXED"))
                 .andExpect(jsonPath("$.processingMetadata.schema_version").value("v1"))
                 .andExpect(jsonPath("$.processingMetadata.stable.source_file").value("demo.pdf"));

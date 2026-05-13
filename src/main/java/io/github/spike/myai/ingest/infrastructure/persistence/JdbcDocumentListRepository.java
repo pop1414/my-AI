@@ -4,6 +4,7 @@ import io.github.spike.myai.ingest.domain.model.DocumentId;
 import io.github.spike.myai.ingest.domain.model.DocumentListFilter;
 import io.github.spike.myai.ingest.domain.model.DocumentListItem;
 import io.github.spike.myai.ingest.domain.model.DocumentListPage;
+import io.github.spike.myai.ingest.domain.model.DocumentVersionOriginType;
 import io.github.spike.myai.ingest.domain.model.UploadStatus;
 import io.github.spike.myai.ingest.domain.port.DocumentListRepository;
 import java.sql.Timestamp;
@@ -53,6 +54,8 @@ public class JdbcDocumentListRepository implements DocumentListRepository {
             SELECT d.document_id,
                    d.workspace_id,
                    d.kb_id,
+                   d.latest_version_number,
+                   d.latest_version_origin_type,
                    d.latest_filename AS filename,
                    v.file_size,
                    d.latest_status AS status,
@@ -106,6 +109,8 @@ public class JdbcDocumentListRepository implements DocumentListRepository {
             new DocumentId(rs.getString("document_id")),
             rs.getString("workspace_id"),
             rs.getString("kb_id"),
+            rs.getInt("latest_version_number"),
+            DocumentVersionOriginType.valueOf(rs.getString("latest_version_origin_type")),
             rs.getString("filename"),
             rs.getLong("file_size"),
             UploadStatus.valueOf(rs.getString("status")),
