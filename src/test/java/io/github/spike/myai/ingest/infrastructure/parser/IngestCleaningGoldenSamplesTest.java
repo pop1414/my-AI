@@ -169,14 +169,19 @@ class IngestCleaningGoldenSamplesTest {
         DocumentParseResult result = parser.parse("knowledge-base-review-checklist.docx", Files.readAllBytes(input));
         String markdown = result.cleanedMarkdown();
 
-        assertTrue(markdown.contains("知识库文档上线前核对清单"), markdown);
-        assertTrue(markdown.contains("上线前核对项"), markdown);
-        assertTrue(markdown.contains("确认知识库名称与文档主题一致"), markdown);
-        assertTrue(markdown.contains("确认文档中的敏感信息已经脱敏"), markdown);
-        assertTrue(markdown.contains("图片说明保留建议"), markdown);
+        assertTrue(markdown.contains("# 知识库文档上线前核对清单"), markdown);
+        assertTrue(markdown.contains("# 上线前核对项"), markdown);
+        assertContainsInOrder(
+                markdown,
+                "- 确认知识库名称与文档主题一致",
+                "- 确认文档中的敏感信息已经脱敏",
+                "- 确认固定 QA 问题能够从正文直接定位答案");
+        assertTrue(markdown.contains("# 图片说明保留建议"), markdown);
         assertTrue(markdown.contains("图示说明：当原文中存在流程图或示意图时"), markdown);
-        assertTrue(markdown.contains("回归风险对照"), markdown);
-        assertTrue(markdown.contains("表格被拍平"), markdown);
+        assertTrue(markdown.contains("# 回归风险对照"), markdown);
+        assertTrue(markdown.contains("| 风险项 | 表现 | 回归关注点 |"), markdown);
+        assertTrue(markdown.contains("| 表格被拍平 | 表格列顺序丢失，内容连成一段 |"), markdown);
+        assertTrue(markdown.contains("| 图片说明缺失 | 图片占位或说明文字被删除 |"), markdown);
         assertTrue(markdown.contains("documents/chunks/preview 是否仍能给出结构化上下文"), markdown);
 
         assertFalse(markdown.contains("Codex sample generator"), markdown);
@@ -234,5 +239,14 @@ class IngestCleaningGoldenSamplesTest {
         properties.getParser().setMaxTextLength(20_000);
         properties.getParser().setParseEmbeddedResource(false);
         return properties;
+    }
+
+    private static void assertContainsInOrder(String content, String... expectedParts) {
+        int previousIndex = -1;
+        for (String expectedPart : expectedParts) {
+            int currentIndex = content.indexOf(expectedPart);
+            assertTrue(currentIndex > previousIndex, content);
+            previousIndex = currentIndex;
+        }
     }
 }

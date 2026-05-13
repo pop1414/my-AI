@@ -1,6 +1,7 @@
 package io.github.spike.myai.ingest.infrastructure.parser;
 
 import com.vladsch.flexmark.html2md.converter.FlexmarkHtmlConverter;
+import com.vladsch.flexmark.util.data.MutableDataSet;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.Matcher;
@@ -121,6 +122,11 @@ public class TextCleaningService {
      * 多空格/制表符合并模式，将连续空白字符规范化合并为单个空格
      */
     private static final Pattern MULTI_SPACE = Pattern.compile("[ \\t]+");
+    private static final Pattern WORD_BULLET_LINE = Pattern.compile("^\\s*[·•]\\s+(.+)$");
+    private static final Pattern MARKDOWN_TABLE_ROW = Pattern.compile("^\\s*\\|.*\\|\\s*$");
+    private static final Pattern MARKDOWN_TABLE_SEPARATOR = Pattern.compile("^\\s*\\|?\\s*:?-{3,}:?\\s*(\\|\\s*:?-{3,}:?\\s*)+\\|?\\s*$");
+    private static final FlexmarkHtmlConverter HTML_TO_MARKDOWN = FlexmarkHtmlConverter.builder(htmlToMarkdownOptions())
+            .build();
     /**
      * 需要直接移除的 HTML 标签集合。
      * 这些标签承载样式、脚本、元数据、嵌入内容等非语义信息，
@@ -178,9 +184,9 @@ public class TextCleaningService {
             return "";
         }
         // 使用 flexmark-java 的 HTML-to-Markdown 转换器，将清洗后的 HTML 转为标准 Markdown
-        String markdown = FlexmarkHtmlConverter.builder().build().convert(cleanedHtml);
+        String markdown = HTML_TO_MARKDOWN.convert(cleanedHtml);
         // 对生成的 Markdown 再执行一次轻量规整，去除残留噪声
-        return cleanText(markdown);
+        return repairMarkdownStructure(cleanText(markdown));
     }
 
     /**
@@ -308,6 +314,61 @@ public class TextCleaningService {
         cleaned = SEPARATOR_LINE.matcher(cleaned).replaceAll("");
         cleaned = MULTI_SPACE.matcher(cleaned).replaceAll(" ");
         return stripTrailingWhitespace(cleaned);
+    }
+
+    private static MutableDataSet htmlToMarkdownOptions() {
+        MutableDataSet options = new MutableDataSet();
+        options.set(FlexmarkHtmlConverter.SETEXT_HEADINGS, false);
+        options.set(FlexmarkHtmlConverter.UNORDERED_LIST_DELIMITER, '-');
+        return options;
+    }
+
+    private static String repairMarkdownStructure(String markdown) {
+        String[] lines = markdown.split("\n", -1);
+        List<String> repaired = new ArrayList<>(lines.length);
+        String pendingTableSeparator = null;
+
+        for (String line : lines) {
+            String normalizedLine = normalizeWordBullet(line);
+            if (pendingTableSeparator != null) {
+                if (isMarkdownTableRow(normalizedLine) && !isMarkdownTableSeparator(normalizedLine)) {
+                    repaired.add(normalizedLine);
+                    repaired.add(pendingTableSeparator);
+                    pendingTableSeparator = null;
+                    continue;
+                }
+                repaired.add(pendingTableSeparator);
+                pendingTableSeparator = null;
+            }
+
+            if (isMarkdownTableSeparator(normalizedLine)
+                    && (repaired.isEmpty() || !isMarkdownTableRow(repaired.getLast()))) {
+                pendingTableSeparator = normalizedLine;
+                continue;
+            }
+
+            repaired.add(normalizedLine);
+        }
+        if (pendingTableSeparator != null) {
+            repaired.add(pendingTableSeparator);
+        }
+        return String.join("\n", repaired).replaceAll("\\n{3,}", "\n\n").trim();
+    }
+
+    private static String normalizeWordBullet(String line) {
+        Matcher matcher = WORD_BULLET_LINE.matcher(line);
+        if (matcher.matches()) {
+            return "- " + matcher.group(1).trim();
+        }
+        return line;
+    }
+
+    private static boolean isMarkdownTableRow(String line) {
+        return MARKDOWN_TABLE_ROW.matcher(line).matches();
+    }
+
+    private static boolean isMarkdownTableSeparator(String line) {
+        return MARKDOWN_TABLE_SEPARATOR.matcher(line).matches();
     }
 
     /**

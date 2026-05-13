@@ -81,6 +81,34 @@ class TextCleaningServiceTest {
         assertTrue(markdown.contains("流程图") || markdown.contains("图片"));
     }
 
+    @Test
+    @DisplayName("HTML 转 Markdown 应保留 ATX 标题、Word 圆点列表和表格表头顺序")
+    void toMarkdown_shouldRepairWordLikeMarkdownStructure() {
+        String cleanedHtml = """
+                <h1>知识库文档上线前核对清单</h1>
+                <h1>上线前核对项</h1>
+                <p>· 确认知识库名称与文档主题一致</p>
+                <p>· 确认文档中的敏感信息已经脱敏</p>
+                <table>
+                  <tbody>
+                    <tr><td>风险项</td><td>表现</td><td>回归关注点</td></tr>
+                    <tr><td>表格被拍平</td><td>表格列顺序丢失</td><td>chunks preview 是否可解释</td></tr>
+                  </tbody>
+                </table>
+                """;
+
+        String markdown = service.toMarkdown(cleanedHtml);
+
+        assertTrue(markdown.contains("# 知识库文档上线前核对清单"), markdown);
+        assertTrue(markdown.contains("# 上线前核对项"), markdown);
+        assertTrue(markdown.contains("- 确认知识库名称与文档主题一致"), markdown);
+        assertTrue(markdown.contains("- 确认文档中的敏感信息已经脱敏"), markdown);
+        assertTrue(markdown.contains("| 风险项 | 表现 | 回归关注点 |"), markdown);
+        assertTrue(markdown.indexOf("| 风险项 | 表现 | 回归关注点 |")
+                < markdown.indexOf("|-------|"), markdown);
+        assertTrue(markdown.contains("| 表格被拍平 | 表格列顺序丢失 | chunks preview 是否可解释 |"), markdown);
+    }
+
     /**
      * 验证多空格合并和连续空行压缩：
      * "A   B" → "A B"；三个空行 → 两个空行。
