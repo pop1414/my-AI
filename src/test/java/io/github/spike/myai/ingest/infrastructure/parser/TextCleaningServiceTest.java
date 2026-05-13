@@ -109,6 +109,38 @@ class TextCleaningServiceTest {
         assertTrue(markdown.contains("| 表格被拍平 | 表格列顺序丢失 | chunks preview 是否可解释 |"), markdown);
     }
 
+    @Test
+    @DisplayName("Markdown 结构修复应保留 Word 圆点列表的基本缩进层级")
+    void repairMarkdownStructure_shouldPreserveWordBulletIndentation() {
+        String markdown = """
+                · 一级核对项
+
+                  · 二级核对项
+                """;
+
+        String repaired = TextCleaningService.repairMarkdownStructure(markdown);
+
+        assertTrue(repaired.contains("- 一级核对项"), repaired);
+        assertTrue(repaired.contains("  - 二级核对项"), repaired);
+    }
+
+    @Test
+    @DisplayName("HTML 转 Markdown 结构修复不应改写代码块内的圆点和表格样例")
+    void toMarkdown_shouldNotRepairWordMarkersInsideCodeBlocks() {
+        String cleanedHtml = """
+                <pre><code>· literal bullet
+                |---|---|
+                | code | row |
+                </code></pre>
+                """;
+
+        String markdown = service.toMarkdown(cleanedHtml);
+
+        assertTrue(markdown.contains("· literal bullet"), markdown);
+        assertFalse(markdown.contains("- literal bullet"), markdown);
+        assertTrue(markdown.indexOf("|---|---|") < markdown.indexOf("| code | row |"), markdown);
+    }
+
     /**
      * 验证多空格合并和连续空行压缩：
      * "A   B" → "A B"；三个空行 → 两个空行。
