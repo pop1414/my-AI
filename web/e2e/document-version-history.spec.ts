@@ -34,8 +34,6 @@ const versionHistory = {
 			updatedAt: "2026-05-12T13:35:00Z",
 			isLatestVersion: true,
 			isAskableVersion: false,
-			createdByUserId: "admin-1",
-			createdByDisplayName: "管理员",
 		},
 		{
 			documentId,
@@ -50,8 +48,6 @@ const versionHistory = {
 			updatedAt: "2026-05-05T03:16:00Z",
 			isLatestVersion: false,
 			isAskableVersion: false,
-			createdByUserId: "admin-1",
-			createdByDisplayName: "管理员",
 		},
 		{
 			documentId,
@@ -66,8 +62,6 @@ const versionHistory = {
 			updatedAt: "2026-04-17T09:44:00Z",
 			isLatestVersion: false,
 			isAskableVersion: true,
-			createdByUserId: "chen-lin",
-			createdByDisplayName: "Chen Lin",
 		},
 		{
 			documentId,
@@ -82,8 +76,6 @@ const versionHistory = {
 			updatedAt: "2026-03-15T06:08:00Z",
 			isLatestVersion: false,
 			isAskableVersion: false,
-			createdByUserId: "li-wei",
-			createdByDisplayName: "Li Wei",
 			hasBeenRolledBackAsLatest: false,
 		},
 		{
@@ -99,8 +91,6 @@ const versionHistory = {
 			updatedAt: "2026-02-24T10:19:00Z",
 			isLatestVersion: false,
 			isAskableVersion: false,
-			createdByUserId: "li-wei",
-			createdByDisplayName: "Li Wei",
 		},
 		{
 			documentId,
@@ -115,8 +105,6 @@ const versionHistory = {
 			updatedAt: "2026-02-02T01:14:00Z",
 			isLatestVersion: false,
 			isAskableVersion: false,
-			createdByUserId: "li-wei",
-			createdByDisplayName: "Li Wei",
 			hasBeenRolledBackAsLatest: true,
 		},
 	],
@@ -151,7 +139,12 @@ test.describe("文档详情页版本历史只读视图", () => {
 		await expect(page.getByTestId("version-card-4")).toContainText(
 			"当前问答基线",
 		);
-		await expect(page.getByTestId("version-card-4")).toContainText("Chen Lin");
+		await expect(page.getByTestId("version-card-4")).toContainText(
+			"上传人未记录",
+		);
+		await expect(
+			page.getByRole("button", { name: "正文阅读待接入" }).first(),
+		).toBeDisabled();
 		await expect(page.getByText("展开更早版本（1）")).toBeVisible();
 
 		await page.getByText("展开更早版本（1）").click();

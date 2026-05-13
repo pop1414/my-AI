@@ -93,10 +93,6 @@ function buildDetailPath(documentId: string, versionNumber?: number): string {
 	return versionNumber ? `${base}?version=${versionNumber}` : base;
 }
 
-function buildReadPath(documentId: string, versionNumber: number): string {
-	return `/ingest/documents/${encodeURIComponent(documentId)}/versions/${versionNumber}/read`;
-}
-
 function resolveVisibleVersions(
 	versions: DocumentVersionHistoryItem[],
 	viewingVersion: DocumentVersionHistoryItem,
@@ -218,6 +214,19 @@ function VersionTags({
 	);
 }
 
+function ReadUnavailableButton({ size }: { size?: "small" }) {
+	return (
+		<Button
+			size={size}
+			disabled
+			icon={<ReadOutlined />}
+			title="正文阅读接口尚未接入，暂不跳转到原型阅读页"
+		>
+			正文阅读待接入
+		</Button>
+	);
+}
+
 export function IngestDocumentDetailPage() {
 	const navigate = useNavigate();
 	const { documentId = "" } = useParams<{ documentId?: string }>();
@@ -329,20 +338,7 @@ export function IngestDocumentDetailPage() {
 					>
 						刷新
 					</Button>
-					<Button
-						type="primary"
-						icon={<ReadOutlined />}
-						onClick={() =>
-							navigate(
-								buildReadPath(
-									historyData!.documentId,
-									viewingVersion.versionNumber,
-								),
-							)
-						}
-					>
-						查看该版本内容
-					</Button>
+					<ReadUnavailableButton />
 				</Space>
 			</div>
 
@@ -437,19 +433,7 @@ export function IngestDocumentDetailPage() {
 									返回最新版本
 								</Button>
 							)}
-							<Button
-								icon={<ReadOutlined />}
-								onClick={() =>
-									navigate(
-										buildReadPath(
-											historyData!.documentId,
-											viewingVersion.versionNumber,
-										),
-									)
-								}
-							>
-								查看该版本内容
-							</Button>
+							<ReadUnavailableButton />
 						</div>
 					</Card>
 
@@ -568,16 +552,10 @@ export function IngestDocumentDetailPage() {
 												size="small"
 												type="text"
 												icon={<ReadOutlined />}
-												onClick={() =>
-													navigate(
-														buildReadPath(
-														historyData!.documentId,
-															version.versionNumber,
-														),
-													)
-												}
+												disabled
+												title="正文阅读接口尚未接入，暂不跳转到原型阅读页"
 											>
-												查看该版本内容
+												正文阅读待接入
 											</Button>
 										</div>
 									</div>
