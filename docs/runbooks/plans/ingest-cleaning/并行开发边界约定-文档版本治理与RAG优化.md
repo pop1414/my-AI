@@ -20,6 +20,12 @@
 - 一条分支为了提升 RAG 质量顺手改主链路编排，另一条分支为了引入版本治理也改同一条编排链路
 - 合并后无法快速判断回归来自“内容质量变化”还是“文档资产/版本语义变化”
 
+补充说明：
+
+- 当前这一轮 `ingest-cleaning` 已明确收敛为“`cleaned.md` 主链质量 + 现有 chunker 行为 + preview / `qa.ask` 回归验证”
+- 当前这一轮 `qa.ask` 只作为验证面，不作为 retrieval / reference 契约升级入口
+- 当前这一轮默认排除 `vector metadata shape`、`RetrievedChunk`、`AskReferenceResponse`、`Document` 主模型和 Flyway 迁移改动
+
 ## 2. 当前架构分析
 
 ### 2.1 `Document` module 过载
@@ -147,15 +153,19 @@
 - `src/main/java/io/github/spike/myai/ingest/infrastructure/parser/**`
 - `src/main/java/io/github/spike/myai/ingest/infrastructure/chunking/**`
 - 与解析/清洗/分块质量相关的 `src/test/java/io/github/spike/myai/ingest/**`
+- `src/test/resources/**` 中的黄金样本、回归样本与基线产物
 - 纯评测、回归样本、runbook 与对比实验文档
-- `qa` 侧仅限“检索质量内部策略优化”，前提是不改变返回 DTO、metadata shape 与权限语义
+- `qa` 侧仅限“检索质量内部策略优化”或“固定问答回归验证”，前提是不改变返回 DTO、metadata shape 与权限语义
 
 典型可并行内容：
 
 - 清洗规则增强
+- PDF 幽灵换行与段落断裂修复
+- 原生 Markdown / HTML 绕行或最小破坏处理
 - 标题识别与 Markdown 还原质量提升
 - 结构优先 chunking 的确定性优化
-- 召回质量评测、回归测试、离线对比
+- `documents/chunks/preview` 回归验证
+- 固定 QA 问题的离线回归、对比实验与结论文档
 
 ## 4. `high-conflict` 范围（默认归文档版本治理分支所有）
 
@@ -231,6 +241,8 @@
 - 为了接新 metadata，直接重写 `ProcessDocumentApplicationService`
 - 为了调试方便，先把问答引用 DTO 改成 richer shape 而不同步版本治理设计
 - 为了表达多轮处理差异，把 `splitVersion` 暂时伪装成“文档版本号”
+- 为了让 `qa.ask` 回归更方便，顺手扩 `RetrievedChunk` 或 `AskReferenceResponse`
+- 为了表达清洗质量，顺手把 `processing_metadata` 扩成 chunk / node 契约
 
 ## 7. 推荐文件所有权
 
