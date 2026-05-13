@@ -537,10 +537,13 @@ chunk 是向量检索与引用展示的基本文本单元。
 5. `docs/03-architecture.md`
 6. `docs/04-api-contract.yaml`
 7. `docs/07-ingest-processing-execution.md`
-8. `docs/adr/ADR-0001-v1-tech-baseline.md`
-9. `docs/adr/ADR-0003-v1-dashscope-pgvector.md`
-10. `docs/adr/ADR-0004-v1-ingest-processing-strategy.md`
-11. `docs/adr/ADR-0005-rag-access-control-foundation.md`
+8. `docs/runbooks/plans/ingest-cleaning/RAG 文档解析与清洗方案.md`
+9. `docs/runbooks/plans/ingest-cleaning/黄金样本与验收说明.md`
+10. `docs/runbooks/plans/ingest-cleaning/并行开发边界约定-文档版本治理与RAG优化.md`
+11. `docs/adr/ADR-0001-v1-tech-baseline.md`
+12. `docs/adr/ADR-0003-v1-dashscope-pgvector.md`
+13. `docs/adr/ADR-0004-v1-ingest-processing-strategy.md`
+14. `docs/adr/ADR-0005-rag-access-control-foundation.md`
 
 ## 11. 写作与评审约定
 
