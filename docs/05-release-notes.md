@@ -14,6 +14,8 @@
 - 新增账号生命周期后端能力：账号列表、创建账号、账号启用/停用、密码重置、成员移除
 - 新增知识库列表授权可见性收紧：工作区管理员看全部，普通成员仅看自己显式授权的知识库
 - 新增 `auth/me` 能力位返回：`capabilities.{canAccessDocumentList,canUploadDocument,canAccessKnowledge,canAskQuestion,canAccessAdmin}`
+- 新增文档版本历史只读查询接口：`GET /api/v1/documents/{documentId}/versions`
+- 新增文档版本历史 DTO：返回 `versionNumber`、`versionOriginType`、`rollbackFromVersionNumber`、来源文件、状态、失败原因、时间、`isLatestVersion` 与 `isAskableVersion`
 
 ### Changed
 - 知识库列表接口升级为“主数据 + `INDEXED` 统计”视图，保留既有 `id/name/indexedDocumentCount` 字段并新增 `description/status`
@@ -23,6 +25,7 @@
 - 上传页与问答页改为以知识库选择器为主，知识库页升级为可创建、可编辑的管理台
 - 控制台默认落点从上传页切换为文档列表页，旧路由 `/ingest/list` 改为兼容重定向
 - 文档列表页行为与执行计划对齐：URL 路径参数传递 `documentId`、`kbId` 仅展示 `ACTIVE`、状态筛选与按钮显隐规则收紧
+- 文档版本链读边界收紧：版本历史查询按 `versionNumber,DESC` 读取版本事实，`isAskableVersion` 由最近已 `INDEXED` 版本推导，不落库为字段
 - V1.1 范围调整：原“轻量认证与访问控制”从收口范围中拆出，转为独立的成熟 RAG 权限体系规划
 - 前端导航收口为能力位驱动模型：一级菜单按能力位显示，`系统管理` 收口为单一入口 `/admin`
 - 旧的无 `documentId` ingest 独立入口从侧边栏移除，仅保留兼容重定向

@@ -2,17 +2,17 @@
 
 ## 拉取信息
 
-- 更新时间：2026-05-13 16:45
-- 拉取方式：基于 GitHub Issues 当前状态更新；#1、#2、#19 已关闭，#20 作为当前后续边界任务纳入快照
+- 更新时间：2026-05-13 20:05
+- 拉取方式：基于 GitHub Issues 当前状态更新；#1、#2、#19、#20 已关闭，#3 可基于稳定版本历史只读契约继续推进
 - 仓库：`pop1414/my-AI`
-- 范围：文档版本链相关 issues；#1、#2、#19 已完成关闭，当前仍需推进 #3-#12、#20，共 11 个 open follow-up
+- 范围：文档版本链相关 issues；#1、#2、#19、#20 已完成关闭，当前仍需推进 #3-#12，共 10 个 open follow-up
 
 ## 收口状态
 
 - #1 已按“基础版本链后端能力”完成并关闭。
 - #2 已按“文档详情页版本历史交互确认”完成并关闭，交互确认产物见 `document-detail-version-history-interaction-confirmation.md`。
 - #1 保留的兼容式 seam 已由 #19 收口：生产读路径切到 `latest projection + ingest_document_versions`，并补齐 guard 与 ADR。
-- #3 需要稳定版本历史后端契约，已拆出 #20 承接只读版本历史查询接口。
+- #20 已按“版本历史只读后端查询接口”完成并关闭：`GET /api/v1/documents/{documentId}/versions` 提供 #3 所需稳定后端契约。
 
 ## 总览
 
@@ -20,7 +20,7 @@
 | --- | --- | --- | --- | --- |
 | [#1](https://github.com/pop1414/my-AI/issues/1) | document / document version 基础版本链后端落地 | CLOSED | `ready-for-agent` | 无 |
 | [#2](https://github.com/pop1414/my-AI/issues/2) | 文档详情页版本历史交互确认 | CLOSED | `ready-for-human` | #1 已完成 |
-| [#3](https://github.com/pop1414/my-AI/issues/3) | 文档详情页版本历史前端只读视图 | OPEN | `ready-for-agent` | #1 已完成, #2 已完成, #20 |
+| [#3](https://github.com/pop1414/my-AI/issues/3) | 文档详情页版本历史前端只读视图 | OPEN | `ready-for-agent` | #1 已完成, #2 已完成, #20 已完成 |
 | [#4](https://github.com/pop1414/my-AI/issues/4) | 上传新版本后端链路与契约 | OPEN | `ready-for-agent` | #1 已完成, #19 已完成 |
 | [#5](https://github.com/pop1414/my-AI/issues/5) | 上传新版本前端交互与结果提示 | OPEN | `ready-for-agent` | #4 |
 | [#6](https://github.com/pop1414/my-AI/issues/6) | 版本回退后端链路与契约 | OPEN | `ready-for-agent` | #1 已完成, #19 已完成 |
@@ -31,16 +31,16 @@
 | [#11](https://github.com/pop1414/my-AI/issues/11) | 问答页版本提示与引用版本展示前端 | OPEN | `ready-for-agent` | #10 |
 | [#12](https://github.com/pop1414/my-AI/issues/12) | 版本治理审计与冲突收口后端 | OPEN | `ready-for-agent` | #4, #6, #8 |
 | [#19](https://github.com/pop1414/my-AI/issues/19) | 清理 document 主表旧版本事实字段与读写边界 | CLOSED | `ready-for-agent` | #1 已完成 |
-| [#20](https://github.com/pop1414/my-AI/issues/20) | 版本历史只读后端查询接口 | OPEN | `ready-for-agent` | #1 已完成, 建议参考 #2 |
+| [#20](https://github.com/pop1414/my-AI/issues/20) | 版本历史只读后端查询接口 | CLOSED | `ready-for-agent` | #1 已完成, #2 已完成 |
 
 ## 建议执行顺序
 
 1. #1 已完成关闭；后续不再把基础版本链能力作为 blocker。
 2. #19 已完成关闭；后续后端任务默认以 `latest projection + ingest_document_versions` 为生产读路径，不再新增对主表旧版本事实列的读取依赖。
 3. #2 已完成关闭；后续前端与后端实现以交互确认文档为准。
-4. 优先推进 #20，补齐版本历史只读后端查询接口，为 #3 前端只读视图提供稳定契约。
-5. 后端推进 #4、#6、#8、#10，分别覆盖上传新版本、版本回退、删除与列表语义、qa 可问答版本选择；实现时应遵守 #19 已收紧的读写边界。
-6. 前端在后端契约稳定后推进 #3、#5、#7、#9、#11，其中 #3 需要等待 #20。
+4. #20 已完成关闭，#3 可以基于 `GET /api/v1/documents/{documentId}/versions` 推进版本历史前端只读视图。
+5. 后端推进 #4、#6、#8、#10，分别覆盖上传新版本、版本回退、删除与列表语义、qa 可问答版本选择；实现时应遵守 #19 已收紧的读写边界，并复用 #20 的版本历史读模型语义。
+6. 前端在后端契约稳定后推进 #3、#5、#7、#9、#11，其中 #3 不再被 #20 阻塞。
 7. 最后用 #12 收口治理动作之间的互斥、业务错误码、审计事件和竞争场景测试。
 
 ## Issue 摘要
@@ -64,6 +64,7 @@
 
 - 当前实现采用兼容式演进，主表旧版本事实字段仍存在；该风险由 #19 承接。
 - 版本历史只读后端契约不纳入 #1，已由 #20 承接。
+- #20 已完成关闭，版本历史只读契约现以 `GET /api/v1/documents/{documentId}/versions` 为准。
 
 ### #2 文档详情页版本历史交互确认
 
@@ -81,8 +82,8 @@
 收口说明：
 
 - 交互确认产物位于 `docs/runbooks/plans/document-version-chain/document-detail-version-history-interaction-confirmation.md`。
-- #20 负责补齐 `versionHistory[]` 只读后端查询契约。
-- #3 前端只读视图应等待 #20 契约稳定后推进，不基于 mock 数据或临时复用 status/list 接口进入正式实现。
+- #20 已补齐 `versionHistory[]` 只读后端查询契约。
+- #3 前端只读视图可基于 #20 契约推进，不应基于 mock 数据或临时复用 status/list 接口进入正式实现。
 
 ### #3 文档详情页版本历史前端只读视图
 
@@ -237,6 +238,8 @@
 
 ### #20 版本历史只读后端查询接口
 
+状态：已关闭，按“版本历史只读后端查询接口”完成收口。
+
 目标是补齐按 `documentId` 查询版本历史的后端契约，为 #3 文档详情页版本历史前端只读视图提供稳定数据来源。
 
 验收重点：
@@ -249,9 +252,18 @@
 - 历史版本查询不改变 latest projection，也不改变 QA 可问答基线。
 - 后端测试覆盖权限、排序、latest 标记、askable 推导、rollback 来源字段和缺失 document 场景。
 
+收口说明：
+
+- 已提供 `GET /api/v1/documents/{documentId}/versions`，接口阶段在 `docs/04-api-contract.yaml` 中标记为 `implemented`。
+- 响应 DTO 返回 `documentId`、`sort = versionNumber,DESC` 与 `versions[]`，版本项覆盖 #20 要求的核心字段。
+- 应用服务先校验目标 document 存在，再通过 `AuthorizationService.requireCanManageDocument` 统一校验文档管理权限。
+- JDBC 读仓储从 `ingest_document_versions` 读取版本事实，并结合 `ingest_documents.latest_version_number` 推导 latest 标记。
+- `isAskableVersion` 由领域读模型按“最近一个已 `INDEXED` 版本”推导，不写入数据库。
+- 已覆盖应用服务、领域读模型、JDBC repository 与 REST controller 测试。
+
 ## 审阅提示
 
-- 先核对总览表中的标签与阻塞关系是否和 GitHub Issues 当前状态一致，尤其是 #1/#2 已关闭、#19/#20 已新增。
-- 再按 #19、#20、后端功能 issues、前端 issues、#12 的顺序审阅，确认执行顺序是否符合“后端契约先稳定，前端再接入”的原则。
+- 先核对总览表中的标签与阻塞关系是否和 GitHub Issues 当前状态一致，尤其是 #1/#2/#19/#20 已关闭、#3 不再等待 #20。
+- 再按 #19、#20、#3、后端功能 issues、后续前端 issues、#12 的顺序审阅，确认执行顺序是否符合“后端契约先稳定，前端再接入”的原则。
 - 特别检查 #19 是否足以阻止后续代码继续依赖主表旧版本事实字段，#20 是否足以支撑 #3 不靠 mock 或临时接口推进。
 - 最后检查每个 issue 的验收重点是否足够指导后续领取任务；如果 GitHub issue 后续有更新，应重新拉取并更新本快照。

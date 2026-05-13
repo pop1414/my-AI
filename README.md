@@ -34,7 +34,7 @@
 - 历史变化通过 ADR、Roadmap、Release Notes 留痕
 - 课程材料与长期工程文档分开维护，但课程内容主要整理自工程真源
 
-## 1. 当前能力（截至 2026-05-11，含权限治理基础落地）
+## 1. 当前能力（截至 2026-05-13，含文档版本历史只读后端契约落地）
 
 - 上传受理：`POST /api/v1/documents/upload`
     - 返回 `documentId + ACCEPTED`
@@ -59,6 +59,7 @@
     - `GET /api/v1/documents`
     - `POST /api/v1/documents/upload`
     - `GET /api/v1/documents/{documentId}/status`
+    - `GET /api/v1/documents/{documentId}/versions`
     - `GET /api/v1/documents/{documentId}/chunks/preview`
     - `POST /api/v1/documents/{documentId}/reprocess`
     - `DELETE /api/v1/documents/{documentId}`
@@ -316,7 +317,33 @@ curl -sS "http://localhost:8080/actuator/metrics/myai.ingest.delete.success.tota
 
 - `GET /api/v1/documents/{documentId}/status`
 
-### 6.4 分块预览（调试）
+### 6.4 查询文档版本历史
+
+- `GET /api/v1/documents/{documentId}/versions`
+- 权限：当前用户必须具备目标文档管理权限
+- 排序：`versionNumber,DESC`
+- 返回字段：
+    - `documentId`
+    - `sort`
+    - `versions[]`
+        - `documentId`
+        - `versionNumber`
+        - `versionOriginType`
+        - `rollbackFromVersionNumber`
+        - `filename`
+        - `fileSize`
+        - `status`
+        - `failureReason`
+        - `createdAt`
+        - `updatedAt`
+        - `isLatestVersion`
+        - `isAskableVersion`
+- 说明：
+    - `isLatestVersion` 由 latest projection 与版本号比较推导
+    - `isAskableVersion` 由当前 QA 基线规则推导，不持久化为字段
+    - 查询版本历史不改变 latest projection，也不改变 QA 可问答基线
+
+### 6.5 分块预览（调试）
 
 - `GET /api/v1/documents/{documentId}/chunks/preview`
 - 可选参数：
@@ -325,12 +352,12 @@ curl -sS "http://localhost:8080/actuator/metrics/myai.ingest.delete.success.tota
     - `previewChars`（默认 200，范围 20~2000）
 - 用途：验证“向量化前分块文本”是否符合预期
 
-### 6.5 重处理
+### 6.6 重处理
 
 - `POST /api/v1/documents/{documentId}/reprocess`
 - 允许状态：`FAILED` / `INDEXED`（`INGESTING` 返回 `409`）
 
-### 6.6 删除文档资产
+### 6.7 删除文档资产
 
 - `DELETE /api/v1/documents/{documentId}`
 - 删除行为：
@@ -342,7 +369,7 @@ curl -sS "http://localhost:8080/actuator/metrics/myai.ingest.delete.success.tota
     - 文档不存在：`404`
     - `INGESTING/DELETING`：`409`
 
-### 6.7 查询知识库列表
+### 6.8 查询知识库列表
 
 - `GET /api/v1/knowledge-bases`
 - 返回字段：
@@ -353,7 +380,7 @@ curl -sS "http://localhost:8080/actuator/metrics/myai.ingest.delete.success.tota
     - `indexedDocumentCount`（统计口径：`status=INDEXED`）
     - 可见性：`WORKSPACE_OWNER / WORKSPACE_ADMIN` 看全部，`WORKSPACE_MEMBER` 仅看自己显式授权的知识库
 
-### 6.8 文档问答（同步）
+### 6.9 文档问答（同步）
 
 - `POST /api/v1/qa/ask`
 - 请求字段：

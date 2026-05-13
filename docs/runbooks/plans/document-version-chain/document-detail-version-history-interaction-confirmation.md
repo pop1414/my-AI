@@ -356,8 +356,8 @@
 
 为避免前端靠二次推导拼状态，详情页接口至少需要提供以下字段。
 
-后端契约落点：GitHub issue #20《版本历史只读后端查询接口》负责补齐 `versionHistory[]`
-的只读查询能力。#3 前端只读视图不应基于 mock 数据或临时复用 status/list 接口推进。
+后端契约落点：GitHub issue #20《版本历史只读后端查询接口》已落地 `GET /api/v1/documents/{documentId}/versions`。
+该接口提供 #3 前端只读视图所需的核心 `versionHistory[]` 数据来源，#3 不应基于 mock 数据或临时复用 status/list 接口推进。
 
 ## 9.1 详情主响应
 
@@ -444,7 +444,7 @@ issue #2 的验收项与本文对应关系如下：
 
 实现顺序建议如下：
 
-1. 先完成 #20 的版本历史只读后端契约，并补前端类型，确保 `latest version`、`askable version`、`viewing version` 三套事实可同时表达
+1. 基于 #20 已落地的 `GET /api/v1/documents/{documentId}/versions` 补齐前端类型，确保 `latest version`、`askable version`、`viewing version` 三套事实可同时表达
 2. 再把当前 `IngestStatusPage` 演进为真正的文档详情页
 3. 最后接入上传新版本、回退成功后的稳定结果提示区
 
