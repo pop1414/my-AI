@@ -10,12 +10,11 @@ import io.github.spike.myai.ingest.application.result.DocumentVersionHistoryResu
 import io.github.spike.myai.ingest.application.usecase.ListDocumentVersionsUseCase;
 import io.github.spike.myai.ingest.domain.model.Document;
 import io.github.spike.myai.ingest.domain.model.DocumentId;
+import io.github.spike.myai.ingest.domain.model.DocumentVersionHistory;
 import io.github.spike.myai.ingest.domain.model.DocumentVersionHistoryItem;
 import io.github.spike.myai.ingest.domain.model.UploadStatus;
 import io.github.spike.myai.ingest.domain.port.DocumentRepository;
 import io.github.spike.myai.ingest.domain.port.DocumentVersionHistoryRepository;
-import java.util.Comparator;
-import java.util.List;
 import org.springframework.stereotype.Service;
 
 /**
@@ -26,7 +25,7 @@ import org.springframework.stereotype.Service;
  *   <li>获取当前用户身份；</li>
  *   <li>校验目标文档是否存在；</li>
  *   <li>校验当前用户对该文档的读取权限；</li>
- *   <li>调取版本历史数据并按版本号倒序组装返回结果。</li>
+ *   <li>调取版本历史读模型并组装返回结果。</li>
  * </ol>
  *
  * @author Spike
@@ -83,10 +82,8 @@ public class ListDocumentVersionsApplicationService implements ListDocumentVersi
      *       在当前用户工作区内查找文档主记录，不存在则抛出
      *       {@link DocumentNotFoundException}；</li>
      *   <li><b>权限校验</b> —— 调用授权服务确认当前用户对该文档具有读取权限；</li>
-     *   <li><b>数据查询</b> —— 从版本历史仓储中拉取该文档的全量版本记录
-     *       （按版本号降序排列）；</li>
-     *   <li><b>结果组装</b> —— 逐条映射领域模型为应用层返回结果，
-     *       并计算 isLatestVersion / isAskableVersion 等衍生标记。</li>
+     *   <li><b>数据查询</b> —— 从版本历史仓储中拉取该文档的版本历史读模型；</li>
+     *   <li><b>结果组装</b> —— 逐条映射领域模型为应用层返回结果。</li>
      * </ol>
      *
      * @param query 包含目标文档 ID 的查询对象
@@ -108,18 +105,15 @@ public class ListDocumentVersionsApplicationService implements ListDocumentVersi
         // 步骤 4：校验用户对该文档的读取权限（无权限时内部抛出异常）
         authorizationService.requireCanReadDocument(currentUser, documentId.value(), document.kbId());
 
-        // 步骤 5：查询版本历史 → 推导问答基线 → 领域模型映射为应用层结果 → 组装返回
-        List<DocumentVersionHistoryItem> historyItems =
-                documentVersionHistoryRepository.findByDocumentIdOrderByVersionNumberDesc(
-                        currentUser.workspaceId(),
-                        documentId);
-        int askableVersionNumber = resolveAskableVersionNumber(historyItems);
+        // 步骤 5：查询版本历史 → 领域模型映射为应用层结果 → 组装返回
+        DocumentVersionHistory history =
+                documentVersionHistoryRepository.findByDocumentId(currentUser.workspaceId(), documentId);
 
         return new DocumentVersionHistoryResult(
                 documentId.value(),
                 SORT_VERSION_NUMBER_DESC,
-                historyItems.stream()
-                        .map(item -> toResult(item, askableVersionNumber))
+                history.items().stream()
+                        .map(item -> toResult(history, item))
                         .toList());
     }
 
@@ -128,21 +122,19 @@ public class ListDocumentVersionsApplicationService implements ListDocumentVersi
      *
      * <p>转换规则：
      * <ul>
-     *   <li><b>isLatestVersion</b> —— 当 item.versionNumber 等于 latestVersionNumber 时为 true；</li>
+     *   <li><b>isLatestVersion</b> —— 由版本历史读模型统一推导；</li>
      *   <li><b>failureReason</b> —— 仅当 status 为 FAILED 时返回原始值，
      *       其余状态返回 null（避免无关失败原因污染正常状态的版本记录）；</li>
-     *   <li><b>isAskableVersion</b> —— 当该版本命中当前问答基线时为 true；
-     *       当前问答基线优先使用已 INDEXED 的最新版本，否则回退到最近一个已 INDEXED 的历史版本。</li>
+     *   <li><b>isAskableVersion</b> —— 由版本历史读模型统一推导。</li>
      * </ul>
      *
-     * @param item 领域层版本历史项
-     * @param askableVersionNumber 当前可问答版本号，无可问答版本时为 0
+     * @param history 领域层版本历史
+     * @param item    领域层版本历史项
      * @return 应用层版本历史项返回结果
      */
-    private static DocumentVersionHistoryItemResult toResult(DocumentVersionHistoryItem item, int askableVersionNumber) {
-        // 判定当前版本是否为最新版本（通过比较 versionNumber 与 latestVersionNumber）
-        boolean isLatestVersion = item.versionNumber() == item.latestVersionNumber();
-
+    private static DocumentVersionHistoryItemResult toResult(
+            DocumentVersionHistory history,
+            DocumentVersionHistoryItem item) {
         return new DocumentVersionHistoryItemResult(
                 item.documentId().value(),
                 item.versionNumber(),
@@ -157,15 +149,7 @@ public class ListDocumentVersionsApplicationService implements ListDocumentVersi
                 item.status() == UploadStatus.FAILED ? item.failureReason() : null,
                 item.createdAt(),
                 item.updatedAt(),
-                isLatestVersion,
-                item.versionNumber() == askableVersionNumber);
-    }
-
-    private static int resolveAskableVersionNumber(List<DocumentVersionHistoryItem> historyItems) {
-        return historyItems.stream()
-                .filter(item -> item.status() == UploadStatus.INDEXED)
-                .map(DocumentVersionHistoryItem::versionNumber)
-                .max(Comparator.naturalOrder())
-                .orElse(0);
+                history.isLatestVersion(item),
+                history.isAskableVersion(item));
     }
 }

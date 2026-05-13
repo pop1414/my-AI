@@ -8,6 +8,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.github.spike.myai.ingest.domain.model.DocumentId;
+import io.github.spike.myai.ingest.domain.model.DocumentVersionHistory;
 import io.github.spike.myai.ingest.domain.model.DocumentVersionHistoryItem;
 import io.github.spike.myai.ingest.domain.model.DocumentVersionOriginType;
 import io.github.spike.myai.ingest.domain.model.UploadStatus;
@@ -25,14 +26,14 @@ import org.springframework.jdbc.core.RowMapper;
 class JdbcDocumentVersionHistoryRepositoryTest {
 
     @Test
-    @DisplayName("findByDocumentIdOrderByVersionNumberDesc 应按工作区和文档过滤并按版本号倒序")
-    void findByDocumentIdOrderByVersionNumberDesc_shouldFilterAndOrderByVersionNumberDesc() {
+    @DisplayName("findByDocumentId 应按工作区和文档过滤并返回版本历史")
+    void findByDocumentId_shouldFilterAndReturnVersionHistory() {
         JdbcTemplate jdbcTemplate = Mockito.mock(JdbcTemplate.class);
         JdbcDocumentVersionHistoryRepository repository = new JdbcDocumentVersionHistoryRepository(jdbcTemplate);
         when(jdbcTemplate.query(any(String.class), any(RowMapper.class), eq("workspace-a"), eq("doc-1")))
                 .thenReturn(List.of());
 
-        List<DocumentVersionHistoryItem> result = repository.findByDocumentIdOrderByVersionNumberDesc(
+        DocumentVersionHistory result = repository.findByDocumentId(
                 "workspace-a",
                 new DocumentId("doc-1"));
 
@@ -42,7 +43,8 @@ class JdbcDocumentVersionHistoryRepositoryTest {
                 any(RowMapper.class),
                 eq("workspace-a"),
                 eq("doc-1"));
-        assertTrue(result.isEmpty());
+        assertEquals("doc-1", result.documentId().value());
+        assertTrue(result.items().isEmpty());
         assertTrue(sqlCaptor.getValue().contains("JOIN ingest_document_versions v"));
         assertTrue(sqlCaptor.getValue().contains("d.workspace_id = ?"));
         assertTrue(sqlCaptor.getValue().contains("d.document_id = ?"));
@@ -57,7 +59,7 @@ class JdbcDocumentVersionHistoryRepositoryTest {
         when(jdbcTemplate.query(any(String.class), any(RowMapper.class), eq("workspace-a"), eq("doc-rollback")))
                 .thenReturn(List.of());
 
-        repository.findByDocumentIdOrderByVersionNumberDesc("workspace-a", new DocumentId("doc-rollback"));
+        repository.findByDocumentId("workspace-a", new DocumentId("doc-rollback"));
 
         @SuppressWarnings("rawtypes")
         ArgumentCaptor<RowMapper> rowMapperCaptor = ArgumentCaptor.forClass(RowMapper.class);

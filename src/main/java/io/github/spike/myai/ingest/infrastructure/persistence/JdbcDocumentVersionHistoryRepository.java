@@ -1,6 +1,7 @@
 package io.github.spike.myai.ingest.infrastructure.persistence;
 
 import io.github.spike.myai.ingest.domain.model.DocumentId;
+import io.github.spike.myai.ingest.domain.model.DocumentVersionHistory;
 import io.github.spike.myai.ingest.domain.model.DocumentVersionHistoryItem;
 import io.github.spike.myai.ingest.domain.model.DocumentVersionOriginType;
 import io.github.spike.myai.ingest.domain.model.UploadStatus;
@@ -112,7 +113,7 @@ public class JdbcDocumentVersionHistoryRepository implements DocumentVersionHist
     }
 
     /**
-     * 按工作区与文档 ID 查询版本历史，结果按 version_number 降序排列。
+     * 按工作区与文档 ID 查询版本历史。
      *
      * <p>执行逻辑：
      * <ol>
@@ -124,14 +125,16 @@ public class JdbcDocumentVersionHistoryRepository implements DocumentVersionHist
      *
      * @param workspaceId 工作区标识（租户隔离）
      * @param documentId  文档资产 ID
-     * @return 版本历史项列表（保证非 null）
+     * @return 版本历史读模型（保证非 null）
      */
     @Override
-    public List<DocumentVersionHistoryItem> findByDocumentIdOrderByVersionNumberDesc(
+    public DocumentVersionHistory findByDocumentId(
             String workspaceId,
             DocumentId documentId) {
         // 委托 JdbcTemplate 执行参数化查询，自动完成结果集映射
-        return jdbcTemplate.query(FIND_BY_DOCUMENT_ID_SQL, ROW_MAPPER, workspaceId, documentId.value());
+        List<DocumentVersionHistoryItem> items =
+                jdbcTemplate.query(FIND_BY_DOCUMENT_ID_SQL, ROW_MAPPER, workspaceId, documentId.value());
+        return new DocumentVersionHistory(documentId, items);
     }
 
     /**

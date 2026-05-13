@@ -19,6 +19,7 @@ import io.github.spike.myai.ingest.application.query.ListDocumentVersionsQuery;
 import io.github.spike.myai.ingest.application.result.DocumentVersionHistoryResult;
 import io.github.spike.myai.ingest.domain.model.Document;
 import io.github.spike.myai.ingest.domain.model.DocumentId;
+import io.github.spike.myai.ingest.domain.model.DocumentVersionHistory;
 import io.github.spike.myai.ingest.domain.model.DocumentVersionHistoryItem;
 import io.github.spike.myai.ingest.domain.model.DocumentVersionOriginType;
 import io.github.spike.myai.ingest.domain.model.UploadStatus;
@@ -49,11 +50,11 @@ class ListDocumentVersionsApplicationServiceTest {
         DocumentId documentId = new DocumentId("doc-100");
         when(documentRepository.findById(eq("workspace-a"), eq(documentId)))
                 .thenReturn(Optional.of(document(documentId, UploadStatus.INDEXED)));
-        when(historyRepository.findByDocumentIdOrderByVersionNumberDesc(eq("workspace-a"), eq(documentId)))
-                .thenReturn(List.of(
+        when(historyRepository.findByDocumentId(eq("workspace-a"), eq(documentId)))
+                .thenReturn(history(documentId, List.of(
                         historyItem(documentId, 3, DocumentVersionOriginType.ROLLBACK, 1, UploadStatus.INDEXED),
                         historyItem(documentId, 2, DocumentVersionOriginType.UPLOAD, null, UploadStatus.INDEXED),
-                        historyItem(documentId, 1, DocumentVersionOriginType.UPLOAD, null, UploadStatus.FAILED)));
+                        historyItem(documentId, 1, DocumentVersionOriginType.UPLOAD, null, UploadStatus.FAILED))));
 
         DocumentVersionHistoryResult result = service.handle(new ListDocumentVersionsQuery(" doc-100 "));
 
@@ -87,8 +88,10 @@ class ListDocumentVersionsApplicationServiceTest {
         DocumentId documentId = new DocumentId("doc-200");
         when(documentRepository.findById(eq("workspace-a"), eq(documentId)))
                 .thenReturn(Optional.of(document(documentId, UploadStatus.FAILED)));
-        when(historyRepository.findByDocumentIdOrderByVersionNumberDesc(eq("workspace-a"), eq(documentId)))
-                .thenReturn(List.of(historyItem(documentId, 3, DocumentVersionOriginType.UPLOAD, null, UploadStatus.FAILED)));
+        when(historyRepository.findByDocumentId(eq("workspace-a"), eq(documentId)))
+                .thenReturn(history(
+                        documentId,
+                        List.of(historyItem(documentId, 3, DocumentVersionOriginType.UPLOAD, null, UploadStatus.FAILED))));
 
         DocumentVersionHistoryResult result = service.handle(new ListDocumentVersionsQuery("doc-200"));
 
@@ -112,11 +115,11 @@ class ListDocumentVersionsApplicationServiceTest {
         DocumentId documentId = new DocumentId("doc-201");
         when(documentRepository.findById(eq("workspace-a"), eq(documentId)))
                 .thenReturn(Optional.of(document(documentId, UploadStatus.FAILED)));
-        when(historyRepository.findByDocumentIdOrderByVersionNumberDesc(eq("workspace-a"), eq(documentId)))
-                .thenReturn(List.of(
+        when(historyRepository.findByDocumentId(eq("workspace-a"), eq(documentId)))
+                .thenReturn(history(documentId, List.of(
                         historyItem(documentId, 3, DocumentVersionOriginType.UPLOAD, null, UploadStatus.FAILED),
                         historyItem(documentId, 2, DocumentVersionOriginType.UPLOAD, null, UploadStatus.INDEXED),
-                        historyItem(documentId, 1, DocumentVersionOriginType.UPLOAD, null, UploadStatus.INDEXED)));
+                        historyItem(documentId, 1, DocumentVersionOriginType.UPLOAD, null, UploadStatus.INDEXED))));
 
         DocumentVersionHistoryResult result = service.handle(new ListDocumentVersionsQuery("doc-201"));
 
@@ -143,8 +146,8 @@ class ListDocumentVersionsApplicationServiceTest {
         DocumentId documentId = new DocumentId("doc-empty");
         when(documentRepository.findById(eq("workspace-a"), eq(documentId)))
                 .thenReturn(Optional.of(document(documentId, UploadStatus.INDEXED)));
-        when(historyRepository.findByDocumentIdOrderByVersionNumberDesc(eq("workspace-a"), eq(documentId)))
-                .thenReturn(List.of());
+        when(historyRepository.findByDocumentId(eq("workspace-a"), eq(documentId)))
+                .thenReturn(history(documentId, List.of()));
 
         DocumentVersionHistoryResult result = service.handle(new ListDocumentVersionsQuery("doc-empty"));
 
@@ -175,7 +178,7 @@ class ListDocumentVersionsApplicationServiceTest {
                 () -> service.handle(new ListDocumentVersionsQuery("doc-denied")));
 
         verify(historyRepository, never())
-                .findByDocumentIdOrderByVersionNumberDesc(any(String.class), any(DocumentId.class));
+                .findByDocumentId(any(String.class), any(DocumentId.class));
     }
 
     @Test
@@ -251,5 +254,9 @@ class ListDocumentVersionsApplicationServiceTest {
                 status == UploadStatus.FAILED ? "parse failed" : null,
                 Instant.parse("2026-05-08T0" + versionNumber + ":00:00Z"),
                 Instant.parse("2026-05-08T0" + versionNumber + ":05:00Z"));
+    }
+
+    private static DocumentVersionHistory history(DocumentId documentId, List<DocumentVersionHistoryItem> items) {
+        return new DocumentVersionHistory(documentId, items);
     }
 }
