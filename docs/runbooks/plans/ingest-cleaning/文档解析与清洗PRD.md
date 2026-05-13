@@ -9,6 +9,7 @@
 - `docs/runbooks/plans/ingest-cleaning/RAG 文档解析与清洗方案.md`
 - `docs/runbooks/plans/ingest-cleaning/黄金样本与验收说明.md`
 - `docs/runbooks/plans/ingest-cleaning/并行开发边界约定-文档版本治理与RAG优化.md`
+- `docs/runbooks/plans/ingest-cleaning/文档解析与清洗Issue拆分.md`
 
 ## 问题陈述
 
