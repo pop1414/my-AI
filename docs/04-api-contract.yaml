@@ -1740,6 +1740,7 @@ components:
 
     DocumentVersionHistoryResponse:
       type: object
+      required: [documentId, sort, versions]
       properties:
         documentId:
           type: string
@@ -1755,6 +1756,17 @@ components:
 
     DocumentVersionHistoryItem:
       type: object
+      required:
+        - documentId
+        - versionNumber
+        - versionOriginType
+        - filename
+        - fileSize
+        - status
+        - createdAt
+        - updatedAt
+        - isLatestVersion
+        - isAskableVersion
       properties:
         documentId:
           type: string

@@ -1,6 +1,7 @@
 package io.github.spike.myai.ingest.interfaces.rest;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -41,6 +42,7 @@ import io.github.spike.myai.ingest.domain.model.UploadTicket;
 import io.github.spike.myai.ingest.domain.port.DocumentSourceStorage;
 import io.github.spike.myai.knowledge.application.exception.KnowledgeBaseInactiveException;
 import io.github.spike.myai.knowledge.application.exception.KnowledgeBaseNotFoundException;
+import io.github.spike.myai.shared.rest.GlobalRestExceptionHandler;
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -49,6 +51,8 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
@@ -84,6 +88,9 @@ class DocumentIngestControllerTest {
         this.reprocessDocumentUseCase = Mockito.mock(ReprocessDocumentUseCase.class);
         this.deleteDocumentUseCase = Mockito.mock(DeleteDocumentUseCase.class);
         this.documentSourceStorage = Mockito.mock(DocumentSourceStorage.class);
+        ObjectMapper objectMapper = new ObjectMapper()
+                .findAndRegisterModules()
+                .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
         DocumentIngestController controller =
                 new DocumentIngestController(
                         acceptUploadUseCase,
@@ -94,8 +101,11 @@ class DocumentIngestControllerTest {
                 reprocessDocumentUseCase,
                 deleteDocumentUseCase,
                 documentSourceStorage,
-                new ObjectMapper());
-        this.mockMvc = MockMvcBuilders.standaloneSetup(controller).build();
+                objectMapper);
+        this.mockMvc = MockMvcBuilders.standaloneSetup(controller)
+                .setControllerAdvice(new GlobalRestExceptionHandler())
+                .setMessageConverters(new MappingJackson2HttpMessageConverter(objectMapper))
+                .build();
     }
 
     @Test
@@ -323,13 +333,26 @@ class DocumentIngestControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.documentId").value("doc-500"))
                 .andExpect(jsonPath("$.sort").value("versionNumber,DESC"))
+                .andExpect(jsonPath("$.versions[0].documentId").value("doc-500"))
                 .andExpect(jsonPath("$.versions[0].versionNumber").value(3))
                 .andExpect(jsonPath("$.versions[0].versionOriginType").value("ROLLBACK"))
                 .andExpect(jsonPath("$.versions[0].rollbackFromVersionNumber").value(1))
+                .andExpect(jsonPath("$.versions[0].filename").value("rollback.pdf"))
+                .andExpect(jsonPath("$.versions[0].fileSize").value(300))
+                .andExpect(jsonPath("$.versions[0].status").value("INDEXED"))
+                .andExpect(jsonPath("$.versions[0].createdAt").value("2026-05-08T10:00:00Z"))
+                .andExpect(jsonPath("$.versions[0].updatedAt").value("2026-05-08T10:05:00Z"))
                 .andExpect(jsonPath("$.versions[0].isLatestVersion").value(true))
                 .andExpect(jsonPath("$.versions[0].isAskableVersion").value(true))
+                .andExpect(jsonPath("$.versions[1].documentId").value("doc-500"))
                 .andExpect(jsonPath("$.versions[1].versionNumber").value(2))
+                .andExpect(jsonPath("$.versions[1].versionOriginType").value("UPLOAD"))
+                .andExpect(jsonPath("$.versions[1].filename").value("failed.pdf"))
+                .andExpect(jsonPath("$.versions[1].fileSize").value(200))
+                .andExpect(jsonPath("$.versions[1].status").value("FAILED"))
                 .andExpect(jsonPath("$.versions[1].failureReason").value("parse failed"))
+                .andExpect(jsonPath("$.versions[1].createdAt").value("2026-05-08T09:00:00Z"))
+                .andExpect(jsonPath("$.versions[1].updatedAt").value("2026-05-08T09:05:00Z"))
                 .andExpect(jsonPath("$.versions[1].isLatestVersion").value(false))
                 .andExpect(jsonPath("$.versions[1].isAskableVersion").value(false));
 
@@ -346,6 +369,18 @@ class DocumentIngestControllerTest {
 
         mockMvc.perform(get("/api/v1/documents/{documentId}/versions", "doc-missing"))
                 .andExpect(status().isNotFound());
+    }
+
+    @Test
+    @DisplayName("版本历史查询无读取权限时，应返回 403")
+    void listVersions_shouldReturnForbidden_whenReadAccessDenied() throws Exception {
+        when(listDocumentVersionsUseCase.handle(any(ListDocumentVersionsQuery.class)))
+                .thenThrow(new AccessDeniedException("document read access denied"));
+
+        mockMvc.perform(get("/api/v1/documents/{documentId}/versions", "doc-denied"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("FORBIDDEN"))
+                .andExpect(jsonPath("$.message").value("document read access denied"));
     }
 
     @Test

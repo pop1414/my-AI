@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -29,6 +30,7 @@ import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
+import org.springframework.security.access.AccessDeniedException;
 
 class ListDocumentVersionsApplicationServiceTest {
 
@@ -116,6 +118,33 @@ class ListDocumentVersionsApplicationServiceTest {
         DocumentVersionHistoryResult result = service.handle(new ListDocumentVersionsQuery("doc-empty"));
 
         assertEquals(0, result.versions().size());
+    }
+
+    @Test
+    @DisplayName("读取权限不足时，应抛出 AccessDeniedException 且不查询版本历史")
+    void handle_shouldThrowAccessDeniedAndSkipHistoryQuery_whenReadAccessDenied() {
+        DocumentRepository documentRepository = Mockito.mock(DocumentRepository.class);
+        DocumentVersionHistoryRepository historyRepository = Mockito.mock(DocumentVersionHistoryRepository.class);
+        CurrentUserProvider currentUserProvider = currentUserProvider();
+        AuthorizationService authorizationService = Mockito.mock(AuthorizationService.class);
+        ListDocumentVersionsApplicationService service = new ListDocumentVersionsApplicationService(
+                documentRepository,
+                historyRepository,
+                currentUserProvider,
+                authorizationService);
+        DocumentId documentId = new DocumentId("doc-denied");
+        when(documentRepository.findById(eq("workspace-a"), eq(documentId)))
+                .thenReturn(Optional.of(document(documentId, UploadStatus.INDEXED)));
+        Mockito.doThrow(new AccessDeniedException("document read access denied"))
+                .when(authorizationService)
+                .requireCanReadDocument(any(CurrentUser.class), eq("doc-denied"), eq("kb-1"));
+
+        assertThrows(
+                AccessDeniedException.class,
+                () -> service.handle(new ListDocumentVersionsQuery("doc-denied")));
+
+        verify(historyRepository, never())
+                .findByDocumentIdOrderByVersionNumberDesc(any(String.class), any(DocumentId.class));
     }
 
     @Test
