@@ -1082,6 +1082,60 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+  /api/v1/documents/{documentId}/versions:
+    get:
+      tags: [ingest]
+      summary: 查询文档版本历史
+      x-stage: implemented
+      description: |
+        当前用户必须对目标文档具备读取权限；
+        支持工作区所有者/管理员、知识库读取授权，以及文档级 `DOC_ALLOW_READ` / `DOC_ALLOW_MANAGE`。
+        响应按 `versionNumber DESC` 稳定排序。
+
+        `isLatestVersion` 由 `ingest_documents.latest_version_number` 与版本号比较推导；
+        `isAskableVersion` 不持久化，当前规则为：仅 latest 且状态为 `INDEXED` 的版本可用于现有 QA 基线。
+        历史版本查询只读取版本事实，不修改 latest projection，也不改变 QA 可问答基线。
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: documentId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: 文档资产 ID
+      responses:
+        '200':
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentVersionHistoryResponse'
+        '400':
+          description: documentId 为空或非法
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: 当前用户无目标文档读取权限
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: 文档不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
   /api/v1/documents/{documentId}/chunks/preview:
     get:
       tags: [ingest]
@@ -1665,6 +1719,16 @@ components:
         documentId:
           type: string
           description: 文档资产 ID
+        latestVersionNumber:
+          type: integer
+          description: 当前 latest projection 指向的版本号
+        latestFilename:
+          type: string
+          description: 当前 latest projection 指向版本的来源文件名
+        latestVersionOriginType:
+          type: string
+          enum: [UPLOAD, ROLLBACK]
+          description: 当前 latest projection 指向版本的来源类型
         status:
           type: string
           example: UPLOADED
@@ -1673,6 +1737,68 @@ components:
             - $ref: '#/components/schemas/ProcessingMetadata'
           nullable: true
           description: 仅 `INDEXED` / `FAILED` 终态允许返回的处理结果元数据
+
+    DocumentVersionHistoryResponse:
+      type: object
+      properties:
+        documentId:
+          type: string
+          description: 文档资产 ID
+        sort:
+          type: string
+          example: versionNumber,DESC
+          description: 版本历史排序契约，当前固定为版本号倒序
+        versions:
+          type: array
+          items:
+            $ref: '#/components/schemas/DocumentVersionHistoryItem'
+
+    DocumentVersionHistoryItem:
+      type: object
+      properties:
+        documentId:
+          type: string
+          description: 文档资产 ID
+        versionNumber:
+          type: integer
+          description: 版本号，从 1 开始递增
+        versionOriginType:
+          type: string
+          enum: [UPLOAD, ROLLBACK]
+          description: 版本来源类型
+        rollbackFromVersionNumber:
+          type: integer
+          nullable: true
+          description: 回退来源版本号，仅 ROLLBACK 版本有值
+        filename:
+          type: string
+          description: 该版本来源文件名
+        fileSize:
+          type: integer
+          format: int64
+          description: 该版本文件大小，单位字节
+        status:
+          type: string
+          enum: [UPLOADED, INGESTING, INDEXED, FAILED, DELETING, DELETED]
+          description: 该版本处理状态
+        failureReason:
+          type: string
+          nullable: true
+          description: 仅 FAILED 状态返回失败原因，其余状态返回 null
+        createdAt:
+          type: string
+          format: date-time
+          description: 版本创建时间
+        updatedAt:
+          type: string
+          format: date-time
+          description: 版本更新时间
+        isLatestVersion:
+          type: boolean
+          description: 是否为当前 latest projection 指向版本
+        isAskableVersion:
+          type: boolean
+          description: 是否可用于当前 QA 基线；由 latest + INDEXED 规则推导，不持久化
 
     ProcessingMetadata:
       type: object
