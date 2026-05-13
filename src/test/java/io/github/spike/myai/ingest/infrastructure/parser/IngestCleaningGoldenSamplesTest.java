@@ -1,5 +1,6 @@
 package io.github.spike.myai.ingest.infrastructure.parser;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -9,6 +10,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -53,6 +55,27 @@ class IngestCleaningGoldenSamplesTest {
         DocumentParseResult result = parser.parse(inputFile, Files.readAllBytes(input));
 
         assertTrue(result.cleanedMarkdown().contains(expectedText), result.cleanedMarkdown());
+    }
+
+    @Test
+    @DisplayName("Markdown 黄金样本应保留标题、代码块、表格、列表并排除外部噪音")
+    void markdownGoldenInput_shouldPreserveNativeMarkdownStructure() throws Exception {
+        TikaDocumentTextParser parser =
+                new TikaDocumentTextParser(new TextCleaningService(), new ObjectMapper(), properties());
+        Path input = GOLDEN_ROOT.resolve("md-001").resolve("project-handoff-checklist.md");
+
+        DocumentParseResult result = parser.parse("project-handoff-checklist.md", Files.readAllBytes(input));
+        String markdown = result.cleanedMarkdown();
+
+        assertTrue(markdown.contains("# 接手文档质量回归清单"), markdown);
+        assertTrue(markdown.contains("## 4. 指标对照"), markdown);
+        assertTrue(markdown.contains("```bash\ncurl -X GET"), markdown);
+        assertTrue(markdown.contains("| 检查项 | 通过标准 | 常见失真 |"), markdown);
+        assertTrue(markdown.contains("  - 一级标题不能和正文粘连"), markdown);
+        assertFalse(markdown.contains("内部评审稿"), markdown);
+        assertFalse(markdown.contains("质检热线"), markdown);
+        assertFalse(markdown.contains("控制台首页"), markdown);
+        assertFalse(markdown.contains("页脚热线"), markdown);
     }
 
     private static Stream<Arguments> readmeCases() {

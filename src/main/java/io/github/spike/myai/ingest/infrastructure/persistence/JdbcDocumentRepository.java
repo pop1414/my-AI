@@ -187,6 +187,13 @@ public class JdbcDocumentRepository implements DocumentRepository {
                 updated_at = ?
             WHERE workspace_id = ? AND document_id = ? AND status = ?
             """;
+    /**
+     * 将文档状态变更为 DELETING 的 SQL。
+     *
+     * <p>采用 CAS（Compare And Set）机制，仅当文档当前状态与
+     * {@code expectedStatus} 一致时才执行更新，防止并发覆盖。
+     * DELETING 是删除流程的第一个状态变更，用于锁定文档防止并发操作。
+     */
     private static final String MARK_DELETING_SQL = """
             UPDATE ingest_documents
             SET status = 'DELETING',

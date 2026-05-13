@@ -26,7 +26,38 @@ import org.springframework.stereotype.Component;
 @Component
 public class TextCleaningService {
 
+    /**
+     * 围栏代码块分隔符匹配模式。
+     *
+     * <p>匹配以 3 个及以上反引号（{@code ```}）或波浪号（{@code ~~~}）
+     * 开头的行，用于标记 Markdown 代码块的起止边界。边界行之前允许
+     * 最多 3 个前导空格（兼容缩进代码块）。
+     */
     private static final Pattern FENCED_CODE_DELIMITER = Pattern.compile("^\\s{0,3}(```+|~~~+).*$");
+    /**
+     * 危险 HTML 块级元素匹配模式（如 &lt;script&gt;...&lt;/script&gt;）。
+     *
+     * <p>用于移除 Markdown 中残留的完整危险 HTML 标签块，
+     * 采用 DOTALL 模式（{@code (?s)}）以支持跨行匹配。
+     */
+    private static final Pattern DANGEROUS_HTML_BLOCK =
+            Pattern.compile("(?is)<(script|style|iframe|object|embed|applet)\\b[^>]*>.*?</\\1>");
+    /**
+     * 危险 HTML 单标签匹配模式（开标签或闭标签）。
+     *
+     * <p>用于移除未被 {@link #DANGEROUS_HTML_BLOCK} 覆盖的孤立危险标签，
+     * 如不成对的 {@code <script>} 或 {@code </iframe>}。
+     */
+    private static final Pattern DANGEROUS_HTML_TAG =
+            Pattern.compile("(?is)</?(script|style|iframe|object|embed|applet)\\b[^>]*>");
+    /**
+     * 不可见格式化字符匹配模式。
+     *
+     * <p>匹配零宽空格（U+200B）、零宽非连接符（U+200C）、
+     * 零宽连接符（U+200D）和 BOM（U+FEFF）等不可见字符，
+     * 这些字符常由 Word 或 HTML 编辑器引入，对文本理解无意义。
+     */
+    private static final Pattern INVISIBLE_FORMATTING_CHARS = Pattern.compile("[\\uFEFF\\u200B\\u200C\\u200D]");
 
     /**
      * 控制字符匹配模式，保留换行符（\n）和制表符（\t），
@@ -45,9 +76,24 @@ public class TextCleaningService {
     private static final Pattern IMAGE_URL =
             Pattern.compile("(?im)https?://\\S+\\.(png|jpg|jpeg|gif|bmp|webp)(\\?\\S*)?");
     /**
+     * 独立成行的图片 URL 匹配模式。
+     *
+     * <p>与 {@link #IMAGE_URL} 的区别在于采用整行匹配（{@code ^...$}），
+     * 仅移除图片 URL 独占一行的场景，避免误伤正文中内嵌的图片链接。
+     */
+    private static final Pattern IMAGE_URL_LINE =
+            Pattern.compile("(?im)^\\s*https?://\\S+\\.(png|jpg|jpeg|gif|bmp|webp)(\\?\\S*)?\\s*$");
+    /**
      * 本地文件 URL 匹配模式（file:// 协议），用于去除文档中嵌入的本地文件引用
      */
     private static final Pattern FILE_URL = Pattern.compile("(?im)file:///\\S+");
+    /**
+     * 独立成行的本地文件 URL 匹配模式。
+     *
+     * <p>采用整行匹配，仅移除 {@code file:///} 协议 URL 独占一行的情况，
+     * 避免误删正文中行内出现的本地文件引用路径。
+     */
+    private static final Pattern FILE_URL_LINE = Pattern.compile("(?im)^\\s*file:///\\S+\\s*$");
     /**
      * 分隔线匹配模式，匹配由连续横线、下划线或等号组成的装饰性分隔线，
      * 这些线条在 Markdown 中可能被误解析为标题或分割标记
@@ -120,12 +166,65 @@ public class TextCleaningService {
     }
 
     /**
+     * 对原生 Markdown 执行最小破坏清洗。
+     *
+     * <p>该路径不做 HTML 重解析或 Markdown 重新序列化，只处理跨平台换行、不可见字符、
+     * 明显文件噪音和危险 raw HTML 标签，避免破坏标题、表格、列表缩进和代码块围栏。
+     *
+     * @param rawMarkdown 原生 Markdown 文本
+     * @return 最小规整后的 Markdown
+     */
+    public String cleanNativeMarkdown(String rawMarkdown) {
+        // 空值守卫：上游可能传入 null 或空字符串
+        if (rawMarkdown == null || rawMarkdown.isBlank()) {
+            return "";
+        }
+        // 第 1 步：归一化换行符（CRLF/CR → LF）
+        String text = rawMarkdown.replace("\r\n", "\n").replace("\r", "\n");
+        // 第 2 步：去除控制字符（保留 \n 和 \t）
+        text = CONTROL_CHARS.matcher(text).replaceAll("");
+        // 第 3 步：去除零宽空格/BOM 等不可见格式化字符
+        text = INVISIBLE_FORMATTING_CHARS.matcher(text).replaceAll("");
+        // 第 4 步：移除残留的完整危险 HTML 标签块
+        text = DANGEROUS_HTML_BLOCK.matcher(text).replaceAll("");
+        // 第 5 步：移除残留的孤立危险 HTML 标签
+        text = DANGEROUS_HTML_TAG.matcher(text).replaceAll("");
+
+        // 第 6 步：按行遍历，对代码块内外分别处理
+        String[] lines = text.split("\n", -1);
+        StringBuilder cleaned = new StringBuilder(text.length());
+        boolean inFencedCodeBlock = false;
+
+        for (int i = 0; i < lines.length; i++) {
+            String line = lines[i];
+            if (isFencedCodeDelimiter(line)) {
+                // 遇到围栏分隔符：切换代码块状态，仅去除行尾空白
+                inFencedCodeBlock = !inFencedCodeBlock;
+                cleaned.append(stripTrailingWhitespace(line));
+            } else if (inFencedCodeBlock || isIndentedCodeLine(line)) {
+                // 代码块内或缩进代码行：仅去除行尾空白，保留内部格式
+                cleaned.append(stripTrailingWhitespace(line));
+            } else {
+                // 普通行：执行原生 Markdown 的最小破坏清洗
+                cleaned.append(cleanNativeMarkdownLine(line));
+            }
+            if (i < lines.length - 1) {
+                cleaned.append('\n');
+            }
+        }
+
+        // 第 7 步：压缩过多连续空行（3+ → 2），保持 Markdown 可读性
+        return cleaned.toString().replaceAll("\\n{3,}", "\n\n").trim();
+    }
+
+    /**
      * 对 Markdown/纯文本执行轻量规整。
      *
      * @param rawText 原始文本
      * @return 规整后的文本
      */
     public String cleanText(String rawText) {
+        // 空值守卫：上游可能传入 null 或空字符串
         if (rawText == null || rawText.isBlank()) {
             return "";
         }
@@ -134,6 +233,7 @@ public class TextCleaningService {
         // 第 2 步：去除除换行/制表外的所有控制字符
         text = CONTROL_CHARS.matcher(text).replaceAll("");
 
+        // 第 3 步：按行遍历，区分代码块内外
         String[] lines = text.split("\n", -1);
         StringBuilder cleaned = new StringBuilder(text.length());
         boolean inFencedCodeBlock = false;
@@ -141,12 +241,14 @@ public class TextCleaningService {
         for (int i = 0; i < lines.length; i++) {
             String line = lines[i];
             if (isFencedCodeDelimiter(line)) {
+                // 遇到围栏分隔符：切换代码块状态，原样保留分隔符行
                 inFencedCodeBlock = !inFencedCodeBlock;
                 cleaned.append(line);
             } else if (inFencedCodeBlock || isIndentedCodeLine(line)) {
                 // 代码块仅做控制字符与换行归一化，不压缩内部空格和缩进。
                 cleaned.append(line);
             } else {
+                // 普通行：执行完整清洗（去图片/URL/分隔线 + 合并空白）
                 cleaned.append(cleanRegularLine(line));
             }
             if (i < lines.length - 1) {
@@ -158,6 +260,21 @@ public class TextCleaningService {
         return cleaned.toString().replaceAll("\\n{3,}", "\n\n").trim();
     }
 
+    /**
+     * 对普通行（非代码块内）执行轻量规整。
+     *
+     * <p>按顺序执行以下清洗步骤：
+     * <ol>
+     *   <li>移除独立成行的图片文件名（如 image1.png）；</li>
+     *   <li>移除行内图片 URL；</li>
+     *   <li>移除行内本地文件 URL；</li>
+     *   <li>移除无意义分隔线（连续横线/下划线/等号）；</li>
+     *   <li>合并连续空格和制表符为单个空格。</li>
+     * </ol>
+     *
+     * @param line 待清洗的普通行
+     * @return 规整后的行
+     */
     private static String cleanRegularLine(String line) {
         String cleaned = IMAGE_FILENAME_LINE.matcher(line).replaceAll("");
         cleaned = IMAGE_URL.matcher(cleaned).replaceAll("");
@@ -167,14 +284,63 @@ public class TextCleaningService {
         return stripTrailingWhitespace(cleaned);
     }
 
+    /**
+     * 对原生 Markdown 行（非代码块内、非缩进代码）执行最小破坏清洗。
+     *
+     * <p>与 {@link #cleanRegularLine} 的区别在于：
+     * <ul>
+     *   <li>不压缩空格（保留 Markdown 缩进语义）；</li>
+     *   <li>使用更严格的图片/文件 URL 行级匹配（整行匹配才移除）；</li>
+     *   <li>不处理分隔线（避免误删 Markdown 的 setext 标题）。</li>
+     * </ul>
+     *
+     * @param line 待清洗的原生 Markdown 行
+     * @return 规整后的行
+     */
+    private static String cleanNativeMarkdownLine(String line) {
+        String cleaned = IMAGE_FILENAME_LINE.matcher(line).replaceAll("");
+        cleaned = IMAGE_URL_LINE.matcher(cleaned).replaceAll("");
+        cleaned = FILE_URL_LINE.matcher(cleaned).replaceAll("");
+        return stripTrailingWhitespace(cleaned);
+    }
+
+    /**
+     * 判断当前行是否为围栏代码块分隔符。
+     *
+     * <p>围栏代码块分隔符是指以 3 个及以上反引号（{@code ```}）或
+     * 波浪号（{@code ~~~}）开头的行，用于标记 Markdown 代码块的起止边界。
+     * 代码块内部内容（如缩进、空格）需要保留原样，不做规整处理。
+     *
+     * @param line 待判断的文本行
+     * @return {@code true} 如果该行是围栏代码块分隔符
+     */
     private static boolean isFencedCodeDelimiter(String line) {
         return FENCED_CODE_DELIMITER.matcher(line).matches();
     }
 
+    /**
+     * 判断当前行是否为缩进代码行。
+     *
+     * <p>Markdown 规范中，以 4 个空格或 1 个制表符开头的行被视为缩进代码块。
+     * 此类行在文本清洗时应保留原始格式（空格、缩进等），不做压缩或规整处理，
+     * 以保持代码片段的完整性。
+     *
+     * @param line 待判断的文本行
+     * @return {@code true} 如果该行以 4 个空格或 1 个制表符开头
+     */
     private static boolean isIndentedCodeLine(String line) {
         return line.startsWith("    ") || line.startsWith("\t");
     }
 
+    /**
+     * 去除行尾空白字符（空格和制表符）。
+     *
+     * <p>从行尾向前扫描，找到第一个非空白字符后截断。该方法直接操作字符数组，
+     * 避免创建不必要的中间字符串对象，适用于大规模文本的逐行处理场景。
+     *
+     * @param line 待处理的文本行
+     * @return 去除行尾空白后的行内容，如果整行均为空白则返回空字符串
+     */
     private static String stripTrailingWhitespace(String line) {
         int end = line.length();
         while (end > 0) {

@@ -98,5 +98,39 @@ class TextCleaningServiceTest {
         assertTrue(cleaned.contains("    SELECT  *"));
         assertTrue(cleaned.contains("    FROM   demo_table"));
     }
+
+    @Test
+    @DisplayName("原生 Markdown 清洗应保留表格、列表缩进和代码块围栏")
+    void cleanNativeMarkdown_shouldPreserveMarkdownStructure() {
+        String raw = """
+                \uFEFF# 标题
+
+                - 一级
+                  - 二级
+
+                | 检查项 | 通过标准 |
+                | --- | --- |
+                | 标题 | 保留层级 |
+
+                ```bash
+                curl  -X GET "http://localhost"
+                ```
+
+                image1.png
+                file:///tmp/tika-cache.html
+                <script>alert("x")</script>
+                """;
+
+        String cleaned = service.cleanNativeMarkdown(raw);
+
+        assertTrue(cleaned.contains("# 标题"));
+        assertTrue(cleaned.contains("  - 二级"));
+        assertTrue(cleaned.contains("| 检查项 | 通过标准 |"));
+        assertTrue(cleaned.contains("```bash"));
+        assertTrue(cleaned.contains("curl  -X GET"));
+        assertFalse(cleaned.contains("image1.png"));
+        assertFalse(cleaned.contains("file:///tmp"));
+        assertFalse(cleaned.contains("<script>"));
+    }
 }
 
