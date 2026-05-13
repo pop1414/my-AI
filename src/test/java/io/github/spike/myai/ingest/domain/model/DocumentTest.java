@@ -18,6 +18,8 @@ class DocumentTest {
         Document document = Document.uploaded(new DocumentId("doc-u1"), "kb-1", "hash-u1", "x.txt", 100L, now);
 
         assertEquals(UploadStatus.UPLOADED, document.status());
+        assertEquals(1, document.latestVersionNumber());
+        assertEquals(DocumentVersionOriginType.UPLOAD, document.latestVersionOriginType());
         assertEquals("hash-u1", document.fileHash());
         assertEquals(null, document.processingMetadata());
         assertEquals(now, document.createdAt());

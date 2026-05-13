@@ -50,16 +50,19 @@ public class JdbcDocumentListRepository implements DocumentListRepository {
      * 其他状态返回 {@code NULL}，避免前端展示无意义信息。
      */
     private static final String SELECT_BASE_SQL = """
-            SELECT document_id,
-                   workspace_id,
-                   kb_id,
-                   filename,
-                   file_size,
-                   status,
-                   CASE WHEN status = 'FAILED' THEN failure_reason ELSE NULL END AS failure_reason,
-                   created_at,
-                   updated_at
-            FROM ingest_documents
+            SELECT d.document_id,
+                   d.workspace_id,
+                   d.kb_id,
+                   d.latest_filename AS filename,
+                   v.file_size,
+                   d.latest_status AS status,
+                   CASE WHEN d.latest_status = 'FAILED' THEN v.failure_reason ELSE NULL END AS failure_reason,
+                   d.created_at,
+                   d.updated_at
+            FROM ingest_documents d
+            JOIN ingest_document_versions v
+              ON v.document_id = d.document_id
+             AND v.version_number = d.latest_version_number
             """;
 
     /**
@@ -70,7 +73,7 @@ public class JdbcDocumentListRepository implements DocumentListRepository {
      */
     private static final String COUNT_BASE_SQL = """
             SELECT COUNT(1)
-            FROM ingest_documents
+            FROM ingest_documents d
             """;
 
     /**
@@ -197,28 +200,28 @@ public class JdbcDocumentListRepository implements DocumentListRepository {
         List<String> conditions = new ArrayList<>();
 
         // 0. workspaceId 必选过滤：始终追加，确保多工作区数据隔离
-        conditions.add("workspace_id = ?");
+        conditions.add("d.workspace_id = ?");
         args.add(filter.workspaceId());
 
         // 1. kbId 精确过滤
         if (filter.kbId() != null) {
-            conditions.add("kb_id = ?");
+            conditions.add("d.kb_id = ?");
             args.add(filter.kbId());
         }
 
         // 2. 状态过滤：显式传入 → 精确匹配；未传且需排除已删除 → 追加 <> 'DELETED'
         if (filter.status() != null) {
-            conditions.add("status = ?");
+            conditions.add("d.latest_status = ?");
             args.add(filter.status().name());
         } else if (filter.excludeDeleted()) {
             // 默认排除已删除文档（非用户输入，硬编码安全）
-            conditions.add("status <> 'DELETED'");
+            conditions.add("d.latest_status <> 'DELETED'");
         }
 
         // 3. 文件名模糊匹配
         //    使用 COALESCE 处理 NULL 文件名，LIKE 支持前后通配
         if (filter.filename() != null) {
-            conditions.add("COALESCE(filename, '') LIKE ?");
+            conditions.add("COALESCE(d.latest_filename, '') LIKE ?");
             args.add("%" + filter.filename() + "%");
         }
 

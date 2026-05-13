@@ -36,8 +36,8 @@ class JdbcDocumentListRepositoryTest {
 
         ArgumentCaptor<String> sqlCaptor = ArgumentCaptor.forClass(String.class);
         verify(jdbcTemplate).query(sqlCaptor.capture(), any(RowMapper.class), eq(WorkspaceConstants.DEFAULT_WORKSPACE_ID), eq(20), eq(0));
-        assertTrue(sqlCaptor.getValue().contains("workspace_id = ?"));
-        assertTrue(sqlCaptor.getValue().contains("status <> 'DELETED'"));
+        assertTrue(sqlCaptor.getValue().contains("d.workspace_id = ?"));
+        assertTrue(sqlCaptor.getValue().contains("d.latest_status <> 'DELETED'"));
         assertTrue(sqlCaptor.getValue().contains("ORDER BY created_at DESC"));
         assertTrue(sqlCaptor.getValue().contains("LIMIT ? OFFSET ?"));
         assertTrue(page.items().isEmpty());
@@ -73,8 +73,8 @@ class JdbcDocumentListRepositoryTest {
                 eq("DELETED"),
                 eq(10),
                 eq(5));
-        assertTrue(sqlCaptor.getValue().contains("status = ?"));
-        assertFalse(sqlCaptor.getValue().contains("status <> 'DELETED'"));
+        assertTrue(sqlCaptor.getValue().contains("d.latest_status = ?"));
+        assertFalse(sqlCaptor.getValue().contains("d.latest_status <> 'DELETED'"));
     }
 
     @Test
@@ -110,8 +110,8 @@ class JdbcDocumentListRepositoryTest {
                 eq("%合同%"),
                 eq(5),
                 eq(10));
-        assertTrue(sqlCaptor.getValue().contains("kb_id = ?"));
-        assertTrue(sqlCaptor.getValue().contains("COALESCE(filename, '') LIKE ?"));
+        assertTrue(sqlCaptor.getValue().contains("d.kb_id = ?"));
+        assertTrue(sqlCaptor.getValue().contains("COALESCE(d.latest_filename, '') LIKE ?"));
         verify(jdbcTemplate).queryForObject(
                 contains("COUNT(1)"),
                 eq(Long.class),

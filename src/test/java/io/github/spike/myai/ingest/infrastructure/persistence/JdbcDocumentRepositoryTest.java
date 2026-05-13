@@ -39,7 +39,7 @@ class JdbcDocumentRepositoryTest {
     }
 
     @Test
-    @DisplayName("save 与 markIndexed 应透传 processing_metadata 字段")
+    @DisplayName("save 与 markIndexed 应同时维护 latest projection 与 version processing_metadata")
     void processingMetadataMethods_shouldIncludeJsonbColumn() {
         JdbcTemplate jdbcTemplate = Mockito.mock(JdbcTemplate.class);
         JdbcDocumentRepository repository = new JdbcDocumentRepository(jdbcTemplate);
@@ -67,6 +67,8 @@ class JdbcDocumentRepositoryTest {
                 now);
 
         repository.save(document);
+        when(jdbcTemplate.update(contains("SET status = 'INDEXED'"), any(), any(), eq(WorkspaceConstants.DEFAULT_WORKSPACE_ID), eq("doc-meta-1"), eq("INGESTING")))
+                .thenReturn(1);
         repository.markIndexed(
                 WorkspaceConstants.DEFAULT_WORKSPACE_ID,
                 new DocumentId("doc-meta-1"),
@@ -75,10 +77,13 @@ class JdbcDocumentRepositoryTest {
                 now);
 
         ArgumentCaptor<String> sqlCaptor = ArgumentCaptor.forClass(String.class);
-        verify(jdbcTemplate, times(2)).update(sqlCaptor.capture(), any(Object[].class));
+        verify(jdbcTemplate, times(4)).update(sqlCaptor.capture(), any(Object[].class));
         assertTrue(sqlCaptor.getAllValues().get(0).contains("processing_metadata"));
         assertTrue(sqlCaptor.getAllValues().get(0).contains("CAST(? AS JSONB)"));
-        assertTrue(sqlCaptor.getAllValues().get(1).contains("processing_metadata = CAST(? AS JSONB)"));
+        assertTrue(sqlCaptor.getAllValues().get(0).contains("latest_version_number"));
+        assertTrue(sqlCaptor.getAllValues().get(1).contains("ingest_document_versions"));
+        assertTrue(sqlCaptor.getAllValues().get(2).contains("processing_metadata = CAST(? AS JSONB)"));
+        assertTrue(sqlCaptor.getAllValues().get(3).contains("ingest_document_versions"));
     }
 
     @Test
@@ -110,7 +115,8 @@ class JdbcDocumentRepositoryTest {
         when(jdbcTemplate.update(contains("SET status = 'DELETED'"), any(), eq(WorkspaceConstants.DEFAULT_WORKSPACE_ID), eq("doc-1")))
                 .thenReturn(0);
         when(jdbcTemplate.update(
-                        contains("WHERE workspace_id = ? AND document_id = ? AND status = 'DELETING'"),
+                        contains("WHERE workspace_id = ? AND document_id = ? AND latest_status = 'DELETING'"),
+                        eq("FAILED"),
                         eq("FAILED"),
                         any(),
                         eq(WorkspaceConstants.DEFAULT_WORKSPACE_ID),

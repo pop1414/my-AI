@@ -2,6 +2,7 @@ package io.github.spike.myai.ingest.infrastructure.persistence;
 
 import io.github.spike.myai.ingest.domain.model.Document;
 import io.github.spike.myai.ingest.domain.model.DocumentId;
+import io.github.spike.myai.ingest.domain.model.DocumentVersionOriginType;
 import io.github.spike.myai.ingest.domain.model.UploadStatus;
 import io.github.spike.myai.ingest.domain.port.DocumentRepository;
 import java.sql.Timestamp;
@@ -10,40 +11,72 @@ import java.util.Optional;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 文档仓储 PostgreSQL 实现（Infrastructure Adapter）。
+ * 文档仓储 PostgreSQL 实现。
  *
- * <p>设计说明：
- * <ul>
- *     <li>使用 JdbcTemplate 实现最小可读、可控的 SQL 访问。</li>
- *     <li>采用 UPSERT（ON CONFLICT）保证 save 可用于新增和状态更新。</li>
- *     <li>表结构由 Flyway 统一维护，仓储仅负责运行时读写。</li>
- * </ul>
- *
- * @author Spike
- * @since 1.0.0
+ * <p>当前实现将稳定的 `document` 身份与 latest `document version`
+ * 事实拆开存储，但对上层仍保持 `DocumentRepository` 端口不变。
+ * 现阶段 `Document` 仍表示“文档资产 + latest version projection”。
  */
 @Repository
+@Transactional
 public class JdbcDocumentRepository implements DocumentRepository {
 
-    /**
-     * UPSERT 逻辑：存在即更新，不存在即插入。
-     * 使用 PostgreSQL 的 ON CONFLICT (document_id) 特性实现。
-     */
-    private static final String UPSERT_SQL = """
+    private static final String UPSERT_DOCUMENT_SQL = """
             INSERT INTO ingest_documents
-              (document_id, workspace_id, kb_id, file_hash, filename, file_size, status, failure_reason,
-               retry_count, retry_max, next_retry_at, last_error_code, last_error_message, last_error_at,
+              (document_id, workspace_id, kb_id, file_hash, filename, file_size, status,
+               latest_version_number, latest_status, latest_filename, latest_version_origin_type,
+               failure_reason, retry_count, retry_max, next_retry_at, last_error_code, last_error_message, last_error_at,
                reprocess_count, reprocess_requested_at, split_version, processing_metadata,
                created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?,
-                    ?, ?, ?, ?, ?, ?,
+            VALUES (?, ?, ?, ?, ?, ?, ?,
+                    ?, ?, ?, ?,
+                    ?, ?, ?, ?, ?, ?, ?,
                     ?, ?, ?, CAST(? AS JSONB),
                     ?, ?)
             ON CONFLICT (document_id) DO UPDATE SET
               workspace_id = EXCLUDED.workspace_id,
               kb_id = EXCLUDED.kb_id,
+              file_hash = EXCLUDED.file_hash,
+              filename = EXCLUDED.filename,
+              file_size = EXCLUDED.file_size,
+              status = EXCLUDED.status,
+              latest_version_number = EXCLUDED.latest_version_number,
+              latest_status = EXCLUDED.latest_status,
+              latest_filename = EXCLUDED.latest_filename,
+              latest_version_origin_type = EXCLUDED.latest_version_origin_type,
+              failure_reason = EXCLUDED.failure_reason,
+              retry_count = EXCLUDED.retry_count,
+              retry_max = EXCLUDED.retry_max,
+              next_retry_at = EXCLUDED.next_retry_at,
+              last_error_code = EXCLUDED.last_error_code,
+              last_error_message = EXCLUDED.last_error_message,
+              last_error_at = EXCLUDED.last_error_at,
+              reprocess_count = EXCLUDED.reprocess_count,
+              reprocess_requested_at = EXCLUDED.reprocess_requested_at,
+              split_version = EXCLUDED.split_version,
+              processing_metadata = EXCLUDED.processing_metadata,
+              created_at = EXCLUDED.created_at,
+              updated_at = EXCLUDED.updated_at
+            """;
+
+    private static final String UPSERT_DOCUMENT_VERSION_SQL = """
+            INSERT INTO ingest_document_versions
+              (document_id, version_number, version_origin_type, rollback_from_version_number,
+               file_hash, filename, file_size, status, failure_reason,
+               retry_count, retry_max, next_retry_at, last_error_code, last_error_message, last_error_at,
+               reprocess_count, reprocess_requested_at, split_version, processing_metadata,
+               created_at, updated_at)
+            VALUES (?, ?, ?, ?,
+                    ?, ?, ?, ?, ?,
+                    ?, ?, ?, ?, ?, ?,
+                    ?, ?, ?, CAST(? AS JSONB),
+                    ?, ?)
+            ON CONFLICT (document_id, version_number) DO UPDATE SET
+              version_origin_type = EXCLUDED.version_origin_type,
+              rollback_from_version_number = EXCLUDED.rollback_from_version_number,
               file_hash = EXCLUDED.file_hash,
               filename = EXCLUDED.filename,
               file_size = EXCLUDED.file_size,
@@ -63,67 +96,88 @@ public class JdbcDocumentRepository implements DocumentRepository {
               updated_at = EXCLUDED.updated_at
             """;
 
-    /**
-     * 根据主键查询完整文档信息的 SQL。
-     */
-    private static final String FIND_BY_ID_SQL = """
-            SELECT document_id, workspace_id, kb_id, file_hash, filename, file_size, status, failure_reason,
-                   retry_count, retry_max, next_retry_at, last_error_code, last_error_message, last_error_at,
-                   reprocess_count, reprocess_requested_at, split_version, processing_metadata,
-                   created_at, updated_at
-            FROM ingest_documents
-            WHERE workspace_id = ? AND document_id = ?
+    private static final String DOCUMENT_PROJECTION_SELECT = """
+            SELECT d.document_id,
+                   d.workspace_id,
+                   d.kb_id,
+                   d.latest_version_number,
+                   d.latest_version_origin_type,
+                   v.file_hash,
+                   v.filename,
+                   v.file_size,
+                   v.status,
+                   v.failure_reason,
+                   v.retry_count,
+                   v.retry_max,
+                   v.next_retry_at,
+                   v.last_error_code,
+                   v.last_error_message,
+                   v.last_error_at,
+                   v.reprocess_count,
+                   v.reprocess_requested_at,
+                   v.split_version,
+                   v.processing_metadata,
+                   d.created_at,
+                   d.updated_at
+            FROM ingest_documents d
+            JOIN ingest_document_versions v
+              ON v.document_id = d.document_id
+             AND v.version_number = d.latest_version_number
             """;
 
-    /**
-     * 实现“秒传”逻辑的查询语句。
-     * 检查当前知识库内是否已存在相同 Hash 的文件，若存在则取最新的一条。
-     */
-    private static final String FIND_BY_KB_ID_AND_FILE_HASH_SQL = """
-            SELECT document_id, workspace_id, kb_id, file_hash, filename, file_size, status, failure_reason,
-                   retry_count, retry_max, next_retry_at, last_error_code, last_error_message, last_error_at,
-                   reprocess_count, reprocess_requested_at, split_version, processing_metadata,
-                   created_at, updated_at
-            FROM ingest_documents
-            WHERE workspace_id = ? AND kb_id = ? AND file_hash = ? AND status <> 'DELETED'
-            ORDER BY created_at DESC
+    private static final String FIND_BY_ID_SQL = DOCUMENT_PROJECTION_SELECT + """
+            WHERE d.workspace_id = ? AND d.document_id = ?
+            """;
+
+    private static final String FIND_BY_KB_ID_AND_FILE_HASH_SQL = DOCUMENT_PROJECTION_SELECT + """
+            WHERE d.workspace_id = ? AND d.kb_id = ? AND d.file_hash = ? AND d.status <> 'DELETED'
+            ORDER BY d.created_at DESC
             LIMIT 1
             """;
 
-    /**
-     * 核心调度查询：寻找最早达到可处理状态的任务。
-     * 排除正在处理的任务、已达到最大重试次数的任务以及尚未到达重试退避时间的任务。
-     */
-    private static final String FIND_OLDEST_READY_SQL = """
-            SELECT document_id, workspace_id, kb_id, file_hash, filename, file_size, status, failure_reason,
-                   retry_count, retry_max, next_retry_at, last_error_code, last_error_message, last_error_at,
-                   reprocess_count, reprocess_requested_at, split_version, processing_metadata,
-                   created_at, updated_at
-            FROM ingest_documents
-            WHERE workspace_id = ?
-              AND status = 'UPLOADED'
-              AND (next_retry_at IS NULL OR next_retry_at <= ?)
-              AND retry_count < retry_max
-            ORDER BY COALESCE(next_retry_at, created_at) ASC, created_at ASC
+    private static final String FIND_OLDEST_READY_SQL = DOCUMENT_PROJECTION_SELECT + """
+            WHERE d.workspace_id = ?
+              AND d.latest_status = 'UPLOADED'
+              AND (v.next_retry_at IS NULL OR v.next_retry_at <= ?)
+              AND v.retry_count < v.retry_max
+            ORDER BY COALESCE(v.next_retry_at, d.created_at) ASC, d.created_at ASC
             LIMIT 1
             """;
 
-    /**
-     * 通用的 CAS (Compare And Set) 状态更新 SQL。
-     * 只有当数据库中的当前状态与 expectedStatus 一致时，才允许执行更新。
-     */
-    private static final String COMPARE_AND_SET_STATUS_SQL = """
+    private static final String COMPARE_AND_SET_DOCUMENT_STATUS_SQL = """
             UPDATE ingest_documents
+            SET status = ?, latest_status = ?, failure_reason = ?, updated_at = ?
+            WHERE workspace_id = ? AND document_id = ? AND latest_status = ?
+            """;
+
+    private static final String COMPARE_AND_SET_VERSION_STATUS_SQL = """
+            UPDATE ingest_document_versions
             SET status = ?, failure_reason = ?, updated_at = ?
-            WHERE workspace_id = ? AND document_id = ? AND status = ?
+            WHERE document_id = ?
+              AND version_number = (
+                  SELECT latest_version_number
+                  FROM ingest_documents
+                  WHERE workspace_id = ? AND document_id = ?
+              )
             """;
 
-    /**
-     * 成功完成索引后的收口更新。
-     * 除了将状态改为 INDEXED，还需要清空重试计数和错误上下文。
-     */
-    private static final String MARK_INDEXED_SQL = """
+    private static final String MARK_INDEXED_DOCUMENT_SQL = """
             UPDATE ingest_documents
+            SET status = 'INDEXED',
+                latest_status = 'INDEXED',
+                failure_reason = NULL,
+                retry_count = 0,
+                next_retry_at = NULL,
+                last_error_code = NULL,
+                last_error_message = NULL,
+                last_error_at = NULL,
+                processing_metadata = CAST(? AS JSONB),
+                updated_at = ?
+            WHERE workspace_id = ? AND document_id = ? AND latest_status = ?
+            """;
+
+    private static final String MARK_INDEXED_VERSION_SQL = """
+            UPDATE ingest_document_versions
             SET status = 'INDEXED',
                 failure_reason = NULL,
                 retry_count = 0,
@@ -133,15 +187,29 @@ public class JdbcDocumentRepository implements DocumentRepository {
                 last_error_at = NULL,
                 processing_metadata = CAST(? AS JSONB),
                 updated_at = ?
-            WHERE workspace_id = ? AND document_id = ? AND status = ?
+            WHERE document_id = ?
+              AND version_number = (
+                  SELECT latest_version_number
+                  FROM ingest_documents
+                  WHERE workspace_id = ? AND document_id = ?
+              )
             """;
 
-    /**
-     * 标记为彻底失败后的状态更新。
-     * 永久性记录最后的错误码和详细错误报文。
-     */
-    private static final String MARK_FAILED_SQL = """
+    private static final String MARK_FAILED_DOCUMENT_SQL = """
             UPDATE ingest_documents
+            SET status = 'FAILED',
+                latest_status = 'FAILED',
+                failure_reason = ?,
+                processing_metadata = CAST(? AS JSONB),
+                last_error_code = ?,
+                last_error_message = ?,
+                last_error_at = ?,
+                updated_at = ?
+            WHERE workspace_id = ? AND document_id = ? AND latest_status = ?
+            """;
+
+    private static final String MARK_FAILED_VERSION_SQL = """
+            UPDATE ingest_document_versions
             SET status = 'FAILED',
                 failure_reason = ?,
                 processing_metadata = CAST(? AS JSONB),
@@ -149,15 +217,31 @@ public class JdbcDocumentRepository implements DocumentRepository {
                 last_error_message = ?,
                 last_error_at = ?,
                 updated_at = ?
-            WHERE workspace_id = ? AND document_id = ? AND status = ?
+            WHERE document_id = ?
+              AND version_number = (
+                  SELECT latest_version_number
+                  FROM ingest_documents
+                  WHERE workspace_id = ? AND document_id = ?
+              )
             """;
 
-    /**
-     * 瞬时错误触发重试时的状态更新。
-     * 将状态重置为 UPLOADED 允许 worker 重新抢占，并设置下一次重试的具体时间点。
-     */
-    private static final String MARK_RETRY_SQL = """
+    private static final String MARK_RETRY_DOCUMENT_SQL = """
             UPDATE ingest_documents
+            SET status = 'UPLOADED',
+                latest_status = 'UPLOADED',
+                failure_reason = NULL,
+                retry_count = ?,
+                next_retry_at = ?,
+                processing_metadata = NULL,
+                last_error_code = ?,
+                last_error_message = ?,
+                last_error_at = ?,
+                updated_at = ?
+            WHERE workspace_id = ? AND document_id = ? AND latest_status = ?
+            """;
+
+    private static final String MARK_RETRY_VERSION_SQL = """
+            UPDATE ingest_document_versions
             SET status = 'UPLOADED',
                 failure_reason = NULL,
                 retry_count = ?,
@@ -167,15 +251,31 @@ public class JdbcDocumentRepository implements DocumentRepository {
                 last_error_message = ?,
                 last_error_at = ?,
                 updated_at = ?
-            WHERE workspace_id = ? AND document_id = ? AND status = ?
+            WHERE document_id = ?
+              AND version_number = (
+                  SELECT latest_version_number
+                  FROM ingest_documents
+                  WHERE workspace_id = ? AND document_id = ?
+              )
             """;
 
-    /**
-     * 标记文档重处理的 SQL。
-     * 重置处理状态并在保留历史记录的同时递增重处理计数器。
-     */
-    private static final String REQUEST_REPROCESS_SQL = """
+    private static final String REQUEST_REPROCESS_DOCUMENT_SQL = """
             UPDATE ingest_documents
+            SET status = 'UPLOADED',
+                latest_status = 'UPLOADED',
+                failure_reason = NULL,
+                retry_count = 0,
+                next_retry_at = NULL,
+                processing_metadata = NULL,
+                reprocess_count = reprocess_count + 1,
+                reprocess_requested_at = ?,
+                split_version = ?,
+                updated_at = ?
+            WHERE workspace_id = ? AND document_id = ? AND latest_status = ?
+            """;
+
+    private static final String REQUEST_REPROCESS_VERSION_SQL = """
+            UPDATE ingest_document_versions
             SET status = 'UPLOADED',
                 failure_reason = NULL,
                 retry_count = 0,
@@ -185,46 +285,80 @@ public class JdbcDocumentRepository implements DocumentRepository {
                 reprocess_requested_at = ?,
                 split_version = ?,
                 updated_at = ?
-            WHERE workspace_id = ? AND document_id = ? AND status = ?
+            WHERE document_id = ?
+              AND version_number = (
+                  SELECT latest_version_number
+                  FROM ingest_documents
+                  WHERE workspace_id = ? AND document_id = ?
+              )
             """;
+
     private static final String MARK_DELETING_SQL = """
             UPDATE ingest_documents
             SET status = 'DELETING',
+                latest_status = 'DELETING',
                 updated_at = ?
-            WHERE workspace_id = ? AND document_id = ? AND status = ?
+            WHERE workspace_id = ? AND document_id = ? AND latest_status = ?
             """;
 
-    /**
-     * 标记为已删除的 SQL。
-     *
-     * <p>仅当文档当前状态为 {@code DELETING} 时才执行，确保删除流程的原子性。
-     */
+    private static final String MARK_DELETING_VERSION_SQL = """
+            UPDATE ingest_document_versions
+            SET status = 'DELETING',
+                updated_at = ?
+            WHERE document_id = ?
+              AND version_number = (
+                  SELECT latest_version_number
+                  FROM ingest_documents
+                  WHERE workspace_id = ? AND document_id = ?
+              )
+            """;
+
     private static final String MARK_DELETED_SQL = """
             UPDATE ingest_documents
             SET status = 'DELETED',
+                latest_status = 'DELETED',
                 updated_at = ?
-            WHERE workspace_id = ? AND document_id = ? AND status = 'DELETING'
+            WHERE workspace_id = ? AND document_id = ? AND latest_status = 'DELETING'
             """;
 
-    /**
-     * 删除失败回滚 SQL。
-     *
-     * <p>将 DELETING 状态的文档恢复到指定状态（删除前的状态）。
-     */
+    private static final String MARK_DELETED_VERSION_SQL = """
+            UPDATE ingest_document_versions
+            SET status = 'DELETED',
+                updated_at = ?
+            WHERE document_id = ?
+              AND version_number = (
+                  SELECT latest_version_number
+                  FROM ingest_documents
+                  WHERE workspace_id = ? AND document_id = ?
+              )
+            """;
+
     private static final String ROLLBACK_DELETING_SQL = """
             UPDATE ingest_documents
             SET status = ?,
+                latest_status = ?,
                 updated_at = ?
-            WHERE workspace_id = ? AND document_id = ? AND status = 'DELETING'
+            WHERE workspace_id = ? AND document_id = ? AND latest_status = 'DELETING'
             """;
 
-    /**
-     * JDBC 结果集映射器：将数据库行原始数据装配回 Document 领域对象实例。
-     */
+    private static final String ROLLBACK_DELETING_VERSION_SQL = """
+            UPDATE ingest_document_versions
+            SET status = ?,
+                updated_at = ?
+            WHERE document_id = ?
+              AND version_number = (
+                  SELECT latest_version_number
+                  FROM ingest_documents
+                  WHERE workspace_id = ? AND document_id = ?
+              )
+            """;
+
     private static final RowMapper<Document> DOCUMENT_ROW_MAPPER = (rs, rowNum) -> new Document(
             new DocumentId(rs.getString("document_id")),
             rs.getString("workspace_id"),
             rs.getString("kb_id"),
+            rs.getInt("latest_version_number"),
+            DocumentVersionOriginType.valueOf(rs.getString("latest_version_origin_type")),
             rs.getString("file_hash"),
             rs.getString("filename"),
             rs.getLong("file_size"),
@@ -245,27 +379,45 @@ public class JdbcDocumentRepository implements DocumentRepository {
 
     private final JdbcTemplate jdbcTemplate;
 
-    /**
-     * 构造函数：注入 JdbcTemplate。
-     *
-     * <p>表结构由 Flyway 统一维护，仓储本身不再承担建表和补字段职责。
-     */
     public JdbcDocumentRepository(JdbcTemplate jdbcTemplate) {
         this.jdbcTemplate = jdbcTemplate;
     }
 
-    /**
-     * 保存文档聚合（新增或更新）。
-     *
-     * @param document 领域文档对象
-     */
     @Override
     public void save(Document document) {
         jdbcTemplate.update(
-                UPSERT_SQL,
+                UPSERT_DOCUMENT_SQL,
                 document.documentId().value(),
                 document.workspaceId(),
                 document.kbId(),
+                document.fileHash(),
+                document.filename(),
+                document.fileSize(),
+                document.status().name(),
+                document.latestVersionNumber(),
+                document.status().name(),
+                document.filename(),
+                document.latestVersionOriginType().name(),
+                document.failureReason(),
+                document.retryCount(),
+                document.retryMax(),
+                toTimestamp(document.nextRetryAt()),
+                document.lastErrorCode(),
+                document.lastErrorMessage(),
+                toTimestamp(document.lastErrorAt()),
+                document.reprocessCount(),
+                toTimestamp(document.reprocessRequestedAt()),
+                document.splitVersion(),
+                document.processingMetadata(),
+                Timestamp.from(document.createdAt()),
+                Timestamp.from(document.updatedAt()));
+
+        jdbcTemplate.update(
+                UPSERT_DOCUMENT_VERSION_SQL,
+                document.documentId().value(),
+                document.latestVersionNumber(),
+                document.latestVersionOriginType().name(),
+                null,
                 document.fileHash(),
                 document.filename(),
                 document.fileSize(),
@@ -285,21 +437,11 @@ public class JdbcDocumentRepository implements DocumentRepository {
                 Timestamp.from(document.updatedAt()));
     }
 
-    /**
-     * 根据文档 ID 查询文档聚合。
-     *
-     * @param documentId 文档 ID
-     * @return 查询结果（Optional 封装）
-     */
     @Override
     public Optional<Document> findById(String workspaceId, DocumentId documentId) {
         return jdbcTemplate.query(FIND_BY_ID_SQL, DOCUMENT_ROW_MAPPER, workspaceId, documentId.value()).stream().findFirst();
     }
 
-    /**
-     * 根据知识库 ID 和文件哈希查找文档。
-     * 用于在上传前检查是否存在完全一致且已处理的文件。
-     */
     @Override
     public Optional<Document> findByKbIdAndFileHash(String workspaceId, String kbId, String fileHash) {
         return jdbcTemplate.query(FIND_BY_KB_ID_AND_FILE_HASH_SQL, DOCUMENT_ROW_MAPPER, workspaceId, kbId, fileHash)
@@ -307,22 +449,13 @@ public class JdbcDocumentRepository implements DocumentRepository {
                 .findFirst();
     }
 
-    /**
-     * 寻找最早的任务以进行异步处理。
-     * 这是 InProcessWorker 等调度器的核心数据来源。
-     */
     @Override
     public Optional<Document> findOldestReadyForProcessing(String workspaceId, Instant now) {
-        // 固定按 next_retry_at/created_at 升序取 1 条，保证处理顺序尽量稳定、可预期。
         return jdbcTemplate.query(FIND_OLDEST_READY_SQL, DOCUMENT_ROW_MAPPER, workspaceId, Timestamp.from(now))
                 .stream()
                 .findFirst();
     }
 
-    /**
-     * 原子性的状态变更方法。
-     * 采用 CAS 机制防止多个处理进程/线程冲突导致的状态覆盖问题。
-     */
     @Override
     public boolean compareAndSetStatus(
             String workspaceId,
@@ -331,17 +464,27 @@ public class JdbcDocumentRepository implements DocumentRepository {
             UploadStatus targetStatus,
             String failureReason,
             Instant updatedAt) {
-        // CAS 核心：where 子句里带 expectedStatus，只有状态匹配才更新成功。
-        // 在并发场景下可避免后写覆盖先写导致的状态回退。
         int updatedRows = jdbcTemplate.update(
-                COMPARE_AND_SET_STATUS_SQL,
+                COMPARE_AND_SET_DOCUMENT_STATUS_SQL,
+                targetStatus.name(),
                 targetStatus.name(),
                 failureReason,
                 Timestamp.from(updatedAt),
                 workspaceId,
                 documentId.value(),
                 expectedStatus.name());
-        return updatedRows == 1;
+        if (updatedRows != 1) {
+            return false;
+        }
+        jdbcTemplate.update(
+                COMPARE_AND_SET_VERSION_STATUS_SQL,
+                targetStatus.name(),
+                failureReason,
+                Timestamp.from(updatedAt),
+                documentId.value(),
+                workspaceId,
+                documentId.value());
+        return true;
     }
 
     @Override
@@ -351,15 +494,24 @@ public class JdbcDocumentRepository implements DocumentRepository {
             UploadStatus expectedStatus,
             String processingMetadata,
             Instant updatedAt) {
-        // 成功收口：重试信息一并清理，避免污染后续查询；processing_metadata 在成功时可选择性回填。
         int updatedRows = jdbcTemplate.update(
-                MARK_INDEXED_SQL,
+                MARK_INDEXED_DOCUMENT_SQL,
                 processingMetadata,
                 Timestamp.from(updatedAt),
                 workspaceId,
                 documentId.value(),
                 expectedStatus.name());
-        return updatedRows == 1;
+        if (updatedRows != 1) {
+            return false;
+        }
+        jdbcTemplate.update(
+                MARK_INDEXED_VERSION_SQL,
+                processingMetadata,
+                Timestamp.from(updatedAt),
+                documentId.value(),
+                workspaceId,
+                documentId.value());
+        return true;
     }
 
     @Override
@@ -373,9 +525,8 @@ public class JdbcDocumentRepository implements DocumentRepository {
             String errorMessage,
             Instant errorAt,
             Instant updatedAt) {
-        // 失败收口：保留错误信息便于排障；processing_metadata 在失败时也可选择性记录部分产物。
         int updatedRows = jdbcTemplate.update(
-                MARK_FAILED_SQL,
+                MARK_FAILED_DOCUMENT_SQL,
                 failureReason,
                 processingMetadata,
                 errorCode,
@@ -385,7 +536,21 @@ public class JdbcDocumentRepository implements DocumentRepository {
                 workspaceId,
                 documentId.value(),
                 expectedStatus.name());
-        return updatedRows == 1;
+        if (updatedRows != 1) {
+            return false;
+        }
+        jdbcTemplate.update(
+                MARK_FAILED_VERSION_SQL,
+                failureReason,
+                processingMetadata,
+                errorCode,
+                errorMessage,
+                toTimestamp(errorAt),
+                Timestamp.from(updatedAt),
+                documentId.value(),
+                workspaceId,
+                documentId.value());
+        return true;
     }
 
     @Override
@@ -399,10 +564,8 @@ public class JdbcDocumentRepository implements DocumentRepository {
             String errorMessage,
             Instant errorAt,
             Instant updatedAt) {
-        // 瞬时失败：状态回到 UPLOADED，等待下一次抢占。
-        // 同时清空 processing_metadata，避免旧元数据残留到下一次处理周期。
         int updatedRows = jdbcTemplate.update(
-                MARK_RETRY_SQL,
+                MARK_RETRY_DOCUMENT_SQL,
                 retryCount,
                 toTimestamp(nextRetryAt),
                 errorCode,
@@ -412,7 +575,21 @@ public class JdbcDocumentRepository implements DocumentRepository {
                 workspaceId,
                 documentId.value(),
                 expectedStatus.name());
-        return updatedRows == 1;
+        if (updatedRows != 1) {
+            return false;
+        }
+        jdbcTemplate.update(
+                MARK_RETRY_VERSION_SQL,
+                retryCount,
+                toTimestamp(nextRetryAt),
+                errorCode,
+                errorMessage,
+                toTimestamp(errorAt),
+                Timestamp.from(updatedAt),
+                documentId.value(),
+                workspaceId,
+                documentId.value());
+        return true;
     }
 
     @Override
@@ -422,30 +599,28 @@ public class JdbcDocumentRepository implements DocumentRepository {
             UploadStatus expectedStatus,
             String newSplitVersion,
             Instant requestedAt) {
-        // 清空 processing_metadata，因为重处理会重新走完整链路并产出新的元数据。
-        // 进入重处理队列：重置重试计数，并更新 splitVersion。
         int updatedRows = jdbcTemplate.update(
-                REQUEST_REPROCESS_SQL,
+                REQUEST_REPROCESS_DOCUMENT_SQL,
                 Timestamp.from(requestedAt),
                 newSplitVersion,
                 Timestamp.from(requestedAt),
                 workspaceId,
                 documentId.value(),
                 expectedStatus.name());
-        return updatedRows == 1;
+        if (updatedRows != 1) {
+            return false;
+        }
+        jdbcTemplate.update(
+                REQUEST_REPROCESS_VERSION_SQL,
+                Timestamp.from(requestedAt),
+                newSplitVersion,
+                Timestamp.from(requestedAt),
+                documentId.value(),
+                workspaceId,
+                documentId.value());
+        return true;
     }
 
-    /**
-     * 将文档状态推进为 DELETING。
-     *
-     * <p>采用 CAS 机制，仅当文档当前状态与期望状态一致时才更新。
-     *
-     * @param workspaceId    工作区标识
-     * @param documentId     文档资产 ID
-     * @param expectedStatus 期望当前状态
-     * @param updatedAt      更新时间
-     * @return 更新是否成功
-     */
     @Override
     public boolean markDeleting(String workspaceId, DocumentId documentId, UploadStatus expectedStatus, Instant updatedAt) {
         int updatedRows = jdbcTemplate.update(
@@ -454,19 +629,18 @@ public class JdbcDocumentRepository implements DocumentRepository {
                 workspaceId,
                 documentId.value(),
                 expectedStatus.name());
-        return updatedRows == 1;
+        if (updatedRows != 1) {
+            return false;
+        }
+        jdbcTemplate.update(
+                MARK_DELETING_VERSION_SQL,
+                Timestamp.from(updatedAt),
+                documentId.value(),
+                workspaceId,
+                documentId.value());
+        return true;
     }
 
-    /**
-     * 将文档状态推进为 DELETED（物理标记删除完成）。
-     *
-     * <p>仅当文档当前状态为 {@code DELETING} 时才执行，无需额外 CAS 参数。
-     *
-     * @param workspaceId 工作区标识
-     * @param documentId  文档资产 ID
-     * @param updatedAt   更新时间
-     * @return 更新是否成功
-     */
     @Override
     public boolean markDeleted(String workspaceId, DocumentId documentId, Instant updatedAt) {
         int updatedRows = jdbcTemplate.update(
@@ -474,34 +648,40 @@ public class JdbcDocumentRepository implements DocumentRepository {
                 Timestamp.from(updatedAt),
                 workspaceId,
                 documentId.value());
-        return updatedRows == 1;
+        if (updatedRows != 1) {
+            return false;
+        }
+        jdbcTemplate.update(
+                MARK_DELETED_VERSION_SQL,
+                Timestamp.from(updatedAt),
+                documentId.value(),
+                workspaceId,
+                documentId.value());
+        return true;
     }
 
-    /**
-     * 删除失败时回滚 DELETING 状态。
-     *
-     * <p>将文档从 DELETING 状态恢复到指定的回滚状态（删除前的状态）。
-     *
-     * @param workspaceId    工作区标识
-     * @param documentId     文档资产 ID
-     * @param rollbackStatus 回滚目标状态
-     * @param updatedAt      更新时间
-     * @return 更新是否成功
-     */
     @Override
     public boolean rollbackDeleting(String workspaceId, DocumentId documentId, UploadStatus rollbackStatus, Instant updatedAt) {
         int updatedRows = jdbcTemplate.update(
                 ROLLBACK_DELETING_SQL,
                 rollbackStatus.name(),
+                rollbackStatus.name(),
                 Timestamp.from(updatedAt),
                 workspaceId,
                 documentId.value());
-        return updatedRows == 1;
+        if (updatedRows != 1) {
+            return false;
+        }
+        jdbcTemplate.update(
+                ROLLBACK_DELETING_VERSION_SQL,
+                rollbackStatus.name(),
+                Timestamp.from(updatedAt),
+                documentId.value(),
+                workspaceId,
+                documentId.value());
+        return true;
     }
 
-    /**
-     * 工具方法：将数据库的 Timestamp 类型安全转化为 Java 的 Instant 类型。
-     */
     private static Instant toInstant(Timestamp timestamp) {
         if (timestamp == null) {
             return null;
@@ -509,11 +689,7 @@ public class JdbcDocumentRepository implements DocumentRepository {
         return timestamp.toInstant();
     }
 
-    /**
-     * 工具方法：将 Java 的 Instant 类型转化为数据库兼容的 Timestamp 类型（支持 null）。
-     */
     private static Timestamp toTimestamp(Instant instant) {
-        // 允许空值，便于 next_retry_at 等字段清空。
         if (instant == null) {
             return null;
         }

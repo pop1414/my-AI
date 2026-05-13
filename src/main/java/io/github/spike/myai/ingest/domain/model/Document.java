@@ -47,6 +47,8 @@ public record Document(
         DocumentId documentId,
         String workspaceId,
         String kbId,
+        int latestVersionNumber,
+        DocumentVersionOriginType latestVersionOriginType,
         String fileHash,
         String filename,
         long fileSize,
@@ -64,6 +66,61 @@ public record Document(
         String processingMetadata,
         Instant createdAt,
         Instant updatedAt) {
+
+    /**
+     * 兼容构造器：沿用旧的 latest projection 之前的参数形状。
+     *
+     * <p>当前未显式传入版本链信息时，默认将其视为：
+     * <ul>
+     *   <li>latestVersionNumber = 1</li>
+     *   <li>latestVersionOriginType = {@link DocumentVersionOriginType#UPLOAD}</li>
+     * </ul>
+     */
+    public Document(
+            DocumentId documentId,
+            String workspaceId,
+            String kbId,
+            String fileHash,
+            String filename,
+            long fileSize,
+            UploadStatus status,
+            String failureReason,
+            int retryCount,
+            int retryMax,
+            Instant nextRetryAt,
+            String lastErrorCode,
+            String lastErrorMessage,
+            Instant lastErrorAt,
+            int reprocessCount,
+            Instant reprocessRequestedAt,
+            String splitVersion,
+            String processingMetadata,
+            Instant createdAt,
+            Instant updatedAt) {
+        this(
+                documentId,
+                workspaceId,
+                kbId,
+                1,
+                DocumentVersionOriginType.UPLOAD,
+                fileHash,
+                filename,
+                fileSize,
+                status,
+                failureReason,
+                retryCount,
+                retryMax,
+                nextRetryAt,
+                lastErrorCode,
+                lastErrorMessage,
+                lastErrorAt,
+                reprocessCount,
+                reprocessRequestedAt,
+                splitVersion,
+                processingMetadata,
+                createdAt,
+                updatedAt);
+    }
 
     /**
      * 便利构造器：自动填充默认工作区标识。
@@ -95,6 +152,8 @@ public record Document(
                 documentId,
                 WorkspaceConstants.DEFAULT_WORKSPACE_ID,
                 kbId,
+                1,
+                DocumentVersionOriginType.UPLOAD,
                 fileHash,
                 filename,
                 fileSize,
@@ -140,6 +199,12 @@ public record Document(
         // 3. kbId 必填校验
         if (kbId == null || kbId.isBlank()) {
             throw new IllegalArgumentException("kbId must not be blank");
+        }
+        if (latestVersionNumber < 1) {
+            throw new IllegalArgumentException("latestVersionNumber must be positive");
+        }
+        if (latestVersionOriginType == null) {
+            throw new IllegalArgumentException("latestVersionOriginType must not be null");
         }
         // 4. fileSize 非负校验
         if (fileSize < 0) {
@@ -223,6 +288,8 @@ public record Document(
                 documentId,
                 workspaceId,
                 kbId,
+                1,
+                DocumentVersionOriginType.UPLOAD,
                 fileHash,
                 filename,
                 fileSize,
@@ -296,6 +363,8 @@ public record Document(
                 documentId,              // 标识不变
                 workspaceId,             // 工作区不变
                 kbId,                    // 知识库归属不变
+                latestVersionNumber,     // latest version number 不变
+                latestVersionOriginType, // latest version origin 不变
                 fileHash,                // 文件哈希不变
                 filename,                // 文件名不变
                 fileSize,                // 文件大小不变
