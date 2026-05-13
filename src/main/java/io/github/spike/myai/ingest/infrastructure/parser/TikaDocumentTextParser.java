@@ -7,6 +7,11 @@ import io.github.spike.myai.ingest.domain.port.DocumentTextParser;
 import io.github.spike.myai.ingest.infrastructure.config.IngestProperties;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
+import java.nio.ByteBuffer;
+import java.nio.charset.CharacterCodingException;
+import java.nio.charset.Charset;
+import java.nio.charset.CharsetDecoder;
+import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.LinkedHashMap;
@@ -108,8 +113,37 @@ public class TikaDocumentTextParser implements DocumentTextParser {
             throw new IllegalStateException("empty source content");
         }
         if (isNativeMarkdown(filename)) {
-            return parseNativeMarkdown(filename, content);
+            try {
+                return parseNativeMarkdown(filename, content);
+            } catch (CharacterCodingException ignored) {
+                // 非 UTF-8 且无可识别 BOM 时，回退 Tika 让其执行字符集检测。
+            }
         }
+        return parseWithTika(filename, content);
+    }
+
+    /**
+     * Tika 通用解析路径。
+     *
+     * <p>处理非 Markdown 文件（PDF、Word、Excel 等）的完整解析链路：
+     * <ol>
+     *   <li>通过 {@link AutoDetectParser} 自动识别文档类型；</li>
+     *   <li>产出原始 XHTML 并委托 {@link TextCleaningService} 执行
+     *       语义清洗（cleanHtml → toMarkdown）；</li>
+     *   <li>校验清洗结果的有效性；</li>
+     *   <li>组装 {@link DocumentParseResult} 并提取 processingMetadata。</li>
+     * </ol>
+     *
+     * <p>异常策略：Tika 解析异常（{@link TikaException}、{@link SAXException}）
+     * 和其他运行时异常分别包装为带不同消息的 {@link IllegalStateException}，
+     * 便于排障时区分错误来源。
+     *
+     * @param filename 原始文件名，用于 MIME 类型推断
+     * @param content  文件原始字节数组
+     * @return 结构化解析结果
+     * @throws IllegalStateException 解析失败时抛出
+     */
+    private DocumentParseResult parseWithTika(String filename, byte[] content) {
         // 使用 try-with-resources 确保输入流正确关闭
         try (InputStream inputStream = new ByteArrayInputStream(content)) {
             // 创建 Tika 自动检测解析器，根据文件内容自动识别文档类型
@@ -157,9 +191,10 @@ public class TikaDocumentTextParser implements DocumentTextParser {
      * @param content  文件原始字节数组
      * @return 结构化解析结果（rawXhtml 和 cleanedHtml 均为空字符串）
      */
-    private DocumentParseResult parseNativeMarkdown(String filename, byte[] content) {
-        // 第 1 步：将字节数组按 UTF-8 解码为原始 Markdown 文本
-        String rawMarkdown = new String(content, StandardCharsets.UTF_8);
+    private DocumentParseResult parseNativeMarkdown(String filename, byte[] content) throws CharacterCodingException {
+        // 第 1 步：按 BOM 或严格 UTF-8 解码为原始 Markdown 文本
+        DecodedMarkdown decodedMarkdown = decodeNativeMarkdown(content);
+        String rawMarkdown = decodedMarkdown.text();
         // 第 2 步：委托 TextCleaningService 执行最小破坏清洗（保留代码块/缩进/表格等结构）
         String cleanedMarkdown = textCleaningService.cleanNativeMarkdown(rawMarkdown);
         // 第 3 步：校验清洗结果的有效性（非空 + 长度阈值）
@@ -168,7 +203,7 @@ public class TikaDocumentTextParser implements DocumentTextParser {
         // 第 4 步：构造最小 Tika 元数据（仅包含文件名和 MIME 类型）
         Metadata metadata = new Metadata();
         metadata.set(TikaCoreProperties.RESOURCE_NAME_KEY, filename);
-        metadata.set(Metadata.CONTENT_TYPE, "text/markdown; charset=UTF-8");
+        metadata.set(Metadata.CONTENT_TYPE, "text/markdown; charset=" + decodedMarkdown.charset().name());
 
         // 第 5 步：组装解析结果——rawXhtml 和 cleanedHtml 均为空，因为未经过 Tika 管道
         return new DocumentParseResult(
@@ -176,6 +211,79 @@ public class TikaDocumentTextParser implements DocumentTextParser {
                 "",
                 cleanedMarkdown,
                 buildProcessingMetadata(filename, metadata, cleanedMarkdown));
+    }
+
+    /**
+     * 按 BOM 或严格 UTF-8 解码原生 Markdown 文件的字节内容。
+     *
+     * <p>解码策略按优先级：
+     * <ol>
+     *   <li><b>UTF-8 BOM</b>（{@code EF BB BF}）：跳过 BOM 后按严格 UTF-8 解码；</li>
+     *   <li><b>UTF-16LE BOM</b>（{@code FF FE}）：跳过 BOM 后按严格 UTF-16LE 解码；</li>
+     *   <li><b>UTF-16BE BOM</b>（{@code FE FF}）：跳过 BOM 后按严格 UTF-16BE 解码；</li>
+     *   <li><b>无 BOM</b>：按严格 UTF-8 解码（若含非法字节序列则抛出
+     *       {@link CharacterCodingException}，由调用方回退到 Tika 路径）。</li>
+     * </ol>
+     *
+     * <p>"严格解码"指遇到非法字节序列或不可映射字符时立即抛出异常，
+     * 而非静默替换为替代字符（U+FFFD），确保内容完整性。
+     *
+     * @param content 原始字节数组
+     * @return 解码后的文本及所用字符集
+     * @throws CharacterCodingException 严格解码失败时抛出（非 UTF-8/UTF-16 文件）
+     */
+    private static DecodedMarkdown decodeNativeMarkdown(byte[] content) throws CharacterCodingException {
+        // 第 1 步：检测 UTF-8 BOM（EF BB BF）
+        if (content.length >= 3
+                && (content[0] & 0xFF) == 0xEF
+                && (content[1] & 0xFF) == 0xBB
+                && (content[2] & 0xFF) == 0xBF) {
+            // 跳过前 3 字节 BOM，按严格 UTF-8 解码
+            return new DecodedMarkdown(decodeStrict(StandardCharsets.UTF_8, content, 3), StandardCharsets.UTF_8);
+        }
+        // 第 2 步：检测 UTF-16LE BOM（FF FE）
+        if (content.length >= 2
+                && (content[0] & 0xFF) == 0xFF
+                && (content[1] & 0xFF) == 0xFE) {
+            return new DecodedMarkdown(decodeStrict(StandardCharsets.UTF_16LE, content, 2), StandardCharsets.UTF_16LE);
+        }
+        // 第 3 步：检测 UTF-16BE BOM（FE FF）
+        if (content.length >= 2
+                && (content[0] & 0xFF) == 0xFE
+                && (content[1] & 0xFF) == 0xFF) {
+            return new DecodedMarkdown(decodeStrict(StandardCharsets.UTF_16BE, content, 2), StandardCharsets.UTF_16BE);
+        }
+        // 第 4 步：无 BOM，按严格 UTF-8 解码
+        return new DecodedMarkdown(decodeStrict(StandardCharsets.UTF_8, content, 0), StandardCharsets.UTF_8);
+    }
+
+    /**
+     * 使用指定字符集严格解码字节数组（从指定偏移量开始）。
+     *
+     * <p>"严格"的含义：
+     * <ul>
+     *   <li>{@link CodingErrorAction#REPORT}：遇到非法字节序列时抛出
+     *       {@link CharacterCodingException}，而非静默替换；</li>
+     *   <li>{@link CodingErrorAction#REPORT}：遇到不可映射字符时同样抛出异常。</li>
+     * </ul>
+     *
+     * <p>此严格策略确保 Markdown 文件内容无损解码：
+     * 若文件声称是 UTF-8 但实际含非法字节，将触发回退到 Tika 路径
+     * （Tika 内置了更鲁棒的字符集检测机制）。
+     *
+     * @param charset 目标字符集（如 UTF-8、UTF-16LE）
+     * @param content 原始字节数组
+     * @param offset  起始偏移量（用于跳过 BOM 头）
+     * @return 解码后的字符串
+     * @throws CharacterCodingException 遇到非法字节序列或不可映射字符时抛出
+     */
+    private static String decodeStrict(Charset charset, byte[] content, int offset) throws CharacterCodingException {
+        // 创建严格解码器：非法输入和不可映射字符均报告异常
+        CharsetDecoder decoder = charset.newDecoder()
+                .onMalformedInput(CodingErrorAction.REPORT)
+                .onUnmappableCharacter(CodingErrorAction.REPORT);
+        // 从指定偏移量开始解码，跳过 BOM 头
+        return decoder.decode(ByteBuffer.wrap(content, offset, content.length - offset)).toString();
     }
 
     /**
@@ -446,5 +554,21 @@ public class TikaDocumentTextParser implements DocumentTextParser {
         }
         // 全部为空，返回 null
         return null;
+    }
+
+    /**
+     * 原生 Markdown 解码结果（内部 Record）。
+     *
+     * <p>封装 {@link #decodeNativeMarkdown} 的两项输出：
+     * <ul>
+     *   <li>{@code text}：按 BOM 检测或严格 UTF-8 解码后的 Markdown 文本；</li>
+     *   <li>{@code charset}：实际使用的字符集，用于构造 MIME 类型的
+     *       charset 参数（如 {@code text/markdown; charset=UTF-8}）。</li>
+     * </ul>
+     *
+     * @param text    解码后的 Markdown 文本
+     * @param charset 解码使用的字符集
+     */
+    private record DecodedMarkdown(String text, Charset charset) {
     }
 }

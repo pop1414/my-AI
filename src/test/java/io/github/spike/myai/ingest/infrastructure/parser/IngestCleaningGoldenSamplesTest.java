@@ -78,6 +78,36 @@ class IngestCleaningGoldenSamplesTest {
         assertFalse(markdown.contains("页脚热线"), markdown);
     }
 
+    @Test
+    @DisplayName("Markdown 边界样本应区分代码块内容、raw HTML 噪音与 URL 噪音")
+    void markdownEdgeCaseGoldenInput_shouldPreserveCodeExamplesAndCleanNoise() throws Exception {
+        TikaDocumentTextParser parser =
+                new TikaDocumentTextParser(new TextCleaningService(), new ObjectMapper(), properties());
+        Path input = GOLDEN_ROOT.resolve("md-002").resolve("markdown-edge-cases.md");
+
+        DocumentParseResult result = parser.parse("markdown-edge-cases.md", Files.readAllBytes(input));
+        String markdown = result.cleanedMarkdown();
+
+        assertTrue(markdown.contains("# Markdown 边界清洗样本"), markdown);
+        assertTrue(markdown.contains("Setext 二级标题\n---"), markdown);
+        assertTrue(markdown.contains("```html\n<script>\nalert(\"keep script example\");\n</script>"), markdown);
+        assertTrue(markdown.contains("<iframe src=\"https://example.com/embed\"></iframe>"), markdown);
+        assertTrue(markdown.contains("| 转义管道 | `a \\| b` | 保留单元格内容 |"), markdown);
+        assertTrue(markdown.contains(">   - 再检查 chunks preview"), markdown);
+        assertTrue(markdown.contains("    SELECT  *"), markdown);
+        assertTrue(markdown.contains("正文中的图片链接 https://static.example.com/manual.png 应保留"), markdown);
+        assertTrue(markdown.contains("正文中的本地路径提示 file:///docs/local-note.md 也应保留"), markdown);
+
+        assertFalse(markdown.contains("remove script noise"), markdown);
+        assertFalse(markdown.contains("https://noise.example.com"), markdown);
+        assertFalse(markdown.contains("image42.png"), markdown);
+        assertFalse(markdown.contains("file:///tmp/tika-cache.html"), markdown);
+        assertFalse(markdown.contains("内部评审稿"), markdown);
+        assertFalse(markdown.contains("质检热线"), markdown);
+        assertFalse(markdown.contains("控制台首页"), markdown);
+        assertFalse(markdown.contains("页脚热线"), markdown);
+    }
+
     private static Stream<Arguments> readmeCases() {
         return Stream.of(
                 Arguments.of("weak-pdf-001", "weak-pdf-regression-sample.pdf", "第一节 可分块文本基底", "内部评审稿"),
@@ -87,6 +117,7 @@ class IngestCleaningGoldenSamplesTest {
                         "上线前核对项",
                         "Codex sample generator"),
                 Arguments.of("md-001", "project-handoff-checklist.md", "指标对照", "质检热线"),
+                Arguments.of("md-002", "markdown-edge-cases.md", "代码块中的 HTML 示例", "remove script noise"),
                 Arguments.of("html-001", "support-workflow.html", "人工复核触发条件", "控制台首页"));
     }
 
@@ -95,6 +126,7 @@ class IngestCleaningGoldenSamplesTest {
                 Arguments.of("weak-pdf-001", "weak-pdf-regression-sample.pdf", "chunking"),
                 Arguments.of("word-001", "knowledge-base-review-checklist.docx", "上线前核对项"),
                 Arguments.of("md-001", "project-handoff-checklist.md", "结构化检查表"),
+                Arguments.of("md-002", "markdown-edge-cases.md", "keep script example"),
                 Arguments.of("html-001", "support-workflow.html", "人工复核触发条件"));
     }
 

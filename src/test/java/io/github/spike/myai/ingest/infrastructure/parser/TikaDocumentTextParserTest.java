@@ -97,6 +97,39 @@ class TikaDocumentTextParserTest {
     }
 
     @Test
+    @DisplayName("原生 Markdown 应识别 UTF-16 BOM 并避免乱码")
+    void parse_shouldDecodeNativeMarkdownWithUtf16Bom() throws Exception {
+        TextCleaningService cleaningService = spy(new TextCleaningService());
+        TikaDocumentTextParser parser = new TikaDocumentTextParser(
+                cleaningService,
+                new ObjectMapper(),
+                properties(4000, false));
+        String raw = """
+                # UTF16 标题
+
+                正文内容
+                """;
+        byte[] encoded = raw.getBytes(StandardCharsets.UTF_16LE);
+        byte[] content = new byte[encoded.length + 2];
+        content[0] = (byte) 0xFF;
+        content[1] = (byte) 0xFE;
+        System.arraycopy(encoded, 0, content, 2, encoded.length);
+
+        DocumentParseResult result = parser.parse("utf16.md", content);
+
+        assertEquals("", result.rawXhtml());
+        assertEquals("", result.cleanedHtml());
+        assertTrue(result.cleanedMarkdown().contains("# UTF16 标题"));
+        assertTrue(result.cleanedMarkdown().contains("正文内容"));
+
+        JsonNode metadata = new ObjectMapper().readTree(result.processingMetadata());
+        assertEquals("text/markdown; charset=UTF-16LE", metadata.path("stable").path("mime_type").asText());
+        verify(cleaningService).cleanNativeMarkdown(raw);
+        verify(cleaningService, never()).cleanHtml(org.mockito.ArgumentMatchers.anyString());
+        verify(cleaningService, never()).toMarkdown(org.mockito.ArgumentMatchers.anyString());
+    }
+
+    @Test
     @DisplayName("空内容应抛出异常")
     void parse_shouldThrowException_whenContentEmpty() {
         TextCleaningService cleaningService = new TextCleaningService();

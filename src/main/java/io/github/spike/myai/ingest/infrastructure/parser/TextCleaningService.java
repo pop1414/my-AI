@@ -3,6 +3,7 @@ package io.github.spike.myai.ingest.infrastructure.parser;
 import com.vladsch.flexmark.html2md.converter.FlexmarkHtmlConverter;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Comment;
@@ -50,6 +51,15 @@ public class TextCleaningService {
      */
     private static final Pattern DANGEROUS_HTML_TAG =
             Pattern.compile("(?is)</?(script|style|iframe|object|embed|applet)\\b[^>]*>");
+    /**
+     * 危险 HTML 开标签匹配模式，用于识别跨行 raw HTML 块的起点。
+     *
+     * <p>当检测到危险开标签（如 {@code <script>}）但本行未找到对应闭标签时，
+     * 标记进入"危险 HTML 块"状态，后续行将跳过直到找到匹配的闭标签，
+     * 实现跨行危险 HTML 块的整体移除。
+     */
+    private static final Pattern DANGEROUS_HTML_OPEN_TAG =
+            Pattern.compile("(?i)<(script|style|iframe|object|embed|applet)\\b[^>]*>");
     /**
      * 不可见格式化字符匹配模式。
      *
@@ -185,19 +195,22 @@ public class TextCleaningService {
         text = CONTROL_CHARS.matcher(text).replaceAll("");
         // 第 3 步：去除零宽空格/BOM 等不可见格式化字符
         text = INVISIBLE_FORMATTING_CHARS.matcher(text).replaceAll("");
-        // 第 4 步：移除残留的完整危险 HTML 标签块
-        text = DANGEROUS_HTML_BLOCK.matcher(text).replaceAll("");
-        // 第 5 步：移除残留的孤立危险 HTML 标签
-        text = DANGEROUS_HTML_TAG.matcher(text).replaceAll("");
-
-        // 第 6 步：按行遍历，对代码块内外分别处理
+        // 第 4 步：按行遍历，对代码块内外分别处理
         String[] lines = text.split("\n", -1);
         StringBuilder cleaned = new StringBuilder(text.length());
         boolean inFencedCodeBlock = false;
+        boolean inDangerousHtmlBlock = false;
+        String dangerousHtmlEndTag = null;
 
         for (int i = 0; i < lines.length; i++) {
             String line = lines[i];
-            if (isFencedCodeDelimiter(line)) {
+            if (!inFencedCodeBlock && inDangerousHtmlBlock) {
+                DangerousHtmlLineResult htmlCleaned =
+                        cleanDangerousHtmlOutsideCode(line, true, dangerousHtmlEndTag);
+                inDangerousHtmlBlock = htmlCleaned.inDangerousHtmlBlock();
+                dangerousHtmlEndTag = htmlCleaned.dangerousHtmlEndTag();
+                cleaned.append(cleanNativeMarkdownLine(htmlCleaned.line()));
+            } else if (isFencedCodeDelimiter(line)) {
                 // 遇到围栏分隔符：切换代码块状态，仅去除行尾空白
                 inFencedCodeBlock = !inFencedCodeBlock;
                 cleaned.append(stripTrailingWhitespace(line));
@@ -206,7 +219,11 @@ public class TextCleaningService {
                 cleaned.append(stripTrailingWhitespace(line));
             } else {
                 // 普通行：执行原生 Markdown 的最小破坏清洗
-                cleaned.append(cleanNativeMarkdownLine(line));
+                DangerousHtmlLineResult htmlCleaned =
+                        cleanDangerousHtmlOutsideCode(line, inDangerousHtmlBlock, dangerousHtmlEndTag);
+                inDangerousHtmlBlock = htmlCleaned.inDangerousHtmlBlock();
+                dangerousHtmlEndTag = htmlCleaned.dangerousHtmlEndTag();
+                cleaned.append(cleanNativeMarkdownLine(htmlCleaned.line()));
             }
             if (i < lines.length - 1) {
                 cleaned.append('\n');
@@ -302,6 +319,112 @@ public class TextCleaningService {
         cleaned = IMAGE_URL_LINE.matcher(cleaned).replaceAll("");
         cleaned = FILE_URL_LINE.matcher(cleaned).replaceAll("");
         return stripTrailingWhitespace(cleaned);
+    }
+
+    /**
+     * 清理代码块外的危险 HTML 内容（支持跨行块）。
+     *
+     * <p>处理策略分三个阶段：
+     * <ol>
+     *   <li><b>块内续行</b>：若当前处于危险 HTML 块内部，
+     *       查找闭标签并截断；整行都在块内则返回空字符串；</li>
+     *   <li><b>单行块移除</b>：移除行内完整闭合的危险 HTML 标签对
+     *       （如 {@code <script>...</script>}）；</li>
+     *   <li><b>跨行块起点检测</b>：发现危险开标签但本行无闭标签时，
+     *       截断后续内容并标记进入块状态。</li>
+     * </ol>
+     *
+     * <p>该方法仅在非围栏代码块内调用，代码块内保留原始内容不做处理。
+     *
+     * @param line                 当前文本行
+     * @param inDangerousHtmlBlock 是否已处于危险 HTML 块内部
+     * @param dangerousHtmlEndTag  期待匹配的闭标签（如 {@code </script>}）
+     * @return 包含清洗后行内容、块状态和闭标签的结果对象
+     */
+    private static DangerousHtmlLineResult cleanDangerousHtmlOutsideCode(
+            String line,
+            boolean inDangerousHtmlBlock,
+            String dangerousHtmlEndTag) {
+        String cleaned = line;
+        boolean stillInBlock = inDangerousHtmlBlock;
+        String endTag = dangerousHtmlEndTag;
+
+        // 阶段 1：块内续行 —— 查找期待的闭标签
+        if (stillInBlock) {
+            // 大小写不敏感查找闭标签（如 </script>、</SCRIPT>）
+            int endIndex = indexOfIgnoreCase(cleaned, endTag);
+            if (endIndex < 0) {
+                // 整行都在危险块内，全部丢弃
+                return new DangerousHtmlLineResult("", true, endTag);
+            }
+            // 找到闭标签，截取其后内容继续处理
+            cleaned = cleaned.substring(endIndex + endTag.length());
+            stillInBlock = false;
+            endTag = null;
+        }
+
+        // 阶段 2：单行块移除 —— 移除完整危险标签对
+        cleaned = DANGEROUS_HTML_BLOCK.matcher(cleaned).replaceAll("");
+        // 阶段 3：跨行块起点检测 —— 发现危险开标签
+        Matcher openTag = DANGEROUS_HTML_OPEN_TAG.matcher(cleaned);
+        if (openTag.find()) {
+            // 根据开标签构造对应的闭标签（如 <script> → </script>）
+            endTag = "</" + openTag.group(1) + ">";
+            // 丢弃开标签及其后内容，标记进入块状态
+            cleaned = cleaned.substring(0, openTag.start());
+            stillInBlock = true;
+        }
+        // 移除残留的孤立危险单标签
+        cleaned = DANGEROUS_HTML_TAG.matcher(cleaned).replaceAll("");
+        return new DangerousHtmlLineResult(cleaned, stillInBlock, endTag);
+    }
+
+    /**
+     * 大小写不敏感的字符串查找（不使用正则，避免转义问题）。
+     *
+     * <p>用于在文本中定位危险 HTML 闭标签（如 {@code </script>}），
+     * 使用 {@link String#regionMatches} 逐位置比较，
+     * 性能优于正则且无需担心标签名中的特殊字符。
+     *
+     * @param text   待搜索的文本
+     * @param target 目标字符串（如 {@code </script>}）
+     * @return 首次匹配的起始索引，未找到返回 -1
+     */
+    private static int indexOfIgnoreCase(String text, String target) {
+        // 空值守卫：目标为空直接返回未找到
+        if (target == null || target.isEmpty()) {
+            return -1;
+        }
+        // 逐位置滑动窗口比较，窗口大小等于 target 长度
+        int max = text.length() - target.length();
+        for (int i = 0; i <= max; i++) {
+            // regionMatches(true, ...) 第三个参数 true 表示忽略大小写
+            if (text.regionMatches(true, i, target, 0, target.length())) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    /**
+     * 危险 HTML 行清洗结果（内部 Record）。
+     *
+     * <p>封装 {@link #cleanDangerousHtmlOutsideCode} 的三项输出：
+     * <ul>
+     *   <li>{@code line}：清洗后的行内容（可能为空字符串）；</li>
+     *   <li>{@code inDangerousHtmlBlock}：处理完成后是否仍处于危险块内；</li>
+     *   <li>{@code dangerousHtmlEndTag}：期待的闭标签（如 {@code </script>}），
+     *       不在块内时为 null。</li>
+     * </ul>
+     *
+     * @param line                 清洗后的行内容
+     * @param inDangerousHtmlBlock 是否仍处于危险 HTML 块内部
+     * @param dangerousHtmlEndTag  期待的闭标签（块外为 null）
+     */
+    private record DangerousHtmlLineResult(
+            String line,
+            boolean inDangerousHtmlBlock,
+            String dangerousHtmlEndTag) {
     }
 
     /**
