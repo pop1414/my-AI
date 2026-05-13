@@ -10,12 +10,16 @@
 
 ## 当前结构
 
+- [document-version-chain/](./document-version-chain/)：文档版本链与版本治理前端/后端规划
 - [v1/](./v1/)：V1 收口与归档相关文档
 - [v1-1/](./v1-1/)：V1.1 规划与后续主题拆解
 - [rag-access-control/](./rag-access-control/)：RAG 权限体系专项规划
 
 ## 当前文件
 
+- [document-version-chain/document-version-chain-prd.md](./document-version-chain/document-version-chain-prd.md)：文档版本链与治理基线 PRD
+- [document-version-chain/document-detail-version-history-interaction-confirmation.md](./document-version-chain/document-detail-version-history-interaction-confirmation.md)：文档详情页版本历史交互确认
+- [document-version-chain/github-open-issues-snapshot-2026-05-13.md](./document-version-chain/github-open-issues-snapshot-2026-05-13.md)：文档版本链 GitHub issues 状态快照与后续执行顺序
 - [v1/v1-closure-plan.md](./v1/v1-closure-plan.md)：V1 闭环收口计划（历史记录）
 - [v1/v1-release-archive.md](./v1/v1-release-archive.md)：V1 正式归档记录
 - [v1-1/v1-1-plan.md](./v1-1/v1-1-plan.md)：V1.1 总规划草案
