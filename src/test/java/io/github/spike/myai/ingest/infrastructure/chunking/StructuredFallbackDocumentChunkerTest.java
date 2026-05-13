@@ -1,5 +1,6 @@
 package io.github.spike.myai.ingest.infrastructure.chunking;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.github.spike.myai.ingest.domain.model.DocumentChunk;
@@ -67,13 +68,36 @@ class StructuredFallbackDocumentChunkerTest {
         List<DocumentChunk> chunks = chunker.chunk(cleanedMarkdown);
 
         assertTrue(chunks.stream().anyMatch(chunk ->
-                chunk.sourceHint() != null
-                        && chunk.sourceHint().contains("分流目标")
+                "{\"heading\":\"分流目标\"}".equals(chunk.sourceHint())
                         && chunk.content().contains("区分普通文本清洗问题")));
         assertTrue(chunks.stream().anyMatch(chunk ->
-                chunk.sourceHint() != null
-                        && chunk.sourceHint().contains("人工复核触发条件")
+                "{\"heading\":\"人工复核触发条件\"}".equals(chunk.sourceHint())
                         && chunk.content().contains("同一段正文被错误切成三段以上")));
+        assertFalse(chunks.stream().anyMatch(chunk ->
+                chunk.sourceHint() != null
+                        && chunk.sourceHint().contains("面向文档回归值班同学的内部说明页")));
+    }
+
+    @Test
+    @DisplayName("普通独立短正文不应覆盖后续 chunk 的 sourceHint")
+    void chunk_shouldNotTreatPlainShortBodySentenceAsHeading() {
+        StructuredFallbackDocumentChunker chunker = new StructuredFallbackDocumentChunker(properties());
+        String cleanedMarkdown = """
+                ## 处理建议
+
+                请先检查输入质量
+
+                如果正文已经出现标题漂移或导航文本混入，就不应该直接继续调 chunk 参数。
+                """;
+
+        List<DocumentChunk> chunks = chunker.chunk(cleanedMarkdown);
+
+        assertTrue(chunks.stream().anyMatch(chunk ->
+                "{\"heading\":\"处理建议\"}".equals(chunk.sourceHint())
+                        && chunk.content().contains("请先检查输入质量")
+                        && chunk.content().contains("标题漂移")));
+        assertFalse(chunks.stream().anyMatch(chunk ->
+                chunk.sourceHint() != null && chunk.sourceHint().contains("请先检查输入质量")));
     }
 
     private static IngestProperties properties() {

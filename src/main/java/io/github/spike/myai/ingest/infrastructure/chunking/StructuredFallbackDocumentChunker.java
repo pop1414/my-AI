@@ -52,8 +52,10 @@ public class StructuredFallbackDocumentChunker implements DocumentChunker {
         String currentHeading = null;
         String currentChunkHeading = null;
 
-        for (String segment : segments) {
-            String heading = extractHeading(segment);
+        for (int i = 0; i < segments.size(); i++) {
+            String segment = segments.get(i);
+            String nextSegment = i + 1 < segments.size() ? segments.get(i + 1) : null;
+            String heading = extractHeading(segment, nextSegment);
             if (heading != null) {
                 // 标题出现时，优先刷出当前 chunk，保证标题边界稳定。
                 if (!currentTokens.isEmpty()) {
@@ -245,7 +247,7 @@ public class StructuredFallbackDocumentChunker implements DocumentChunker {
      * @param segment 段落级文本片段
      * @return 提取到的标题文本，或 {@code null}
      */
-    private static String extractHeading(String segment) {
+    private static String extractHeading(String segment, String nextSegment) {
         String firstLine = firstLine(segment);
         Matcher markdown = MARKDOWN_HEADING.matcher(firstLine);
         if (markdown.matches()) {
@@ -259,13 +261,13 @@ public class StructuredFallbackDocumentChunker implements DocumentChunker {
         if (number.matches()) {
             return firstLine.trim();
         }
-        if (isPlainStandaloneHeading(segment, firstLine)) {
+        if (isPlainStandaloneHeading(segment, firstLine, nextSegment)) {
             return firstLine.trim();
         }
         return null;
     }
 
-    private static boolean isPlainStandaloneHeading(String segment, String firstLine) {
+    private static boolean isPlainStandaloneHeading(String segment, String firstLine, String nextSegment) {
         String trimmed = segment.strip();
         if (!trimmed.equals(firstLine) || firstLine.length() > 48) {
             return false;
@@ -278,10 +280,62 @@ public class StructuredFallbackDocumentChunker implements DocumentChunker {
                 || firstLine.endsWith("！")
                 || firstLine.endsWith("？")
                 || firstLine.endsWith(".")
-                || firstLine.endsWith(",")) {
+                || firstLine.endsWith(",")
+                || startsLikeBodySentence(firstLine)) {
             return false;
         }
-        return PLAIN_STANDALONE_HEADING.matcher(firstLine).matches();
+        if (!PLAIN_STANDALONE_HEADING.matcher(firstLine).matches()) {
+            return false;
+        }
+        return nextSegment != null
+                && looksLikeFollowingContent(nextSegment)
+                && !looksLikePlainStandaloneHeading(nextSegment);
+    }
+
+    private static boolean startsLikeBodySentence(String line) {
+        return line.startsWith("面向")
+                || line.startsWith("如果")
+                || line.startsWith("请")
+                || line.startsWith("先")
+                || line.startsWith("再")
+                || line.startsWith("为了")
+                || line.startsWith("当")
+                || line.startsWith("在")
+                || line.startsWith("我们")
+                || line.startsWith("用户")
+                || line.startsWith("系统")
+                || line.startsWith("该")
+                || line.startsWith("这")
+                || line.startsWith("这些")
+                || line.startsWith("以下")
+                || line.startsWith("This ")
+                || line.startsWith("These ")
+                || line.startsWith("If ")
+                || line.startsWith("When ")
+                || line.startsWith("Please ");
+    }
+
+    private static boolean looksLikeFollowingContent(String segment) {
+        String trimmed = segment.strip();
+        return trimmed.contains("\n")
+                || trimmed.startsWith("* ")
+                || trimmed.startsWith("- ")
+                || trimmed.startsWith("|")
+                || trimmed.startsWith("```")
+                || trimmed.endsWith("。")
+                || trimmed.endsWith("！")
+                || trimmed.endsWith("？")
+                || trimmed.endsWith(".")
+                || trimmed.endsWith(",");
+    }
+
+    private static boolean looksLikePlainStandaloneHeading(String segment) {
+        String firstLine = firstLine(segment);
+        String trimmed = segment.strip();
+        return trimmed.equals(firstLine)
+                && firstLine.length() <= 48
+                && !startsLikeBodySentence(firstLine)
+                && PLAIN_STANDALONE_HEADING.matcher(firstLine).matches();
     }
 
     /**
