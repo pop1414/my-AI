@@ -2,16 +2,16 @@
 
 ## 拉取信息
 
-- 更新时间：2026-05-13 15:57
-- 拉取方式：基于 GitHub Issues 当前状态更新；#1、#2 已关闭，#19 / #20 已作为后续边界任务纳入快照
+- 更新时间：2026-05-13 16:45
+- 拉取方式：基于 GitHub Issues 当前状态更新；#1、#2、#19 已关闭，#20 作为当前后续边界任务纳入快照
 - 仓库：`pop1414/my-AI`
-- 范围：文档版本链相关 issues；#1、#2 已完成关闭，当前仍需推进 #3-#12、#19、#20，共 12 个 open follow-up
+- 范围：文档版本链相关 issues；#1、#2、#19 已完成关闭，当前仍需推进 #3-#12、#20，共 11 个 open follow-up
 
 ## 收口状态
 
 - #1 已按“基础版本链后端能力”完成并关闭。
 - #2 已按“文档详情页版本历史交互确认”完成并关闭，交互确认产物见 `document-detail-version-history-interaction-confirmation.md`。
-- #1 保留的兼容式 seam 不再作为隐性假设处理，已拆出 #19 收紧主表旧版本事实读写边界。
+- #1 保留的兼容式 seam 已由 #19 收口：生产读路径切到 `latest projection + ingest_document_versions`，并补齐 guard 与 ADR。
 - #3 需要稳定版本历史后端契约，已拆出 #20 承接只读版本历史查询接口。
 
 ## 总览
@@ -21,25 +21,25 @@
 | [#1](https://github.com/pop1414/my-AI/issues/1) | document / document version 基础版本链后端落地 | CLOSED | `ready-for-agent` | 无 |
 | [#2](https://github.com/pop1414/my-AI/issues/2) | 文档详情页版本历史交互确认 | CLOSED | `ready-for-human` | #1 已完成 |
 | [#3](https://github.com/pop1414/my-AI/issues/3) | 文档详情页版本历史前端只读视图 | OPEN | `ready-for-agent` | #1 已完成, #2 已完成, #20 |
-| [#4](https://github.com/pop1414/my-AI/issues/4) | 上传新版本后端链路与契约 | OPEN | `ready-for-agent` | #1 已完成, 建议先做 #19 |
+| [#4](https://github.com/pop1414/my-AI/issues/4) | 上传新版本后端链路与契约 | OPEN | `ready-for-agent` | #1 已完成, #19 已完成 |
 | [#5](https://github.com/pop1414/my-AI/issues/5) | 上传新版本前端交互与结果提示 | OPEN | `ready-for-agent` | #4 |
-| [#6](https://github.com/pop1414/my-AI/issues/6) | 版本回退后端链路与契约 | OPEN | `ready-for-agent` | #1 已完成, 建议先做 #19 |
+| [#6](https://github.com/pop1414/my-AI/issues/6) | 版本回退后端链路与契约 | OPEN | `ready-for-agent` | #1 已完成, #19 已完成 |
 | [#7](https://github.com/pop1414/my-AI/issues/7) | 版本回退前端交互与结果提示 | OPEN | `ready-for-agent` | #3, #6 |
-| [#8](https://github.com/pop1414/my-AI/issues/8) | 删除与列表页适配版本语义后端 | OPEN | `ready-for-agent` | #1 已完成, 建议先做 #19 |
+| [#8](https://github.com/pop1414/my-AI/issues/8) | 删除与列表页适配版本语义后端 | OPEN | `ready-for-agent` | #1 已完成, #19 已完成 |
 | [#9](https://github.com/pop1414/my-AI/issues/9) | 删除确认与列表页版本语义前端 | OPEN | `ready-for-agent` | #8 |
-| [#10](https://github.com/pop1414/my-AI/issues/10) | qa 可问答版本选择与引用版本化后端 | OPEN | `ready-for-agent` | #1 已完成, 建议先做 #19 |
+| [#10](https://github.com/pop1414/my-AI/issues/10) | qa 可问答版本选择与引用版本化后端 | OPEN | `ready-for-agent` | #1 已完成, #19 已完成 |
 | [#11](https://github.com/pop1414/my-AI/issues/11) | 问答页版本提示与引用版本展示前端 | OPEN | `ready-for-agent` | #10 |
 | [#12](https://github.com/pop1414/my-AI/issues/12) | 版本治理审计与冲突收口后端 | OPEN | `ready-for-agent` | #4, #6, #8 |
-| [#19](https://github.com/pop1414/my-AI/issues/19) | 清理 document 主表旧版本事实字段与读写边界 | OPEN | `ready-for-agent` | #1 已完成 |
+| [#19](https://github.com/pop1414/my-AI/issues/19) | 清理 document 主表旧版本事实字段与读写边界 | CLOSED | `ready-for-agent` | #1 已完成 |
 | [#20](https://github.com/pop1414/my-AI/issues/20) | 版本历史只读后端查询接口 | OPEN | `ready-for-agent` | #1 已完成, 建议参考 #2 |
 
 ## 建议执行顺序
 
 1. #1 已完成关闭；后续不再把基础版本链能力作为 blocker。
-2. 优先推进 #19，收紧 `ingest_documents` 旧版本事实字段的读写边界，避免后续后端任务继续依赖兼容字段。
+2. #19 已完成关闭；后续后端任务默认以 `latest projection + ingest_document_versions` 为生产读路径，不再新增对主表旧版本事实列的读取依赖。
 3. #2 已完成关闭；后续前端与后端实现以交互确认文档为准。
-4. 推进 #20，补齐版本历史只读后端查询接口，为 #3 前端只读视图提供稳定契约。
-5. 后端推进 #4、#6、#8、#10，分别覆盖上传新版本、版本回退、删除与列表语义、qa 可问答版本选择；实现时应遵守 #19 的读写边界。
+4. 优先推进 #20，补齐版本历史只读后端查询接口，为 #3 前端只读视图提供稳定契约。
+5. 后端推进 #4、#6、#8、#10，分别覆盖上传新版本、版本回退、删除与列表语义、qa 可问答版本选择；实现时应遵守 #19 已收紧的读写边界。
 6. 前端在后端契约稳定后推进 #3、#5、#7、#9、#11，其中 #3 需要等待 #20。
 7. 最后用 #12 收口治理动作之间的互斥、业务错误码、审计事件和竞争场景测试。
 
@@ -214,6 +214,8 @@
 
 ### #19 清理 document 主表旧版本事实字段与读写边界
 
+状态：已关闭，按“主表旧版本事实字段读写边界收紧”完成收口。
+
 目标是收紧 #1 兼容式演进留下的主表旧版本事实字段边界，避免后续实现继续把 `ingest_documents.file_hash`、`filename`、`file_size`、`status`、`processing_metadata` 等字段当作真实版本事实来源。
 
 验收重点：
@@ -224,6 +226,14 @@
 - 增加回归测试，证明主链路以 latest projection / version 表为准。
 - 补充 schema/read-model guard，避免后续新代码重新依赖旧主表字段。
 - 给出后续物理删列迁移方案；若可安全删列，则在本 issue 内通过 Flyway 完成。
+
+收口说明：
+
+- 上传幂等查询已从 `ingest_documents.file_hash/status` 切换为 `ingest_document_versions.file_hash + ingest_documents.latest_status`。
+- 知识库已索引文档计数已切换为 `doc.latest_status`，不再读取主表旧 `status`。
+- `JdbcDocumentRepository` 已明确主表旧事实列仅作兼容镜像写入，不再作为新生产读路径事实源。
+- `IngestSchemaVerifier` 已扩展到 version 事实列与 `file_hash` 查询索引校验。
+- 已补充 `DocumentVersionReadBoundaryTest`、`KnowledgeBaseDocumentCountReadBoundaryTest` 与 ADR-0006，作为后续防回退护栏。
 
 ### #20 版本历史只读后端查询接口
 
