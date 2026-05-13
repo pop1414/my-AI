@@ -10,6 +10,7 @@ import io.github.spike.myai.ingest.application.exception.DocumentDeleteFailedExc
 import io.github.spike.myai.ingest.application.exception.DocumentNotFoundException;
 import io.github.spike.myai.ingest.application.query.GetDocumentChunksPreviewQuery;
 import io.github.spike.myai.ingest.application.query.GetDocumentStatusQuery;
+import io.github.spike.myai.ingest.application.query.ListDocumentVersionsQuery;
 import io.github.spike.myai.ingest.application.query.ListDocumentsQuery;
 import io.github.spike.myai.ingest.application.result.DocumentChunkPreviewItemResult;
 import io.github.spike.myai.ingest.application.result.DocumentChunksPreviewResult;
@@ -19,6 +20,7 @@ import io.github.spike.myai.ingest.application.usecase.AcceptUploadUseCase;
 import io.github.spike.myai.ingest.application.usecase.DeleteDocumentUseCase;
 import io.github.spike.myai.ingest.application.usecase.GetDocumentChunksPreviewUseCase;
 import io.github.spike.myai.ingest.application.usecase.GetDocumentStatusUseCase;
+import io.github.spike.myai.ingest.application.usecase.ListDocumentVersionsUseCase;
 import io.github.spike.myai.ingest.application.usecase.ListDocumentsUseCase;
 import io.github.spike.myai.ingest.application.usecase.ReprocessDocumentUseCase;
 import io.github.spike.myai.ingest.application.result.DocumentStatusResult;
@@ -30,6 +32,8 @@ import io.github.spike.myai.ingest.interfaces.rest.dto.DocumentChunksPreviewResp
 import io.github.spike.myai.ingest.interfaces.rest.dto.DocumentListItemResponse;
 import io.github.spike.myai.ingest.interfaces.rest.dto.DocumentListPageResponse;
 import io.github.spike.myai.ingest.interfaces.rest.dto.DocumentStatusResponse;
+import io.github.spike.myai.ingest.interfaces.rest.dto.DocumentVersionHistoryItemResponse;
+import io.github.spike.myai.ingest.interfaces.rest.dto.DocumentVersionHistoryResponse;
 import io.github.spike.myai.ingest.interfaces.rest.dto.UploadResponse;
 import io.github.spike.myai.knowledge.application.exception.KnowledgeBaseInactiveException;
 import io.github.spike.myai.knowledge.application.exception.KnowledgeBaseNotFoundException;
@@ -83,6 +87,10 @@ public class DocumentIngestController {
      */
     private final GetDocumentStatusUseCase getDocumentStatusUseCase;
     /**
+     * 文档版本历史查询用例。
+     */
+    private final ListDocumentVersionsUseCase listDocumentVersionsUseCase;
+    /**
      * 文档分块预览查询用例。
      */
     private final GetDocumentChunksPreviewUseCase getDocumentChunksPreviewUseCase;
@@ -112,6 +120,7 @@ public class DocumentIngestController {
      * @param acceptUploadUseCase            上传受理用例
      * @param listDocumentsUseCase           文档列表查询用例
      * @param getDocumentStatusUseCase       文档状态查询用例
+     * @param listDocumentVersionsUseCase    文档版本历史查询用例
      * @param getDocumentChunksPreviewUseCase 文档分块预览用例
      * @param reprocessDocumentUseCase       文档重处理用例
      * @param deleteDocumentUseCase          文档删除用例
@@ -122,6 +131,7 @@ public class DocumentIngestController {
             AcceptUploadUseCase acceptUploadUseCase,
             ListDocumentsUseCase listDocumentsUseCase,
             GetDocumentStatusUseCase getDocumentStatusUseCase,
+            ListDocumentVersionsUseCase listDocumentVersionsUseCase,
             GetDocumentChunksPreviewUseCase getDocumentChunksPreviewUseCase,
             ReprocessDocumentUseCase reprocessDocumentUseCase,
             DeleteDocumentUseCase deleteDocumentUseCase,
@@ -130,6 +140,7 @@ public class DocumentIngestController {
         this.acceptUploadUseCase = acceptUploadUseCase;
         this.listDocumentsUseCase = listDocumentsUseCase;
         this.getDocumentStatusUseCase = getDocumentStatusUseCase;
+        this.listDocumentVersionsUseCase = listDocumentVersionsUseCase;
         this.getDocumentChunksPreviewUseCase = getDocumentChunksPreviewUseCase;
         this.reprocessDocumentUseCase = reprocessDocumentUseCase;
         this.deleteDocumentUseCase = deleteDocumentUseCase;
@@ -253,6 +264,48 @@ public class DocumentIngestController {
     }
 
     /**
+     * 查询文档版本历史。
+     *
+     * <p>接口契约：
+     * <ul>
+     *     <li>路径：GET /api/v1/documents/{documentId}/versions</li>
+     *     <li>排序：versionNumber DESC</li>
+     *     <li>权限：当前用户必须对目标文档具备读取权限</li>
+     * </ul>
+     *
+     * @param documentId 文档资产 ID
+     * @return 文档版本历史
+     */
+    @GetMapping(value = "/{documentId}/versions", produces = MediaType.APPLICATION_JSON_VALUE)
+    public DocumentVersionHistoryResponse listVersions(@PathVariable("documentId") String documentId) {
+        try {
+            var result = listDocumentVersionsUseCase.handle(new ListDocumentVersionsQuery(documentId));
+            return new DocumentVersionHistoryResponse(
+                    result.documentId(),
+                    result.sort(),
+                    result.versions().stream()
+                            .map(item -> new DocumentVersionHistoryItemResponse(
+                                    item.documentId(),
+                                    item.versionNumber(),
+                                    item.versionOriginType(),
+                                    item.rollbackFromVersionNumber(),
+                                    item.filename(),
+                                    item.fileSize(),
+                                    item.status(),
+                                    item.failureReason(),
+                                    item.createdAt(),
+                                    item.updatedAt(),
+                                    item.isLatestVersion(),
+                                    item.isAskableVersion()))
+                            .toList());
+        } catch (DocumentNotFoundException ex) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, ex.getMessage(), ex);
+        } catch (IllegalArgumentException ex) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, ex.getMessage(), ex);
+        }
+    }
+
+    /**
      * 查询文档分块预览（调试接口）。
      * 在处理文档提取完成后，用此接口可以查看知识库如何将文档文本进行切片（Chunk）分割的详细内容。
      *
@@ -312,7 +365,17 @@ public class DocumentIngestController {
                 item.sourceHint());
     }
 
+    /**
+     * 将应用层文档列表项结果映射为 REST 响应 DTO。
+     *
+     * <p>该映射为纯字段对字段的一一映射，不涉及业务逻辑计算，
+     * 仅做 DTO 隔离，确保领域模型不直接暴露给 API 消费者。
+     *
+     * @param item 应用层文档列表项结果
+     * @return REST 响应 DTO
+     */
     private static DocumentListItemResponse toDocumentListItemResponse(DocumentListItemResult item) {
+        // DTO 映射：保持对外结构稳定，内部字段可演进
         return new DocumentListItemResponse(
                 item.documentId(),
                 item.kbId(),

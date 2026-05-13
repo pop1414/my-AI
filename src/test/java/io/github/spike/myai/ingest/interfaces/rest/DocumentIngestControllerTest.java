@@ -18,16 +18,20 @@ import io.github.spike.myai.ingest.application.exception.DocumentDeleteFailedExc
 import io.github.spike.myai.ingest.application.exception.DocumentNotFoundException;
 import io.github.spike.myai.ingest.application.query.GetDocumentChunksPreviewQuery;
 import io.github.spike.myai.ingest.application.query.GetDocumentStatusQuery;
+import io.github.spike.myai.ingest.application.query.ListDocumentVersionsQuery;
 import io.github.spike.myai.ingest.application.query.ListDocumentsQuery;
 import io.github.spike.myai.ingest.application.result.DocumentChunkPreviewItemResult;
 import io.github.spike.myai.ingest.application.result.DocumentChunksPreviewResult;
 import io.github.spike.myai.ingest.application.result.DocumentListItemResult;
 import io.github.spike.myai.ingest.application.result.DocumentListPageResult;
 import io.github.spike.myai.ingest.application.result.DocumentStatusResult;
+import io.github.spike.myai.ingest.application.result.DocumentVersionHistoryItemResult;
+import io.github.spike.myai.ingest.application.result.DocumentVersionHistoryResult;
 import io.github.spike.myai.ingest.application.usecase.AcceptUploadUseCase;
 import io.github.spike.myai.ingest.application.usecase.DeleteDocumentUseCase;
 import io.github.spike.myai.ingest.application.usecase.GetDocumentChunksPreviewUseCase;
 import io.github.spike.myai.ingest.application.usecase.GetDocumentStatusUseCase;
+import io.github.spike.myai.ingest.application.usecase.ListDocumentVersionsUseCase;
 import io.github.spike.myai.ingest.application.usecase.ListDocumentsUseCase;
 import io.github.spike.myai.ingest.application.usecase.ReprocessDocumentUseCase;
 import io.github.spike.myai.ingest.domain.model.DocumentId;
@@ -63,6 +67,7 @@ class DocumentIngestControllerTest {
     private AcceptUploadUseCase acceptUploadUseCase;
     private ListDocumentsUseCase listDocumentsUseCase;
     private GetDocumentStatusUseCase getDocumentStatusUseCase;
+    private ListDocumentVersionsUseCase listDocumentVersionsUseCase;
     private GetDocumentChunksPreviewUseCase getDocumentChunksPreviewUseCase;
     private ReprocessDocumentUseCase reprocessDocumentUseCase;
     private DeleteDocumentUseCase deleteDocumentUseCase;
@@ -74,6 +79,7 @@ class DocumentIngestControllerTest {
         this.acceptUploadUseCase = Mockito.mock(AcceptUploadUseCase.class);
         this.listDocumentsUseCase = Mockito.mock(ListDocumentsUseCase.class);
         this.getDocumentStatusUseCase = Mockito.mock(GetDocumentStatusUseCase.class);
+        this.listDocumentVersionsUseCase = Mockito.mock(ListDocumentVersionsUseCase.class);
         this.getDocumentChunksPreviewUseCase = Mockito.mock(GetDocumentChunksPreviewUseCase.class);
         this.reprocessDocumentUseCase = Mockito.mock(ReprocessDocumentUseCase.class);
         this.deleteDocumentUseCase = Mockito.mock(DeleteDocumentUseCase.class);
@@ -83,6 +89,7 @@ class DocumentIngestControllerTest {
                         acceptUploadUseCase,
                         listDocumentsUseCase,
                 getDocumentStatusUseCase,
+                listDocumentVersionsUseCase,
                 getDocumentChunksPreviewUseCase,
                 reprocessDocumentUseCase,
                 deleteDocumentUseCase,
@@ -274,6 +281,70 @@ class DocumentIngestControllerTest {
                 .thenThrow(new DocumentNotFoundException("document not found: doc-missing"));
 
         mockMvc.perform(get("/api/v1/documents/{documentId}/status", "doc-missing"))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    @DisplayName("版本历史查询命中时，应返回倒序版本列表与可问答标记")
+    void listVersions_shouldReturnVersionHistory_whenDocumentExists() throws Exception {
+        when(listDocumentVersionsUseCase.handle(any(ListDocumentVersionsQuery.class)))
+                .thenReturn(new DocumentVersionHistoryResult(
+                        "doc-500",
+                        "versionNumber,DESC",
+                        java.util.List.of(
+                                new DocumentVersionHistoryItemResult(
+                                        "doc-500",
+                                        3,
+                                        "ROLLBACK",
+                                        1,
+                                        "rollback.pdf",
+                                        300L,
+                                        "INDEXED",
+                                        null,
+                                        java.time.Instant.parse("2026-05-08T10:00:00Z"),
+                                        java.time.Instant.parse("2026-05-08T10:05:00Z"),
+                                        true,
+                                        true),
+                                new DocumentVersionHistoryItemResult(
+                                        "doc-500",
+                                        2,
+                                        "UPLOAD",
+                                        null,
+                                        "failed.pdf",
+                                        200L,
+                                        "FAILED",
+                                        "parse failed",
+                                        java.time.Instant.parse("2026-05-08T09:00:00Z"),
+                                        java.time.Instant.parse("2026-05-08T09:05:00Z"),
+                                        false,
+                                        false))));
+
+        mockMvc.perform(get("/api/v1/documents/{documentId}/versions", "doc-500"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.documentId").value("doc-500"))
+                .andExpect(jsonPath("$.sort").value("versionNumber,DESC"))
+                .andExpect(jsonPath("$.versions[0].versionNumber").value(3))
+                .andExpect(jsonPath("$.versions[0].versionOriginType").value("ROLLBACK"))
+                .andExpect(jsonPath("$.versions[0].rollbackFromVersionNumber").value(1))
+                .andExpect(jsonPath("$.versions[0].isLatestVersion").value(true))
+                .andExpect(jsonPath("$.versions[0].isAskableVersion").value(true))
+                .andExpect(jsonPath("$.versions[1].versionNumber").value(2))
+                .andExpect(jsonPath("$.versions[1].failureReason").value("parse failed"))
+                .andExpect(jsonPath("$.versions[1].isLatestVersion").value(false))
+                .andExpect(jsonPath("$.versions[1].isAskableVersion").value(false));
+
+        ArgumentCaptor<ListDocumentVersionsQuery> captor = ArgumentCaptor.forClass(ListDocumentVersionsQuery.class);
+        verify(listDocumentVersionsUseCase).handle(captor.capture());
+        org.junit.jupiter.api.Assertions.assertEquals("doc-500", captor.getValue().documentId());
+    }
+
+    @Test
+    @DisplayName("版本历史查询文档不存在时，应返回 404")
+    void listVersions_shouldReturnNotFound_whenDocumentMissing() throws Exception {
+        when(listDocumentVersionsUseCase.handle(any(ListDocumentVersionsQuery.class)))
+                .thenThrow(new DocumentNotFoundException("document not found: doc-missing"));
+
+        mockMvc.perform(get("/api/v1/documents/{documentId}/versions", "doc-missing"))
                 .andExpect(status().isNotFound());
     }
 
