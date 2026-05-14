@@ -48,6 +48,7 @@
 - 权限治理进展（2026-05-11）：账号生命周期后端与知识库列表授权可见性收紧已完成，动态 CSRF token 仍在后续范围内
 - 权限治理联调收口（2026-05-11）：资源维度授权最终以单成员授权接口作为稳定保存链路，成员维度继续保留 `:batch` 批量覆盖接口
 - ingest-cleaning 同步（2026-05-14）：#14 - #18 已关闭，纯文字解析/清洗阶段完成收口；Markdown/HTML 绕行、Word/PDF 黄金样本、`cleaned.md` 质量回归闭环和基础 `processingMetadata` 回填均已纳入当前事实。图片理解、表格结构化节点、OCR 与 richer node model 仍属于后续增强。
+- 版本治理收口（2026-05-14）：#6 已关闭，版本回退后端链路与 API 契约完成；回退基于已 `INDEXED` 历史版本创建 `ROLLBACK` 来源的新最新版本，并通过 `expectedLatestVersionNumber` 防止过期视图提交。
 
 ---
 
