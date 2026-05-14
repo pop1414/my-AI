@@ -1210,6 +1210,79 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+  /api/v1/documents/{documentId}/versions/{versionNumber}/rollback:
+    post:
+      tags: [ingest]
+      summary: 将指定历史版本回退为新的最新版本
+      x-stage: implemented
+      description: |
+        该接口只服务文档详情页版本历史中的“回退为最新版本”治理动作。
+        回退不会回拨旧版本指针，而是基于目标历史版本创建一个 `ROLLBACK`
+        来源的新 latest 版本，并让新版本以 `UPLOADED` 状态重新进入 ingest 处理链路。
+
+        当前用户必须具备目标 document 管理权限；回退目标必须是非 latest 的 `INDEXED`
+        历史版本。调用方必须提交 `expectedLatestVersionNumber`，用于防止基于过期详情页提交回退。
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: documentId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: 文档资产 ID
+        - name: versionNumber
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+          description: 要回退到的历史版本号
+        - name: expectedLatestVersionNumber
+          in: query
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+          description: 调用方页面看到的最新版本号
+      responses:
+        '200':
+          description: 版本回退成功并创建新的 latest 版本
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentVersionRollbackResponse'
+        '400':
+          description: 参数非法
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: 当前用户无目标文档管理权限，code 为 VERSION_ROLLBACK_NO_MANAGE_PERMISSION
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: 文档或目标版本不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: 状态不允许、目标版本不可回退或 latest version 乐观并发冲突
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
   /api/v1/documents/{documentId}/chunks/preview:
     get:
       tags: [ingest]
@@ -1937,6 +2010,45 @@ components:
           type: string
           enum: [UPLOAD, ROLLBACK]
           description: 当前最新版本来源类型
+
+    DocumentVersionRollbackResponse:
+      type: object
+      required:
+        - documentId
+        - versionNumber
+        - rollbackFromVersionNumber
+        - latestVersionNumber
+        - canAskNow
+        - status
+        - versionOriginType
+      properties:
+        documentId:
+          type: string
+          description: 文档资产 ID
+        versionNumber:
+          type: integer
+          description: 回退创建的新最新版本号
+        rollbackFromVersionNumber:
+          type: integer
+          description: 回退来源历史版本号
+        latestVersionNumber:
+          type: integer
+          description: 系统当前认定的最新版本号，应等于 versionNumber
+        askableVersionNumber:
+          type: integer
+          nullable: true
+          description: 当前 QA 基线实际使用的版本号；不存在可问答版本时为空
+        canAskNow:
+          type: boolean
+          description: 当前是否存在可问答版本
+        status:
+          type: string
+          enum: [UPLOADED, INGESTING, INDEXED, FAILED, DELETING, DELETED]
+          description: 当前最新版本状态；回退创建成功后初始为 UPLOADED
+        versionOriginType:
+          type: string
+          enum: [ROLLBACK]
+          description: 当前最新版本来源类型，回退成功时固定为 ROLLBACK
 
     ProcessingMetadata:
       type: object

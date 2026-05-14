@@ -17,6 +17,7 @@
 - 新增文档版本历史只读查询接口：`GET /api/v1/documents/{documentId}/versions`
 - 新增文档版本历史 DTO：返回 `versionNumber`、`versionOriginType`、`rollbackFromVersionNumber`、来源文件、状态、失败原因、时间、`isLatestVersion` 与 `isAskableVersion`
 - 新增上传新版本接口：`POST /api/v1/documents/{documentId}/versions`，支持绑定既有 `document` 上下文、`expectedLatestVersionNumber` 乐观并发校验、同内容复用和稳定版本结果 DTO
+- 新增版本回退接口：`POST /api/v1/documents/{documentId}/versions/{versionNumber}/rollback`，基于已 `INDEXED` 历史版本创建 `ROLLBACK` 来源的新最新版本，并以 `UPLOADED` 状态重新进入处理链路
 - 新增文档详情页版本历史前端只读视图：展示版本账本、历史版本查看态、差异摘要、返回最新版本入口与无管理权限不可见分支
 
 ### Changed
@@ -46,7 +47,7 @@
 - 文档治理（2026-05-08）：新增成熟 RAG 权限体系专题计划与 `ADR-0005`，将权限方向从路线级描述升级为可引用的正式规划与决策留痕
 - 权限治理进展（2026-05-11）：账号生命周期后端与知识库列表授权可见性收紧已完成，动态 CSRF token 仍在后续范围内
 - 权限治理联调收口（2026-05-11）：资源维度授权最终以单成员授权接口作为稳定保存链路，成员维度继续保留 `:batch` 批量覆盖接口
-- ingest-cleaning 同步（2026-05-13）：#14 原生 Markdown 最小破坏路径已关闭；#15 原生 HTML 正文抽取与噪音清洗路径后端验收完成，可关闭
+- ingest-cleaning 同步（2026-05-14）：#14 - #18 已关闭，纯文字解析/清洗阶段完成收口；Markdown/HTML 绕行、Word/PDF 黄金样本、`cleaned.md` 质量回归闭环和基础 `processingMetadata` 回填均已纳入当前事实。图片理解、表格结构化节点、OCR 与 richer node model 仍属于后续增强。
 
 ---
 
