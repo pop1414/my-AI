@@ -74,7 +74,13 @@ export function IngestDeletePage() {
 					}}
 				>
 					<Form.Item name="documentId" style={{ flex: 1, minWidth: 320 }}>
-						<Input placeholder="输入 documentId" allowClear />
+						<Input
+							aria-label="输入 documentId"
+							autoComplete="off"
+							spellCheck={false}
+							placeholder="输入 documentId"
+							allowClear
+						/>
 					</Form.Item>
 					<Button
 						danger

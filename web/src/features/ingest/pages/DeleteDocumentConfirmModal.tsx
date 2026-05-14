@@ -129,6 +129,9 @@ function DeleteDocumentConfirmDialog({
 				<label>
 					<Typography.Text strong>输入完整 documentId 后确认删除</Typography.Text>
 					<Input
+						aria-label="输入完整 documentId 确认删除"
+						autoComplete="off"
+						spellCheck={false}
 						value={confirmationText}
 						placeholder={expectedDocumentId}
 						status={

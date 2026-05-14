@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
 	Alert,
@@ -22,7 +22,7 @@ import {
 	SearchOutlined,
 	ReloadOutlined,
 } from "@ant-design/icons";
-import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useLocation, useSearchParams } from "react-router-dom";
 import { z } from "zod";
 import {
 	deleteDocument,
@@ -131,8 +131,37 @@ function buildReturnTo(locationSearch: string): string {
 	return `/ingest/documents${qs ? `?${qs}` : ""}`;
 }
 
+function ActionIconLink({
+	to,
+	label,
+	icon,
+}: {
+	to: string;
+	label: string;
+	icon: ReactNode;
+}) {
+	return (
+		<Link
+			to={to}
+			aria-label={label}
+			style={{
+				display: "inline-flex",
+				alignItems: "center",
+				justifyContent: "center",
+				width: 24,
+				height: 24,
+				border: "1px solid #d9d9d9",
+				borderRadius: 6,
+				color: "rgba(0, 0, 0, 0.88)",
+				background: "#ffffff",
+			}}
+		>
+			{icon}
+		</Link>
+	);
+}
+
 export function IngestListPage() {
-	const navigate = useNavigate();
 	const location = useLocation();
 	const [searchParams, setSearchParams] = useSearchParams();
 	const queryClient = useQueryClient();
@@ -317,42 +346,27 @@ export function IngestListPage() {
 				return (
 					<Space size="small" wrap>
 						<Tooltip title="查看详情">
-							<Button
-								size="small"
-								aria-label="查看详情"
+							<ActionIconLink
+								label="查看详情"
 								icon={<SearchOutlined />}
-								onClick={() =>
-									navigate(
-										`/ingest/documents/${encodeURIComponent(record.documentId)}?returnTo=${encodeURIComponent(returnTo)}`,
-									)
-								}
+								to={`/ingest/documents/${encodeURIComponent(record.documentId)}?returnTo=${encodeURIComponent(returnTo)}`}
 							/>
 						</Tooltip>
 						{showChunksPreview && (
 							<Tooltip title="分块预览">
-								<Button
-									size="small"
-									aria-label="分块预览"
+								<ActionIconLink
+									label="分块预览"
 									icon={<FileSearchOutlined />}
-									onClick={() =>
-										navigate(
-											`/ingest/documents/${encodeURIComponent(record.documentId)}/chunks-preview`,
-										)
-									}
+									to={`/ingest/documents/${encodeURIComponent(record.documentId)}/chunks-preview`}
 								/>
 							</Tooltip>
 						)}
 						{showReprocess && (
 							<Tooltip title="重处理">
-								<Button
-									size="small"
-									aria-label="重处理"
+								<ActionIconLink
+									label="重处理"
 									icon={<FileSyncOutlined />}
-									onClick={() =>
-										navigate(
-											`/ingest/documents/${encodeURIComponent(record.documentId)}/reprocess`,
-										)
-									}
+									to={`/ingest/documents/${encodeURIComponent(record.documentId)}/reprocess`}
 								/>
 							</Tooltip>
 						)}
@@ -369,15 +383,10 @@ export function IngestListPage() {
 					)}
 						{canAccessAdmin && (
 							<Tooltip title="授权管理">
-								<Button
-									size="small"
-									aria-label="授权管理"
+								<ActionIconLink
+									label="授权管理"
 									icon={<SafetyOutlined />}
-									onClick={() =>
-										navigate(
-											`/admin/documents/${encodeURIComponent(record.documentId)}/grants`,
-										)
-									}
+									to={`/admin/documents/${encodeURIComponent(record.documentId)}/grants`}
 								/>
 							</Tooltip>
 						)}
@@ -413,6 +422,7 @@ export function IngestListPage() {
 				>
 					<Form.Item name="kbId" style={{ minWidth: 200 }}>
 						<Select
+							aria-label="按知识库筛选文档"
 							allowClear
 							placeholder="选择知识库"
 							loading={knowledgeQuery.isLoading}
@@ -421,6 +431,7 @@ export function IngestListPage() {
 					</Form.Item>
 					<Form.Item name="status" style={{ minWidth: 150 }}>
 						<Select
+							aria-label="按处理状态筛选文档"
 							allowClear
 							placeholder="处理状态"
 							options={DOCUMENT_STATUSES.map((s) => ({
@@ -431,6 +442,8 @@ export function IngestListPage() {
 					</Form.Item>
 					<Form.Item name="filename" style={{ minWidth: 200 }}>
 						<Input
+							aria-label="按文件名搜索文档"
+							autoComplete="off"
 							allowClear
 							placeholder="搜索文件名（模糊匹配）"
 						/>
@@ -463,6 +476,8 @@ export function IngestListPage() {
 			{deletedDocumentId && (
 				<Alert
 					data-testid="document-delete-result"
+					aria-live="polite"
+					aria-atomic="true"
 					type="success"
 					showIcon
 					message="document 资产已删除"
