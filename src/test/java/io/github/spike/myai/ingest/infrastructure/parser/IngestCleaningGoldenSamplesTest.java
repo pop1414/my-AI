@@ -191,25 +191,46 @@ class IngestCleaningGoldenSamplesTest {
     }
 
     @Test
-    @DisplayName("弱结构 PDF 黄金样本应保留正文锚点并清理页眉页脚页码噪音")
-    void weakPdfGoldenInput_shouldKeepBodyAnchorsAndRemoveHeaderFooterNoise() throws Exception {
+    @DisplayName("弱结构 PDF 黄金样本应修复段落、保持标题边界并清理页眉页脚页码噪音")
+    void weakPdfGoldenInput_shouldRepairParagraphsKeepHeadingBoundariesAndRemoveHeaderFooterNoise() throws Exception {
         TikaDocumentTextParser parser =
                 new TikaDocumentTextParser(new TextCleaningService(), new ObjectMapper(), properties());
+        StructuredFallbackDocumentChunker chunker = new StructuredFallbackDocumentChunker(properties());
         Path input = GOLDEN_ROOT.resolve("weak-pdf-001").resolve("weak-pdf-regression-sample.pdf");
 
         DocumentParseResult result = parser.parse("weak-pdf-regression-sample.pdf", Files.readAllBytes(input));
         String markdown = result.cleanedMarkdown();
+        List<DocumentChunk> chunks = chunker.chunk(markdown);
 
         assertTrue(markdown.contains("第一节 可分块文本基底"), markdown);
         assertTrue(markdown.contains("在进入 chunking 之前，已经尽量消除了噪音"), markdown);
+        assertTrue(markdown.contains(
+                "可分块文本基底指的是在进入 chunking 之前，已经尽量消除了噪音、错误断段和标题漂移问题的正文文本。"),
+                markdown);
+        assertTrue(markdown.contains(
+                "如果这个阶段的文本本身已经不稳定，后续不管采用普通分块还是父子分块，都只会把错误边界继续向后传递。"),
+                markdown);
         assertTrue(markdown.contains("第二节 人工复核建议"), markdown);
-        assertTrue(markdown.contains("不要先去调向量参数"), markdown);
+        assertTrue(markdown.contains(
+                "第二节 人工复核建议\n当同一自然段被切成三段以上，或者标题和正文粘连在一起时，不要先去调向量参数"),
+                markdown);
         assertTrue(markdown.contains("第三节 回归观察点"), markdown);
+        assertTrue(chunks.stream().anyMatch(chunk ->
+                "{\"heading\":\"第一节 可分块文本基底\"}".equals(chunk.sourceHint().toStorageValue())
+                        && chunk.content().contains("错误断段和标题漂移问题")), markdown);
+        assertTrue(chunks.stream().anyMatch(chunk ->
+                "{\"heading\":\"第二节 人工复核建议\"}".equals(chunk.sourceHint().toStorageValue())
+                        && chunk.content().contains("不要先去调向量参数")), markdown);
 
         assertFalse(markdown.contains("内部评审稿"), markdown);
         assertFalse(markdown.contains("第 1 页"), markdown);
         assertFalse(markdown.contains("第 2 页"), markdown);
         assertFalse(markdown.contains("质检热线 400-900-1200"), markdown);
+        assertFalse(markdown.contains("噪音、\n错误断段"), markdown);
+        assertFalse(markdown.contains("人工复核建议 当同一自然段"), markdown);
+        assertFalse(chunks.stream().anyMatch(chunk ->
+                chunk.sourceHint().toStorageValue() != null
+                        && chunk.sourceHint().toStorageValue().contains("当同一自然段")), markdown);
     }
 
     private static Stream<Arguments> readmeCases() {

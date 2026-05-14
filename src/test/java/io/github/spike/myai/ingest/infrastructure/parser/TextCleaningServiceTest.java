@@ -125,6 +125,41 @@ class TextCleaningServiceTest {
     }
 
     @Test
+    @DisplayName("Markdown 结构修复应修复弱结构 PDF 软换行并拆开粘连标题")
+    void repairMarkdownStructure_shouldRepairWeakPdfSoftWrapsAndGluedHeading() {
+        String markdown = """
+                文档清洗回归说明
+
+                第一节 可分块文本基底
+                可分块文本基底指的是在进入 chunking 之前，已经尽量消除了噪音、
+                错误断段和标题漂移问题的正文文本。如果这个阶段的文本本身已经不稳定，
+                后续不管采用普通分块还是父子分块，都只会把错误边界继续向后传递。
+
+                第二节 人工复核建议 当同一自然段被切成三段以上，或者标题和正文粘连在一起时，
+                不要先去调向量参数，而应先回到 parser 和 cleaner 检查输入质量。
+
+                第三节 回归观察点
+                1. cleaned.md 是否恢复了自然段连续性。
+                2. documents/chunks/preview 是否仍沿着正确标题边界切分。
+                """;
+
+        String repaired = TextCleaningService.repairMarkdownStructure(markdown);
+
+        assertTrue(repaired.contains(
+                "可分块文本基底指的是在进入 chunking 之前，已经尽量消除了噪音、错误断段和标题漂移问题的正文文本。"),
+                repaired);
+        assertTrue(repaired.contains(
+                "如果这个阶段的文本本身已经不稳定，后续不管采用普通分块还是父子分块，都只会把错误边界继续向后传递。"),
+                repaired);
+        assertTrue(repaired.contains(
+                "第二节 人工复核建议\n当同一自然段被切成三段以上，或者标题和正文粘连在一起时，不要先去调向量参数"),
+                repaired);
+        assertTrue(repaired.contains("继续向后传递。\n\n第二节 人工复核建议"), repaired);
+        assertTrue(repaired.contains("第三节 回归观察点\n1. cleaned.md 是否恢复了自然段连续性。"), repaired);
+        assertFalse(repaired.contains("人工复核建议 当同一自然段"), repaired);
+    }
+
+    @Test
     @DisplayName("HTML 转 Markdown 结构修复不应改写代码块内的圆点和表格样例")
     void toMarkdown_shouldNotRepairWordMarkersInsideCodeBlocks() {
         String cleanedHtml = """
@@ -139,6 +174,26 @@ class TextCleaningServiceTest {
         assertTrue(markdown.contains("· literal bullet"), markdown);
         assertFalse(markdown.contains("- literal bullet"), markdown);
         assertTrue(markdown.indexOf("|---|---|") < markdown.indexOf("| code | row |"), markdown);
+    }
+
+    @Test
+    @DisplayName("Markdown 结构修复不应拼接围栏代码块内部行")
+    void repairMarkdownStructure_shouldNotJoinLinesInsideFencedCodeBlocks() {
+        String markdown = """
+                说明段第一行
+                说明段第二行
+
+                ```text
+                code line one
+                code line two
+                ```
+                """;
+
+        String repaired = TextCleaningService.repairMarkdownStructure(markdown);
+
+        assertTrue(repaired.contains("说明段第一行说明段第二行"), repaired);
+        assertTrue(repaired.contains("```text\ncode line one\ncode line two\n```"), repaired);
+        assertFalse(repaired.contains("code line one code line two"), repaired);
     }
 
     /**
