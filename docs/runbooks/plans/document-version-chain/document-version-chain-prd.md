@@ -55,6 +55,9 @@
 - 上传新版本和版本回退都引入 `expectedLatestVersionNumber` 一类的乐观并发校验。
 - 当上传新版本命中同内容复用时，按成功分支处理，复用当前最新版本，不创建新版本。
 - 删除仍建模为终止整个 `document` 资产，而不是删除某个版本；软删除后的 `document` 仍保留终态与审计上下文可查询。
+- 删除完成前后区分两类身份边界：`DELETING` 期间同内容上传仍命中原 `documentId`，避免与当前 `(kb_id, file_hash)` 兼容唯一索引冲突；只有旧 document 到达 `DELETED` 终态后，同内容重新上传才生成新的 `documentId`，且旧 document 的文档级授权不自动继承到新 document。
+- 文档列表与详情主视图锚定 latest projection：列表展示 `latest_filename/latest_status/latest_version_number/latest_version_origin_type` 与最新版本事实，详情状态查询展示当前最新版本的状态、来源文件名和版本来源类型。
+- 删除、上传新版本、版本回退和重处理在同一 `document` 上按执行态互斥：`UPLOADED`、`INGESTING`、`DELETING` 期间不再允许删除插入执行态；上传新版本、版本回退和重处理继续依赖 latest 状态与乐观并发校验。
 - 为上传新版本和版本回退定义带版本上下文的专用成功结果 DTO，显式返回当前最新版本和当前可问答版本。
 - 扩展 `qa` 引用契约，补充版本来源字段和 stale reference 汇总字段，同时保持 `qa` 只消费当前用户有权访问内容的规则不变。
 - 保持 ADR-0005 的安全约束：不能先越权召回，再靠展示层裁剪引用。

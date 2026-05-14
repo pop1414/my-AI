@@ -16,7 +16,9 @@ Accepted
 
 - 文档聚合读取通过 `ingest_documents.latest_version_number` 关联 `ingest_document_versions`。
 - 上传幂等的文件哈希判断读取 `ingest_document_versions.file_hash`，删除排除读取 `ingest_documents.latest_status`。
+- 上传幂等只排除 `DELETED`。`DELETING` 期间仍命中原 document，以保持应用层查重、兼容唯一索引 `uk_ingest_documents_kb_file_hash` 和删除失败回滚语义一致。
 - 文档列表读取 `latest_filename/latest_status` 与 version 表中的 `file_size/failure_reason`。
+- 文档详情状态读取同样以 latest projection + latest version fact 为主视图事实源，返回当前最新版本的状态、来源文件名、版本号和来源类型。
 - 知识库已索引文档计数读取 `ingest_documents.latest_status`。
 - schema 自检同时校验主表 latest projection、旧兼容镜像列、version 事实列与 version 文件哈希索引。
 

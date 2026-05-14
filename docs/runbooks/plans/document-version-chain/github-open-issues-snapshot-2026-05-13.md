@@ -2,10 +2,10 @@
 
 ## 拉取信息
 
-- 更新时间：2026-05-14 23:05
-- 拉取方式：基于当前仓库实现与本地回归结果更新；#1、#2、#3、#4、#5、#6、#7、#19、#20 已关闭，版本历史只读前后端基线、上传新版本前后端闭环与版本回退前后端链路已完成
+- 更新时间：2026-05-14 19:55
+- 拉取方式：基于当前仓库实现、本地回归结果与 GitHub issue 状态更新；#1、#2、#3、#4、#5、#6、#7、#8、#19、#20 已关闭，版本历史只读前后端基线、上传新版本前后端闭环、版本回退前后端链路、删除与列表版本语义后端闭环已完成
 - 仓库：`pop1414/my-AI`
-- 范围：文档版本链相关 issues；#1、#2、#3、#4、#5、#6、#7、#19、#20 已完成关闭，当前仍需推进 #8-#12，共 5 个 open follow-up
+- 范围：文档版本链相关 issues；#1、#2、#3、#4、#5、#6、#7、#8、#19、#20 已完成关闭，当前仍需推进 #9-#12，共 4 个 open follow-up
 
 ## 收口状态
 
@@ -18,6 +18,7 @@
 - #5 已按“上传新版本前端交互与结果提示”完成并关闭，收口说明见 `document-version-upload-frontend-closure.md`。
 - #6 已按“版本回退后端链路与契约”完成并关闭：`POST /api/v1/documents/{documentId}/versions/{versionNumber}/rollback` 提供 #7 所需稳定后端契约。
 - #7 已按“版本回退前端交互与结果提示”完成并关闭，收口说明见 `document-version-rollback-frontend-closure.md`。
+- #8 已按“删除与列表页适配版本语义后端”完成并关闭，收口说明见 `document-delete-list-version-semantics-backend-closure.md`。
 
 ## 总览
 
@@ -30,11 +31,11 @@
 | [#5](https://github.com/pop1414/my-AI/issues/5) | 上传新版本前端交互与结果提示 | CLOSED | `ready-for-agent` | #4 已完成 |
 | [#6](https://github.com/pop1414/my-AI/issues/6) | 版本回退后端链路与契约 | CLOSED | `ready-for-agent` | #1 已完成, #19 已完成 |
 | [#7](https://github.com/pop1414/my-AI/issues/7) | 版本回退前端交互与结果提示 | CLOSED | `ready-for-agent` | #3 已完成, #6 已完成 |
-| [#8](https://github.com/pop1414/my-AI/issues/8) | 删除与列表页适配版本语义后端 | OPEN | `ready-for-agent` | #1 已完成, #19 已完成 |
-| [#9](https://github.com/pop1414/my-AI/issues/9) | 删除确认与列表页版本语义前端 | OPEN | `ready-for-agent` | #8 |
+| [#8](https://github.com/pop1414/my-AI/issues/8) | 删除与列表页适配版本语义后端 | CLOSED | `ready-for-agent` | #1 已完成, #19 已完成 |
+| [#9](https://github.com/pop1414/my-AI/issues/9) | 删除确认与列表页版本语义前端 | OPEN | `ready-for-agent` | #8 已完成 |
 | [#10](https://github.com/pop1414/my-AI/issues/10) | qa 可问答版本选择与引用版本化后端 | OPEN | `ready-for-agent` | #1 已完成, #19 已完成 |
 | [#11](https://github.com/pop1414/my-AI/issues/11) | 问答页版本提示与引用版本展示前端 | OPEN | `ready-for-agent` | #10 |
-| [#12](https://github.com/pop1414/my-AI/issues/12) | 版本治理审计与冲突收口后端 | OPEN | `ready-for-agent` | #4 已完成, #6 已完成, #8 |
+| [#12](https://github.com/pop1414/my-AI/issues/12) | 版本治理审计与冲突收口后端 | OPEN | `ready-for-agent` | #4 已完成, #6 已完成, #8 已完成 |
 | [#19](https://github.com/pop1414/my-AI/issues/19) | 清理 document 主表旧版本事实字段与读写边界 | CLOSED | `ready-for-agent` | #1 已完成 |
 | [#20](https://github.com/pop1414/my-AI/issues/20) | 版本历史只读后端查询接口 | CLOSED | `ready-for-agent` | #1 已完成, #2 已完成 |
 
@@ -46,9 +47,10 @@
 4. #20 已完成关闭，#3 已基于 `GET /api/v1/documents/{documentId}/versions` 完成版本历史前端只读视图。
 5. #4 与 #5 已完成关闭，上传新版本前后端闭环已具备入口、提交流程、稳定结果提示和 E2E 覆盖。
 6. #6 与 #7 已完成关闭；版本回退前后端链路已形成稳定闭环，前端回退动作、确认交互、稳定结果提示与 E2E 覆盖均已落地。
-7. 后端继续推进 #8、#10，分别覆盖删除与列表语义、qa 可问答版本选择；实现时应遵守 #19 已收紧的读写边界，并复用 #20 的版本历史读模型语义。
-8. 前端在后端契约稳定后推进 #9、#11；其中 #9 继续依赖 #8，#11 继续依赖 #10。
-9. 最后用 #12 收口治理动作之间的互斥、业务错误码、审计事件和竞争场景测试；#12 当前仍等待 #8。
+7. #8 已完成关闭；删除与列表语义后端已稳定，后续 #9 可直接接入删除确认、列表反馈和结果提示。
+8. 后端继续推进 #10，覆盖 qa 可问答版本选择；实现时应遵守 #19 已收紧的读写边界，并复用 #20 的版本历史读模型语义。
+9. 前端在后端契约稳定后推进 #9、#11；其中 #9 的后端 blocker 已解除，#11 继续依赖 #10。
+10. 最后用 #12 收口治理动作之间的互斥、业务错误码、审计事件和竞争场景测试；#12 的 #8 blocker 已解除，仍需统筹 #4/#6/#8 已落地行为。
 
 ## Issue 摘要
 
@@ -220,14 +222,14 @@
 
 目标是把删除、文档列表和文档详情查询适配到版本链语义。删除仍终止整个 `document` 资产，而不是某个历史版本。
 
-验收重点：
+完成状态：
 
-- 删除仍针对整个 `document` 资产。
-- 文档列表与详情查询返回的主视图信息跟随当前最新版本的真实状态与最新来源文件名。
-- 删除后同内容重新上传生成新的 `documentId`，旧 document 保留终态与审计上下文可查询。
-- 后端明确表达删除后文档级授权不自动继承到新 document。
-- 删除、上传新版本、版本回退、重处理在同一 document 上保持互斥进入执行态。
-- 后端测试覆盖删除后的身份语义、列表投影更新与互斥规则。
+- 已完成并关闭，收口说明见 `document-delete-list-version-semantics-backend-closure.md`。
+- 删除仍针对整个 `document` 资产，不提供删除单个历史版本路径。
+- 文档列表与详情主视图已锚定 latest projection 与最新版本事实。
+- 删除完成后同内容重新上传生成新的 `documentId`；`DELETING` 期间同内容上传仍复用原 `documentId`，与现有唯一索引和删除失败回滚语义保持一致。
+- 后端文档明确表达旧 `documentId` 上的文档级授权不会自动继承到新 document。
+- 删除用例拒绝 `UPLOADED/INGESTING/DELETING` 执行态，配合上传新版本、版本回退、重处理的状态与 CAS 校验保持互斥。
 
 ### #9 删除确认与列表页版本语义前端
 
