@@ -20,6 +20,7 @@ import io.github.spike.myai.shared.rest.GlobalRestExceptionHandler;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * 上传既有 document 新版本应用服务。
@@ -42,6 +43,7 @@ import org.springframework.stereotype.Service;
  * @since 1.0.0
  */
 @Service
+@Transactional
 public class UploadNewDocumentVersionApplicationService implements UploadNewDocumentVersionUseCase {
 
     /** 结果类型：成功创建新版本 */
@@ -172,10 +174,7 @@ public class UploadNewDocumentVersionApplicationService implements UploadNewDocu
                 now,
                 now);
 
-        // 步骤 9：先持久化源文件到版本化存储（在事务外执行，失败可重试）
-        documentSourceStorage.saveVersion(documentId, newVersionNumber, command.filename(), command.sourceContent());
-
-        // 步骤 10：通过 CAS 追加新版本到主表 latest 快照
+        // 步骤 9：通过 CAS 追加新版本到主表 latest 快照
         boolean appended = documentRepository.appendUploadVersion(
                 currentUser.workspaceId(),
                 documentId,
@@ -183,12 +182,14 @@ public class UploadNewDocumentVersionApplicationService implements UploadNewDocu
                 newVersion,
                 now);
         if (!appended) {
-            // CAS 失败说明在步骤 4~10 之间版本号已被其他请求修改
+            // CAS 失败说明在步骤 4~9 之间版本号已被其他请求修改
             throw business(
                     HttpStatus.CONFLICT,
                     "VERSION_CONFLICT_STALE_LATEST_VERSION",
                     "当前最新版本已变化，请刷新详情后重试");
         }
+        // 步骤 10：DB 版本事实已写入当前事务后，再保存版本源文件；保存失败会触发事务回滚。
+        saveNewVersionSource(documentId, newVersionNumber, command.filename(), command.sourceContent());
 
         // 步骤 11：追加成功后重新查询可问答版本号（可能与追加前一致）
         Integer updatedAskableVersionNumber =
@@ -205,6 +206,32 @@ public class UploadNewDocumentVersionApplicationService implements UploadNewDocu
                 updatedAskableVersionNumber != null,
                 UploadStatus.UPLOADED.name(),
                 DocumentVersionOriginType.UPLOAD.name());
+    }
+
+    /**
+     * 保存上传新版本源文件。
+     *
+     * @param documentId    文档资产 ID
+     * @param versionNumber 新版本号
+     * @param filename      文件名
+     * @param sourceContent 文件内容
+     */
+    private void saveNewVersionSource(
+            DocumentId documentId,
+            int versionNumber,
+            String filename,
+            byte[] sourceContent) {
+        try {
+            documentSourceStorage.saveVersionIfAbsent(documentId, versionNumber, filename, sourceContent);
+        } catch (IllegalStateException ex) {
+            if (DocumentSourceStorage.VERSION_SOURCE_CONTENT_CONFLICT_MESSAGE.equals(ex.getMessage())) {
+                throw business(
+                        HttpStatus.CONFLICT,
+                        "VERSION_CONFLICT_STALE_LATEST_VERSION",
+                        "当前最新版本已变化，请刷新详情后重试");
+            }
+            throw ex;
+        }
     }
 
     /**

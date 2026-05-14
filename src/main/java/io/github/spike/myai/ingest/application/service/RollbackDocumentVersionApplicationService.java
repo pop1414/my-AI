@@ -19,6 +19,7 @@ import java.time.Instant;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * 文档版本回退应用服务。
@@ -31,6 +32,7 @@ import org.springframework.stereotype.Service;
  * 由 {@link GlobalRestExceptionHandler} 统一转换为结构化 JSON 错误响应。
  */
 @Service
+@Transactional
 public class RollbackDocumentVersionApplicationService implements RollbackDocumentVersionUseCase {
 
     /** 文档元数据仓储 */
@@ -128,8 +130,10 @@ public class RollbackDocumentVersionApplicationService implements RollbackDocume
 
         byte[] sourceContent = documentSourceStorage
                 .loadVersion(documentId, targetVersion.versionNumber(), targetVersion.filename())
-                .orElseThrow(() -> new IllegalStateException("rollback source file missing: " + documentId.value()));
-        documentSourceStorage.saveVersion(documentId, newVersionNumber, targetVersion.filename(), sourceContent);
+                .orElseThrow(() -> business(
+                        HttpStatus.INTERNAL_SERVER_ERROR,
+                        "VERSION_ROLLBACK_SOURCE_FILE_MISSING",
+                        "回退来源版本文件缺失，请联系管理员修复版本源文件"));
 
         boolean appended = documentRepository.appendRollbackVersion(
                 currentUser.workspaceId(),
@@ -140,6 +144,7 @@ public class RollbackDocumentVersionApplicationService implements RollbackDocume
         if (!appended) {
             throw staleLatestVersion();
         }
+        saveRollbackSource(documentId, newVersionNumber, targetVersion.filename(), sourceContent);
 
         Integer askableVersionNumber =
                 toNullableVersionNumber(documentRepository.findLatestIndexedVersionNumber(currentUser.workspaceId(), documentId));
@@ -152,6 +157,29 @@ public class RollbackDocumentVersionApplicationService implements RollbackDocume
                 askableVersionNumber != null,
                 UploadStatus.UPLOADED.name(),
                 DocumentVersionOriginType.ROLLBACK.name());
+    }
+
+    /**
+     * 保存回退新版本源文件。
+     *
+     * @param documentId       文档资产 ID
+     * @param versionNumber    新版本号
+     * @param filename         来源文件名
+     * @param sourceContent    来源文件内容
+     */
+    private void saveRollbackSource(
+            DocumentId documentId,
+            int versionNumber,
+            String filename,
+            byte[] sourceContent) {
+        try {
+            documentSourceStorage.saveVersionIfAbsent(documentId, versionNumber, filename, sourceContent);
+        } catch (IllegalStateException ex) {
+            if (DocumentSourceStorage.VERSION_SOURCE_CONTENT_CONFLICT_MESSAGE.equals(ex.getMessage())) {
+                throw staleLatestVersion();
+            }
+            throw ex;
+        }
     }
 
     /**

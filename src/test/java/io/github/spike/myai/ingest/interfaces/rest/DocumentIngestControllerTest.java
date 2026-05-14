@@ -559,6 +559,22 @@ class DocumentIngestControllerTest {
     }
 
     @Test
+    @DisplayName("版本回退源文件缺失时，应返回稳定 500 业务错误码")
+    void rollbackVersion_shouldReturnBusinessErrorCode_whenSourceFileMissing() throws Exception {
+        when(rollbackDocumentVersionUseCase.handle(any(RollbackDocumentVersionCommand.class)))
+                .thenThrow(new BusinessException(
+                        HttpStatus.INTERNAL_SERVER_ERROR,
+                        "VERSION_ROLLBACK_SOURCE_FILE_MISSING",
+                        "回退来源版本文件缺失，请联系管理员修复版本源文件"));
+
+        mockMvc.perform(post("/api/v1/documents/{documentId}/versions/{versionNumber}/rollback", "doc-702", 3)
+                        .param("expectedLatestVersionNumber", "4"))
+                .andExpect(status().isInternalServerError())
+                .andExpect(jsonPath("$.code").value("VERSION_ROLLBACK_SOURCE_FILE_MISSING"))
+                .andExpect(jsonPath("$.message").value("回退来源版本文件缺失，请联系管理员修复版本源文件"));
+    }
+
+    @Test
     @DisplayName("分块预览命中时，应返回 200 与分块列表")
     void getChunksPreview_shouldReturnPreview_whenFound() throws Exception {
         when(getDocumentChunksPreviewUseCase.handle(any(GetDocumentChunksPreviewQuery.class)))

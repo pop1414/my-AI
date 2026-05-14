@@ -7,6 +7,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
+import java.util.Arrays;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Stream;
@@ -100,13 +101,37 @@ public class LocalDocumentSourceStorage implements DocumentSourceStorage {
      */
     @Override
     public void saveVersion(DocumentId documentId, int versionNumber, String filename, byte[] content) {
+        saveVersionIfAbsent(documentId, versionNumber, filename, content);
+    }
+
+    /**
+     * 幂等保存指定版本的源文件，并区分本次是否真正创建文件。
+     *
+     * <p>如果目标版本文件已存在，会读取已有内容与本次内容做字节级比较：
+     * 内容一致时视为幂等命中并返回 {@code false}；内容不一致时说明出现并发候选版本冲突，
+     * 直接抛出异常，避免同一版本号路径被错误内容污染。
+     *
+     * @param documentId   文档资产 ID
+     * @param versionNumber 版本号
+     * @param filename     原始文件名
+     * @param content      文件字节内容
+     * @return 本次调用是否创建了新文件
+     */
+    @Override
+    public boolean saveVersionIfAbsent(DocumentId documentId, int versionNumber, String filename, byte[] content) {
         String safeFilename = sanitizeFilename(filename);
         Path filePath = resolveVersionFilePath(documentId, versionNumber, safeFilename);
         try {
             Files.createDirectories(filePath.getParent());
-            if (Files.notExists(filePath)) {
-                Files.write(filePath, content, StandardOpenOption.CREATE_NEW);
+            if (Files.exists(filePath)) {
+                byte[] existingContent = Files.readAllBytes(filePath);
+                if (!Arrays.equals(existingContent, content)) {
+                    throw new IllegalStateException(VERSION_SOURCE_CONTENT_CONFLICT_MESSAGE);
+                }
+                return false;
             }
+            Files.write(filePath, content, StandardOpenOption.CREATE_NEW);
+            return true;
         } catch (IOException ex) {
             throw new IllegalStateException("failed to save version source file", ex);
         }

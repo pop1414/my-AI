@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
@@ -47,6 +48,8 @@ class UploadNewDocumentVersionApplicationServiceTest {
         Document document = document("doc-1", 2, "hash-old", UploadStatus.INDEXED);
         when(repository.findById(eq("workspace-a"), eq(new DocumentId("doc-1")))).thenReturn(Optional.of(document));
         when(repository.findLatestIndexedVersionNumber(eq("workspace-a"), eq(new DocumentId("doc-1")))).thenReturn(2);
+        when(sourceStorage.saveVersionIfAbsent(eq(new DocumentId("doc-1")), eq(3), eq("new.pdf"), eq(bytes("new content"))))
+                .thenReturn(true);
         when(repository.appendUploadVersion(eq("workspace-a"), eq(new DocumentId("doc-1")), eq(2), any(DocumentVersion.class), any(Instant.class)))
                 .thenReturn(true);
         UploadNewDocumentVersionApplicationService service =
@@ -72,8 +75,8 @@ class UploadNewDocumentVersionApplicationServiceTest {
         assertEquals(UploadStatus.UPLOADED, versionCaptor.getValue().status());
         assertEquals(DocumentVersionOriginType.UPLOAD, versionCaptor.getValue().versionOriginType());
         InOrder inOrder = Mockito.inOrder(sourceStorage, repository);
-        inOrder.verify(sourceStorage).saveVersion(eq(new DocumentId("doc-1")), eq(3), eq("new.pdf"), eq(bytes("new content")));
         inOrder.verify(repository).appendUploadVersion(eq("workspace-a"), eq(new DocumentId("doc-1")), eq(2), any(DocumentVersion.class), any(Instant.class));
+        inOrder.verify(sourceStorage).saveVersionIfAbsent(eq(new DocumentId("doc-1")), eq(3), eq("new.pdf"), eq(bytes("new content")));
     }
 
     @Test
@@ -99,7 +102,7 @@ class UploadNewDocumentVersionApplicationServiceTest {
         assertEquals(4, result.latestVersionNumber());
         assertEquals(4, result.askableVersionNumber());
         verify(repository, never()).appendUploadVersion(any(), any(), any(Integer.class), any(), any());
-        verify(sourceStorage, never()).saveVersion(any(), org.mockito.ArgumentMatchers.anyInt(), any(), any());
+        verify(sourceStorage, never()).saveVersionIfAbsent(any(), anyInt(), any(), any());
     }
 
     @Test
@@ -160,7 +163,7 @@ class UploadNewDocumentVersionApplicationServiceTest {
 
         assertEquals("VERSION_CONFLICT_STALE_LATEST_VERSION", ex.code());
         verify(repository, never()).appendUploadVersion(any(), any(), any(Integer.class), any(), any());
-        verify(sourceStorage, never()).saveVersion(any(), org.mockito.ArgumentMatchers.anyInt(), any(), any());
+        verify(sourceStorage, never()).saveVersionIfAbsent(any(), anyInt(), any(), any());
     }
 
     @Test
@@ -173,6 +176,8 @@ class UploadNewDocumentVersionApplicationServiceTest {
         Document document = document("doc-6", 2, "hash-old", UploadStatus.FAILED);
         when(repository.findById(eq("workspace-a"), eq(new DocumentId("doc-6")))).thenReturn(Optional.of(document));
         when(repository.findLatestIndexedVersionNumber(eq("workspace-a"), eq(new DocumentId("doc-6")))).thenReturn(1);
+        when(sourceStorage.saveVersionIfAbsent(eq(new DocumentId("doc-6")), eq(3), eq("new.pdf"), eq(bytes("new content"))))
+                .thenReturn(true);
         when(repository.appendUploadVersion(eq("workspace-a"), eq(new DocumentId("doc-6")), eq(2), any(DocumentVersion.class), any(Instant.class)))
                 .thenReturn(false);
         UploadNewDocumentVersionApplicationService service =
@@ -182,11 +187,12 @@ class UploadNewDocumentVersionApplicationServiceTest {
                 new UploadNewDocumentVersionCommand("doc-6", "new.pdf", 42L, "hash-new", 2, bytes("new content"))));
 
         assertEquals("VERSION_CONFLICT_STALE_LATEST_VERSION", ex.code());
+        verify(sourceStorage, never()).saveVersionIfAbsent(any(), anyInt(), any(), any());
     }
 
     @Test
-    @DisplayName("源文件保存失败时，不应追加数据库版本")
-    void handle_shouldNotAppendVersion_whenSourceSaveFailed() {
+    @DisplayName("源文件保存失败时，应抛出异常触发事务回滚")
+    void handle_shouldThrowToRollbackTransaction_whenSourceSaveFailed() {
         DocumentRepository repository = Mockito.mock(DocumentRepository.class);
         DocumentSourceStorage sourceStorage = Mockito.mock(DocumentSourceStorage.class);
         AuthorizationService authorizationService = Mockito.mock(AuthorizationService.class);
@@ -194,16 +200,43 @@ class UploadNewDocumentVersionApplicationServiceTest {
         Document document = document("doc-7", 2, "hash-old", UploadStatus.INDEXED);
         when(repository.findById(eq("workspace-a"), eq(new DocumentId("doc-7")))).thenReturn(Optional.of(document));
         when(repository.findLatestIndexedVersionNumber(eq("workspace-a"), eq(new DocumentId("doc-7")))).thenReturn(2);
+        when(repository.appendUploadVersion(eq("workspace-a"), eq(new DocumentId("doc-7")), eq(2), any(DocumentVersion.class), any(Instant.class)))
+                .thenReturn(true);
         doThrow(new IllegalStateException("disk full"))
                 .when(sourceStorage)
-                .saveVersion(eq(new DocumentId("doc-7")), eq(3), eq("new.pdf"), eq(bytes("new content")));
+                .saveVersionIfAbsent(eq(new DocumentId("doc-7")), eq(3), eq("new.pdf"), eq(bytes("new content")));
         UploadNewDocumentVersionApplicationService service =
                 new UploadNewDocumentVersionApplicationService(repository, sourceStorage, currentUserProvider, authorizationService);
 
         assertThrows(IllegalStateException.class, () -> service.handle(
                 new UploadNewDocumentVersionCommand("doc-7", "new.pdf", 42L, "hash-new", 2, bytes("new content"))));
 
-        verify(repository, never()).appendUploadVersion(any(), any(), any(Integer.class), any(), any());
+        verify(repository).appendUploadVersion(eq("workspace-a"), eq(new DocumentId("doc-7")), eq(2), any(DocumentVersion.class), any(Instant.class));
+    }
+
+    @Test
+    @DisplayName("版本源文件已存在但内容不一致时，应按 latest 并发冲突处理")
+    void handle_shouldThrowConflict_whenVersionSourceContentConflict() {
+        DocumentRepository repository = Mockito.mock(DocumentRepository.class);
+        DocumentSourceStorage sourceStorage = Mockito.mock(DocumentSourceStorage.class);
+        AuthorizationService authorizationService = Mockito.mock(AuthorizationService.class);
+        CurrentUserProvider currentUserProvider = currentUserProvider();
+        Document document = document("doc-8", 2, "hash-old", UploadStatus.INDEXED);
+        when(repository.findById(eq("workspace-a"), eq(new DocumentId("doc-8")))).thenReturn(Optional.of(document));
+        when(repository.findLatestIndexedVersionNumber(eq("workspace-a"), eq(new DocumentId("doc-8")))).thenReturn(2);
+        when(repository.appendUploadVersion(eq("workspace-a"), eq(new DocumentId("doc-8")), eq(2), any(DocumentVersion.class), any(Instant.class)))
+                .thenReturn(true);
+        doThrow(new IllegalStateException(DocumentSourceStorage.VERSION_SOURCE_CONTENT_CONFLICT_MESSAGE))
+                .when(sourceStorage)
+                .saveVersionIfAbsent(eq(new DocumentId("doc-8")), eq(3), eq("new.pdf"), eq(bytes("new content")));
+        UploadNewDocumentVersionApplicationService service =
+                new UploadNewDocumentVersionApplicationService(repository, sourceStorage, currentUserProvider, authorizationService);
+
+        BusinessException ex = assertThrows(BusinessException.class, () -> service.handle(
+                new UploadNewDocumentVersionCommand("doc-8", "new.pdf", 42L, "hash-new", 2, bytes("new content"))));
+
+        assertEquals("VERSION_CONFLICT_STALE_LATEST_VERSION", ex.code());
+        verify(repository).appendUploadVersion(eq("workspace-a"), eq(new DocumentId("doc-8")), eq(2), any(DocumentVersion.class), any(Instant.class));
     }
 
     private static CurrentUserProvider currentUserProvider() {

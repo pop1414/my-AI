@@ -52,6 +52,8 @@ class RollbackDocumentVersionApplicationServiceTest {
                 .thenReturn(Optional.of(targetVersion));
         when(sourceStorage.loadVersion(eq(documentId), eq(1), eq("v1.pdf")))
                 .thenReturn(Optional.of(bytes("v1 content")));
+        when(sourceStorage.saveVersionIfAbsent(eq(documentId), eq(4), eq("v1.pdf"), eq(bytes("v1 content"))))
+                .thenReturn(true);
         when(repository.appendRollbackVersion(eq("workspace-a"), eq(documentId), eq(3), any(DocumentVersion.class), any(Instant.class)))
                 .thenReturn(true);
         when(repository.findLatestIndexedVersionNumber(eq("workspace-a"), eq(documentId))).thenReturn(1);
@@ -80,8 +82,8 @@ class RollbackDocumentVersionApplicationServiceTest {
         assertEquals("v1.pdf", rollbackVersion.filename());
         assertEquals(UploadStatus.UPLOADED, rollbackVersion.status());
         InOrder inOrder = Mockito.inOrder(sourceStorage, repository);
-        inOrder.verify(sourceStorage).saveVersion(eq(documentId), eq(4), eq("v1.pdf"), eq(bytes("v1 content")));
         inOrder.verify(repository).appendRollbackVersion(eq("workspace-a"), eq(documentId), eq(3), any(DocumentVersion.class), any(Instant.class));
+        inOrder.verify(sourceStorage).saveVersionIfAbsent(eq(documentId), eq(4), eq("v1.pdf"), eq(bytes("v1 content")));
     }
 
     @Test
@@ -200,6 +202,8 @@ class RollbackDocumentVersionApplicationServiceTest {
                 .thenReturn(Optional.of(version(documentId, 1, "hash-v1", "v1.pdf", UploadStatus.INDEXED)));
         when(sourceStorage.loadVersion(eq(documentId), eq(1), eq("v1.pdf")))
                 .thenReturn(Optional.of(bytes("v1 content")));
+        when(sourceStorage.saveVersionIfAbsent(eq(documentId), eq(4), eq("v1.pdf"), eq(bytes("v1 content"))))
+                .thenReturn(true);
         when(repository.appendRollbackVersion(eq("workspace-a"), eq(documentId), eq(3), any(DocumentVersion.class), any(Instant.class)))
                 .thenReturn(false);
         RollbackDocumentVersionApplicationService service =
@@ -209,6 +213,7 @@ class RollbackDocumentVersionApplicationServiceTest {
                 service.handle(new RollbackDocumentVersionCommand("doc-7", 1, 3)));
 
         assertEquals("VERSION_CONFLICT_STALE_LATEST_VERSION", ex.code());
+        verify(sourceStorage, never()).saveVersionIfAbsent(any(), anyInt(), any(), any());
     }
 
     @Test
@@ -227,10 +232,40 @@ class RollbackDocumentVersionApplicationServiceTest {
         RollbackDocumentVersionApplicationService service =
                 new RollbackDocumentVersionApplicationService(repository, sourceStorage, currentUserProvider, authorizationService);
 
-        assertThrows(IllegalStateException.class, () ->
+        BusinessException ex = assertThrows(BusinessException.class, () ->
                 service.handle(new RollbackDocumentVersionCommand("doc-8", 1, 3)));
 
+        assertEquals("VERSION_ROLLBACK_SOURCE_FILE_MISSING", ex.code());
         verify(repository, never()).appendRollbackVersion(any(), any(), anyInt(), any(), any());
+    }
+
+    @Test
+    @DisplayName("版本源文件已存在但内容不一致时，应按 latest 并发冲突处理")
+    void handle_shouldThrowConflict_whenVersionSourceContentConflict() {
+        DocumentRepository repository = Mockito.mock(DocumentRepository.class);
+        DocumentSourceStorage sourceStorage = Mockito.mock(DocumentSourceStorage.class);
+        AuthorizationService authorizationService = Mockito.mock(AuthorizationService.class);
+        CurrentUserProvider currentUserProvider = currentUserProvider();
+        DocumentId documentId = new DocumentId("doc-9");
+        when(repository.findById(eq("workspace-a"), eq(documentId)))
+                .thenReturn(Optional.of(document("doc-9", 3, "hash-latest", UploadStatus.INDEXED)));
+        when(repository.findVersionByNumber(eq("workspace-a"), eq(documentId), eq(1)))
+                .thenReturn(Optional.of(version(documentId, 1, "hash-v1", "v1.pdf", UploadStatus.INDEXED)));
+        when(sourceStorage.loadVersion(eq(documentId), eq(1), eq("v1.pdf")))
+                .thenReturn(Optional.of(bytes("v1 content")));
+        when(repository.appendRollbackVersion(eq("workspace-a"), eq(documentId), eq(3), any(DocumentVersion.class), any(Instant.class)))
+                .thenReturn(true);
+        doThrow(new IllegalStateException(DocumentSourceStorage.VERSION_SOURCE_CONTENT_CONFLICT_MESSAGE))
+                .when(sourceStorage)
+                .saveVersionIfAbsent(eq(documentId), eq(4), eq("v1.pdf"), eq(bytes("v1 content")));
+        RollbackDocumentVersionApplicationService service =
+                new RollbackDocumentVersionApplicationService(repository, sourceStorage, currentUserProvider, authorizationService);
+
+        BusinessException ex = assertThrows(BusinessException.class, () ->
+                service.handle(new RollbackDocumentVersionCommand("doc-9", 1, 3)));
+
+        assertEquals("VERSION_CONFLICT_STALE_LATEST_VERSION", ex.code());
+        verify(repository).appendRollbackVersion(eq("workspace-a"), eq(documentId), eq(3), any(DocumentVersion.class), any(Instant.class));
     }
 
     private static CurrentUserProvider currentUserProvider() {

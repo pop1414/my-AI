@@ -2,6 +2,7 @@ package io.github.spike.myai.ingest.infrastructure.storage;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import io.github.spike.myai.ingest.domain.model.DocumentId;
 import io.github.spike.myai.ingest.infrastructure.config.IngestProperties;
@@ -67,4 +68,44 @@ class LocalDocumentSourceStorageTest {
                 "version-3".getBytes(StandardCharsets.UTF_8),
                 storage.loadVersion(documentId, 3, "same.pdf").orElseThrow());
     }
+
+    @Test
+    @DisplayName("同一版本同名源文件已存在但内容不一致时，应拒绝覆盖")
+    void saveVersionIfAbsent_shouldRejectDifferentContent_whenSameVersionFileExists() {
+        IngestProperties properties = new IngestProperties();
+        properties.getStorage().setRootDir(tempDir.toString());
+        LocalDocumentSourceStorage storage = new LocalDocumentSourceStorage(properties);
+        DocumentId documentId = new DocumentId("doc-source-4");
+
+        boolean created = storage.saveVersionIfAbsent(
+                documentId,
+                4,
+                "same.pdf",
+                "first-content".getBytes(StandardCharsets.UTF_8));
+
+        assertThrows(IllegalStateException.class, () -> storage.saveVersionIfAbsent(
+                documentId,
+                4,
+                "same.pdf",
+                "second-content".getBytes(StandardCharsets.UTF_8)));
+        assertArrayEquals(
+                "first-content".getBytes(StandardCharsets.UTF_8),
+                storage.loadVersion(documentId, 4, "same.pdf").orElseThrow());
+        org.junit.jupiter.api.Assertions.assertTrue(created);
+    }
+
+    @Test
+    @DisplayName("同一版本同名源文件内容一致时，应返回幂等命中")
+    void saveVersionIfAbsent_shouldReturnFalse_whenSameContentAlreadyExists() {
+        IngestProperties properties = new IngestProperties();
+        properties.getStorage().setRootDir(tempDir.toString());
+        LocalDocumentSourceStorage storage = new LocalDocumentSourceStorage(properties);
+        DocumentId documentId = new DocumentId("doc-source-5");
+        byte[] content = "same-content".getBytes(StandardCharsets.UTF_8);
+
+        org.junit.jupiter.api.Assertions.assertTrue(storage.saveVersionIfAbsent(documentId, 5, "same.pdf", content));
+
+        assertFalse(storage.saveVersionIfAbsent(documentId, 5, "same.pdf", content));
+    }
+
 }
