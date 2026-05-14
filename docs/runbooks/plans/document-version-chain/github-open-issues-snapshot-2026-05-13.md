@@ -2,10 +2,10 @@
 
 ## 拉取信息
 
-- 更新时间：2026-05-14 18:51
-- 拉取方式：基于 GitHub Issues 当前状态更新；#1、#2、#3、#4、#5、#6、#19、#20 已关闭，版本历史只读前后端基线、上传新版本前后端闭环与版本回退后端链路已完成
+- 更新时间：2026-05-14 23:05
+- 拉取方式：基于当前仓库实现与本地回归结果更新；#1、#2、#3、#4、#5、#6、#7、#19、#20 已关闭，版本历史只读前后端基线、上传新版本前后端闭环与版本回退前后端链路已完成
 - 仓库：`pop1414/my-AI`
-- 范围：文档版本链相关 issues；#1、#2、#3、#4、#5、#6、#19、#20 已完成关闭，当前仍需推进 #7-#12，共 6 个 open follow-up
+- 范围：文档版本链相关 issues；#1、#2、#3、#4、#5、#6、#7、#19、#20 已完成关闭，当前仍需推进 #8-#12，共 5 个 open follow-up
 
 ## 收口状态
 
@@ -17,6 +17,7 @@
 - #4 已按“上传新版本后端链路与契约”完成并关闭：`POST /api/v1/documents/{documentId}/versions` 提供 #5 所需稳定后端契约。
 - #5 已按“上传新版本前端交互与结果提示”完成并关闭，收口说明见 `document-version-upload-frontend-closure.md`。
 - #6 已按“版本回退后端链路与契约”完成并关闭：`POST /api/v1/documents/{documentId}/versions/{versionNumber}/rollback` 提供 #7 所需稳定后端契约。
+- #7 已按“版本回退前端交互与结果提示”完成并关闭，收口说明见 `document-version-rollback-frontend-closure.md`。
 
 ## 总览
 
@@ -28,7 +29,7 @@
 | [#4](https://github.com/pop1414/my-AI/issues/4) | 上传新版本后端链路与契约 | CLOSED | `ready-for-agent` | #1 已完成, #19 已完成 |
 | [#5](https://github.com/pop1414/my-AI/issues/5) | 上传新版本前端交互与结果提示 | CLOSED | `ready-for-agent` | #4 已完成 |
 | [#6](https://github.com/pop1414/my-AI/issues/6) | 版本回退后端链路与契约 | CLOSED | `ready-for-agent` | #1 已完成, #19 已完成 |
-| [#7](https://github.com/pop1414/my-AI/issues/7) | 版本回退前端交互与结果提示 | OPEN | `ready-for-agent` | #3 已完成, #6 已完成 |
+| [#7](https://github.com/pop1414/my-AI/issues/7) | 版本回退前端交互与结果提示 | CLOSED | `ready-for-agent` | #3 已完成, #6 已完成 |
 | [#8](https://github.com/pop1414/my-AI/issues/8) | 删除与列表页适配版本语义后端 | OPEN | `ready-for-agent` | #1 已完成, #19 已完成 |
 | [#9](https://github.com/pop1414/my-AI/issues/9) | 删除确认与列表页版本语义前端 | OPEN | `ready-for-agent` | #8 |
 | [#10](https://github.com/pop1414/my-AI/issues/10) | qa 可问答版本选择与引用版本化后端 | OPEN | `ready-for-agent` | #1 已完成, #19 已完成 |
@@ -44,9 +45,9 @@
 3. #2 已完成关闭；后续前端与后端实现以交互确认文档为准。
 4. #20 已完成关闭，#3 已基于 `GET /api/v1/documents/{documentId}/versions` 完成版本历史前端只读视图。
 5. #4 与 #5 已完成关闭，上传新版本前后端闭环已具备入口、提交流程、稳定结果提示和 E2E 覆盖。
-6. #6 已完成关闭；版本回退后端契约稳定，#7 可基于 #3 的版本历史只读视图接入回退动作，并参考 #5 的稳定结果提示模式。
+6. #6 与 #7 已完成关闭；版本回退前后端链路已形成稳定闭环，前端回退动作、确认交互、稳定结果提示与 E2E 覆盖均已落地。
 7. 后端继续推进 #8、#10，分别覆盖删除与列表语义、qa 可问答版本选择；实现时应遵守 #19 已收紧的读写边界，并复用 #20 的版本历史读模型语义。
-8. 前端在后端契约稳定后推进 #7、#9、#11；其中 #7 已解除 #6 blocker。
+8. 前端在后端契约稳定后推进 #9、#11；其中 #9 继续依赖 #8，#11 继续依赖 #10。
 9. 最后用 #12 收口治理动作之间的互斥、业务错误码、审计事件和竞争场景测试；#12 当前仍等待 #8。
 
 ## Issue 摘要
@@ -193,6 +194,8 @@
 
 ### #7 版本回退前端交互与结果提示
 
+状态：已关闭，按“版本回退前端交互与结果提示”完成收口。
+
 目标是在版本历史前端视图中接入“回退为最新版本”动作、确认交互与成功后的稳定结果提示。
 
 验收重点：
@@ -203,6 +206,15 @@
 - 当回退产生的新最新版本尚未 `INDEXED` 时，提示当前问答暂时仍使用最近一个已 `INDEXED` 的版本。
 - 回退成功后版本历史刷新，并展示“最新”“回退产生”“曾被回退为最新版本”等标记。
 - 前端测试覆盖入口可见性、确认交互和结果提示。
+
+收口说明：
+
+- 已在版本历史列表中仅对可回退目标展示“回退为最新版本”入口；当前最新版本与不满足条件的历史版本不显示该动作。
+- 已提供回退确认 Modal，明确提示该操作会创建新的最新版本，并可能改变当前问答基线。
+- 回退成功后，页面清除历史版本 query、切回最新版本主视图，并刷新版本历史与主概览。
+- 稳定结果提示区展示 `latestVersionNumber`、`rollbackFromVersionNumber`、`status`、`askableVersionNumber` 等关键事实。
+- 当回退产生的新最新版本尚未 `INDEXED` 时，结果提示区明确提示当前问答暂时仍使用最近一个已 `INDEXED` 的版本。
+- 已通过 `npm.cmd run build` 与 `document-version-history.spec.ts` 端到端测试；收口说明位于 `docs/runbooks/plans/document-version-chain/document-version-rollback-frontend-closure.md`。
 
 ### #8 删除与列表页适配版本语义后端
 
