@@ -46,6 +46,7 @@ class JdbcDocumentVersionHistoryRepositoryTest {
         assertEquals("doc-1", result.documentId().value());
         assertTrue(result.items().isEmpty());
         assertTrue(sqlCaptor.getValue().contains("JOIN ingest_document_versions v"));
+        assertTrue(sqlCaptor.getValue().contains("LEFT JOIN users u"));
         assertTrue(sqlCaptor.getValue().contains("d.workspace_id = ?"));
         assertTrue(sqlCaptor.getValue().contains("d.document_id = ?"));
         assertTrue(sqlCaptor.getValue().contains("ORDER BY v.version_number DESC"));
@@ -81,6 +82,8 @@ class JdbcDocumentVersionHistoryRepositoryTest {
         when(resultSet.getLong("file_size")).thenReturn(512L);
         when(resultSet.getString("status")).thenReturn("FAILED");
         when(resultSet.getString("failure_reason")).thenReturn("parse failed");
+        when(resultSet.getString("created_by_user_id")).thenReturn("user-1");
+        when(resultSet.getString("created_by_display_name")).thenReturn("Ayanami");
         when(resultSet.getTimestamp("created_at"))
                 .thenReturn(Timestamp.from(Instant.parse("2026-05-08T10:00:00Z")));
         when(resultSet.getTimestamp("updated_at"))
@@ -101,6 +104,8 @@ class JdbcDocumentVersionHistoryRepositoryTest {
         assertEquals(512L, item.fileSize());
         assertEquals(UploadStatus.FAILED, item.status());
         assertEquals("parse failed", item.failureReason());
+        assertEquals("user-1", item.createdByUserId());
+        assertEquals("Ayanami", item.createdByDisplayName());
         assertEquals(Instant.parse("2026-05-08T10:00:00Z"), item.createdAt());
         assertEquals(Instant.parse("2026-05-08T10:05:00Z"), item.updatedAt());
     }

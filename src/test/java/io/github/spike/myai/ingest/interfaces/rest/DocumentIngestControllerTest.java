@@ -309,10 +309,12 @@ class DocumentIngestControllerTest {
                                         1,
                                         "rollback.pdf",
                                         300L,
-                                        "INDEXED",
-                                        null,
-                                        java.time.Instant.parse("2026-05-08T10:00:00Z"),
-                                        java.time.Instant.parse("2026-05-08T10:05:00Z"),
+                                         "INDEXED",
+                                         null,
+                                         "user-rollback",
+                                         "Rollback User",
+                                         java.time.Instant.parse("2026-05-08T10:00:00Z"),
+                                         java.time.Instant.parse("2026-05-08T10:05:00Z"),
                                         true,
                                         true),
                                 new DocumentVersionHistoryItemResult(
@@ -322,10 +324,12 @@ class DocumentIngestControllerTest {
                                         null,
                                         "failed.pdf",
                                         200L,
-                                        "FAILED",
-                                        "parse failed",
-                                        java.time.Instant.parse("2026-05-08T09:00:00Z"),
-                                        java.time.Instant.parse("2026-05-08T09:05:00Z"),
+                                         "FAILED",
+                                         "parse failed",
+                                         "user-upload",
+                                         "Upload User",
+                                         java.time.Instant.parse("2026-05-08T09:00:00Z"),
+                                         java.time.Instant.parse("2026-05-08T09:05:00Z"),
                                         false,
                                         false))));
 
@@ -339,8 +343,10 @@ class DocumentIngestControllerTest {
                 .andExpect(jsonPath("$.versions[0].rollbackFromVersionNumber").value(1))
                 .andExpect(jsonPath("$.versions[0].filename").value("rollback.pdf"))
                 .andExpect(jsonPath("$.versions[0].fileSize").value(300))
-                .andExpect(jsonPath("$.versions[0].status").value("INDEXED"))
-                .andExpect(jsonPath("$.versions[0].createdAt").value("2026-05-08T10:00:00Z"))
+                 .andExpect(jsonPath("$.versions[0].status").value("INDEXED"))
+                .andExpect(jsonPath("$.versions[0].createdByUserId").value("user-rollback"))
+                .andExpect(jsonPath("$.versions[0].createdByDisplayName").value("Rollback User"))
+                 .andExpect(jsonPath("$.versions[0].createdAt").value("2026-05-08T10:00:00Z"))
                 .andExpect(jsonPath("$.versions[0].updatedAt").value("2026-05-08T10:05:00Z"))
                 .andExpect(jsonPath("$.versions[0].isLatestVersion").value(true))
                 .andExpect(jsonPath("$.versions[0].isAskableVersion").value(true))
@@ -349,9 +355,11 @@ class DocumentIngestControllerTest {
                 .andExpect(jsonPath("$.versions[1].versionOriginType").value("UPLOAD"))
                 .andExpect(jsonPath("$.versions[1].filename").value("failed.pdf"))
                 .andExpect(jsonPath("$.versions[1].fileSize").value(200))
-                .andExpect(jsonPath("$.versions[1].status").value("FAILED"))
-                .andExpect(jsonPath("$.versions[1].failureReason").value("parse failed"))
-                .andExpect(jsonPath("$.versions[1].createdAt").value("2026-05-08T09:00:00Z"))
+                 .andExpect(jsonPath("$.versions[1].status").value("FAILED"))
+                 .andExpect(jsonPath("$.versions[1].failureReason").value("parse failed"))
+                .andExpect(jsonPath("$.versions[1].createdByUserId").value("user-upload"))
+                .andExpect(jsonPath("$.versions[1].createdByDisplayName").value("Upload User"))
+                 .andExpect(jsonPath("$.versions[1].createdAt").value("2026-05-08T09:00:00Z"))
                 .andExpect(jsonPath("$.versions[1].updatedAt").value("2026-05-08T09:05:00Z"))
                 .andExpect(jsonPath("$.versions[1].isLatestVersion").value(false))
                 .andExpect(jsonPath("$.versions[1].isAskableVersion").value(false));

@@ -24,7 +24,8 @@ import org.springframework.stereotype.Repository;
  *   <li>SQL 使用 Text Block（Java 15+）提高可读性；</li>
  *   <li>RowMapper 为静态不可变常量，线程安全且可复用；</li>
  *   <li>{@code failure_reason} 通过 CASE WHEN 在 SQL 层面过滤——
- *       仅 status='FAILED' 的记录才返回原因，其余返回 NULL。</li>
+ *       仅 status='FAILED' 的记录才返回原因，其余返回 NULL；</li>
+ *   <li>{@code created_by_user_id} 左连接 users，历史数据缺少操作者时仍返回版本事实。</li>
  * </ul>
  *
  * @author Spike
@@ -43,7 +44,8 @@ public class JdbcDocumentVersionHistoryRepository implements DocumentVersionHist
      *   <li>latest_version_number 取自主表，每条版本记录携带同一值
      *       （用于应用层判定 isLatestVersion）；</li>
      *   <li>failure_reason 使用 CASE WHEN 在数据库层过滤，
-     *       减少应用层条件判断。</li>
+     *       减少应用层条件判断；</li>
+     *   <li>上传人展示名优先使用 display_name，缺失时回退 username。</li>
      * </ul>
      */
     private static final String FIND_BY_DOCUMENT_ID_SQL = """
@@ -58,11 +60,15 @@ public class JdbcDocumentVersionHistoryRepository implements DocumentVersionHist
                    v.file_size,
                    v.status,
                    CASE WHEN v.status = 'FAILED' THEN v.failure_reason ELSE NULL END AS failure_reason,
+                   v.created_by_user_id,
+                   COALESCE(NULLIF(u.display_name, ''), u.username) AS created_by_display_name,
                    v.created_at,
                    v.updated_at
             FROM ingest_documents d
             JOIN ingest_document_versions v
               ON v.document_id = d.document_id
+            LEFT JOIN users u
+              ON u.user_id = v.created_by_user_id
             WHERE d.workspace_id = ?
               AND d.document_id = ?
             ORDER BY v.version_number DESC
@@ -97,6 +103,8 @@ public class JdbcDocumentVersionHistoryRepository implements DocumentVersionHist
                     UploadStatus.valueOf(rs.getString("status")),
                     // failure_reason 已由 SQL CASE WHEN 处理，非 FAILED 时为 null
                     rs.getString("failure_reason"),
+                    rs.getString("created_by_user_id"),
+                    rs.getString("created_by_display_name"),
                     toInstant(rs.getTimestamp("created_at")),
                     toInstant(rs.getTimestamp("updated_at")));
 

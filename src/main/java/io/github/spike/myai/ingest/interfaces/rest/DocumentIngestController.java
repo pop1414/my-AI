@@ -293,6 +293,8 @@ public class DocumentIngestController {
                                     item.fileSize(),
                                     item.status(),
                                     item.failureReason(),
+                                    item.createdByUserId(),
+                                    item.createdByDisplayName(),
                                     item.createdAt(),
                                     item.updatedAt(),
                                     item.isLatestVersion(),

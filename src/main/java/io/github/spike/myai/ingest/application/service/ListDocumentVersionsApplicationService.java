@@ -147,6 +147,8 @@ public class ListDocumentVersionsApplicationService implements ListDocumentVersi
                 item.status().name(),
                 // 仅失败状态返回原因，其余状态统一置 null
                 item.status() == UploadStatus.FAILED ? item.failureReason() : null,
+                item.createdByUserId(),
+                item.createdByDisplayName(),
                 item.createdAt(),
                 item.updatedAt(),
                 history.isLatestVersion(item),

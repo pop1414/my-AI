@@ -70,6 +70,8 @@ class ListDocumentVersionsApplicationServiceTest {
         assertFalse(result.versions().get(1).isLatestVersion());
         assertFalse(result.versions().get(1).isAskableVersion());
         assertEquals("parse failed", result.versions().get(2).failureReason());
+        assertEquals("user-3", result.versions().get(0).createdByUserId());
+        assertEquals("Uploader 3", result.versions().get(0).createdByDisplayName());
         verify(authorizationService).requireCanManageDocument(any(CurrentUser.class), eq("doc-100"), eq("kb-1"));
     }
 
@@ -252,6 +254,8 @@ class ListDocumentVersionsApplicationServiceTest {
                 versionNumber * 100L,
                 status,
                 status == UploadStatus.FAILED ? "parse failed" : null,
+                "user-" + versionNumber,
+                "Uploader " + versionNumber,
                 Instant.parse("2026-05-08T0" + versionNumber + ":00:00Z"),
                 Instant.parse("2026-05-08T0" + versionNumber + ":05:00Z"));
     }

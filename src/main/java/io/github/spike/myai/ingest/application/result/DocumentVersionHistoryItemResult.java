@@ -17,6 +17,8 @@ import java.time.Instant;
  * @param fileSize                 文件大小（字节）
  * @param status                   处理状态（如 INDEXED / FAILED / PROCESSING）
  * @param failureReason            失败原因，仅当 status 为 FAILED 时有值，否则为 null
+ * @param createdByUserId          创建该版本的用户 ID，历史数据可能为空
+ * @param createdByDisplayName     创建该版本的用户展示名，历史数据或用户缺失时可能为空
  * @param createdAt                创建时间
  * @param updatedAt                最后更新时间
  * @param isLatestVersion          是否为当前最新版本
@@ -31,6 +33,8 @@ public record DocumentVersionHistoryItemResult(
         long fileSize,
         String status,
         String failureReason,
+        String createdByUserId,
+        String createdByDisplayName,
         Instant createdAt,
         Instant updatedAt,
         boolean isLatestVersion,

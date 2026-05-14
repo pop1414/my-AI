@@ -68,6 +68,8 @@ class DocumentVersionHistoryTest {
                 versionNumber * 100L,
                 status,
                 status == UploadStatus.FAILED ? "parse failed" : null,
+                "user-" + versionNumber,
+                "Uploader " + versionNumber,
                 Instant.parse("2026-05-08T0" + versionNumber + ":00:00Z"),
                 Instant.parse("2026-05-08T0" + versionNumber + ":05:00Z"));
     }
