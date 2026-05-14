@@ -57,6 +57,20 @@ const documentVersionHistoryResponseSchema = z.object({
 	versions: z.array(documentVersionHistoryItemSchema),
 });
 
+const documentVersionUploadResponseSchema = z.object({
+	documentId: z.string().min(1),
+	versionCreated: z.boolean(),
+	versionResultType: z.enum(["CREATED", "REUSED_IDENTICAL_CONTENT"]),
+	versionNumber: z.number().int().positive().nullable().optional(),
+	previousVersionNumber: z.number().int().positive().nullable().optional(),
+	reusedLatestVersionNumber: z.number().int().positive().nullable().optional(),
+	latestVersionNumber: z.number().int().positive(),
+	askableVersionNumber: z.number().int().positive().nullable().optional(),
+	canAskNow: z.boolean(),
+	status: z.string().min(1),
+	versionOriginType: z.string().min(1),
+});
+
 export type UploadResponse = z.infer<typeof uploadResponseSchema>;
 export type DocumentStatusResponse = z.infer<
 	typeof documentStatusResponseSchema
@@ -69,6 +83,9 @@ export type DocumentVersionHistoryItem = z.infer<
 >;
 export type DocumentVersionHistoryResponse = z.infer<
 	typeof documentVersionHistoryResponseSchema
+>;
+export type DocumentVersionUploadResponse = z.infer<
+	typeof documentVersionUploadResponseSchema
 >;
 
 // ── Document List ────────────────────────────────────────────────
@@ -132,6 +149,28 @@ export async function uploadDocument(
 		body: formData,
 	});
 	return uploadResponseSchema.parse(response);
+}
+
+export async function uploadNewDocumentVersion(params: {
+	documentId: string;
+	file: File;
+	expectedLatestVersionNumber: number;
+}): Promise<DocumentVersionUploadResponse> {
+	const formData = new FormData();
+	formData.append("file", params.file);
+	formData.append(
+		"expectedLatestVersionNumber",
+		String(params.expectedLatestVersionNumber),
+	);
+
+	const response = await requestJson<unknown>(
+		`/api/v1/documents/${encodeURIComponent(params.documentId)}/versions`,
+		{
+			method: "POST",
+			body: formData,
+		},
+	);
+	return documentVersionUploadResponseSchema.parse(response);
 }
 
 export async function getDocumentStatus(

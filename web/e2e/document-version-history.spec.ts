@@ -122,6 +122,49 @@ const versionHistory = {
 	],
 };
 
+const uploadAllowedVersionHistory = {
+	...versionHistory,
+	versions: versionHistory.versions.map((version) =>
+		version.versionNumber === 6
+			? {
+					...version,
+					status: "INDEXED",
+					isAskableVersion: true,
+				}
+			: {
+					...version,
+					isAskableVersion: false,
+				},
+	),
+};
+
+const createdVersionHistory = {
+	...versionHistory,
+	versions: [
+		{
+			documentId,
+			versionNumber: 7,
+			versionOriginType: "UPLOAD",
+			rollbackFromVersionNumber: null,
+			filename: "policy-2026-v7.docx",
+			fileSize: 1_700_000,
+			status: "UPLOADED",
+			failureReason: null,
+			createdAt: "2026-05-14T02:00:00Z",
+			updatedAt: "2026-05-14T02:00:00Z",
+			isLatestVersion: true,
+			isAskableVersion: false,
+			createdByUserId: "admin-1",
+			createdByDisplayName: "管理员",
+		},
+		...uploadAllowedVersionHistory.versions.map((version) => ({
+			...version,
+			isLatestVersion: false,
+			isAskableVersion: version.versionNumber === 6,
+		})),
+	],
+};
+
 async function mockAuthenticatedConsole(page: Page) {
 	await page.route("**/api/v1/auth/me", async (route) => {
 		await route.fulfill({ json: currentUser });
@@ -153,8 +196,10 @@ test.describe("文档详情页版本历史只读视图", () => {
 		);
 		await expect(page.getByTestId("version-card-4")).toContainText("Chen Lin");
 		await expect(
-			page.getByRole("button", { name: "正文阅读待接入" }).first(),
-		).toBeDisabled();
+			page
+				.getByLabel("正文阅读接口尚未接入，暂不支持阅读跳转")
+				.first(),
+		).toBeVisible();
 		await expect(page.getByText("展开更早版本（1）")).toBeVisible();
 
 		await page.getByText("展开更早版本（1）").click();
@@ -196,5 +241,130 @@ test.describe("文档详情页版本历史只读视图", () => {
 
 		await expect(page.getByText("旧版本视图不可见")).toBeVisible();
 		await expect(page.getByTestId("version-history-list")).toBeHidden();
+	});
+});
+
+test.describe("文档详情页上传新版本", () => {
+	test("仅当最新版本状态允许时展示上传新版本入口", async ({ page }) => {
+		await mockAuthenticatedConsole(page);
+		await mockVersionHistory(page);
+
+		await page.goto(`/ingest/documents/${documentId}`);
+
+		await expect(
+			page.getByRole("button", { name: "上传新版本" }),
+		).toBeHidden();
+	});
+
+	test("创建新版本后切换到新的最新版本并展示稳定结果提示", async ({ page }) => {
+		await mockAuthenticatedConsole(page);
+
+		let activeHistory = uploadAllowedVersionHistory;
+		let uploadRequestBody = "";
+		await page.route(`**/api/v1/documents/${documentId}/versions`, async (route) => {
+			if (route.request().method() === "POST") {
+				uploadRequestBody = route.request().postData() ?? "";
+				activeHistory = createdVersionHistory;
+				await route.fulfill({
+					json: {
+						documentId,
+						versionCreated: true,
+						versionResultType: "CREATED",
+						versionNumber: 7,
+						previousVersionNumber: 6,
+						reusedLatestVersionNumber: null,
+						latestVersionNumber: 7,
+						askableVersionNumber: 6,
+						canAskNow: true,
+						status: "UPLOADED",
+						versionOriginType: "UPLOAD",
+					},
+				});
+				return;
+			}
+
+			await route.fulfill({ json: activeHistory });
+		});
+
+		await page.goto(`/ingest/documents/${documentId}?version=4`);
+		await page.getByTestId("return-latest").click();
+		await page.getByRole("button", { name: "上传新版本" }).first().click();
+		await page
+			.locator('input[type="file"]')
+			.setInputFiles({
+				name: "policy-2026-v7.docx",
+				mimeType:
+					"application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+				buffer: Buffer.from("changed version content"),
+			});
+		await page.getByRole("button", { name: "提交新版本" }).click();
+
+		await expect(page.getByTestId("version-upload-result")).toContainText(
+			"已创建新版本 v7",
+		);
+		await expect(page.getByTestId("version-upload-result")).toContainText(
+			"上一版本为 v6",
+		);
+		await expect(
+			page.getByRole("heading", { name: "v7", exact: true }),
+		).toBeVisible();
+		await expect(page).toHaveURL(new RegExp(`/ingest/documents/${documentId}$`));
+		expect(uploadRequestBody).toContain('name="expectedLatestVersionNumber"');
+		expect(uploadRequestBody).toContain("6");
+		expect(uploadRequestBody).not.toContain('name="kbId"');
+
+		await page.getByRole("button", { name: "查看版本历史" }).click();
+		await expect(page).toHaveURL(/history=expanded/);
+		await expect(page.getByRole("link", { name: "去问答" })).toBeVisible();
+	});
+
+	test("同内容复用时提示未创建新版本并停留在原最新版本", async ({ page }) => {
+		await mockAuthenticatedConsole(page);
+
+		await page.route(`**/api/v1/documents/${documentId}/versions`, async (route) => {
+			if (route.request().method() === "POST") {
+				await route.fulfill({
+					json: {
+						documentId,
+						versionCreated: false,
+						versionResultType: "REUSED_IDENTICAL_CONTENT",
+						versionNumber: null,
+						previousVersionNumber: 6,
+						reusedLatestVersionNumber: 6,
+						latestVersionNumber: 6,
+						askableVersionNumber: 6,
+						canAskNow: true,
+						status: "INDEXED",
+						versionOriginType: "UPLOAD",
+					},
+				});
+				return;
+			}
+
+			await route.fulfill({ json: uploadAllowedVersionHistory });
+		});
+
+		await page.goto(`/ingest/documents/${documentId}`);
+		await page.getByRole("button", { name: "上传新版本" }).first().click();
+		await page
+			.locator('input[type="file"]')
+			.setInputFiles({
+				name: "policy-2026-final.docx",
+				mimeType:
+					"application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+				buffer: Buffer.from("same version content"),
+			});
+		await page.getByRole("button", { name: "提交新版本" }).click();
+
+		await expect(page.getByTestId("version-upload-result")).toContainText(
+			"未创建新版本",
+		);
+		await expect(page.getByTestId("version-upload-result")).toContainText(
+			"当前仍停留在 v6",
+		);
+		await expect(
+			page.getByRole("heading", { name: "v6", exact: true }),
+		).toBeVisible();
+		await expect(page.getByTestId("version-card-7")).toBeHidden();
 	});
 });

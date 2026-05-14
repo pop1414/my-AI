@@ -2,8 +2,10 @@ import {
 	ArrowLeftOutlined,
 	EyeOutlined,
 	HistoryOutlined,
+	InboxOutlined,
 	ReadOutlined,
 	ReloadOutlined,
+	UploadOutlined,
 } from "@ant-design/icons";
 import {
 	Alert,
@@ -11,23 +13,30 @@ import {
 	Card,
 	Descriptions,
 	Empty,
+	Modal,
 	Result,
 	Skeleton,
 	Space,
 	Tag,
 	Typography,
+	Upload,
 } from "antd";
-import { type ReactNode, useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import type { UploadFile } from "antd/es/upload/interface";
+import { type ReactNode, useMemo, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, type To, useParams, useSearchParams } from "react-router-dom";
 import {
 	getDocumentVersionHistory,
+	uploadNewDocumentVersion,
+	type DocumentVersionUploadResponse,
 	type DocumentVersionHistoryItem,
 } from "../../../shared/api/ingestApi";
 import { ApiErrorAlert } from "../../../shared/ui/ApiErrorAlert";
 import "./IngestDocumentDetailPage.css";
 
 const defaultVisibleVersionCount = 5;
+const uploadAllowedStatuses = new Set(["INDEXED", "FAILED"]);
+const { Dragger } = Upload;
 const fileSizeFormatter = new Intl.NumberFormat("zh-CN", {
 	maximumFractionDigits: 1,
 });
@@ -144,7 +153,7 @@ function DetailDiffSummary({
 	return (
 		<section className="detail-page__diff" data-testid="diff-summary">
 			<div className="detail-page__section-title">
-				<Typography.Title level={4}>差异摘要</Typography.Title>
+				<Typography.Title level={3}>差异摘要</Typography.Title>
 				<Typography.Text type="secondary">
 					只比较版本元数据，不做正文 diff。
 				</Typography.Text>
@@ -152,7 +161,7 @@ function DetailDiffSummary({
 			<div className="detail-page__diff-grid">
 				<Card size="small" className="detail-page__diff-card">
 					<Typography.Text type="secondary">版本关系</Typography.Text>
-					<Typography.Title level={5}>
+					<Typography.Title level={4}>
 						v{viewingVersion.versionNumber} vs v
 						{compareVersion.versionNumber}
 					</Typography.Title>
@@ -164,7 +173,7 @@ function DetailDiffSummary({
 				</Card>
 				<Card size="small" className="detail-page__diff-card">
 					<Typography.Text type="secondary">文件变化</Typography.Text>
-					<Typography.Title level={5}>
+					<Typography.Title level={4}>
 						{fileChanged ? "文件事实有变化" : "文件事实一致"}
 					</Typography.Title>
 					<Typography.Paragraph type="secondary">
@@ -173,7 +182,7 @@ function DetailDiffSummary({
 				</Card>
 				<Card size="small" className="detail-page__diff-card">
 					<Typography.Text type="secondary">处理与问答</Typography.Text>
-					<Typography.Title level={5}>
+					<Typography.Title level={4}>
 						问答基线{" "}
 						{askableVersion ? `v${askableVersion.versionNumber}` : "暂无"}
 					</Typography.Title>
@@ -184,7 +193,7 @@ function DetailDiffSummary({
 				</Card>
 				<Card size="small" className="detail-page__diff-card">
 					<Typography.Text type="secondary">时间与来源</Typography.Text>
-					<Typography.Title level={5}>
+					<Typography.Title level={4}>
 						{originLabel(viewingVersion.versionOriginType)}
 					</Typography.Title>
 					<Typography.Paragraph type="secondary">
@@ -217,16 +226,98 @@ function VersionTags({
 	);
 }
 
-function ReadUnavailableButton({ size }: { size?: "small" }) {
+function VersionUploadResultAlert({
+	result,
+	onClose,
+	onShowHistory,
+}: {
+	result: DocumentVersionUploadResponse;
+	onClose: () => void;
+	onShowHistory: () => void;
+}) {
+	const visibleVersionNumber =
+		result.versionNumber ??
+		result.reusedLatestVersionNumber ??
+		result.latestVersionNumber;
+	const title = result.versionCreated
+		? `已创建新版本 v${visibleVersionNumber}`
+		: "未创建新版本";
+	const description = result.versionCreated
+		? `上一版本为 v${result.previousVersionNumber}，当前详情页已切换到最新版本。`
+		: `上传文件与当前最新版本内容一致，当前仍停留在 v${visibleVersionNumber}。`;
+
 	return (
-		<Button
-			size={size}
-			disabled
-			icon={<ReadOutlined />}
-			title="正文阅读接口尚未接入，暂不跳转到原型阅读页"
+		<Alert
+			className="detail-page__result-alert"
+			data-result-kind={result.versionCreated ? "success" : "info"}
+			data-testid="version-upload-result"
+			aria-live="polite"
+			aria-atomic="true"
+			type={result.versionCreated ? "success" : "info"}
+			showIcon
+			message={title}
+			description={
+				<div className="detail-page__result-body">
+					<Typography.Paragraph>{description}</Typography.Paragraph>
+					<div className="detail-page__result-facts">
+						<span>documentId：{result.documentId}</span>
+						<span>latestVersionNumber：v{result.latestVersionNumber}</span>
+						<span>
+							previousVersionNumber：
+							{result.previousVersionNumber
+								? `v${result.previousVersionNumber}`
+								: "-"}
+						</span>
+						<span>status：{result.status}</span>
+						<span>
+							askableVersionNumber：
+							{result.askableVersionNumber
+								? `v${result.askableVersionNumber}`
+								: "暂无"}
+						</span>
+					</div>
+					{!result.canAskNow && (
+						<Typography.Text type="secondary">
+							当前暂无可问答版本，请等待处理完成。
+						</Typography.Text>
+					)}
+				</div>
+			}
+			action={
+				<Space wrap>
+					<Button size="small" onClick={onShowHistory}>
+						查看版本历史
+					</Button>
+					{result.canAskNow && (
+						<RouterButtonLink size="small" tone="primary" to="/qa">
+							去问答
+						</RouterButtonLink>
+					)}
+					<Button size="small" type="text" onClick={onClose}>
+						关闭提示
+					</Button>
+				</Space>
+			}
+		/>
+	);
+}
+
+function ReadUnavailableNotice({ size }: { size?: "small" }) {
+	const className = [
+		"detail-page__read-unavailable",
+		size ? "detail-page__read-unavailable--small" : "",
+	]
+		.filter(Boolean)
+		.join(" ");
+
+	return (
+		<span
+			aria-label="正文阅读接口尚未接入，暂不支持阅读跳转"
+			className={className}
 		>
+			<ReadOutlined />
 			正文阅读待接入
-		</Button>
+		</span>
 	);
 }
 
@@ -267,6 +358,11 @@ function RouterButtonLink({
 export function IngestDocumentDetailPage() {
 	const { documentId = "" } = useParams<{ documentId?: string }>();
 	const [searchParams, setSearchParams] = useSearchParams();
+	const queryClient = useQueryClient();
+	const [uploadModalOpen, setUploadModalOpen] = useState(false);
+	const [uploadFileList, setUploadFileList] = useState<UploadFile[]>([]);
+	const [uploadResult, setUploadResult] =
+		useState<DocumentVersionUploadResponse | null>(null);
 	const expandedHistory = searchParams.get("history") === "expanded";
 
 	const historyQuery = useQuery({
@@ -306,12 +402,46 @@ export function IngestDocumentDetailPage() {
 	);
 	const hiddenVersionCount = versions.length - visibleVersions.length;
 	const errorStatus = (historyQuery.error as { status?: number } | null)?.status;
+	const canUploadNewVersion = Boolean(
+		isViewingLatest &&
+			latestVersion &&
+			uploadAllowedStatuses.has(latestVersion.status),
+	);
+	const uploadVersionMutation = useMutation({
+		mutationFn: (file: File) =>
+			uploadNewDocumentVersion({
+				documentId,
+				file,
+				expectedLatestVersionNumber: latestVersion!.versionNumber,
+			}),
+		onSuccess: async (data) => {
+			setUploadResult(data);
+			setUploadModalOpen(false);
+			setUploadFileList([]);
+			setSearchParams((current) => {
+				const next = new URLSearchParams(current);
+				next.delete("version");
+				return next;
+			});
+			await queryClient.invalidateQueries({
+				queryKey: ["document-version-history", documentId],
+			});
+		},
+	});
 	const expandHistory = () => {
 		setSearchParams((current) => {
 			const next = new URLSearchParams(current);
 			next.set("history", "expanded");
 			return next;
 		});
+	};
+	const submitNewVersion = async () => {
+		const selectedFile = uploadFileList[0]?.originFileObj;
+		if (!selectedFile || !latestVersion) {
+			return;
+		}
+
+		await uploadVersionMutation.mutateAsync(selectedFile);
 	};
 
 	if (historyQuery.isLoading) {
@@ -358,16 +488,23 @@ export function IngestDocumentDetailPage() {
 	return (
 		<div className="detail-page">
 			<div className="detail-page__header">
-				<div>
+				<div className="detail-page__header-copy">
 					<Typography.Text className="detail-page__kicker">
 						document version ledger
 					</Typography.Text>
 					<Typography.Title level={2}>文档详情</Typography.Title>
-					<Typography.Paragraph type="secondary">
+					<Typography.Paragraph
+						className="detail-page__document-id"
+						type="secondary"
+						copyable={
+							historyData?.documentId ? { text: historyData.documentId } : false
+						}
+						ellipsis={{ rows: 2, expandable: true, symbol: "展开" }}
+					>
 						{historyData?.documentId}
 					</Typography.Paragraph>
 				</div>
-				<Space wrap>
+				<Space className="detail-page__header-actions" wrap>
 					<RouterButtonLink
 						icon={<ArrowLeftOutlined />}
 						to="/ingest/documents"
@@ -381,9 +518,26 @@ export function IngestDocumentDetailPage() {
 					>
 						刷新
 					</Button>
-					<ReadUnavailableButton />
+					{canUploadNewVersion && (
+						<Button
+							type="primary"
+							icon={<UploadOutlined />}
+							onClick={() => setUploadModalOpen(true)}
+						>
+							上传新版本
+						</Button>
+					)}
+					<ReadUnavailableNotice />
 				</Space>
 			</div>
+
+			{uploadResult && (
+				<VersionUploadResultAlert
+					result={uploadResult}
+					onClose={() => setUploadResult(null)}
+					onShowHistory={expandHistory}
+				/>
+			)}
 
 			{!isViewingLatest && (
 				<Alert
@@ -464,6 +618,14 @@ export function IngestDocumentDetailPage() {
 						</Descriptions>
 
 						<div className="detail-page__actions">
+							{canUploadNewVersion && (
+								<Button
+									icon={<UploadOutlined />}
+									onClick={() => setUploadModalOpen(true)}
+								>
+									上传新版本
+								</Button>
+							)}
 							{!isViewingLatest && (
 								<RouterButtonLink
 									tone="primary"
@@ -472,12 +634,12 @@ export function IngestDocumentDetailPage() {
 									返回最新版本
 								</RouterButtonLink>
 							)}
-							<ReadUnavailableButton />
+							<ReadUnavailableNotice />
 						</div>
 					</Card>
 
 					<Card className="detail-page__panel">
-						<Typography.Title level={4}>处理与问答上下文</Typography.Title>
+						<Typography.Title level={3}>处理与问答上下文</Typography.Title>
 						<Space direction="vertical" size={10}>
 							<Typography.Text>
 								当前查看版本状态：
@@ -520,7 +682,7 @@ export function IngestDocumentDetailPage() {
 					<div className="detail-page__section-title">
 						<div>
 							<Typography.Text type="secondary">版本历史</Typography.Text>
-							<Typography.Title level={4}>
+							<Typography.Title level={3}>
 								<HistoryOutlined /> 版本账本
 							</Typography.Title>
 						</div>
@@ -578,15 +740,7 @@ export function IngestDocumentDetailPage() {
 											>
 												查看详情
 											</RouterButtonLink>
-											<Button
-												size="small"
-												type="text"
-												icon={<ReadOutlined />}
-												disabled
-												title="正文阅读接口尚未接入，暂不跳转到原型阅读页"
-											>
-												正文阅读待接入
-											</Button>
+											<ReadUnavailableNotice size="small" />
 										</div>
 									</div>
 								);
@@ -603,6 +757,49 @@ export function IngestDocumentDetailPage() {
 					)}
 				</Card>
 			</div>
+
+			<Modal
+				title={`上传新版本 · 当前最新 v${latestVersion.versionNumber}`}
+				open={uploadModalOpen}
+				okText="提交新版本"
+				cancelText="取消"
+				confirmLoading={uploadVersionMutation.isPending}
+				okButtonProps={{ disabled: uploadFileList.length === 0 }}
+				onOk={submitNewVersion}
+				onCancel={() => {
+					setUploadModalOpen(false);
+					setUploadFileList([]);
+				}}
+			>
+				<Space direction="vertical" size={12} style={{ width: "100%" }}>
+					<Alert
+						type="info"
+						showIcon
+						message="流程已锁定当前 document 所属 knowledge base"
+						description="上传新版本只绑定当前 document，不提供 knowledge base 切换项。"
+					/>
+					<Dragger
+						multiple={false}
+						maxCount={1}
+						fileList={uploadFileList}
+						beforeUpload={() => false}
+						onChange={(info) => setUploadFileList(info.fileList.slice(-1))}
+						onRemove={() => setUploadFileList([])}
+					>
+						<p className="ant-upload-drag-icon">
+							<InboxOutlined />
+						</p>
+						<p className="ant-upload-text">选择要作为新版本的文件</p>
+						<p className="ant-upload-hint">
+							提交时会携带 expectedLatestVersionNumber =
+							{latestVersion.versionNumber}。
+						</p>
+					</Dragger>
+					{uploadVersionMutation.isError && (
+						<ApiErrorAlert error={uploadVersionMutation.error} />
+					)}
+				</Space>
+			</Modal>
 		</div>
 	);
 }
