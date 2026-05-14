@@ -2,7 +2,7 @@
 
 日期：2026-05-13
 
-状态：已发布 GitHub Issues；#14、#15、#16、#17 已关闭
+状态：已发布 GitHub Issues；#14、#15、#16、#17、#18 已关闭
 
 关联 PRD：
 
@@ -125,17 +125,28 @@
 - 类型：AFK
 - 依赖：#14, #15, #16, #17
 - 覆盖用户故事：1, 13, 14, 16, 17
+- 当前状态：GitHub 已关闭（CLOSED）
 
 目标：
 
 - 将黄金样本、chunk preview 和固定 qa.ask 问题串成统一验收闭环。
 - 区分 cleaned.md 改善、chunk 边界改善和 qa.ask 偶然变化。
 
+完成同步：
+
+- 新增 `docs/runbooks/plans/ingest-cleaning/cleaned-md质量回归闭环.md` 作为固定验收 runbook。
+- 固定完整样本审阅顺序：`weak-pdf-001 -> md-001 -> md-002 -> html-001 -> word-001`。
+- 明确每个样本必须串联审阅 `cleaned.md`、`documents/chunks/preview` 和固定 `qa.ask` 结果。
+- chunk preview 验收要求记录 chunk 边界、`sourceHint` 可解释性和结构上下文。
+- 固定 `qa.ask` 验收要求记录预期命中位置、回答稳定性和不应出现的噪音词。
+- 回归记录模板明确区分 `cleaned.md` 改善、chunk 边界改善和 `qa.ask` 偶然变化。
+- 后端测试已固定 runbook 的核心验收口径，避免后续修改弱化 #18 闭环要求。
+
 ## 推荐执行顺序
 
 1. 先完成 #13，确保黄金样本输入和验收锚点可靠。
-2. #14、#15、#16、#17 已关闭；继续推进 #18。
-3. 最后执行 #18，形成统一回归闭环。
+2. #14、#15、#16、#17 已关闭。
+3. #18 已关闭，统一回归闭环已形成；后续 parser / cleaner 优化按 runbook 填写实际回归记录。
 
 ## 与版本治理 Issues 的关系
 
