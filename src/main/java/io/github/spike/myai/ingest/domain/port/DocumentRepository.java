@@ -38,6 +38,19 @@ public interface DocumentRepository {
     Optional<Document> findById(String workspaceId, DocumentId documentId);
 
     /**
+     * 按文档 ID 与版本号查询版本事实。
+     *
+     * <p>该方法用于版本治理动作读取目标历史版本的文件事实与状态事实，
+     * 并通过 workspaceId 约束租户边界。
+     *
+     * @param workspaceId   工作区标识
+     * @param documentId    文档 ID
+     * @param versionNumber 版本号
+     * @return 查询结果，未命中时返回空
+     */
+    Optional<DocumentVersion> findVersionByNumber(String workspaceId, DocumentId documentId, int versionNumber);
+
+    /**
      * 按知识库和文件哈希查询文档，用于上传受理幂等。
      *
      * <p>排除已删除（{@code DELETED}）状态的文档。
@@ -205,6 +218,25 @@ public interface DocumentRepository {
      * @return 是否成功追加
      */
     boolean appendUploadVersion(
+            String workspaceId,
+            DocumentId documentId,
+            int expectedLatestVersionNumber,
+            DocumentVersion newVersion,
+            Instant updatedAt);
+
+    /**
+     * 追加一个回退来源的新最新版本。
+     *
+     * <p>仅当当前 latestVersionNumber 与调用方期望值一致、且当前 latest 状态允许治理动作时才成功。
+     *
+     * @param workspaceId 工作区标识
+     * @param documentId 文档资产 ID
+     * @param expectedLatestVersionNumber 调用方期望的当前最新版本号
+     * @param newVersion 新版本事实，来源类型应为 ROLLBACK
+     * @param updatedAt 更新时间
+     * @return 是否成功追加
+     */
+    boolean appendRollbackVersion(
             String workspaceId,
             DocumentId documentId,
             int expectedLatestVersionNumber,

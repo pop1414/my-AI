@@ -12,6 +12,8 @@ import static org.mockito.Mockito.when;
 
 import io.github.spike.myai.ingest.domain.model.Document;
 import io.github.spike.myai.ingest.domain.model.DocumentId;
+import io.github.spike.myai.ingest.domain.model.DocumentVersion;
+import io.github.spike.myai.ingest.domain.model.DocumentVersionOriginType;
 import io.github.spike.myai.ingest.domain.model.UploadStatus;
 import io.github.spike.myai.shared.workspace.WorkspaceConstants;
 import java.time.Instant;
@@ -104,6 +106,111 @@ class JdbcDocumentRepositoryTest {
         assertFalse(sqlCaptor.getValue().contains("d.file_hash = ?"));
         assertFalse(sqlCaptor.getValue().contains("d.status <> 'DELETED'"));
         assertTrue(sqlCaptor.getValue().contains("d.workspace_id = ?"));
+    }
+
+    @Test
+    @DisplayName("findVersionByNumber 应通过 workspace 与版本号读取版本事实")
+    void findVersionByNumber_shouldReadTargetVersionFactsWithinWorkspace() {
+        JdbcTemplate jdbcTemplate = Mockito.mock(JdbcTemplate.class);
+        JdbcDocumentRepository repository = new JdbcDocumentRepository(jdbcTemplate);
+        when(jdbcTemplate.query(any(String.class), any(RowMapper.class), eq(WorkspaceConstants.DEFAULT_WORKSPACE_ID), eq("doc-1"), eq(2)))
+                .thenReturn(List.of());
+
+        repository.findVersionByNumber(WorkspaceConstants.DEFAULT_WORKSPACE_ID, new DocumentId("doc-1"), 2);
+
+        ArgumentCaptor<String> sqlCaptor = ArgumentCaptor.forClass(String.class);
+        verify(jdbcTemplate).query(
+                sqlCaptor.capture(),
+                any(RowMapper.class),
+                eq(WorkspaceConstants.DEFAULT_WORKSPACE_ID),
+                eq("doc-1"),
+                eq(2));
+        assertTrue(sqlCaptor.getValue().contains("JOIN ingest_document_versions v"));
+        assertTrue(sqlCaptor.getValue().contains("d.workspace_id = ?"));
+        assertTrue(sqlCaptor.getValue().contains("v.version_number = ?"));
+    }
+
+    @Test
+    @DisplayName("appendRollbackVersion 后失败推进不应改写 latest 版本号与来源")
+    void appendRollbackVersionAndMarkFailed_shouldKeepLatestVersionProjection() {
+        JdbcTemplate jdbcTemplate = Mockito.mock(JdbcTemplate.class);
+        JdbcDocumentRepository repository = new JdbcDocumentRepository(jdbcTemplate);
+        DocumentId documentId = new DocumentId("doc-rollback");
+        Instant now = Instant.now();
+        DocumentVersion rollbackVersion = new DocumentVersion(
+                documentId,
+                4,
+                DocumentVersionOriginType.ROLLBACK,
+                1,
+                "hash-v1",
+                "v1.pdf",
+                128L,
+                UploadStatus.UPLOADED,
+                null,
+                0,
+                3,
+                null,
+                null,
+                null,
+                null,
+                0,
+                null,
+                "version-4-v1",
+                null,
+                now,
+                now);
+
+        when(jdbcTemplate.update(
+                        contains("latest_version_origin_type = ?"),
+                        eq("hash-v1"),
+                        eq("v1.pdf"),
+                        eq(128L),
+                        eq(4),
+                        eq("v1.pdf"),
+                        eq("ROLLBACK"),
+                        eq(3),
+                        eq("version-4-v1"),
+                        any(),
+                        eq(WorkspaceConstants.DEFAULT_WORKSPACE_ID),
+                        eq("doc-rollback"),
+                        eq(3)))
+                .thenReturn(1);
+        when(jdbcTemplate.update(
+                        contains("SET status = 'FAILED'"),
+                        eq("parse failed"),
+                        eq("{}"),
+                        eq("PARSE_FAILED"),
+                        eq("parse failed"),
+                        any(),
+                        any(),
+                        eq(WorkspaceConstants.DEFAULT_WORKSPACE_ID),
+                        eq("doc-rollback"),
+                        eq("UPLOADED")))
+                .thenReturn(1);
+
+        assertTrue(repository.appendRollbackVersion(
+                WorkspaceConstants.DEFAULT_WORKSPACE_ID,
+                documentId,
+                3,
+                rollbackVersion,
+                now));
+        assertTrue(repository.markFailed(
+                WorkspaceConstants.DEFAULT_WORKSPACE_ID,
+                documentId,
+                UploadStatus.UPLOADED,
+                "parse failed",
+                "{}",
+                "PARSE_FAILED",
+                "parse failed",
+                now,
+                now));
+
+        ArgumentCaptor<String> sqlCaptor = ArgumentCaptor.forClass(String.class);
+        verify(jdbcTemplate, times(4)).update(sqlCaptor.capture(), any(Object[].class));
+        assertTrue(sqlCaptor.getAllValues().get(0).contains("latest_version_number = ?"));
+        assertTrue(sqlCaptor.getAllValues().get(0).contains("latest_version_origin_type = ?"));
+        assertFalse(sqlCaptor.getAllValues().get(2).contains("latest_version_number = ?"));
+        assertFalse(sqlCaptor.getAllValues().get(2).contains("latest_version_origin_type = ?"));
     }
 
     @Test

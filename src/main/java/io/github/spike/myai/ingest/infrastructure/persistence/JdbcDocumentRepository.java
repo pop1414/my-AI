@@ -137,6 +137,36 @@ public class JdbcDocumentRepository implements DocumentRepository {
             WHERE d.workspace_id = ? AND d.document_id = ?
             """;
 
+    private static final String FIND_VERSION_BY_NUMBER_SQL = """
+            SELECT v.document_id,
+                   v.version_number,
+                   v.version_origin_type,
+                   v.rollback_from_version_number,
+                   v.file_hash,
+                   v.filename,
+                   v.file_size,
+                   v.status,
+                   v.failure_reason,
+                   v.retry_count,
+                   v.retry_max,
+                   v.next_retry_at,
+                   v.last_error_code,
+                   v.last_error_message,
+                   v.last_error_at,
+                   v.reprocess_count,
+                   v.reprocess_requested_at,
+                   v.split_version,
+                   v.processing_metadata,
+                   v.created_at,
+                   v.updated_at
+            FROM ingest_documents d
+            JOIN ingest_document_versions v
+              ON v.document_id = d.document_id
+            WHERE d.workspace_id = ?
+              AND d.document_id = ?
+              AND v.version_number = ?
+            """;
+
     private static final String FIND_BY_KB_ID_AND_FILE_HASH_SQL = DOCUMENT_PROJECTION_SELECT + """
             WHERE d.workspace_id = ? AND d.kb_id = ? AND v.file_hash = ? AND d.latest_status <> 'DELETED'
             ORDER BY d.created_at DESC
@@ -314,7 +344,7 @@ public class JdbcDocumentRepository implements DocumentRepository {
                 latest_version_number = ?,
                 latest_status = 'UPLOADED',
                 latest_filename = ?,
-                latest_version_origin_type = 'UPLOAD',
+                latest_version_origin_type = ?,
                 failure_reason = NULL,
                 retry_count = 0,
                 retry_max = ?,
@@ -434,6 +464,35 @@ public class JdbcDocumentRepository implements DocumentRepository {
             toInstant(rs.getTimestamp("created_at")),
             toInstant(rs.getTimestamp("updated_at")));
 
+    /**
+     * 文档版本事实映射器。
+     *
+     * <p>该映射器用于版本治理动作按版本号读取目标历史版本，
+     * 字段来源仅限 {@code ingest_document_versions} 版本事实表。
+     */
+    private static final RowMapper<DocumentVersion> DOCUMENT_VERSION_ROW_MAPPER = (rs, rowNum) -> new DocumentVersion(
+            new DocumentId(rs.getString("document_id")),
+            rs.getInt("version_number"),
+            DocumentVersionOriginType.valueOf(rs.getString("version_origin_type")),
+            (Integer) rs.getObject("rollback_from_version_number"),
+            rs.getString("file_hash"),
+            rs.getString("filename"),
+            rs.getLong("file_size"),
+            UploadStatus.valueOf(rs.getString("status")),
+            rs.getString("failure_reason"),
+            rs.getInt("retry_count"),
+            rs.getInt("retry_max"),
+            toInstant(rs.getTimestamp("next_retry_at")),
+            rs.getString("last_error_code"),
+            rs.getString("last_error_message"),
+            toInstant(rs.getTimestamp("last_error_at")),
+            rs.getInt("reprocess_count"),
+            toInstant(rs.getTimestamp("reprocess_requested_at")),
+            rs.getString("split_version"),
+            rs.getString("processing_metadata"),
+            toInstant(rs.getTimestamp("created_at")),
+            toInstant(rs.getTimestamp("updated_at")));
+
     /** Spring JDBC 模板，用于执行所有数据库操作 */
     private final JdbcTemplate jdbcTemplate;
 
@@ -526,6 +585,28 @@ public class JdbcDocumentRepository implements DocumentRepository {
     @Override
     public Optional<Document> findById(String workspaceId, DocumentId documentId) {
         return jdbcTemplate.query(FIND_BY_ID_SQL, DOCUMENT_ROW_MAPPER, workspaceId, documentId.value()).stream().findFirst();
+    }
+
+    /**
+     * 按版本号查询文档版本事实。
+     *
+     * <p>通过主表校验 workspace 边界，再读取版本表中的目标版本事实。
+     *
+     * @param workspaceId   工作区标识
+     * @param documentId    文档 ID
+     * @param versionNumber 版本号
+     * @return 查询结果，未命中时返回空
+     */
+    @Override
+    public Optional<DocumentVersion> findVersionByNumber(String workspaceId, DocumentId documentId, int versionNumber) {
+        return jdbcTemplate.query(
+                        FIND_VERSION_BY_NUMBER_SQL,
+                        DOCUMENT_VERSION_ROW_MAPPER,
+                        workspaceId,
+                        documentId.value(),
+                        versionNumber)
+                .stream()
+                .findFirst();
     }
 
     /**
@@ -832,6 +913,48 @@ public class JdbcDocumentRepository implements DocumentRepository {
             int expectedLatestVersionNumber,
             DocumentVersion newVersion,
             Instant updatedAt) {
+        return appendVersion(workspaceId, documentId, expectedLatestVersionNumber, newVersion, updatedAt);
+    }
+
+    /**
+     * 追加回退来源版本作为 latest 版本。
+     *
+     * <p>与上传新版本共用同一套 latest projection 更新逻辑，
+     * 区别由 {@link DocumentVersion#versionOriginType()} 决定。
+     *
+     * @param workspaceId                 工作区标识
+     * @param documentId                  文档资产 ID
+     * @param expectedLatestVersionNumber 调用方期望的当前最新版本号
+     * @param newVersion                  新版本事实
+     * @param updatedAt                   更新时间
+     * @return 是否成功追加
+     */
+    @Override
+    public boolean appendRollbackVersion(
+            String workspaceId,
+            DocumentId documentId,
+            int expectedLatestVersionNumber,
+            DocumentVersion newVersion,
+            Instant updatedAt) {
+        return appendVersion(workspaceId, documentId, expectedLatestVersionNumber, newVersion, updatedAt);
+    }
+
+    /**
+     * 追加版本并同步 latest projection。
+     *
+     * @param workspaceId                 工作区标识
+     * @param documentId                  文档资产 ID
+     * @param expectedLatestVersionNumber 调用方期望的当前最新版本号
+     * @param newVersion                  新版本事实
+     * @param updatedAt                   更新时间
+     * @return 是否成功追加
+     */
+    private boolean appendVersion(
+            String workspaceId,
+            DocumentId documentId,
+            int expectedLatestVersionNumber,
+            DocumentVersion newVersion,
+            Instant updatedAt) {
         // 先 CAS 更新主表 latest 快照
         int updatedRows = jdbcTemplate.update(
                 APPEND_UPLOAD_VERSION_DOCUMENT_SQL,
@@ -840,6 +963,7 @@ public class JdbcDocumentRepository implements DocumentRepository {
                 newVersion.fileSize(),
                 newVersion.versionNumber(),
                 newVersion.filename(),
+                newVersion.versionOriginType().name(),
                 newVersion.retryMax(),
                 newVersion.splitVersion(),
                 Timestamp.from(updatedAt),

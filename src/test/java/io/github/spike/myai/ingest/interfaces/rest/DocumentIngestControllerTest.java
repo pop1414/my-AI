@@ -14,6 +14,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import io.github.spike.myai.ingest.application.command.AcceptUploadCommand;
+import io.github.spike.myai.ingest.application.command.RollbackDocumentVersionCommand;
 import io.github.spike.myai.ingest.application.command.UploadNewDocumentVersionCommand;
 import io.github.spike.myai.ingest.application.exception.DocumentDeleteConflictException;
 import io.github.spike.myai.ingest.application.exception.DocumentDeleteFailedException;
@@ -29,6 +30,7 @@ import io.github.spike.myai.ingest.application.result.DocumentListPageResult;
 import io.github.spike.myai.ingest.application.result.DocumentStatusResult;
 import io.github.spike.myai.ingest.application.result.DocumentVersionHistoryItemResult;
 import io.github.spike.myai.ingest.application.result.DocumentVersionHistoryResult;
+import io.github.spike.myai.ingest.application.result.DocumentVersionRollbackResult;
 import io.github.spike.myai.ingest.application.result.DocumentVersionUploadResult;
 import io.github.spike.myai.ingest.application.usecase.AcceptUploadUseCase;
 import io.github.spike.myai.ingest.application.usecase.DeleteDocumentUseCase;
@@ -37,6 +39,7 @@ import io.github.spike.myai.ingest.application.usecase.GetDocumentStatusUseCase;
 import io.github.spike.myai.ingest.application.usecase.ListDocumentVersionsUseCase;
 import io.github.spike.myai.ingest.application.usecase.ListDocumentsUseCase;
 import io.github.spike.myai.ingest.application.usecase.ReprocessDocumentUseCase;
+import io.github.spike.myai.ingest.application.usecase.RollbackDocumentVersionUseCase;
 import io.github.spike.myai.ingest.application.usecase.UploadNewDocumentVersionUseCase;
 import io.github.spike.myai.ingest.domain.model.DocumentId;
 import io.github.spike.myai.ingest.domain.model.DocumentVersionOriginType;
@@ -81,6 +84,7 @@ class DocumentIngestControllerTest {
     private ReprocessDocumentUseCase reprocessDocumentUseCase;
     private DeleteDocumentUseCase deleteDocumentUseCase;
     private UploadNewDocumentVersionUseCase uploadNewDocumentVersionUseCase;
+    private RollbackDocumentVersionUseCase rollbackDocumentVersionUseCase;
     private DocumentSourceStorage documentSourceStorage;
     private MockMvc mockMvc;
 
@@ -94,6 +98,7 @@ class DocumentIngestControllerTest {
         this.reprocessDocumentUseCase = Mockito.mock(ReprocessDocumentUseCase.class);
         this.deleteDocumentUseCase = Mockito.mock(DeleteDocumentUseCase.class);
         this.uploadNewDocumentVersionUseCase = Mockito.mock(UploadNewDocumentVersionUseCase.class);
+        this.rollbackDocumentVersionUseCase = Mockito.mock(RollbackDocumentVersionUseCase.class);
         this.documentSourceStorage = Mockito.mock(DocumentSourceStorage.class);
         ObjectMapper objectMapper = new ObjectMapper()
                 .findAndRegisterModules()
@@ -108,6 +113,7 @@ class DocumentIngestControllerTest {
                 reprocessDocumentUseCase,
                 deleteDocumentUseCase,
                 uploadNewDocumentVersionUseCase,
+                rollbackDocumentVersionUseCase,
                 documentSourceStorage,
                 objectMapper);
         this.mockMvc = MockMvcBuilders.standaloneSetup(controller)
@@ -500,6 +506,56 @@ class DocumentIngestControllerTest {
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("VERSION_CONFLICT_STALE_LATEST_VERSION"))
                 .andExpect(jsonPath("$.message").value("当前最新版本已变化，请刷新详情后重试"));
+    }
+
+    @Test
+    @DisplayName("版本回退成功时，应返回新最新版本上下文")
+    void rollbackVersion_shouldReturnRollbackResult() throws Exception {
+        when(rollbackDocumentVersionUseCase.handle(any(RollbackDocumentVersionCommand.class)))
+                .thenReturn(new DocumentVersionRollbackResult(
+                        "doc-700",
+                        5,
+                        2,
+                        5,
+                        4,
+                        true,
+                        "UPLOADED",
+                        "ROLLBACK"));
+
+        mockMvc.perform(post("/api/v1/documents/{documentId}/versions/{versionNumber}/rollback", "doc-700", 2)
+                        .param("expectedLatestVersionNumber", "4"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.documentId").value("doc-700"))
+                .andExpect(jsonPath("$.versionNumber").value(5))
+                .andExpect(jsonPath("$.rollbackFromVersionNumber").value(2))
+                .andExpect(jsonPath("$.latestVersionNumber").value(5))
+                .andExpect(jsonPath("$.askableVersionNumber").value(4))
+                .andExpect(jsonPath("$.canAskNow").value(true))
+                .andExpect(jsonPath("$.status").value("UPLOADED"))
+                .andExpect(jsonPath("$.versionOriginType").value("ROLLBACK"));
+
+        ArgumentCaptor<RollbackDocumentVersionCommand> captor =
+                ArgumentCaptor.forClass(RollbackDocumentVersionCommand.class);
+        verify(rollbackDocumentVersionUseCase).handle(captor.capture());
+        org.junit.jupiter.api.Assertions.assertEquals("doc-700", captor.getValue().documentId());
+        org.junit.jupiter.api.Assertions.assertEquals(2, captor.getValue().targetVersionNumber());
+        org.junit.jupiter.api.Assertions.assertEquals(4, captor.getValue().expectedLatestVersionNumber());
+    }
+
+    @Test
+    @DisplayName("版本回退业务冲突时，应返回稳定业务错误码")
+    void rollbackVersion_shouldReturnBusinessErrorCode_whenUseCaseThrowsBusinessException() throws Exception {
+        when(rollbackDocumentVersionUseCase.handle(any(RollbackDocumentVersionCommand.class)))
+                .thenThrow(new BusinessException(
+                        HttpStatus.CONFLICT,
+                        "VERSION_ROLLBACK_TARGET_NOT_INDEXED",
+                        "版本回退只允许选择已形成可用内容的历史版本"));
+
+        mockMvc.perform(post("/api/v1/documents/{documentId}/versions/{versionNumber}/rollback", "doc-701", 3)
+                        .param("expectedLatestVersionNumber", "4"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("VERSION_ROLLBACK_TARGET_NOT_INDEXED"))
+                .andExpect(jsonPath("$.message").value("版本回退只允许选择已形成可用内容的历史版本"));
     }
 
     @Test
