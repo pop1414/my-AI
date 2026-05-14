@@ -89,7 +89,7 @@ class JdbcDocumentRepositoryTest {
     }
 
     @Test
-    @DisplayName("findByKbIdAndFileHash 应从 version 表读取文件哈希并用 latest projection 排除删除文档")
+    @DisplayName("findByKbIdAndFileHash 应从 version 表读取文件哈希并用 latest projection 排除删除中文档")
     void findByKbIdAndFileHash_shouldReadFileHashFromVersionFacts() {
         JdbcTemplate jdbcTemplate = Mockito.mock(JdbcTemplate.class);
         JdbcDocumentRepository repository = new JdbcDocumentRepository(jdbcTemplate);
@@ -102,7 +102,7 @@ class JdbcDocumentRepositoryTest {
         verify(jdbcTemplate).query(sqlCaptor.capture(), any(RowMapper.class), eq(WorkspaceConstants.DEFAULT_WORKSPACE_ID), eq("kb-1"), eq("hash-1"));
         assertTrue(sqlCaptor.getValue().contains("JOIN ingest_document_versions v"));
         assertTrue(sqlCaptor.getValue().contains("v.file_hash = ?"));
-        assertTrue(sqlCaptor.getValue().contains("d.latest_status <> 'DELETED'"));
+        assertTrue(sqlCaptor.getValue().contains("d.latest_status NOT IN ('DELETING', 'DELETED')"));
         assertFalse(sqlCaptor.getValue().contains("d.file_hash = ?"));
         assertFalse(sqlCaptor.getValue().contains("d.status <> 'DELETED'"));
         assertTrue(sqlCaptor.getValue().contains("d.workspace_id = ?"));

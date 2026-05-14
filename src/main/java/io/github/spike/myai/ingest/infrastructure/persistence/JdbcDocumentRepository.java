@@ -168,7 +168,7 @@ public class JdbcDocumentRepository implements DocumentRepository {
             """;
 
     private static final String FIND_BY_KB_ID_AND_FILE_HASH_SQL = DOCUMENT_PROJECTION_SELECT + """
-            WHERE d.workspace_id = ? AND d.kb_id = ? AND v.file_hash = ? AND d.latest_status <> 'DELETED'
+            WHERE d.workspace_id = ? AND d.kb_id = ? AND v.file_hash = ? AND d.latest_status NOT IN ('DELETING', 'DELETED')
             ORDER BY d.created_at DESC
             LIMIT 1
             """;

@@ -53,7 +53,9 @@ public interface DocumentRepository {
     /**
      * 按知识库和文件哈希查询文档，用于上传受理幂等。
      *
-     * <p>排除已删除（{@code DELETED}）状态的文档。
+     * <p>排除删除中（{@code DELETING}）与已删除（{@code DELETED}）状态的文档。
+     * 因此同内容在旧文档删除完成后重新上传时，会分配新的 documentId，
+     * 旧 documentId 上的文档级授权不会被自动继承到新 document。
      *
      * @param workspaceId 工作区标识
      * @param kbId        知识库 ID

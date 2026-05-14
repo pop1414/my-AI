@@ -163,6 +163,58 @@ class DeleteDocumentApplicationServiceTest {
     }
 
     @Test
+    @DisplayName("UPLOADED 执行态删除时应抛出冲突异常")
+    void handle_shouldThrowConflict_whenUploaded() {
+        DocumentRepository repository = Mockito.mock(DocumentRepository.class);
+        DocumentSourceStorage sourceStorage = Mockito.mock(DocumentSourceStorage.class);
+        DocumentVectorIndexer vectorIndexer = Mockito.mock(DocumentVectorIndexer.class);
+        SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
+        CurrentUserProvider currentUserProvider = currentUserProvider();
+        AuthorizationService authorizationService = Mockito.mock(AuthorizationService.class);
+        DeleteDocumentApplicationService service =
+                new DeleteDocumentApplicationService(
+                        repository,
+                        sourceStorage,
+                        vectorIndexer,
+                        new IngestMetrics(meterRegistry),
+                        currentUserProvider,
+                        authorizationService);
+
+        DocumentId documentId = new DocumentId("doc-del-uploaded");
+        Document uploaded = new Document(
+                documentId,
+                "workspace-a",
+                "kb-1",
+                "hash-uploaded",
+                "uploaded.txt",
+                1L,
+                UploadStatus.UPLOADED,
+                null,
+                0,
+                3,
+                null,
+                null,
+                null,
+                null,
+                0,
+                null,
+                "v1",
+                null,
+                Instant.now(),
+                Instant.now());
+        when(repository.findById(anyString(), eq(documentId))).thenReturn(Optional.of(uploaded));
+
+        assertThrows(DocumentDeleteConflictException.class, () -> service.handle(new DeleteDocumentCommand("doc-del-uploaded")));
+
+        verify(repository, never()).markDeleting(anyString(), any(), any(), any());
+        verify(sourceStorage, never()).deleteByDocumentId(any());
+        verify(vectorIndexer, never()).deleteByDocumentId(any());
+        verify(authorizationService).requireCanManageDocument(any(CurrentUser.class), eq("doc-del-uploaded"), eq("kb-1"));
+        org.junit.jupiter.api.Assertions.assertEquals(
+                1.0, meterRegistry.get("myai.ingest.delete.conflict.total").counter().count());
+    }
+
+    @Test
     @DisplayName("资源删除失败时应回滚状态并抛出删除失败异常")
     void handle_shouldRollback_whenDeleteFailed() {
         DocumentRepository repository = Mockito.mock(DocumentRepository.class);

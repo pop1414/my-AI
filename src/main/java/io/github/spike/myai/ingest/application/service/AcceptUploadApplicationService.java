@@ -200,6 +200,8 @@ public class AcceptUploadApplicationService implements AcceptUploadUseCase {
         }
 
         // ---------- 步骤6：创建新文档记录 ----------
+        // 删除后的同内容文件不会命中旧 document。新 documentId 是新的授权边界，
+        // 不会自动继承旧 documentId 上的文档级授权覆盖。
         // 生成全局唯一文档 ID
         DocumentId documentId = documentIdGenerator.nextId();
         // 记录当前时间戳，作为文档的创建时间和更新时间

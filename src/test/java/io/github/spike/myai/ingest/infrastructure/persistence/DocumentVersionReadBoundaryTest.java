@@ -19,7 +19,7 @@ class DocumentVersionReadBoundaryTest {
         String source = readSource(JdbcDocumentRepository.class);
 
         assertTrue(source.contains("v.file_hash = ?"));
-        assertTrue(source.contains("d.latest_status <> 'DELETED'"));
+        assertTrue(source.contains("d.latest_status NOT IN ('DELETING', 'DELETED')"));
         assertFalse(source.contains("d.file_hash = ?"));
         assertFalse(source.contains("d.status <> 'DELETED'"));
     }

@@ -167,6 +167,46 @@ class AcceptUploadApplicationServiceTest {
     }
 
     @Test
+    @DisplayName("旧文档删除后同内容重新上传应生成新 documentId，且不继承旧文档级授权")
+    void handle_shouldCreateNewDocument_whenDeletedDocumentIsExcludedFromDuplicateLookup() {
+        DocumentIdGenerator generator = Mockito.mock(DocumentIdGenerator.class);
+        DocumentRepository repository = Mockito.mock(DocumentRepository.class);
+        KnowledgeBaseRepository knowledgeBaseRepository = Mockito.mock(KnowledgeBaseRepository.class);
+        CurrentUserProvider currentUserProvider = currentUserProvider();
+        AuthorizationService authorizationService = Mockito.mock(AuthorizationService.class);
+        when(generator.nextId()).thenReturn(new DocumentId("doc-new-after-delete"));
+        when(repository.findByKbIdAndFileHash(eq("workspace-a"), eq("kb-dup"), eq("hash-dup")))
+                .thenReturn(Optional.empty());
+        when(knowledgeBaseRepository.findByKbId(eq("workspace-a"), eq("kb-dup")))
+                .thenReturn(Optional.of(new KnowledgeBase(
+                        "kb-dup",
+                        "workspace-a",
+                        "知识库",
+                        "",
+                        KnowledgeBaseStatus.ACTIVE,
+                        Instant.now(),
+                        Instant.now())));
+
+        AcceptUploadApplicationService service = new AcceptUploadApplicationService(
+                generator,
+                repository,
+                knowledgeBaseRepository,
+                currentUserProvider,
+                authorizationService);
+
+        UploadTicket ticket = service.handle(new AcceptUploadCommand("same.txt", 99L, "kb-dup", "hash-dup"));
+
+        assertEquals("doc-new-after-delete", ticket.documentId().value());
+        assertEquals(UploadStatus.ACCEPTED, ticket.status());
+        verify(authorizationService).requireCanContributeKnowledgeBase("kb-dup");
+        verify(generator, times(1)).nextId();
+        ArgumentCaptor<Document> documentCaptor = ArgumentCaptor.forClass(Document.class);
+        verify(repository).save(documentCaptor.capture());
+        assertEquals("doc-new-after-delete", documentCaptor.getValue().documentId().value());
+        assertEquals("hash-dup", documentCaptor.getValue().fileHash());
+    }
+
+    @Test
     @DisplayName("知识库不存在时应抛出未找到异常")
     void handle_shouldThrow_whenKnowledgeBaseMissing() {
         DocumentIdGenerator generator = Mockito.mock(DocumentIdGenerator.class);

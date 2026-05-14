@@ -31,7 +31,7 @@ import org.springframework.stereotype.Service;
  * <ol>
  *   <li>查询文档并校验存在性；</li>
  *   <li>幂等检查：已删除则直接返回成功；</li>
- *   <li>冲突检查：INGESTING/DELETING 状态拒绝删除；</li>
+ *   <li>冲突检查：UPLOADED/INGESTING/DELETING 状态拒绝删除；</li>
  *   <li>CAS 锁定为 DELETING 状态；</li>
  *   <li>清理物理资产（源文件 + 向量索引）；</li>
  *   <li>标记为最终 DELETED 状态；</li>
@@ -120,8 +120,8 @@ public class DeleteDocumentApplicationService implements DeleteDocumentUseCase {
             return;
         }
 
-        // 3. 冲突检查：如果文档正在处理中（INGESTING）或已在执行删除（DELETING），拒绝本次请求
-        if (status == UploadStatus.INGESTING || status == UploadStatus.DELETING) {
+        // 3. 冲突检查：文档已进入待处理、处理中或删除中时，拒绝插入新的删除执行态。
+        if (isExecutionStatus(status)) {
             ingestMetrics.incrementDeleteConflict();
             log.warn("Delete rejected by conflict status. documentId={}, status={}", documentId.value(), status);
             throw new DocumentDeleteConflictException("document is in conflict status: " + status);
@@ -159,5 +159,20 @@ public class DeleteDocumentApplicationService implements DeleteDocumentUseCase {
             log.error("Document delete failed. documentId={}", documentId.value(), ex);
             throw new DocumentDeleteFailedException("failed to delete document asset", ex);
         }
+    }
+
+    /**
+     * 判断文档是否处于治理动作或处理链路的执行态。
+     *
+     * <p>{@link UploadStatus#UPLOADED} 可能来自首次上传、上传新版本、版本回退或重处理；
+     * 这些状态均代表已有执行链路等待或正在推进，删除动作不得并发插入。
+     *
+     * @param status 当前文档状态
+     * @return 是否处于执行态
+     */
+    private static boolean isExecutionStatus(UploadStatus status) {
+        return status == UploadStatus.UPLOADED
+                || status == UploadStatus.INGESTING
+                || status == UploadStatus.DELETING;
     }
 }
