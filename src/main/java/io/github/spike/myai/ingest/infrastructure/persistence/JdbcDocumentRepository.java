@@ -168,7 +168,7 @@ public class JdbcDocumentRepository implements DocumentRepository {
             """;
 
     private static final String FIND_BY_KB_ID_AND_FILE_HASH_SQL = DOCUMENT_PROJECTION_SELECT + """
-            WHERE d.workspace_id = ? AND d.kb_id = ? AND v.file_hash = ? AND d.latest_status NOT IN ('DELETING', 'DELETED')
+            WHERE d.workspace_id = ? AND d.kb_id = ? AND v.file_hash = ? AND d.latest_status <> 'DELETED'
             ORDER BY d.created_at DESC
             LIMIT 1
             """;
@@ -1028,7 +1028,7 @@ public class JdbcDocumentRepository implements DocumentRepository {
      *
      * @param workspaceId    工作区标识
      * @param documentId     文档资产 ID
-     * @param expectedStatus 期望状态（UPLOADED/FAILED/INDEXED）
+     * @param expectedStatus 期望状态（通常为 FAILED/INDEXED）
      * @param updatedAt      更新时间
      * @return 更新是否成功
      */

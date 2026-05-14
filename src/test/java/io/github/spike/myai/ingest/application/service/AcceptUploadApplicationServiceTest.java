@@ -167,6 +167,55 @@ class AcceptUploadApplicationServiceTest {
     }
 
     @Test
+    @DisplayName("旧文档删除中同内容重新上传仍应复用原 documentId")
+    void handle_shouldReuseExistingDocument_whenDeletingDocumentMatchesDuplicateUpload() {
+        DocumentIdGenerator generator = Mockito.mock(DocumentIdGenerator.class);
+        DocumentRepository repository = Mockito.mock(DocumentRepository.class);
+        KnowledgeBaseRepository knowledgeBaseRepository = Mockito.mock(KnowledgeBaseRepository.class);
+        CurrentUserProvider currentUserProvider = currentUserProvider();
+        AuthorizationService authorizationService = Mockito.mock(AuthorizationService.class);
+        Document deleting = new Document(
+                new DocumentId("doc-deleting"),
+                "workspace-a",
+                "kb-dup",
+                "hash-dup",
+                "old.txt",
+                88L,
+                UploadStatus.DELETING,
+                null,
+                0,
+                3,
+                null,
+                null,
+                null,
+                null,
+                0,
+                null,
+                "v1",
+                null,
+                Instant.now(),
+                Instant.now());
+        when(repository.findByKbIdAndFileHash(eq("workspace-a"), eq("kb-dup"), eq("hash-dup")))
+                .thenReturn(Optional.of(deleting));
+        when(knowledgeBaseRepository.findByKbId(eq("workspace-a"), eq("kb-dup")))
+                .thenReturn(Optional.of(new KnowledgeBase("kb-dup", "workspace-a", "知识库", "", KnowledgeBaseStatus.ACTIVE, Instant.now(), Instant.now())));
+
+        AcceptUploadApplicationService service = new AcceptUploadApplicationService(
+                generator,
+                repository,
+                knowledgeBaseRepository,
+                currentUserProvider,
+                authorizationService);
+
+        UploadTicket ticket = service.handle(new AcceptUploadCommand("same.txt", 99L, "kb-dup", "hash-dup"));
+
+        assertEquals("doc-deleting", ticket.documentId().value());
+        assertEquals(UploadStatus.ACCEPTED, ticket.status());
+        verify(generator, never()).nextId();
+        verify(repository, never()).save(any(Document.class));
+    }
+
+    @Test
     @DisplayName("旧文档删除后同内容重新上传应生成新 documentId，且不继承旧文档级授权")
     void handle_shouldCreateNewDocument_whenDeletedDocumentIsExcludedFromDuplicateLookup() {
         DocumentIdGenerator generator = Mockito.mock(DocumentIdGenerator.class);
