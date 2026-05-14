@@ -8,7 +8,11 @@ const uploadResponseSchema = z.object({
 
 const documentStatusResponseSchema = z.object({
 	documentId: z.string().min(1),
+	latestVersionNumber: z.number().int().positive(),
+	latestFilename: z.string().min(1),
+	latestVersionOriginType: z.string().min(1),
 	status: z.string().min(1),
+	processingMetadata: z.string().nullable().optional(),
 });
 
 const documentChunkPreviewItemSchema = z.object({
@@ -107,6 +111,8 @@ export type DocumentVersionRollbackResponse = z.infer<
 const documentListItemSchema = z.object({
 	documentId: z.string().min(1),
 	kbId: z.string(),
+	latestVersionNumber: z.number().int().positive(),
+	latestVersionOriginType: z.string().min(1),
 	filename: z.string(),
 	fileSize: z.number().int(),
 	status: z.string(),

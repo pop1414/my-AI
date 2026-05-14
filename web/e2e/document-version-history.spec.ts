@@ -204,6 +204,79 @@ async function mockVersionHistory(page: Page) {
 	});
 }
 
+const knowledgeBases = [
+	{
+		id: "kb-policy",
+		name: "制度知识库",
+		description: "policy docs",
+		status: "ACTIVE",
+		indexedDocumentCount: 2,
+	},
+];
+
+const remainingDocument = {
+	documentId: "doc-ledger-002",
+	kbId: "kb-policy",
+	latestVersionNumber: 1,
+	latestVersionOriginType: "UPLOAD",
+	filename: "policy-retained.docx",
+	fileSize: 840_000,
+	status: "INDEXED",
+	failureReason: null,
+	createdAt: "2026-05-01T08:00:00Z",
+	updatedAt: "2026-05-01T08:12:00Z",
+};
+
+const deletableDocument = {
+	documentId,
+	kbId: "kb-policy",
+	latestVersionNumber: 6,
+	latestVersionOriginType: "UPLOAD",
+	filename: "policy-2026-final.docx",
+	fileSize: 1_640_000,
+	status: "INDEXED",
+	failureReason: null,
+	createdAt: "2026-05-12T13:21:00Z",
+	updatedAt: "2026-05-12T13:35:00Z",
+};
+
+async function mockKnowledgeBases(page: Page) {
+	await page.route("**/api/v1/knowledge-bases", async (route) => {
+		await route.fulfill({ json: knowledgeBases });
+	});
+}
+
+async function mockDocumentListAndDelete(page: Page) {
+	let documents = [deletableDocument, remainingDocument];
+	await page.route("**/api/v1/documents**", async (route) => {
+		const request = route.request();
+		const url = new URL(request.url());
+
+		if (
+			request.method() === "DELETE" &&
+			url.pathname === `/api/v1/documents/${documentId}`
+		) {
+			documents = documents.filter((item) => item.documentId !== documentId);
+			await route.fulfill({ status: 204, body: "" });
+			return;
+		}
+
+		if (request.method() === "GET" && url.pathname === "/api/v1/documents") {
+			await route.fulfill({
+				json: {
+					items: documents,
+					total: documents.length,
+					limit: Number(url.searchParams.get("limit") ?? 20),
+					offset: Number(url.searchParams.get("offset") ?? 0),
+				},
+			});
+			return;
+		}
+
+		await route.fallback();
+	});
+}
+
 test.describe("文档详情页版本历史只读视图", () => {
 	test("展示版本历史列表并保留问答基线版本可见", async ({ page }) => {
 		await mockAuthenticatedConsole(page);
@@ -485,5 +558,81 @@ test.describe("文档详情页版本回退", () => {
 			"曾回退为最新版本",
 		);
 		expect(rollbackUrl).toContain("expectedLatestVersionNumber=6");
+	});
+});
+
+test.describe("文档删除确认与列表结果提示", () => {
+	test("列表页删除需要输入完整 documentId，并即时反映删除结果", async ({
+		page,
+	}) => {
+		await mockAuthenticatedConsole(page);
+		await mockKnowledgeBases(page);
+		await mockDocumentListAndDelete(page);
+
+		await page.goto("/ingest/documents?status=INDEXED&page=2&pageSize=10");
+
+		await expect(page.getByText("policy-2026-final.docx")).toBeVisible();
+		await expect(page.getByText("v6")).toBeVisible();
+		await page
+			.getByRole("row", { name: /policy-2026-final\.docx/ })
+			.getByRole("button", { name: "删除" })
+			.click();
+
+		await expect(page.getByText("确认删除 document 资产")).toBeVisible();
+		await expect(
+			page.getByText("同内容重新上传会生成新的 documentId"),
+		).toBeVisible();
+		await expect(
+			page.getByRole("button", { name: "确认删除整个 document" }),
+		).toBeDisabled();
+
+		await page
+			.getByPlaceholder(documentId)
+			.fill(`${documentId}-wrong`);
+		await expect(
+			page.getByRole("button", { name: "确认删除整个 document" }),
+		).toBeDisabled();
+
+		await page.getByPlaceholder(documentId).fill(documentId);
+		await page.getByRole("button", { name: "确认删除整个 document" }).click();
+
+		await expect(page.getByTestId("document-delete-result")).toContainText(
+			`旧 documentId：${documentId}`,
+		);
+		await expect(page.getByTestId("document-delete-result")).toContainText(
+			"新文档不会继承旧文档级授权",
+		);
+		await expect(page).toHaveURL(/status=INDEXED/);
+		await expect(page).toHaveURL(/page=2/);
+		await expect(page).toHaveURL(/pageSize=10/);
+		await expect(page.getByText("policy-2026-final.docx")).toBeHidden();
+		await expect(page.getByText("policy-retained.docx")).toBeVisible();
+	});
+
+	test("详情页删除成功后返回列表并保留原筛选分页上下文", async ({ page }) => {
+		await mockAuthenticatedConsole(page);
+		await mockKnowledgeBases(page);
+		await page.route(`**/api/v1/documents/${documentId}/versions`, async (route) => {
+			await route.fulfill({ json: uploadAllowedVersionHistory });
+		});
+		await mockDocumentListAndDelete(page);
+
+		await page.goto(
+			`/ingest/documents/${documentId}?returnTo=${encodeURIComponent("/ingest/documents?status=INDEXED&page=2&pageSize=10")}`,
+		);
+
+		await page.getByRole("button", { name: "删除 document" }).click();
+		await page.getByPlaceholder(documentId).fill(documentId);
+		await page.getByRole("button", { name: "确认删除整个 document" }).click();
+
+		await expect(page).toHaveURL(/\/ingest\/documents/);
+		await expect(page).toHaveURL(/status=INDEXED/);
+		await expect(page).toHaveURL(/page=2/);
+		await expect(page).toHaveURL(/pageSize=10/);
+		await expect(page).toHaveURL(new RegExp(`deletedDocumentId=${documentId}`));
+		await expect(page.getByTestId("document-delete-result")).toContainText(
+			`旧 documentId：${documentId}`,
+		);
+		await expect(page.getByText("policy-retained.docx")).toBeVisible();
 	});
 });

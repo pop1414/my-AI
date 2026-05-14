@@ -1,5 +1,6 @@
 import {
 	ArrowLeftOutlined,
+	DeleteOutlined,
 	EyeOutlined,
 	HistoryOutlined,
 	InboxOutlined,
@@ -25,8 +26,15 @@ import {
 import type { UploadFile } from "antd/es/upload/interface";
 import { type ReactNode, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link, type To, useParams, useSearchParams } from "react-router-dom";
 import {
+	Link,
+	type To,
+	useNavigate,
+	useParams,
+	useSearchParams,
+} from "react-router-dom";
+import {
+	deleteDocument,
 	getDocumentVersionHistory,
 	rollbackDocumentVersion,
 	uploadNewDocumentVersion,
@@ -35,6 +43,7 @@ import {
 	type DocumentVersionHistoryItem,
 } from "../../../shared/api/ingestApi";
 import { ApiErrorAlert } from "../../../shared/ui/ApiErrorAlert";
+import { DeleteDocumentConfirmModal } from "./DeleteDocumentConfirmModal";
 import "./IngestDocumentDetailPage.css";
 
 const defaultVisibleVersionCount = 5;
@@ -130,9 +139,31 @@ function canRollbackVersion(
 	);
 }
 
-function buildDetailPath(documentId: string, versionNumber?: number): string {
+function buildDetailPath(
+	documentId: string,
+	versionNumber?: number,
+	returnTo?: string,
+): string {
 	const base = `/ingest/documents/${encodeURIComponent(documentId)}`;
-	return versionNumber ? `${base}?version=${versionNumber}` : base;
+	const params = new URLSearchParams();
+	if (versionNumber) params.set("version", String(versionNumber));
+	if (returnTo) params.set("returnTo", returnTo);
+	const qs = params.toString();
+	return `${base}${qs ? `?${qs}` : ""}`;
+}
+
+function resolveListReturnTo(searchParams: URLSearchParams): string {
+	const returnTo = searchParams.get("returnTo");
+	if (returnTo?.startsWith("/ingest/documents")) {
+		return returnTo;
+	}
+	return "/ingest/documents";
+}
+
+function buildDeletedListPath(returnTo: string, documentId: string): string {
+	const url = new URL(returnTo, "http://my-ai.local");
+	url.searchParams.set("deletedDocumentId", documentId);
+	return `${url.pathname}${url.search}`;
 }
 
 function resolveVisibleVersions(
@@ -458,8 +489,10 @@ function RouterButtonLink({
 export function IngestDocumentDetailPage() {
 	const { documentId = "" } = useParams<{ documentId?: string }>();
 	const [searchParams, setSearchParams] = useSearchParams();
+	const navigate = useNavigate();
 	const queryClient = useQueryClient();
 	const [uploadModalOpen, setUploadModalOpen] = useState(false);
+	const [deleteModalOpen, setDeleteModalOpen] = useState(false);
 	const [uploadFileList, setUploadFileList] = useState<UploadFile[]>([]);
 	const [uploadResult, setUploadResult] =
 		useState<DocumentVersionUploadResponse | null>(null);
@@ -468,6 +501,11 @@ export function IngestDocumentDetailPage() {
 	const [rollbackResult, setRollbackResult] =
 		useState<DocumentVersionRollbackResponse | null>(null);
 	const expandedHistory = searchParams.get("history") === "expanded";
+	const listReturnTo = useMemo(
+		() => resolveListReturnTo(searchParams),
+		[searchParams],
+	);
+	const preservedReturnTo = searchParams.get("returnTo") ?? undefined;
 
 	const historyQuery = useQuery({
 		queryKey: ["document-version-history", documentId],
@@ -562,6 +600,20 @@ export function IngestDocumentDetailPage() {
 			});
 		},
 	});
+	const deleteDocumentMutation = useMutation({
+		mutationFn: () => deleteDocument(documentId),
+		onSuccess: async () => {
+			await Promise.all([
+				queryClient.invalidateQueries({ queryKey: ["documents"] }),
+				queryClient.invalidateQueries({
+					queryKey: ["document-version-history", documentId],
+				}),
+			]);
+			navigate(buildDeletedListPath(listReturnTo, documentId), {
+				replace: true,
+			});
+		},
+	});
 	const expandHistory = () => {
 		setSearchParams((current) => {
 			const next = new URLSearchParams(current);
@@ -648,7 +700,7 @@ export function IngestDocumentDetailPage() {
 				<Space className="detail-page__header-actions" wrap>
 					<RouterButtonLink
 						icon={<ArrowLeftOutlined />}
-						to="/ingest/documents"
+						to={listReturnTo}
 					>
 						返回文档列表
 					</RouterButtonLink>
@@ -668,6 +720,16 @@ export function IngestDocumentDetailPage() {
 							上传新版本
 						</Button>
 					)}
+					{latestVersion.status !== "DELETED" &&
+						latestVersion.status !== "DELETING" && (
+							<Button
+								danger
+								icon={<DeleteOutlined />}
+								onClick={() => setDeleteModalOpen(true)}
+							>
+								删除 document
+							</Button>
+						)}
 					<ReadUnavailableNotice />
 				</Space>
 			</div>
@@ -699,7 +761,11 @@ export function IngestDocumentDetailPage() {
 							size="small"
 							tone="primary"
 							testId="return-latest"
-							to={buildDetailPath(historyData!.documentId)}
+							to={buildDetailPath(
+								historyData!.documentId,
+								undefined,
+								preservedReturnTo,
+							)}
 						>
 							返回最新版本
 						</RouterButtonLink>
@@ -784,7 +850,11 @@ export function IngestDocumentDetailPage() {
 							{!isViewingLatest && (
 								<RouterButtonLink
 									tone="primary"
-									to={buildDetailPath(historyData!.documentId)}
+									to={buildDetailPath(
+										historyData!.documentId,
+										undefined,
+										preservedReturnTo,
+									)}
 								>
 									返回最新版本
 								</RouterButtonLink>
@@ -872,6 +942,7 @@ export function IngestDocumentDetailPage() {
 												version.isLatestVersion
 													? undefined
 													: version.versionNumber,
+												preservedReturnTo,
 											)}
 										>
 											<span className="detail-page__version-number">
@@ -907,6 +978,7 @@ export function IngestDocumentDetailPage() {
 													version.isLatestVersion
 														? undefined
 														: version.versionNumber,
+													preservedReturnTo,
 												)}
 											>
 												查看详情
@@ -1027,6 +1099,20 @@ export function IngestDocumentDetailPage() {
 					)}
 				</Space>
 			</Modal>
+			<DeleteDocumentConfirmModal
+				open={deleteModalOpen}
+				document={{
+					documentId,
+					filename: latestVersion.filename,
+					status: latestVersion.status,
+					latestVersionNumber: latestVersion.versionNumber,
+					latestVersionOriginType: latestVersion.versionOriginType,
+				}}
+				confirmLoading={deleteDocumentMutation.isPending}
+				error={deleteDocumentMutation.error}
+				onCancel={() => setDeleteModalOpen(false)}
+				onConfirm={() => deleteDocumentMutation.mutate()}
+			/>
 		</div>
 	);
 }
