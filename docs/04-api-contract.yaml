@@ -1282,6 +1282,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: 回退来源版本文件缺失，code 为 VERSION_ROLLBACK_SOURCE_FILE_MISSING
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
   /api/v1/documents/{documentId}/chunks/preview:
     get:
