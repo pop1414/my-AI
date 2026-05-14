@@ -71,6 +71,17 @@ const documentVersionUploadResponseSchema = z.object({
 	versionOriginType: z.string().min(1),
 });
 
+const documentVersionRollbackResponseSchema = z.object({
+	documentId: z.string().min(1),
+	versionNumber: z.number().int().positive(),
+	rollbackFromVersionNumber: z.number().int().positive(),
+	latestVersionNumber: z.number().int().positive(),
+	askableVersionNumber: z.number().int().positive().nullable().optional(),
+	canAskNow: z.boolean(),
+	status: z.string().min(1),
+	versionOriginType: z.string().min(1),
+});
+
 export type UploadResponse = z.infer<typeof uploadResponseSchema>;
 export type DocumentStatusResponse = z.infer<
 	typeof documentStatusResponseSchema
@@ -86,6 +97,9 @@ export type DocumentVersionHistoryResponse = z.infer<
 >;
 export type DocumentVersionUploadResponse = z.infer<
 	typeof documentVersionUploadResponseSchema
+>;
+export type DocumentVersionRollbackResponse = z.infer<
+	typeof documentVersionRollbackResponseSchema
 >;
 
 // ── Document List ────────────────────────────────────────────────
@@ -171,6 +185,23 @@ export async function uploadNewDocumentVersion(params: {
 		},
 	);
 	return documentVersionUploadResponseSchema.parse(response);
+}
+
+export async function rollbackDocumentVersion(params: {
+	documentId: string;
+	targetVersionNumber: number;
+	expectedLatestVersionNumber: number;
+}): Promise<DocumentVersionRollbackResponse> {
+	const query = new URLSearchParams({
+		expectedLatestVersionNumber: String(params.expectedLatestVersionNumber),
+	}).toString();
+	const response = await requestJson<unknown>(
+		`/api/v1/documents/${encodeURIComponent(params.documentId)}/versions/${params.targetVersionNumber}/rollback?${query}`,
+		{
+			method: "POST",
+		},
+	);
+	return documentVersionRollbackResponseSchema.parse(response);
 }
 
 export async function getDocumentStatus(

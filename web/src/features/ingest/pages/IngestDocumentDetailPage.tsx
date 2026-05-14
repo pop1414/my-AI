@@ -5,6 +5,7 @@ import {
 	InboxOutlined,
 	ReadOutlined,
 	ReloadOutlined,
+	RollbackOutlined,
 	UploadOutlined,
 } from "@ant-design/icons";
 import {
@@ -27,7 +28,9 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, type To, useParams, useSearchParams } from "react-router-dom";
 import {
 	getDocumentVersionHistory,
+	rollbackDocumentVersion,
 	uploadNewDocumentVersion,
+	type DocumentVersionRollbackResponse,
 	type DocumentVersionUploadResponse,
 	type DocumentVersionHistoryItem,
 } from "../../../shared/api/ingestApi";
@@ -36,6 +39,7 @@ import "./IngestDocumentDetailPage.css";
 
 const defaultVisibleVersionCount = 5;
 const uploadAllowedStatuses = new Set(["INDEXED", "FAILED"]);
+const rollbackAllowedLatestStatuses = new Set(["INDEXED", "FAILED"]);
 const { Dragger } = Upload;
 const fileSizeFormatter = new Intl.NumberFormat("zh-CN", {
 	maximumFractionDigits: 1,
@@ -97,6 +101,32 @@ function getUploader(version: DocumentVersionHistoryItem): string {
 		version.createdByDisplayName ??
 		version.createdByUserId ??
 		"上传人未记录"
+	);
+}
+
+function resolveHasBeenRolledBackAsLatest(
+	version: DocumentVersionHistoryItem,
+	versions: DocumentVersionHistoryItem[],
+): boolean {
+	return Boolean(
+		version.hasBeenRolledBackAsLatest ??
+			versions.some(
+				(item) =>
+					item.versionOriginType === "ROLLBACK" &&
+					item.rollbackFromVersionNumber === version.versionNumber,
+			),
+	);
+}
+
+function canRollbackVersion(
+	version: DocumentVersionHistoryItem,
+	latestVersion: DocumentVersionHistoryItem,
+): boolean {
+	return Boolean(
+		version.canRollback ??
+			(!version.isLatestVersion &&
+				version.status === "INDEXED" &&
+				rollbackAllowedLatestStatuses.has(latestVersion.status)),
 	);
 }
 
@@ -208,9 +238,11 @@ function DetailDiffSummary({
 function VersionTags({
 	version,
 	isActive,
+	hasBeenRolledBackAsLatest,
 }: {
 	version: DocumentVersionHistoryItem;
 	isActive: boolean;
+	hasBeenRolledBackAsLatest: boolean;
 }) {
 	return (
 		<Space size={[6, 6]} wrap>
@@ -220,7 +252,7 @@ function VersionTags({
 			{version.versionOriginType === "ROLLBACK" && (
 				<Tag color="orange">回退产生</Tag>
 			)}
-			{version.hasBeenRolledBackAsLatest && <Tag>曾回退为最新版本</Tag>}
+			{hasBeenRolledBackAsLatest && <Tag>曾回退为最新版本</Tag>}
 			<Tag color={statusColor(version.status)}>{version.status}</Tag>
 		</Space>
 	);
@@ -280,6 +312,74 @@ function VersionUploadResultAlert({
 						<Typography.Text type="secondary">
 							当前暂无可问答版本，请等待处理完成。
 						</Typography.Text>
+					)}
+				</div>
+			}
+			action={
+				<Space wrap>
+					<Button size="small" onClick={onShowHistory}>
+						查看版本历史
+					</Button>
+					{result.canAskNow && (
+						<RouterButtonLink size="small" tone="primary" to="/qa">
+							去问答
+						</RouterButtonLink>
+					)}
+					<Button size="small" type="text" onClick={onClose}>
+						关闭提示
+					</Button>
+				</Space>
+			}
+		/>
+	);
+}
+
+function VersionRollbackResultAlert({
+	result,
+	onClose,
+	onShowHistory,
+}: {
+	result: DocumentVersionRollbackResponse;
+	onClose: () => void;
+	onShowHistory: () => void;
+}) {
+	const latestIndexed = result.status === "INDEXED";
+	const askableText = result.askableVersionNumber
+		? `v${result.askableVersionNumber}`
+		: "暂无可问答版本";
+
+	return (
+		<Alert
+			className="detail-page__result-alert"
+			data-result-kind="success"
+			data-testid="version-rollback-result"
+			aria-live="polite"
+			aria-atomic="true"
+			type="success"
+			showIcon
+			message={`已回退为新的最新版本 v${result.latestVersionNumber}`}
+			description={
+				<div className="detail-page__result-body">
+					<Typography.Paragraph>
+						已基于历史版本 v{result.rollbackFromVersionNumber} 创建回退版本
+						v{result.versionNumber}，页面已切换到新的最新版本。
+					</Typography.Paragraph>
+					<div className="detail-page__result-facts">
+						<span>documentId：{result.documentId}</span>
+						<span>latestVersionNumber：v{result.latestVersionNumber}</span>
+						<span>
+							rollbackFromVersionNumber：v{result.rollbackFromVersionNumber}
+						</span>
+						<span>status：{result.status}</span>
+						<span>askableVersionNumber：{askableText}</span>
+					</div>
+					{!latestIndexed && (
+						<Alert
+							type="warning"
+							showIcon
+							message={`新最新版本 v${result.latestVersionNumber} 尚未 INDEXED`}
+							description={`当前问答暂时仍使用最近一个已 INDEXED 的版本：${askableText}。`}
+						/>
 					)}
 				</div>
 			}
@@ -363,6 +463,10 @@ export function IngestDocumentDetailPage() {
 	const [uploadFileList, setUploadFileList] = useState<UploadFile[]>([]);
 	const [uploadResult, setUploadResult] =
 		useState<DocumentVersionUploadResponse | null>(null);
+	const [rollbackTarget, setRollbackTarget] =
+		useState<DocumentVersionHistoryItem | null>(null);
+	const [rollbackResult, setRollbackResult] =
+		useState<DocumentVersionRollbackResponse | null>(null);
 	const expandedHistory = searchParams.get("history") === "expanded";
 
 	const historyQuery = useQuery({
@@ -372,7 +476,17 @@ export function IngestDocumentDetailPage() {
 	});
 
 	const historyData = historyQuery.data;
-	const versions = useMemo(() => historyData?.versions ?? [], [historyData]);
+	const versions = useMemo(
+		() =>
+			(historyData?.versions ?? []).map((version) => ({
+				...version,
+				hasBeenRolledBackAsLatest: resolveHasBeenRolledBackAsLatest(
+					version,
+					historyData?.versions ?? [],
+				),
+			})),
+		[historyData],
+	);
 	const latestVersion =
 		versions.find((version) => version.isLatestVersion) ?? versions[0];
 	const askableVersion = versions.find((version) => version.isAskableVersion);
@@ -428,6 +542,26 @@ export function IngestDocumentDetailPage() {
 			});
 		},
 	});
+	const rollbackVersionMutation = useMutation({
+		mutationFn: (targetVersionNumber: number) =>
+			rollbackDocumentVersion({
+				documentId,
+				targetVersionNumber,
+				expectedLatestVersionNumber: latestVersion!.versionNumber,
+			}),
+		onSuccess: async (data) => {
+			setRollbackResult(data);
+			setRollbackTarget(null);
+			setSearchParams((current) => {
+				const next = new URLSearchParams(current);
+				next.delete("version");
+				return next;
+			});
+			await queryClient.invalidateQueries({
+				queryKey: ["document-version-history", documentId],
+			});
+		},
+	});
 	const expandHistory = () => {
 		setSearchParams((current) => {
 			const next = new URLSearchParams(current);
@@ -442,6 +576,13 @@ export function IngestDocumentDetailPage() {
 		}
 
 		await uploadVersionMutation.mutateAsync(selectedFile);
+	};
+	const submitRollbackVersion = async () => {
+		if (!rollbackTarget) {
+			return;
+		}
+
+		await rollbackVersionMutation.mutateAsync(rollbackTarget.versionNumber);
 	};
 
 	if (historyQuery.isLoading) {
@@ -538,6 +679,13 @@ export function IngestDocumentDetailPage() {
 					onShowHistory={expandHistory}
 				/>
 			)}
+			{rollbackResult && (
+				<VersionRollbackResultAlert
+					result={rollbackResult}
+					onClose={() => setRollbackResult(null)}
+					onShowHistory={expandHistory}
+				/>
+			)}
 
 			{!isViewingLatest && (
 				<Alert
@@ -577,7 +725,14 @@ export function IngestDocumentDetailPage() {
 									v{viewingVersion.versionNumber}
 								</Typography.Title>
 							</div>
-							<VersionTags version={viewingVersion} isActive />
+							<VersionTags
+								version={viewingVersion}
+								isActive
+								hasBeenRolledBackAsLatest={resolveHasBeenRolledBackAsLatest(
+									viewingVersion,
+									versions,
+								)}
+							/>
 						</div>
 
 						<Descriptions column={{ xs: 1, sm: 2 }} size="small">
@@ -634,6 +789,15 @@ export function IngestDocumentDetailPage() {
 									返回最新版本
 								</RouterButtonLink>
 							)}
+							{!isViewingLatest &&
+								canRollbackVersion(viewingVersion, latestVersion) && (
+									<Button
+										icon={<RollbackOutlined />}
+										onClick={() => setRollbackTarget(viewingVersion)}
+									>
+										回退为最新版本
+									</Button>
+								)}
 							<ReadUnavailableNotice />
 						</div>
 					</Card>
@@ -713,7 +877,14 @@ export function IngestDocumentDetailPage() {
 											<span className="detail-page__version-number">
 												v{version.versionNumber}
 											</span>
-											<VersionTags version={version} isActive={isActive} />
+											<VersionTags
+												version={version}
+												isActive={isActive}
+												hasBeenRolledBackAsLatest={resolveHasBeenRolledBackAsLatest(
+													version,
+													versions,
+												)}
+											/>
 											<span className="detail-page__filename">
 												{version.filename}
 											</span>
@@ -741,6 +912,16 @@ export function IngestDocumentDetailPage() {
 												查看详情
 											</RouterButtonLink>
 											<ReadUnavailableNotice size="small" />
+											{canRollbackVersion(version, latestVersion) && (
+												<Button
+													size="small"
+													type="text"
+													icon={<RollbackOutlined />}
+													onClick={() => setRollbackTarget(version)}
+												>
+													回退为最新版本
+												</Button>
+											)}
 										</div>
 									</div>
 								);
@@ -797,6 +978,52 @@ export function IngestDocumentDetailPage() {
 					</Dragger>
 					{uploadVersionMutation.isError && (
 						<ApiErrorAlert error={uploadVersionMutation.error} />
+					)}
+				</Space>
+			</Modal>
+			<Modal
+				title={
+					rollbackTarget
+						? `确认回退 v${rollbackTarget.versionNumber}`
+						: "确认回退"
+				}
+				open={Boolean(rollbackTarget)}
+				okText="确认回退为最新版本"
+				cancelText="取消"
+				confirmLoading={rollbackVersionMutation.isPending}
+				onOk={submitRollbackVersion}
+				onCancel={() => {
+					setRollbackTarget(null);
+				}}
+			>
+				<Space direction="vertical" size={12} style={{ width: "100%" }}>
+					<Alert
+						type="warning"
+						showIcon
+						message="该操作会创建新的最新版本，并可能改变问答基线"
+						description={
+							rollbackTarget
+								? `系统会基于 v${rollbackTarget.versionNumber} 创建 ROLLBACK 来源的新版本，不会覆盖原历史记录。当前最新版本为 v${latestVersion.versionNumber}，提交时会携带 expectedLatestVersionNumber=${latestVersion.versionNumber}。`
+								: undefined
+						}
+					/>
+					{rollbackTarget && (
+						<Descriptions column={1} size="small">
+							<Descriptions.Item label="回退目标">
+								v{rollbackTarget.versionNumber}
+							</Descriptions.Item>
+							<Descriptions.Item label="目标文件">
+								{rollbackTarget.filename}
+							</Descriptions.Item>
+							<Descriptions.Item label="目标状态">
+								<Tag color={statusColor(rollbackTarget.status)}>
+									{rollbackTarget.status}
+								</Tag>
+							</Descriptions.Item>
+						</Descriptions>
+					)}
+					{rollbackVersionMutation.isError && (
+						<ApiErrorAlert error={rollbackVersionMutation.error} />
 					)}
 				</Space>
 			</Modal>
