@@ -165,6 +165,33 @@ const createdVersionHistory = {
 	],
 };
 
+const rollbackCreatedVersionHistory = {
+	...versionHistory,
+	versions: [
+		{
+			documentId,
+			versionNumber: 7,
+			versionOriginType: "ROLLBACK",
+			rollbackFromVersionNumber: 4,
+			filename: "policy-2026.docx",
+			fileSize: 1_520_000,
+			status: "UPLOADED",
+			failureReason: null,
+			createdAt: "2026-05-14T03:00:00Z",
+			updatedAt: "2026-05-14T03:00:00Z",
+			isLatestVersion: true,
+			isAskableVersion: false,
+			createdByUserId: "admin-1",
+			createdByDisplayName: "管理员",
+		},
+		...uploadAllowedVersionHistory.versions.map((version) => ({
+			...version,
+			isLatestVersion: false,
+			isAskableVersion: version.versionNumber === 6,
+		})),
+	],
+};
+
 async function mockAuthenticatedConsole(page: Page) {
 	await page.route("**/api/v1/auth/me", async (route) => {
 		await route.fulfill({ json: currentUser });
@@ -259,7 +286,7 @@ test.describe("文档详情页上传新版本", () => {
 	test("创建新版本后切换到新的最新版本并展示稳定结果提示", async ({ page }) => {
 		await mockAuthenticatedConsole(page);
 
-		let activeHistory = uploadAllowedVersionHistory;
+		let activeHistory: unknown = uploadAllowedVersionHistory;
 		let uploadRequestBody = "";
 		await page.route(`**/api/v1/documents/${documentId}/versions`, async (route) => {
 			if (route.request().method() === "POST") {
@@ -366,5 +393,97 @@ test.describe("文档详情页上传新版本", () => {
 			page.getByRole("heading", { name: "v6", exact: true }),
 		).toBeVisible();
 		await expect(page.getByTestId("version-card-7")).toBeHidden();
+	});
+});
+
+test.describe("文档详情页版本回退", () => {
+	test("仅对可回退历史版本展示回退入口", async ({ page }) => {
+		await mockAuthenticatedConsole(page);
+		await page.route(`**/api/v1/documents/${documentId}/versions`, async (route) => {
+			await route.fulfill({ json: uploadAllowedVersionHistory });
+		});
+
+		await page.goto(`/ingest/documents/${documentId}`);
+
+		await expect(
+			page
+				.getByTestId("version-card-4")
+				.getByRole("button", { name: "回退为最新版本" }),
+		).toBeVisible();
+		await expect(
+			page
+				.getByTestId("version-card-6")
+				.getByRole("button", { name: "回退为最新版本" }),
+		).toBeHidden();
+	});
+
+	test("确认回退后展示新最新版本与问答基线提示", async ({ page }) => {
+		await mockAuthenticatedConsole(page);
+
+		let activeHistory: unknown = uploadAllowedVersionHistory;
+		let rollbackUrl = "";
+		await page.route(`**/api/v1/documents/${documentId}/versions**`, async (route) => {
+			const request = route.request();
+			if (
+				request.method() === "POST" &&
+				request.url().includes("/versions/4/rollback")
+			) {
+				rollbackUrl = request.url();
+				activeHistory = rollbackCreatedVersionHistory;
+				await route.fulfill({
+					json: {
+						documentId,
+						versionNumber: 7,
+						rollbackFromVersionNumber: 4,
+						latestVersionNumber: 7,
+						askableVersionNumber: 6,
+						canAskNow: true,
+						status: "UPLOADED",
+						versionOriginType: "ROLLBACK",
+					},
+				});
+				return;
+			}
+
+			await route.fulfill({ json: activeHistory });
+		});
+
+		await page.goto(`/ingest/documents/${documentId}`);
+		await page
+			.getByTestId("version-card-4")
+			.getByRole("button", { name: "回退为最新版本" })
+			.click();
+
+		await expect(page.getByText("确认回退 v4")).toBeVisible();
+		await expect(
+			page.getByText("该操作会创建新的最新版本，并可能改变问答基线"),
+		).toBeVisible();
+		await page.getByRole("button", { name: "确认回退为最新版本" }).click();
+
+		await expect(page.getByTestId("version-rollback-result")).toContainText(
+			"已回退为新的最新版本 v7",
+		);
+		await expect(page.getByTestId("version-rollback-result")).toContainText(
+			"历史版本 v4",
+		);
+		await expect(page.getByTestId("version-rollback-result")).toContainText(
+			"新最新版本 v7 尚未 INDEXED",
+		);
+		await expect(page.getByTestId("version-rollback-result")).toContainText(
+			"最近一个已 INDEXED 的版本：v6",
+		);
+		await expect(
+			page.getByRole("heading", { name: "v7", exact: true }),
+		).toBeVisible();
+		await expect(page.getByTestId("version-card-7")).toContainText(
+			"最新版本",
+		);
+		await expect(page.getByTestId("version-card-7")).toContainText(
+			"回退产生",
+		);
+		await expect(page.getByTestId("version-card-4")).toContainText(
+			"曾回退为最新版本",
+		);
+		expect(rollbackUrl).toContain("expectedLatestVersionNumber=6");
 	});
 });
