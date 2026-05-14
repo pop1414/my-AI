@@ -3,6 +3,7 @@ package io.github.spike.myai.ingest.infrastructure.vector;
 import io.github.spike.myai.ingest.domain.model.Document;
 import io.github.spike.myai.ingest.domain.model.DocumentChunk;
 import io.github.spike.myai.ingest.domain.model.DocumentId;
+import io.github.spike.myai.ingest.domain.model.SourceHint;
 import io.github.spike.myai.ingest.domain.port.DocumentVectorIndexer;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -108,9 +109,10 @@ public class PgVectorDocumentVectorIndexer implements DocumentVectorIndexer {
             metadata.put("sourceFile", document.filename());        // 原始文件名
             metadata.put("contentHash", sha256(chunkText));         // 文本指纹（去重/校验）
             metadata.put("splitVersion", splitVersion);             // 逻辑版本锁
-            if (chunk.sourceHint() != null && !chunk.sourceHint().isBlank()) {
+            SourceHint sourceHint = chunk.sourceHint();
+            if (!sourceHint.isEmpty()) {
                 // 存储来自解析器的额外提示（如 PDF 页码、章节标题等 JSON 信息）。
-                metadata.put("sourceHint", chunk.sourceHint());
+                metadata.put("sourceHint", sourceHint.toStorageValue());
             }
 
             // 构建 Spring AI 标准的 Document 对象（包含文本、元数据和 ID）。

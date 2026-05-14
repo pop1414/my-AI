@@ -37,12 +37,12 @@ class StructuredFallbackDocumentChunkerTest {
         List<DocumentChunk> chunks = chunker.chunk(markdown);
 
         assertTrue(chunks.stream().anyMatch(chunk ->
-                chunk.sourceHint() != null
-                        && chunk.sourceHint().contains("4. 指标对照")
+                chunk.sourceHint().toStorageValue() != null
+                        && chunk.sourceHint().toStorageValue().contains("4. 指标对照")
                         && chunk.content().contains("标题层级稳定")));
         assertTrue(chunks.stream().anyMatch(chunk ->
-                chunk.sourceHint() != null
-                        && chunk.sourceHint().contains("5. 示例命令")
+                chunk.sourceHint().toStorageValue() != null
+                        && chunk.sourceHint().toStorageValue().contains("5. 示例命令")
                         && chunk.content().contains("curl")));
     }
 
@@ -68,14 +68,14 @@ class StructuredFallbackDocumentChunkerTest {
         List<DocumentChunk> chunks = chunker.chunk(cleanedMarkdown);
 
         assertTrue(chunks.stream().anyMatch(chunk ->
-                "{\"heading\":\"分流目标\"}".equals(chunk.sourceHint())
+                "{\"heading\":\"分流目标\"}".equals(chunk.sourceHint().toStorageValue())
                         && chunk.content().contains("区分普通文本清洗问题")));
         assertTrue(chunks.stream().anyMatch(chunk ->
-                "{\"heading\":\"人工复核触发条件\"}".equals(chunk.sourceHint())
+                "{\"heading\":\"人工复核触发条件\"}".equals(chunk.sourceHint().toStorageValue())
                         && chunk.content().contains("同一段正文被错误切成三段以上")));
         assertFalse(chunks.stream().anyMatch(chunk ->
-                chunk.sourceHint() != null
-                        && chunk.sourceHint().contains("面向文档回归值班同学的内部说明页")));
+                chunk.sourceHint().toStorageValue() != null
+                        && chunk.sourceHint().toStorageValue().contains("面向文档回归值班同学的内部说明页")));
     }
 
     @Test
@@ -93,11 +93,12 @@ class StructuredFallbackDocumentChunkerTest {
         List<DocumentChunk> chunks = chunker.chunk(cleanedMarkdown);
 
         assertTrue(chunks.stream().anyMatch(chunk ->
-                "{\"heading\":\"处理建议\"}".equals(chunk.sourceHint())
+                "{\"heading\":\"处理建议\"}".equals(chunk.sourceHint().toStorageValue())
                         && chunk.content().contains("请先检查输入质量")
                         && chunk.content().contains("标题漂移")));
         assertFalse(chunks.stream().anyMatch(chunk ->
-                chunk.sourceHint() != null && chunk.sourceHint().contains("请先检查输入质量")));
+                chunk.sourceHint().toStorageValue() != null
+                        && chunk.sourceHint().toStorageValue().contains("请先检查输入质量")));
     }
 
     private static IngestProperties properties() {

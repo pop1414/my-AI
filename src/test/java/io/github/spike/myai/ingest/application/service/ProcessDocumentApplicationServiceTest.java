@@ -13,6 +13,7 @@ import io.github.spike.myai.ingest.domain.model.Document;
 import io.github.spike.myai.ingest.domain.model.DocumentChunk;
 import io.github.spike.myai.ingest.domain.model.DocumentId;
 import io.github.spike.myai.ingest.domain.model.DocumentParseResult;
+import io.github.spike.myai.ingest.domain.model.SourceHint;
 import io.github.spike.myai.ingest.domain.model.UploadStatus;
 import io.github.spike.myai.ingest.domain.port.DocumentChunker;
 import io.github.spike.myai.ingest.domain.port.DocumentProcessingArtifactStorage;
@@ -84,7 +85,7 @@ class ProcessDocumentApplicationServiceTest {
                 "hello world",
                 "{\"schema_version\":\"v1\"}");
         when(parser.parse(eq("a.txt"), any(byte[].class))).thenReturn(parseResult);
-        when(chunker.chunk("hello world")).thenReturn(List.of(new DocumentChunk("hello world", null)));
+        when(chunker.chunk("hello world")).thenReturn(List.of(new DocumentChunk("hello world", SourceHint.none())));
         when(repository.markIndexed(
                         anyString(),
                         eq(documentId),
@@ -95,7 +96,7 @@ class ProcessDocumentApplicationServiceTest {
 
         service.handle(documentId);
 
-        verify(vectorIndexer, times(1)).index(eq(ingesting), eq(List.of(new DocumentChunk("hello world", null))));
+        verify(vectorIndexer, times(1)).index(eq(ingesting), eq(List.of(new DocumentChunk("hello world", SourceHint.none()))));
         verify(artifactStorage, times(1)).save(eq(documentId), eq(parseResult));
         verify(repository, times(1))
                 .markIndexed(

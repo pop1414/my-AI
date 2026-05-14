@@ -148,14 +148,14 @@ class IngestCleaningGoldenSamplesTest {
         List<DocumentChunk> chunks = chunker.chunk(result.cleanedMarkdown());
 
         assertTrue(chunks.stream().anyMatch(chunk ->
-                "{\"heading\":\"分流目标\"}".equals(chunk.sourceHint())
+                "{\"heading\":\"分流目标\"}".equals(chunk.sourceHint().toStorageValue())
                         && chunk.content().contains("区分普通文本清洗问题")), result.cleanedMarkdown());
         assertTrue(chunks.stream().anyMatch(chunk ->
-                "{\"heading\":\"人工复核触发条件\"}".equals(chunk.sourceHint())
+                "{\"heading\":\"人工复核触发条件\"}".equals(chunk.sourceHint().toStorageValue())
                         && chunk.content().contains("同一段正文被错误切成三段以上")), result.cleanedMarkdown());
         assertFalse(chunks.stream().anyMatch(chunk ->
-                chunk.sourceHint() != null
-                        && chunk.sourceHint().contains("面向文档回归值班同学的内部说明页")),
+                chunk.sourceHint().toStorageValue() != null
+                        && chunk.sourceHint().toStorageValue().contains("面向文档回归值班同学的内部说明页")),
                 result.cleanedMarkdown());
     }
 

@@ -25,8 +25,7 @@ public class StructuredFallbackDocumentChunker implements DocumentChunker {
     public StructuredFallbackDocumentChunker(IngestProperties ingestProperties) {
         this.windowAssembler = new ChunkWindowAssembler(
                 ingestProperties.getChunk().getChunkSize(),
-                ingestProperties.getChunk().getOverlapSize(),
-                new SourceHintEncoder());
+                ingestProperties.getChunk().getOverlapSize());
     }
 
     @Override

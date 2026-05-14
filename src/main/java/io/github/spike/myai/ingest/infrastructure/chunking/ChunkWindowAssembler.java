@@ -1,6 +1,7 @@
 package io.github.spike.myai.ingest.infrastructure.chunking;
 
 import io.github.spike.myai.ingest.domain.model.DocumentChunk;
+import io.github.spike.myai.ingest.domain.model.SourceHint;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -12,12 +13,10 @@ final class ChunkWindowAssembler {
 
     private final int chunkSize;
     private final int overlapSize;
-    private final SourceHintEncoder sourceHintEncoder;
 
-    ChunkWindowAssembler(int chunkSize, int overlapSize, SourceHintEncoder sourceHintEncoder) {
+    ChunkWindowAssembler(int chunkSize, int overlapSize) {
         this.chunkSize = chunkSize;
         this.overlapSize = overlapSize;
-        this.sourceHintEncoder = sourceHintEncoder;
     }
 
     List<DocumentChunk> assemble(List<HeadingContextExtractor.HeadingSegment> segments) {
@@ -65,7 +64,7 @@ final class ChunkWindowAssembler {
         }
 
         if (!currentTokens.isEmpty()) {
-            chunks.add(new DocumentChunk(renderTokens(currentTokens), sourceHintEncoder.encodeHeading(currentChunkHeading)));
+            chunks.add(new DocumentChunk(renderTokens(currentTokens), SourceHint.heading(currentChunkHeading)));
         }
         return chunks;
     }
@@ -75,7 +74,7 @@ final class ChunkWindowAssembler {
         for (int start = 0; start < segmentTokens.size(); start += step) {
             int end = Math.min(segmentTokens.size(), start + chunkSize);
             List<String> window = segmentTokens.subList(start, end);
-            chunks.add(new DocumentChunk(renderTokens(window), sourceHintEncoder.encodeHeading(heading)));
+            chunks.add(new DocumentChunk(renderTokens(window), SourceHint.heading(heading)));
             if (end == segmentTokens.size()) {
                 break;
             }
@@ -83,7 +82,7 @@ final class ChunkWindowAssembler {
     }
 
     private String flushChunk(List<DocumentChunk> chunks, List<String> currentTokens, String currentHeading) {
-        chunks.add(new DocumentChunk(renderTokens(currentTokens), sourceHintEncoder.encodeHeading(currentHeading)));
+        chunks.add(new DocumentChunk(renderTokens(currentTokens), SourceHint.heading(currentHeading)));
         List<String> overlapTokens = takeTail(currentTokens, overlapSize);
         currentTokens.clear();
         currentTokens.addAll(overlapTokens);
