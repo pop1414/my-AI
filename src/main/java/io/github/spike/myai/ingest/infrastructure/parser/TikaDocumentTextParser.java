@@ -1,33 +1,17 @@
 package io.github.spike.myai.ingest.infrastructure.parser;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.spike.myai.ingest.domain.model.DocumentParseResult;
 import io.github.spike.myai.ingest.domain.port.DocumentTextParser;
 import io.github.spike.myai.ingest.infrastructure.config.IngestProperties;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
-import java.nio.ByteBuffer;
 import java.nio.charset.CharacterCodingException;
-import java.nio.charset.Charset;
-import java.nio.charset.CharsetDecoder;
-import java.nio.charset.CodingErrorAction;
-import java.nio.charset.StandardCharsets;
-import java.time.Instant;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 import org.apache.tika.exception.TikaException;
-import org.apache.tika.extractor.EmbeddedDocumentExtractor;
 import org.apache.tika.metadata.Metadata;
 import org.apache.tika.metadata.TikaCoreProperties;
 import org.apache.tika.parser.AutoDetectParser;
 import org.apache.tika.parser.ParseContext;
-import org.apache.tika.parser.Parser;
-import org.apache.tika.parser.pdf.PDFParserConfig;
 import org.apache.tika.sax.ToXMLContentHandler;
 import org.springframework.stereotype.Component;
 import org.xml.sax.SAXException;
@@ -49,25 +33,14 @@ import org.xml.sax.SAXException;
 @Component
 public class TikaDocumentTextParser implements DocumentTextParser {
 
-    /**
-     * Markdown 标题行匹配模式，用于从 cleaned.md 中提取标题大纲样本。
-     * 匹配 1~6 级标题（# 至 ######），捕获标题文本内容
-     */
-    private static final Pattern MARKDOWN_HEADING = Pattern.compile("(?m)^#{1,6}\\s+(.+)$");
-    /**
-     * Tika 元数据中可能包含的页码字段键列表。
-     * 按优先级排序：XMP 标准键 > 通用 meta 键 > Tika 自定义键
-     */
-    private static final List<String> PAGE_COUNT_KEYS = List.of("xmpTPg:NPages", "meta:page-count", "Page-Count");
-
     /** 文本清洗服务，负责 HTML 语义清洗和 Markdown 转换 */
     private final TextCleaningService textCleaningService;
-    /** JSON 序列化器，用于序列化 processingMetadata */
-    private final ObjectMapper objectMapper;
     /** 解析文本最大长度阈值，超过将抛出异常防止 OOM */
     private final int maxTextLength;
-    /** 是否解析嵌入资源（如图片中的文本），默认关闭以节省内存 */
-    private final boolean parseEmbeddedResource;
+    private final DocumentParserRouter router = new DocumentParserRouter();
+    private final NativeTextDecoder nativeTextDecoder = new NativeTextDecoder();
+    private final TikaParseContextFactory parseContextFactory;
+    private final ProcessingMetadataBuilder processingMetadataBuilder;
 
     /**
      * 构造器注入：装配解析链路所需的清洗服务、序列化器和配置参数。
@@ -81,9 +54,9 @@ public class TikaDocumentTextParser implements DocumentTextParser {
             ObjectMapper objectMapper,
             IngestProperties ingestProperties) {
         this.textCleaningService = textCleaningService;
-        this.objectMapper = objectMapper;
         this.maxTextLength = ingestProperties.getParser().getMaxTextLength();
-        this.parseEmbeddedResource = ingestProperties.getParser().isParseEmbeddedResource();
+        this.parseContextFactory = new TikaParseContextFactory(ingestProperties.getParser().isParseEmbeddedResource());
+        this.processingMetadataBuilder = new ProcessingMetadataBuilder(objectMapper);
     }
 
     /**
@@ -112,21 +85,17 @@ public class TikaDocumentTextParser implements DocumentTextParser {
         if (content == null || content.length == 0) {
             throw new IllegalStateException("empty source content");
         }
-        if (isNativeMarkdown(filename)) {
-            try {
-                return parseNativeMarkdown(filename, content);
-            } catch (CharacterCodingException ignored) {
-                // 非 UTF-8 且无可识别 BOM 时，回退 Tika 让其执行字符集检测。
-            }
+        DocumentParseRoute route = router.route(filename);
+        try {
+            return switch (route) {
+                case NATIVE_MARKDOWN -> parseNativeMarkdown(filename, content);
+                case NATIVE_HTML -> parseNativeHtml(filename, content);
+                case TIKA -> parseWithTika(filename, content);
+            };
+        } catch (CharacterCodingException ignored) {
+            // 原生文本严格解码失败时，回退 Tika 让其执行字符集检测。
+            return parseWithTika(filename, content);
         }
-        if (isNativeHtml(filename)) {
-            try {
-                return parseNativeHtml(filename, content);
-            } catch (CharacterCodingException ignored) {
-                // 非 UTF-8 且无可识别 BOM 时，回退 Tika 让其执行字符集检测。
-            }
-        }
-        return parseWithTika(filename, content);
     }
 
     /**
@@ -159,7 +128,7 @@ public class TikaDocumentTextParser implements DocumentTextParser {
             Metadata metadata = new Metadata();
             metadata.set(TikaCoreProperties.RESOURCE_NAME_KEY, filename);
             // 构建解析上下文，配置 PDF 解析参数和嵌入资源提取策略
-            ParseContext context = buildParseContext(parser);
+            ParseContext context = parseContextFactory.create(parser);
             // 使用 ToXMLContentHandler 将解析结果输出为 XHTML 格式
             ToXMLContentHandler handler = new ToXMLContentHandler();
 
@@ -176,7 +145,7 @@ public class TikaDocumentTextParser implements DocumentTextParser {
                     rawXhtml,
                     cleanedHtml,
                     cleanedMarkdown,
-                    buildProcessingMetadata(filename, metadata, cleanedMarkdown));
+                    processingMetadataBuilder.build(filename, metadata, cleanedMarkdown));
         } catch (TikaException | SAXException ex) {
             // Tika 解析异常单独 catch 以提供更精确的错误信息
             throw new IllegalStateException("failed to parse content with tika", ex);
@@ -200,7 +169,7 @@ public class TikaDocumentTextParser implements DocumentTextParser {
      */
     private DocumentParseResult parseNativeMarkdown(String filename, byte[] content) throws CharacterCodingException {
         // 第 1 步：按 BOM 或严格 UTF-8 解码为原始 Markdown 文本
-        DecodedText decodedMarkdown = decodeTextContent(content);
+        NativeTextDecoder.DecodedText decodedMarkdown = nativeTextDecoder.decode(content);
         String rawMarkdown = decodedMarkdown.text();
         // 第 2 步：委托 TextCleaningService 执行最小破坏清洗（保留代码块/缩进/表格等结构）
         String cleanedMarkdown = textCleaningService.cleanNativeMarkdown(rawMarkdown);
@@ -217,11 +186,11 @@ public class TikaDocumentTextParser implements DocumentTextParser {
                 "",
                 "",
                 cleanedMarkdown,
-                buildProcessingMetadata(filename, metadata, cleanedMarkdown));
+                processingMetadataBuilder.build(filename, metadata, cleanedMarkdown));
     }
 
     private DocumentParseResult parseNativeHtml(String filename, byte[] content) throws CharacterCodingException {
-        DecodedText decodedHtml = decodeTextContent(content);
+        NativeTextDecoder.DecodedText decodedHtml = nativeTextDecoder.decode(content);
         String cleanedHtml = textCleaningService.cleanHtml(decodedHtml.text());
         String cleanedMarkdown = textCleaningService.toMarkdown(cleanedHtml);
         validateCleanedMarkdown(cleanedMarkdown);
@@ -234,80 +203,7 @@ public class TikaDocumentTextParser implements DocumentTextParser {
                 decodedHtml.text(),
                 cleanedHtml,
                 cleanedMarkdown,
-                buildProcessingMetadata(filename, metadata, cleanedMarkdown));
-    }
-
-    /**
-     * 按 BOM 或严格 UTF-8 解码原生文本文件的字节内容。
-     *
-     * <p>解码策略按优先级：
-     * <ol>
-     *   <li><b>UTF-8 BOM</b>（{@code EF BB BF}）：跳过 BOM 后按严格 UTF-8 解码；</li>
-     *   <li><b>UTF-16LE BOM</b>（{@code FF FE}）：跳过 BOM 后按严格 UTF-16LE 解码；</li>
-     *   <li><b>UTF-16BE BOM</b>（{@code FE FF}）：跳过 BOM 后按严格 UTF-16BE 解码；</li>
-     *   <li><b>无 BOM</b>：按严格 UTF-8 解码（若含非法字节序列则抛出
-     *       {@link CharacterCodingException}，由调用方回退到 Tika 路径）。</li>
-     * </ol>
-     *
-     * <p>"严格解码"指遇到非法字节序列或不可映射字符时立即抛出异常，
-     * 而非静默替换为替代字符（U+FFFD），确保内容完整性。
-     *
-     * @param content 原始字节数组
-     * @return 解码后的文本及所用字符集
-     * @throws CharacterCodingException 严格解码失败时抛出（非 UTF-8/UTF-16 文件）
-     */
-    private static DecodedText decodeTextContent(byte[] content) throws CharacterCodingException {
-        // 第 1 步：检测 UTF-8 BOM（EF BB BF）
-        if (content.length >= 3
-                && (content[0] & 0xFF) == 0xEF
-                && (content[1] & 0xFF) == 0xBB
-                && (content[2] & 0xFF) == 0xBF) {
-            // 跳过前 3 字节 BOM，按严格 UTF-8 解码
-            return new DecodedText(decodeStrict(StandardCharsets.UTF_8, content, 3), StandardCharsets.UTF_8);
-        }
-        // 第 2 步：检测 UTF-16LE BOM（FF FE）
-        if (content.length >= 2
-                && (content[0] & 0xFF) == 0xFF
-                && (content[1] & 0xFF) == 0xFE) {
-            return new DecodedText(decodeStrict(StandardCharsets.UTF_16LE, content, 2), StandardCharsets.UTF_16LE);
-        }
-        // 第 3 步：检测 UTF-16BE BOM（FE FF）
-        if (content.length >= 2
-                && (content[0] & 0xFF) == 0xFE
-                && (content[1] & 0xFF) == 0xFF) {
-            return new DecodedText(decodeStrict(StandardCharsets.UTF_16BE, content, 2), StandardCharsets.UTF_16BE);
-        }
-        // 第 4 步：无 BOM，按严格 UTF-8 解码
-        return new DecodedText(decodeStrict(StandardCharsets.UTF_8, content, 0), StandardCharsets.UTF_8);
-    }
-
-    /**
-     * 使用指定字符集严格解码字节数组（从指定偏移量开始）。
-     *
-     * <p>"严格"的含义：
-     * <ul>
-     *   <li>{@link CodingErrorAction#REPORT}：遇到非法字节序列时抛出
-     *       {@link CharacterCodingException}，而非静默替换；</li>
-     *   <li>{@link CodingErrorAction#REPORT}：遇到不可映射字符时同样抛出异常。</li>
-     * </ul>
-     *
-     * <p>此严格策略确保 Markdown 文件内容无损解码：
-     * 若文件声称是 UTF-8 但实际含非法字节，将触发回退到 Tika 路径
-     * （Tika 内置了更鲁棒的字符集检测机制）。
-     *
-     * @param charset 目标字符集（如 UTF-8、UTF-16LE）
-     * @param content 原始字节数组
-     * @param offset  起始偏移量（用于跳过 BOM 头）
-     * @return 解码后的字符串
-     * @throws CharacterCodingException 遇到非法字节序列或不可映射字符时抛出
-     */
-    private static String decodeStrict(Charset charset, byte[] content, int offset) throws CharacterCodingException {
-        // 创建严格解码器：非法输入和不可映射字符均报告异常
-        CharsetDecoder decoder = charset.newDecoder()
-                .onMalformedInput(CodingErrorAction.REPORT)
-                .onUnmappableCharacter(CodingErrorAction.REPORT);
-        // 从指定偏移量开始解码，跳过 BOM 头
-        return decoder.decode(ByteBuffer.wrap(content, offset, content.length - offset)).toString();
+                processingMetadataBuilder.build(filename, metadata, cleanedMarkdown));
     }
 
     /**
@@ -335,269 +231,4 @@ public class TikaDocumentTextParser implements DocumentTextParser {
         }
     }
 
-    /**
-     * 构建 Tika 解析上下文。
-     *
-     * <p>配置项：
-     * <ul>
-     *   <li>设置 PDF 解析器不提取内联图片（减少内存开销）；</li>
-     *   <li>按配置决定是否忽略嵌入文档（如 Excel 中的嵌入 PDF）。</li>
-     * </ul>
-     *
-     * @param parser Tika 自动检测解析器实例
-     * @return 配置完成的解析上下文
-     */
-    private ParseContext buildParseContext(AutoDetectParser parser) {
-        ParseContext context = new ParseContext();
-        // 注册主解析器到上下文
-        context.set(Parser.class, parser);
-
-        // 配置 PDF 解析参数：禁用内联图片提取以降低内存开销
-        PDFParserConfig pdfParserConfig = new PDFParserConfig();
-        pdfParserConfig.setExtractInlineImages(false);
-        context.set(PDFParserConfig.class, pdfParserConfig);
-
-        // 当配置关闭嵌入资源解析时，注入空操作提取器跳过所有嵌入文档
-        if (!parseEmbeddedResource) {
-            context.set(EmbeddedDocumentExtractor.class, new NoOpEmbeddedDocumentExtractor());
-        }
-        return context;
-    }
-
-    /**
-     * 构建文档处理元数据 JSON。
-     *
-     * <p>元数据结构分为三层：
-     * <ul>
-     *   <li>{@code stable}：始终可获取的稳定元数据（文件名、扩展名、MIME 类型等）；</li>
-     *   <li>{@code conditional}：有条件存在的元数据（语言、页码、标题等）；</li>
-     *   <li>{@code best_effort}：预留的最佳尽力元数据（当前为空对象）。</li>
-     * </ul>
-     *
-     * @param filename        原始文件名
-     * @param metadata        Tika 解析产出的元数据
-     * @param cleanedMarkdown 清洗后的 Markdown 内容
-     * @return 序列化后的 processingMetadata JSON 字符串
-     */
-    private String buildProcessingMetadata(String filename, Metadata metadata, String cleanedMarkdown) {
-        // 使用 LinkedHashMap 保持字段插入顺序，确保 JSON 输出稳定可读
-        Map<String, Object> root = new LinkedHashMap<>();
-        root.put("schema_version", "v1");
-        // stable：始终存在的元数据层
-        root.put("stable", buildStableMetadata(filename, metadata));
-
-        // conditional：按需存在的元数据层，仅在非空时写入
-        Map<String, Object> conditional = buildConditionalMetadata(metadata, cleanedMarkdown);
-        if (!conditional.isEmpty()) {
-            root.put("conditional", conditional);
-        }
-
-        // best_effort：预留扩展层，当前版本为空对象
-        root.put("best_effort", Map.of());
-        try {
-            return objectMapper.writeValueAsString(root);
-        } catch (JsonProcessingException ex) {
-            throw new IllegalStateException("failed to serialize processing metadata", ex);
-        }
-    }
-
-    /**
-     * 构建稳定元数据层。
-     *
-     * <p>稳定元数据在任何文档类型下都应可获取，包括：
-     * 源文件名、文件扩展名、MIME 类型、质量标记和处理时间戳。
-     *
-     * @param filename 原始文件名
-     * @param metadata Tika 解析元数据
-     * @return 稳定元数据键值对
-     */
-    private static Map<String, Object> buildStableMetadata(String filename, Metadata metadata) {
-        Map<String, Object> stable = new LinkedHashMap<>();
-        stable.put("source_file", filename);
-        stable.put("file_ext", fileExtension(filename));
-        // MIME 类型：优先使用 Tika 检测值，回退为通用二进制类型
-        stable.put("mime_type", firstNonBlank(metadata.get(Metadata.CONTENT_TYPE), "application/octet-stream"));
-        // quality 标记当前版本固定为 high
-        stable.put("quality", "high");
-        // 使用 ISO-8601 格式记录处理时间
-        stable.put("created_at", Instant.now().toString());
-        return stable;
-    }
-
-    /**
-     * 构建条件元数据层。
-     *
-     * <p>条件元数据仅在能获取到时写入，包括语言、页码、标题及标题大纲样本。
-     * 如果 Tika 未提供 primary_title，则回退使用 Markdown 中的第一个标题。
-     *
-     * @param metadata        Tika 解析元数据
-     * @param cleanedMarkdown 清洗后的 Markdown 内容
-     * @return 条件元数据键值对（可能为空 Map）
-     */
-    private static Map<String, Object> buildConditionalMetadata(Metadata metadata, String cleanedMarkdown) {
-        Map<String, Object> conditional = new LinkedHashMap<>();
-        // 语言检测：优先取自定义 language 键，回退取 Content-Language
-        String language = firstNonBlank(metadata.get("language"), metadata.get(Metadata.CONTENT_LANGUAGE));
-        if (language != null) {
-            conditional.put("language", language);
-        }
-
-        // 页码提取：从多个可能的 Tika 元数据键中尝试解析
-        Integer pageCount = parsePageCount(metadata);
-        if (pageCount != null) {
-            conditional.put("page_count", pageCount);
-        }
-
-        // 标题提取：优先使用 Tika 元数据中的标题
-        String title = firstNonBlank(metadata.get(TikaCoreProperties.TITLE));
-        if (title != null) {
-            conditional.put("primary_title", title);
-        }
-
-        // 标题大纲样本：从 Markdown 中提取前 3 个标题作为内容结构预览
-        List<String> titleOutlineSample = extractTitleOutlineSample(cleanedMarkdown);
-        if (!titleOutlineSample.isEmpty()) {
-            // 如果 Tika 没有提供标题，使用 Markdown 的第一个标题作为回退
-            if (title == null) {
-                conditional.put("primary_title", titleOutlineSample.getFirst());
-            }
-            conditional.put("title_outline_sample", titleOutlineSample);
-        }
-        return conditional;
-    }
-
-    /**
-     * 从 Tika 元数据中解析页码数。
-     *
-     * <p>按 {@link #PAGE_COUNT_KEYS} 定义的优先级顺序逐一尝试，
-     * 返回第一个成功解析的整数值。若所有键均无法解析则返回 null。
-     *
-     * @param metadata Tika 解析元数据
-     * @return 页码数，无法获取时返回 null
-     */
-    private static Integer parsePageCount(Metadata metadata) {
-        for (String key : PAGE_COUNT_KEYS) {
-            String raw = metadata.get(key);
-            // 跳过空值和空白字符串
-            if (raw == null || raw.isBlank()) {
-                continue;
-            }
-            try {
-                return Integer.parseInt(raw.trim());
-            } catch (NumberFormatException ignored) {
-                // 当前 key 的值不是有效整数，继续尝试下一个 key
-            }
-        }
-        return null;
-    }
-
-    /**
-     * 从 Markdown 内容中提取标题大纲样本。
-     *
-     * <p>提取前 3 个 Markdown 标题行（1~6 级），作为文档结构预览。
-     * 用于在元数据中提供文档内容概览，方便快速判断文档主题。
-     *
-     * @param markdown cleaned.md 内容
-     * @return 标题文本列表（最多 3 条）
-     */
-    private static List<String> extractTitleOutlineSample(String markdown) {
-        Matcher matcher = MARKDOWN_HEADING.matcher(markdown);
-        List<String> headings = new java.util.ArrayList<>();
-        // 最多提取 3 个标题作为大纲样本
-        while (matcher.find() && headings.size() < 3) {
-            headings.add(matcher.group(1).trim());
-        }
-        return headings;
-    }
-
-    /**
-     * 从文件名中提取扩展名（不含点号，统一小写）。
-     *
-     * <p>边界情况处理：
-     * <ul>
-     *   <li>文件名为空 → 返回 {@code "bin"}；</li>
-     *   <li>无扩展名 → 返回 {@code "bin"}；</li>
-     *   <li>扩展名为空（以点结尾）→ 返回 {@code "bin"}。</li>
-     * </ul>
-     *
-     * @param filename 原始文件名
-     * @return 小写扩展名（不含点号）
-     */
-    private static String fileExtension(String filename) {
-        if (filename == null || filename.isBlank()) {
-            return "bin";
-        }
-        int index = filename.lastIndexOf('.');
-        // 无点号或点号在末尾均视为无扩展名
-        if (index < 0 || index == filename.length() - 1) {
-            return "bin";
-        }
-        // 截取点号之后的部分并转为小写
-        return filename.substring(index + 1).toLowerCase(Locale.ROOT);
-    }
-
-    /**
-     * 判断是否为原生 Markdown 文件。
-     *
-     * <p>通过文件扩展名判断，支持的扩展名包括：md、markdown、mdown、mkd。
-     * 原生 Markdown 文件将跳过 Tika 解析，采用最小破坏清洗路径。
-     *
-     * @param filename 文件名
-     * @return {@code true} 如果文件扩展名是 Markdown 类型
-     */
-    private static boolean isNativeMarkdown(String filename) {
-        // 先提取小写扩展名（不含点号）
-        String extension = fileExtension(filename);
-        // 与已知 Markdown 扩展名集合逐一比对
-        return extension.equals("md")
-                || extension.equals("markdown")
-                || extension.equals("mdown")
-                || extension.equals("mkd");
-    }
-
-    private static boolean isNativeHtml(String filename) {
-        String extension = fileExtension(filename);
-        return extension.equals("html") || extension.equals("htm");
-    }
-
-    /**
-     * 返回第一个非空字符串。
-     *
-     * <p>按参数顺序依次检查，返回首个非 null 且非空白（去除首尾空白后）的字符串。
-     * 常用于从多个候选元数据键中按优先级取值。
-     *
-     * @param values 候选字符串数组（按优先级排列）
-     * @return 首个非空字符串，全为空时返回 null
-     */
-    private static String firstNonBlank(String... values) {
-        // 空数组守卫：调用方可能传入 null
-        if (values == null) {
-            return null;
-        }
-        // 按优先级顺序遍历候选值
-        for (String value : values) {
-            // 返回首个非 null 且去除首尾空白后仍非空的字符串
-            if (value != null && !value.isBlank()) {
-                return value.trim();
-            }
-        }
-        // 全部为空，返回 null
-        return null;
-    }
-
-    /**
-     * 原生文本解码结果（内部 Record）。
-     *
-     * <p>封装 {@link #decodeTextContent} 的两项输出：
-     * <ul>
-     *   <li>{@code text}：按 BOM 检测或严格 UTF-8 解码后的文本；</li>
-     *   <li>{@code charset}：实际使用的字符集，用于构造 MIME 类型的
-     *       charset 参数（如 {@code text/markdown; charset=UTF-8}）。</li>
-     * </ul>
-     *
-     * @param text    解码后的文本
-     * @param charset 解码使用的字符集
-     */
-    private record DecodedText(String text, Charset charset) {
-    }
 }
