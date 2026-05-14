@@ -16,6 +16,7 @@
 - 新增 `auth/me` 能力位返回：`capabilities.{canAccessDocumentList,canUploadDocument,canAccessKnowledge,canAskQuestion,canAccessAdmin}`
 - 新增文档版本历史只读查询接口：`GET /api/v1/documents/{documentId}/versions`
 - 新增文档版本历史 DTO：返回 `versionNumber`、`versionOriginType`、`rollbackFromVersionNumber`、来源文件、状态、失败原因、时间、`isLatestVersion` 与 `isAskableVersion`
+- 新增文档详情页版本历史前端只读视图：展示版本账本、历史版本查看态、差异摘要、返回最新版本入口与无管理权限不可见分支
 
 ### Changed
 - 知识库列表接口升级为“主数据 + `INDEXED` 统计”视图，保留既有 `id/name/indexedDocumentCount` 字段并新增 `description/status`

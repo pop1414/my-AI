@@ -2,10 +2,10 @@
 
 ## 拉取信息
 
-- 更新时间：2026-05-13 20:05
-- 拉取方式：基于 GitHub Issues 当前状态更新；#1、#2、#19、#20 已关闭，#3 可基于稳定版本历史只读契约继续推进
+- 更新时间：2026-05-14 09:55
+- 拉取方式：基于 GitHub Issues 当前状态更新；#1、#2、#3、#19、#20 已关闭，版本历史只读前后端基线已完成
 - 仓库：`pop1414/my-AI`
-- 范围：文档版本链相关 issues；#1、#2、#19、#20 已完成关闭，当前仍需推进 #3-#12，共 10 个 open follow-up
+- 范围：文档版本链相关 issues；#1、#2、#3、#19、#20 已完成关闭，当前仍需推进 #4-#12，共 9 个 open follow-up
 
 ## 收口状态
 
@@ -13,6 +13,7 @@
 - #2 已按“文档详情页版本历史交互确认”完成并关闭，交互确认产物见 `document-detail-version-history-interaction-confirmation.md`。
 - #1 保留的兼容式 seam 已由 #19 收口：生产读路径切到 `latest projection + ingest_document_versions`，并补齐 guard 与 ADR。
 - #20 已按“版本历史只读后端查询接口”完成并关闭：`GET /api/v1/documents/{documentId}/versions` 提供 #3 所需稳定后端契约。
+- #3 已按“文档详情页版本历史前端只读视图”完成并关闭，收口说明见 `document-detail-version-history-frontend-readonly-closure.md`。
 
 ## 总览
 
@@ -20,7 +21,7 @@
 | --- | --- | --- | --- | --- |
 | [#1](https://github.com/pop1414/my-AI/issues/1) | document / document version 基础版本链后端落地 | CLOSED | `ready-for-agent` | 无 |
 | [#2](https://github.com/pop1414/my-AI/issues/2) | 文档详情页版本历史交互确认 | CLOSED | `ready-for-human` | #1 已完成 |
-| [#3](https://github.com/pop1414/my-AI/issues/3) | 文档详情页版本历史前端只读视图 | OPEN | `ready-for-agent` | #1 已完成, #2 已完成, #20 已完成 |
+| [#3](https://github.com/pop1414/my-AI/issues/3) | 文档详情页版本历史前端只读视图 | CLOSED | `ready-for-agent` | #1 已完成, #2 已完成, #20 已完成 |
 | [#4](https://github.com/pop1414/my-AI/issues/4) | 上传新版本后端链路与契约 | OPEN | `ready-for-agent` | #1 已完成, #19 已完成 |
 | [#5](https://github.com/pop1414/my-AI/issues/5) | 上传新版本前端交互与结果提示 | OPEN | `ready-for-agent` | #4 |
 | [#6](https://github.com/pop1414/my-AI/issues/6) | 版本回退后端链路与契约 | OPEN | `ready-for-agent` | #1 已完成, #19 已完成 |
@@ -38,9 +39,9 @@
 1. #1 已完成关闭；后续不再把基础版本链能力作为 blocker。
 2. #19 已完成关闭；后续后端任务默认以 `latest projection + ingest_document_versions` 为生产读路径，不再新增对主表旧版本事实列的读取依赖。
 3. #2 已完成关闭；后续前端与后端实现以交互确认文档为准。
-4. #20 已完成关闭，#3 可以基于 `GET /api/v1/documents/{documentId}/versions` 推进版本历史前端只读视图。
+4. #20 已完成关闭，#3 已基于 `GET /api/v1/documents/{documentId}/versions` 完成版本历史前端只读视图。
 5. 后端推进 #4、#6、#8、#10，分别覆盖上传新版本、版本回退、删除与列表语义、qa 可问答版本选择；实现时应遵守 #19 已收紧的读写边界，并复用 #20 的版本历史读模型语义。
-6. 前端在后端契约稳定后推进 #3、#5、#7、#9、#11，其中 #3 不再被 #20 阻塞。
+6. 前端在后端契约稳定后推进 #5、#7、#9、#11；#7 可基于 #3 已落地的版本历史只读视图接入回退动作。
 7. 最后用 #12 收口治理动作之间的互斥、业务错误码、审计事件和竞争场景测试。
 
 ## Issue 摘要
@@ -87,6 +88,8 @@
 
 ### #3 文档详情页版本历史前端只读视图
 
+状态：已关闭，按“文档详情页版本历史前端只读视图”完成收口。
+
 目标是在版本链后端和交互确认完成后，实现文档详情页的版本历史只读视图。不包含上传新版本与版本回退动作。
 
 验收重点：
@@ -96,6 +99,15 @@
 - 历史版本查看态明确提示当前不是最新版本，并提供返回最新版本入口。
 - 历史版本查看不改变当前问答基线。
 - 前端测试覆盖版本历史只读展示与历史版本查看态。
+
+收口说明：
+
+- 详情页通过 `GET /api/v1/documents/{documentId}/versions` 获取版本历史，前端 API client 使用稳定 DTO 校验响应。
+- 版本历史列表已展示版本号、来源文件名、上传人、更新时间、状态、最新版本标记、当前查看标记和当前问答基线标记。
+- 历史版本查看态通过 `?version=N` 表达，页面展示历史查看提示、差异摘要和返回最新版本入口。
+- 后端返回 `403` 时，前端不渲染旧版本历史列表，展示“旧版本视图不可见”。
+- 已通过 `npm.cmd run build` 与 `document-version-history.spec.ts` 端到端测试。
+- 收口说明位于 `docs/runbooks/plans/document-version-chain/document-detail-version-history-frontend-readonly-closure.md`。
 
 ### #4 上传新版本后端链路与契约
 
@@ -263,7 +275,7 @@
 
 ## 审阅提示
 
-- 先核对总览表中的标签与阻塞关系是否和 GitHub Issues 当前状态一致，尤其是 #1/#2/#19/#20 已关闭、#3 不再等待 #20。
+- 先核对总览表中的标签与阻塞关系是否和 GitHub Issues 当前状态一致，尤其是 #1/#2/#3/#19/#20 已关闭。
 - 再按 #19、#20、#3、后端功能 issues、后续前端 issues、#12 的顺序审阅，确认执行顺序是否符合“后端契约先稳定，前端再接入”的原则。
-- 特别检查 #19 是否足以阻止后续代码继续依赖主表旧版本事实字段，#20 是否足以支撑 #3 不靠 mock 或临时接口推进。
+- 特别检查 #19 是否足以阻止后续代码继续依赖主表旧版本事实字段，#20 是否足以支撑 #3 不靠 mock 或临时接口推进，#3 是否足以作为 #7 回退前端交互的只读页面基线。
 - 最后检查每个 issue 的验收重点是否足够指导后续领取任务；如果 GitHub issue 后续有更新，应重新拉取并更新本快照。
