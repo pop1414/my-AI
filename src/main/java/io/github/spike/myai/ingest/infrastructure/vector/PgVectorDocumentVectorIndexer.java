@@ -103,10 +103,13 @@ public class PgVectorDocumentVectorIndexer implements DocumentVectorIndexer {
 
             // 填充元数据映射：这些字段会在检索时作为 Filter 被使用。
             Map<String, Object> metadata = new HashMap<>();
+            metadata.put("workspaceId", document.workspaceId());    // 工作区隔离
             metadata.put("documentId", document.documentId().value()); // 溯源文档
             metadata.put("kbId", document.kbId());                    // 知识库隔离
             metadata.put("chunkIndex", i);                          // 切片顺序
+            metadata.put("documentVersionNumber", document.latestVersionNumber()); // 文档版本号
             metadata.put("sourceFile", document.filename());        // 原始文件名
+            metadata.put("sourceUpdatedAt", document.updatedAt().toString()); // 来源版本更新时间
             metadata.put("contentHash", sha256(chunkText));         // 文本指纹（去重/校验）
             metadata.put("splitVersion", splitVersion);             // 逻辑版本锁
             SourceHint sourceHint = chunk.sourceHint();

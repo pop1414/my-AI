@@ -2,12 +2,16 @@ package io.github.spike.myai.qa.interfaces.rest;
 
 import io.github.spike.myai.qa.application.command.AskQuestionCommand;
 import io.github.spike.myai.qa.application.result.AskReferenceResult;
+import io.github.spike.myai.qa.application.result.AskStaleReferenceDocumentResult;
+import io.github.spike.myai.qa.application.result.AskStaleReferenceSummaryResult;
 import io.github.spike.myai.qa.application.usecase.AskQuestionUseCase;
 import io.github.spike.myai.knowledge.application.exception.KnowledgeBaseInactiveException;
 import io.github.spike.myai.knowledge.application.exception.KnowledgeBaseNotFoundException;
 import io.github.spike.myai.qa.interfaces.rest.dto.AskReferenceResponse;
 import io.github.spike.myai.qa.interfaces.rest.dto.AskRequest;
 import io.github.spike.myai.qa.interfaces.rest.dto.AskResponse;
+import io.github.spike.myai.qa.interfaces.rest.dto.AskStaleReferenceDocumentResponse;
+import io.github.spike.myai.qa.interfaces.rest.dto.AskStaleReferenceSummaryResponse;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -85,7 +89,8 @@ public class QaController {
                     result.answer(),
                     result.references().stream()
                             .map(QaController::toReferenceResponse)
-                            .toList());
+                            .toList(),
+                    toStaleReferenceSummaryResponse(result.staleReferences()));
         } catch (KnowledgeBaseNotFoundException ex) {
             // 知识库不存在 → 400（用户输入了无效的 kbId）
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, ex.getMessage(), ex);
@@ -108,6 +113,49 @@ public class QaController {
      * @return REST 层的引用响应项
      */
     private static AskReferenceResponse toReferenceResponse(AskReferenceResult item) {
-        return new AskReferenceResponse(item.documentId(), item.chunkIndex(), item.contentPreview());
+        return new AskReferenceResponse(
+                item.documentId(),
+                item.chunkIndex(),
+                item.contentPreview(),
+                item.sourceVersionNumber(),
+                item.sourceUpdatedAt(),
+                item.isLatestVersion(),
+                item.latestVersionNumber(),
+                item.sourceFilename());
+    }
+
+    /**
+     * 将应用层陈旧引用汇总映射为 REST 响应对象。
+     *
+     * @param summary 应用层陈旧引用汇总；无引用时为空
+     * @return REST 层陈旧引用汇总；无引用时为空
+     */
+    private static AskStaleReferenceSummaryResponse toStaleReferenceSummaryResponse(
+            AskStaleReferenceSummaryResult summary) {
+        if (summary == null) {
+            return null;
+        }
+        return new AskStaleReferenceSummaryResponse(
+                summary.hasStaleReferences(),
+                summary.staleReferenceCount(),
+                summary.staleDocumentCount(),
+                summary.documents().stream()
+                        .map(QaController::toStaleReferenceDocumentResponse)
+                        .toList());
+    }
+
+    /**
+     * 将应用层陈旧引用文档项映射为 REST 响应对象。
+     *
+     * @param item 应用层陈旧引用文档项
+     * @return REST 层陈旧引用文档项
+     */
+    private static AskStaleReferenceDocumentResponse toStaleReferenceDocumentResponse(
+            AskStaleReferenceDocumentResult item) {
+        return new AskStaleReferenceDocumentResponse(
+                item.documentId(),
+                item.sourceVersionNumber(),
+                item.latestVersionNumber(),
+                item.sourceFilename());
     }
 }

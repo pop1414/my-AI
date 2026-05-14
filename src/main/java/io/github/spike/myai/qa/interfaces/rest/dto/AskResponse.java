@@ -13,6 +13,20 @@ import java.util.List;
  *
  * @param answer 回答文本
  * @param references 引用片段集合，顺序与应用层检索命中顺序一致
+ * @param staleReferences 陈旧引用汇总；无引用时为空
  */
-public record AskResponse(String answer, List<AskReferenceResponse> references) {
+public record AskResponse(
+        String answer,
+        List<AskReferenceResponse> references,
+        AskStaleReferenceSummaryResponse staleReferences) {
+
+    /**
+     * 兼容旧调用方的简化构造器。
+     *
+     * @param answer 回答文本
+     * @param references 引用片段集合
+     */
+    public AskResponse(String answer, List<AskReferenceResponse> references) {
+        this(answer, references, null);
+    }
 }

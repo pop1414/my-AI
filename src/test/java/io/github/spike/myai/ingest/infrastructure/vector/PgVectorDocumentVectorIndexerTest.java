@@ -96,6 +96,7 @@ class PgVectorDocumentVectorIndexerTest {
         VectorStore vectorStore = Mockito.mock(VectorStore.class);
         JdbcTemplate jdbcTemplate = Mockito.mock(JdbcTemplate.class);
         PgVectorDocumentVectorIndexer indexer = new PgVectorDocumentVectorIndexer(vectorStore, jdbcTemplate);
+        Instant updatedAt = Instant.parse("2026-05-09T10:00:00Z");
         Document document = new Document(
                 new DocumentId("7c01e0fd-a83c-4e4e-8334-722708c72b62"),
                 "kb-1",
@@ -115,7 +116,7 @@ class PgVectorDocumentVectorIndexerTest {
                 "v1",
                 null,
                 Instant.now(),
-                Instant.now());
+                updatedAt);
         List<DocumentChunk> chunks = List.of(new DocumentChunk("chunk-a", SourceHint.heading("第1章 \"结构\"")));
 
         indexer.index(document, chunks);
@@ -124,5 +125,9 @@ class PgVectorDocumentVectorIndexerTest {
         verify(vectorStore).add(documentsCaptor.capture());
         Map<String, Object> metadata = documentsCaptor.getValue().getFirst().getMetadata();
         assertEquals("{\"heading\":\"第1章 \\\"结构\\\"\"}", metadata.get("sourceHint"));
+        assertEquals("default", metadata.get("workspaceId"));
+        assertEquals(1, metadata.get("documentVersionNumber"));
+        assertEquals("a.txt", metadata.get("sourceFile"));
+        assertEquals("2026-05-09T10:00:00Z", metadata.get("sourceUpdatedAt"));
     }
 }
