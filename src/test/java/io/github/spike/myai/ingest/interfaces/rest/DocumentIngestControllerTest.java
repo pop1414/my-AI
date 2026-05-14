@@ -14,6 +14,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import io.github.spike.myai.ingest.application.command.AcceptUploadCommand;
+import io.github.spike.myai.ingest.application.command.UploadNewDocumentVersionCommand;
 import io.github.spike.myai.ingest.application.exception.DocumentDeleteConflictException;
 import io.github.spike.myai.ingest.application.exception.DocumentDeleteFailedException;
 import io.github.spike.myai.ingest.application.exception.DocumentNotFoundException;
@@ -28,6 +29,7 @@ import io.github.spike.myai.ingest.application.result.DocumentListPageResult;
 import io.github.spike.myai.ingest.application.result.DocumentStatusResult;
 import io.github.spike.myai.ingest.application.result.DocumentVersionHistoryItemResult;
 import io.github.spike.myai.ingest.application.result.DocumentVersionHistoryResult;
+import io.github.spike.myai.ingest.application.result.DocumentVersionUploadResult;
 import io.github.spike.myai.ingest.application.usecase.AcceptUploadUseCase;
 import io.github.spike.myai.ingest.application.usecase.DeleteDocumentUseCase;
 import io.github.spike.myai.ingest.application.usecase.GetDocumentChunksPreviewUseCase;
@@ -35,6 +37,7 @@ import io.github.spike.myai.ingest.application.usecase.GetDocumentStatusUseCase;
 import io.github.spike.myai.ingest.application.usecase.ListDocumentVersionsUseCase;
 import io.github.spike.myai.ingest.application.usecase.ListDocumentsUseCase;
 import io.github.spike.myai.ingest.application.usecase.ReprocessDocumentUseCase;
+import io.github.spike.myai.ingest.application.usecase.UploadNewDocumentVersionUseCase;
 import io.github.spike.myai.ingest.domain.model.DocumentId;
 import io.github.spike.myai.ingest.domain.model.DocumentVersionOriginType;
 import io.github.spike.myai.ingest.domain.model.UploadStatus;
@@ -42,6 +45,7 @@ import io.github.spike.myai.ingest.domain.model.UploadTicket;
 import io.github.spike.myai.ingest.domain.port.DocumentSourceStorage;
 import io.github.spike.myai.knowledge.application.exception.KnowledgeBaseInactiveException;
 import io.github.spike.myai.knowledge.application.exception.KnowledgeBaseNotFoundException;
+import io.github.spike.myai.shared.rest.BusinessException;
 import io.github.spike.myai.shared.rest.GlobalRestExceptionHandler;
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.BeforeEach;
@@ -49,6 +53,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.security.access.AccessDeniedException;
@@ -75,6 +80,7 @@ class DocumentIngestControllerTest {
     private GetDocumentChunksPreviewUseCase getDocumentChunksPreviewUseCase;
     private ReprocessDocumentUseCase reprocessDocumentUseCase;
     private DeleteDocumentUseCase deleteDocumentUseCase;
+    private UploadNewDocumentVersionUseCase uploadNewDocumentVersionUseCase;
     private DocumentSourceStorage documentSourceStorage;
     private MockMvc mockMvc;
 
@@ -87,6 +93,7 @@ class DocumentIngestControllerTest {
         this.getDocumentChunksPreviewUseCase = Mockito.mock(GetDocumentChunksPreviewUseCase.class);
         this.reprocessDocumentUseCase = Mockito.mock(ReprocessDocumentUseCase.class);
         this.deleteDocumentUseCase = Mockito.mock(DeleteDocumentUseCase.class);
+        this.uploadNewDocumentVersionUseCase = Mockito.mock(UploadNewDocumentVersionUseCase.class);
         this.documentSourceStorage = Mockito.mock(DocumentSourceStorage.class);
         ObjectMapper objectMapper = new ObjectMapper()
                 .findAndRegisterModules()
@@ -100,6 +107,7 @@ class DocumentIngestControllerTest {
                 getDocumentChunksPreviewUseCase,
                 reprocessDocumentUseCase,
                 deleteDocumentUseCase,
+                uploadNewDocumentVersionUseCase,
                 documentSourceStorage,
                 objectMapper);
         this.mockMvc = MockMvcBuilders.standaloneSetup(controller)
@@ -389,6 +397,109 @@ class DocumentIngestControllerTest {
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("FORBIDDEN"))
                 .andExpect(jsonPath("$.message").value("document manage access denied"));
+    }
+
+    @Test
+    @DisplayName("上传新版本成功创建版本时，应返回版本上下文并透传文件内容给用例")
+    void uploadNewVersion_shouldReturnCreatedResult() throws Exception {
+        when(uploadNewDocumentVersionUseCase.handle(any(UploadNewDocumentVersionCommand.class)))
+                .thenReturn(new DocumentVersionUploadResult(
+                        "doc-600",
+                        true,
+                        "CREATED",
+                        3,
+                        2,
+                        null,
+                        3,
+                        2,
+                        true,
+                        "UPLOADED",
+                        "UPLOAD"));
+        MockMultipartFile file =
+                new MockMultipartFile("file", "v3.txt", MediaType.TEXT_PLAIN_VALUE, "new content".getBytes());
+
+        mockMvc.perform(multipart("/api/v1/documents/{documentId}/versions", "doc-600")
+                        .file(file)
+                        .param("expectedLatestVersionNumber", "2"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.documentId").value("doc-600"))
+                .andExpect(jsonPath("$.versionCreated").value(true))
+                .andExpect(jsonPath("$.versionResultType").value("CREATED"))
+                .andExpect(jsonPath("$.versionNumber").value(3))
+                .andExpect(jsonPath("$.previousVersionNumber").value(2))
+                .andExpect(jsonPath("$.latestVersionNumber").value(3))
+                .andExpect(jsonPath("$.askableVersionNumber").value(2))
+                .andExpect(jsonPath("$.canAskNow").value(true))
+                .andExpect(jsonPath("$.status").value("UPLOADED"))
+                .andExpect(jsonPath("$.versionOriginType").value("UPLOAD"));
+
+        ArgumentCaptor<UploadNewDocumentVersionCommand> captor =
+                ArgumentCaptor.forClass(UploadNewDocumentVersionCommand.class);
+        verify(uploadNewDocumentVersionUseCase).handle(captor.capture());
+        org.junit.jupiter.api.Assertions.assertEquals("doc-600", captor.getValue().documentId());
+        org.junit.jupiter.api.Assertions.assertEquals("v3.txt", captor.getValue().filename());
+        org.junit.jupiter.api.Assertions.assertEquals(11L, captor.getValue().fileSize());
+        org.junit.jupiter.api.Assertions.assertEquals(2, captor.getValue().expectedLatestVersionNumber());
+        org.junit.jupiter.api.Assertions.assertArrayEquals("new content".getBytes(), captor.getValue().sourceContent());
+        verify(documentSourceStorage, never()).saveVersion(
+                any(DocumentId.class),
+                org.mockito.ArgumentMatchers.anyInt(),
+                any(String.class),
+                any(byte[].class));
+    }
+
+    @Test
+    @DisplayName("上传新版本同内容复用时，不应保存新的版本源文件")
+    void uploadNewVersion_shouldNotSaveSource_whenReusedIdenticalContent() throws Exception {
+        when(uploadNewDocumentVersionUseCase.handle(any(UploadNewDocumentVersionCommand.class)))
+                .thenReturn(new DocumentVersionUploadResult(
+                        "doc-601",
+                        false,
+                        "REUSED_IDENTICAL_CONTENT",
+                        null,
+                        2,
+                        2,
+                        2,
+                        2,
+                        true,
+                        "INDEXED",
+                        "UPLOAD"));
+        MockMultipartFile file =
+                new MockMultipartFile("file", "same.txt", MediaType.TEXT_PLAIN_VALUE, "same".getBytes());
+
+        mockMvc.perform(multipart("/api/v1/documents/{documentId}/versions", "doc-601")
+                        .file(file)
+                        .param("expectedLatestVersionNumber", "2"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.versionCreated").value(false))
+                .andExpect(jsonPath("$.versionResultType").value("REUSED_IDENTICAL_CONTENT"))
+                .andExpect(jsonPath("$.reusedLatestVersionNumber").value(2))
+                .andExpect(jsonPath("$.latestVersionNumber").value(2));
+
+        verify(documentSourceStorage, never()).saveVersion(
+                any(DocumentId.class),
+                org.mockito.ArgumentMatchers.anyInt(),
+                any(String.class),
+                any(byte[].class));
+    }
+
+    @Test
+    @DisplayName("上传新版本业务冲突时，应返回稳定业务错误码")
+    void uploadNewVersion_shouldReturnBusinessErrorCode_whenUseCaseThrowsBusinessException() throws Exception {
+        when(uploadNewDocumentVersionUseCase.handle(any(UploadNewDocumentVersionCommand.class)))
+                .thenThrow(new BusinessException(
+                        HttpStatus.CONFLICT,
+                        "VERSION_CONFLICT_STALE_LATEST_VERSION",
+                        "当前最新版本已变化，请刷新详情后重试"));
+        MockMultipartFile file =
+                new MockMultipartFile("file", "v3.txt", MediaType.TEXT_PLAIN_VALUE, "new content".getBytes());
+
+        mockMvc.perform(multipart("/api/v1/documents/{documentId}/versions", "doc-602")
+                        .file(file)
+                        .param("expectedLatestVersionNumber", "2"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("VERSION_CONFLICT_STALE_LATEST_VERSION"))
+                .andExpect(jsonPath("$.message").value("当前最新版本已变化，请刷新详情后重试"));
     }
 
     @Test

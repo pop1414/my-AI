@@ -77,7 +77,7 @@ class ProcessDocumentApplicationServiceTest {
                 Instant.now(),
                 Instant.now());
         when(repository.findById(anyString(), eq(documentId))).thenReturn(Optional.of(ingesting));
-        when(sourceStorage.load(documentId, "a.txt")).thenReturn(Optional.of("hello world".getBytes()));
+        when(sourceStorage.loadVersion(documentId, 1, "a.txt")).thenReturn(Optional.of("hello world".getBytes()));
         DocumentParseResult parseResult = new DocumentParseResult(
                 "<html><body><p>hello world</p></body></html>",
                 "<p>hello world</p>",
@@ -153,7 +153,7 @@ class ProcessDocumentApplicationServiceTest {
                 Instant.now(),
                 Instant.now());
         when(repository.findById(anyString(), eq(documentId))).thenReturn(Optional.of(ingesting));
-        when(sourceStorage.load(documentId, "b.txt")).thenReturn(Optional.empty());
+        when(sourceStorage.loadVersion(documentId, 1, "b.txt")).thenReturn(Optional.empty());
         when(repository.markFailed(
                         anyString(),
                         eq(documentId),
@@ -218,7 +218,7 @@ class ProcessDocumentApplicationServiceTest {
                 Instant.now(),
                 Instant.now());
         when(repository.findById(anyString(), eq(documentId))).thenReturn(Optional.of(ingesting));
-        when(sourceStorage.load(documentId, "c.txt"))
+        when(sourceStorage.loadVersion(documentId, 1, "c.txt"))
                 .thenThrow(new RuntimeException(new SocketTimeoutException("timeout")));
         when(repository.markRetry(
                         anyString(),

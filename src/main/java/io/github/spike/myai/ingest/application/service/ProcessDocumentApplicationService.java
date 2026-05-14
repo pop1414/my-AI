@@ -136,7 +136,7 @@ public class ProcessDocumentApplicationService implements ProcessDocumentUseCase
         try {
             // 步骤 1: 从存储系统中调取原始文件字节数组。
             byte[] sourceBytes = sourceStorage
-                    .load(documentId, document.filename())
+                    .loadVersion(documentId, document.latestVersionNumber(), document.filename())
                     .orElseThrow(() -> new IllegalStateException("source file not found"));
 
             // 步骤 2: 解析出一期中间产物，并将 cleaned.md 主链结果落盘。

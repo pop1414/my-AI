@@ -2,6 +2,7 @@ package io.github.spike.myai.ingest.domain.port;
 
 import io.github.spike.myai.ingest.domain.model.Document;
 import io.github.spike.myai.ingest.domain.model.DocumentId;
+import io.github.spike.myai.ingest.domain.model.DocumentVersion;
 import io.github.spike.myai.ingest.domain.model.UploadStatus;
 import java.time.Instant;
 import java.util.Optional;
@@ -190,6 +191,36 @@ public interface DocumentRepository {
             UploadStatus expectedStatus,
             String newSplitVersion,
             Instant requestedAt);
+
+    /**
+     * 追加一个上传来源的新最新版本。
+     *
+     * <p>仅当当前 latestVersionNumber 与调用方期望值一致、且当前 latest 状态允许上传新版本时才成功。
+     *
+     * @param workspaceId 工作区标识
+     * @param documentId 文档资产 ID
+     * @param expectedLatestVersionNumber 调用方期望的当前最新版本号
+     * @param newVersion 新版本事实
+     * @param updatedAt 更新时间
+     * @return 是否成功追加
+     */
+    boolean appendUploadVersion(
+            String workspaceId,
+            DocumentId documentId,
+            int expectedLatestVersionNumber,
+            DocumentVersion newVersion,
+            Instant updatedAt);
+
+    /**
+     * 查询当前可问答版本号。
+     *
+     * <p>当前规则：同一 document 下版本号最大的 INDEXED 版本。
+     *
+     * @param workspaceId 工作区标识
+     * @param documentId 文档资产 ID
+     * @return 可问答版本号；不存在时返回 0
+     */
+    int findLatestIndexedVersionNumber(String workspaceId, DocumentId documentId);
 
     /**
      * 将文档状态推进为 DELETING。

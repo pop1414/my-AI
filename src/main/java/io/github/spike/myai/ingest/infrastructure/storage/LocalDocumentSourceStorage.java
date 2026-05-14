@@ -86,6 +86,32 @@ public class LocalDocumentSourceStorage implements DocumentSourceStorage {
         }
     }
 
+    /**
+     * 保存指定版本的源文件到本地文件系统。
+     *
+     * <p>实现与 {@link #save(DocumentId, String, byte[])} 一致，
+     * 区别在于存储路径携带版本号子目录：
+     * {@code {root}/{documentId}/versions/{versionNumber}/{safeFilename}}。
+     *
+     * @param documentId   文档资产 ID
+     * @param versionNumber 版本号
+     * @param filename     原始文件名
+     * @param content      文件字节内容
+     */
+    @Override
+    public void saveVersion(DocumentId documentId, int versionNumber, String filename, byte[] content) {
+        String safeFilename = sanitizeFilename(filename);
+        Path filePath = resolveVersionFilePath(documentId, versionNumber, safeFilename);
+        try {
+            Files.createDirectories(filePath.getParent());
+            if (Files.notExists(filePath)) {
+                Files.write(filePath, content, StandardOpenOption.CREATE_NEW);
+            }
+        } catch (IOException ex) {
+            throw new IllegalStateException("failed to save version source file", ex);
+        }
+    }
+
     @Override
     public Optional<byte[]> load(DocumentId documentId, String filename) {
         String safeFilename = sanitizeFilename(filename);
@@ -114,6 +140,31 @@ public class LocalDocumentSourceStorage implements DocumentSourceStorage {
             }
         } catch (IOException ex) {
             throw new IllegalStateException("failed to load source file", ex);
+        }
+    }
+
+    /**
+     * 读取指定版本的源文件。
+     *
+     * <p>优先按版本路径精确读取；若版本路径下无文件，
+     * 则回退到 {@link #load(DocumentId, String)} 兼容历史数据。
+     *
+     * @param documentId   文档资产 ID
+     * @param versionNumber 版本号
+     * @param filename     原始文件名
+     * @return 文件字节数组，未命中时返回空
+     */
+    @Override
+    public Optional<byte[]> loadVersion(DocumentId documentId, int versionNumber, String filename) {
+        String safeFilename = sanitizeFilename(filename);
+        Path filePath = resolveVersionFilePath(documentId, versionNumber, safeFilename);
+        try {
+            if (Files.exists(filePath)) {
+                return Optional.of(Files.readAllBytes(filePath));
+            }
+            return load(documentId, filename);
+        } catch (IOException ex) {
+            throw new IllegalStateException("failed to load version source file", ex);
         }
     }
 
@@ -168,6 +219,24 @@ public class LocalDocumentSourceStorage implements DocumentSourceStorage {
      */
     private Path resolveFilePath(DocumentId documentId, String safeFilename) {
         return rootDirectory.resolve(documentId.value()).resolve(safeFilename);
+    }
+
+    /**
+     * 组装版本化源文件的本地存储路径。
+     *
+     * <p>路径格式：{@code {root}/{documentId}/versions/{versionNumber}/{safeFilename}}。
+     *
+     * @param documentId   文档资产 ID
+     * @param versionNumber 版本号
+     * @param safeFilename  已清洗的安全文件名
+     * @return 版本化文件的完整路径
+     */
+    private Path resolveVersionFilePath(DocumentId documentId, int versionNumber, String safeFilename) {
+        return rootDirectory
+                .resolve(documentId.value())
+                .resolve("versions")
+                .resolve(Integer.toString(versionNumber))
+                .resolve(safeFilename);
     }
 
     /**

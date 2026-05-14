@@ -60,6 +60,26 @@ public class GlobalRestExceptionHandler {
     }
 
     /**
+     * 处理携带稳定业务错误码的异常。
+     *
+     * <p>与 {@link ResponseStatusException} 不同，业务异常的响应 code 不使用 HTTP 状态名，
+     * 而是直接返回异常携带的业务错误码，供前端按场景展示精确提示。
+     *
+     * @param ex 业务异常
+     * @return 包含业务错误码和消息的 JSON 响应体
+     */
+    @ExceptionHandler(BusinessException.class)
+    public ResponseEntity<ErrorResponse> handleBusinessException(BusinessException ex) {
+        String message = ex.getMessage();
+        if (message == null || message.isBlank()) {
+            message = ex.status().getReasonPhrase();
+        }
+        return ResponseEntity
+                .status(ex.status())
+                .body(new ErrorResponse(ex.code(), message));
+    }
+
+    /**
      * 处理权限拒绝异常（Spring Security 或治理守卫）。
      *
      * <p>统一映射为 HTTP 403 Forbidden，但根据异常子类型设置差异化的错误码：

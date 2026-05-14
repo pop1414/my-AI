@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.spike.myai.ingest.application.command.AcceptUploadCommand;
 import io.github.spike.myai.ingest.application.command.DeleteDocumentCommand;
 import io.github.spike.myai.ingest.application.command.ReprocessDocumentCommand;
+import io.github.spike.myai.ingest.application.command.UploadNewDocumentVersionCommand;
 import io.github.spike.myai.ingest.application.exception.DocumentDeleteConflictException;
 import io.github.spike.myai.ingest.application.exception.DocumentDeleteFailedException;
 import io.github.spike.myai.ingest.application.exception.DocumentNotFoundException;
@@ -16,6 +17,7 @@ import io.github.spike.myai.ingest.application.result.DocumentChunkPreviewItemRe
 import io.github.spike.myai.ingest.application.result.DocumentChunksPreviewResult;
 import io.github.spike.myai.ingest.application.result.DocumentListItemResult;
 import io.github.spike.myai.ingest.application.result.DocumentListPageResult;
+import io.github.spike.myai.ingest.application.result.DocumentVersionUploadResult;
 import io.github.spike.myai.ingest.application.usecase.AcceptUploadUseCase;
 import io.github.spike.myai.ingest.application.usecase.DeleteDocumentUseCase;
 import io.github.spike.myai.ingest.application.usecase.GetDocumentChunksPreviewUseCase;
@@ -23,8 +25,10 @@ import io.github.spike.myai.ingest.application.usecase.GetDocumentStatusUseCase;
 import io.github.spike.myai.ingest.application.usecase.ListDocumentVersionsUseCase;
 import io.github.spike.myai.ingest.application.usecase.ListDocumentsUseCase;
 import io.github.spike.myai.ingest.application.usecase.ReprocessDocumentUseCase;
+import io.github.spike.myai.ingest.application.usecase.UploadNewDocumentVersionUseCase;
 import io.github.spike.myai.ingest.application.result.DocumentStatusResult;
 import org.springframework.http.ResponseEntity;
+import io.github.spike.myai.ingest.domain.model.DocumentId;
 import io.github.spike.myai.ingest.domain.model.UploadTicket;
 import io.github.spike.myai.ingest.domain.port.DocumentSourceStorage;
 import io.github.spike.myai.ingest.interfaces.rest.dto.DocumentChunkPreviewItemResponse;
@@ -34,6 +38,7 @@ import io.github.spike.myai.ingest.interfaces.rest.dto.DocumentListPageResponse;
 import io.github.spike.myai.ingest.interfaces.rest.dto.DocumentStatusResponse;
 import io.github.spike.myai.ingest.interfaces.rest.dto.DocumentVersionHistoryItemResponse;
 import io.github.spike.myai.ingest.interfaces.rest.dto.DocumentVersionHistoryResponse;
+import io.github.spike.myai.ingest.interfaces.rest.dto.DocumentVersionUploadResponse;
 import io.github.spike.myai.ingest.interfaces.rest.dto.UploadResponse;
 import io.github.spike.myai.knowledge.application.exception.KnowledgeBaseInactiveException;
 import io.github.spike.myai.knowledge.application.exception.KnowledgeBaseNotFoundException;
@@ -103,6 +108,10 @@ public class DocumentIngestController {
      */
     private final DeleteDocumentUseCase deleteDocumentUseCase;
     /**
+     * 上传新版本用例。
+     */
+    private final UploadNewDocumentVersionUseCase uploadNewDocumentVersionUseCase;
+    /**
      * 文档源文件存储端口：用于保存上传文件的原始内容，供异步处理链路读取。
      */
     private final DocumentSourceStorage documentSourceStorage;
@@ -124,6 +133,7 @@ public class DocumentIngestController {
      * @param getDocumentChunksPreviewUseCase 文档分块预览用例
      * @param reprocessDocumentUseCase       文档重处理用例
      * @param deleteDocumentUseCase          文档删除用例
+     * @param uploadNewDocumentVersionUseCase 上传新版本用例
      * @param documentSourceStorage          源文件存储端口
      * @param objectMapper                   Jackson JSON 映射器
      */
@@ -135,6 +145,7 @@ public class DocumentIngestController {
             GetDocumentChunksPreviewUseCase getDocumentChunksPreviewUseCase,
             ReprocessDocumentUseCase reprocessDocumentUseCase,
             DeleteDocumentUseCase deleteDocumentUseCase,
+            UploadNewDocumentVersionUseCase uploadNewDocumentVersionUseCase,
             DocumentSourceStorage documentSourceStorage,
             ObjectMapper objectMapper) {
         this.acceptUploadUseCase = acceptUploadUseCase;
@@ -144,6 +155,7 @@ public class DocumentIngestController {
         this.getDocumentChunksPreviewUseCase = getDocumentChunksPreviewUseCase;
         this.reprocessDocumentUseCase = reprocessDocumentUseCase;
         this.deleteDocumentUseCase = deleteDocumentUseCase;
+        this.uploadNewDocumentVersionUseCase = uploadNewDocumentVersionUseCase;
         this.documentSourceStorage = documentSourceStorage;
         this.objectMapper = objectMapper;
     }
@@ -308,6 +320,49 @@ public class DocumentIngestController {
     }
 
     /**
+     * 针对既有 document 上传新版本。
+     *
+     * <p>接口契约：
+     * <ul>
+     *     <li>路径：POST /api/v1/documents/{documentId}/versions</li>
+     *     <li>请求：multipart/form-data</li>
+     *     <li>参数：file（必填），expectedLatestVersionNumber（必填）</li>
+     * </ul>
+     */
+    @PostMapping(value = "/{documentId}/versions", consumes = MediaType.MULTIPART_FORM_DATA_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
+    public DocumentVersionUploadResponse uploadNewVersion(
+            @PathVariable("documentId") String documentId,
+            @RequestParam("file") MultipartFile file,
+            @RequestParam("expectedLatestVersionNumber") int expectedLatestVersionNumber) {
+        // 安全阀：文件为空时直接拦截，避免无效请求进入应用层
+        if (file.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "file must not be empty");
+        }
+
+        // 计算文件 SHA-256 哈希，供应用层做同内容幂等复用判断
+        String fileHash = calculateFileHash(file);
+        try {
+            // 组装命令对象并委派给应用层用例处理
+            DocumentVersionUploadResult result = uploadNewDocumentVersionUseCase.handle(
+                    new UploadNewDocumentVersionCommand(
+                            documentId,
+                            file.getOriginalFilename(),
+                            file.getSize(),
+                            fileHash,
+                            expectedLatestVersionNumber,
+                            file.getBytes()));
+            // 将应用层结果映射为 REST 响应 DTO
+            return toDocumentVersionUploadResponse(result);
+        } catch (IllegalArgumentException ex) {
+            // 参数校验异常 → 400
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, ex.getMessage(), ex);
+        } catch (IOException ex) {
+            // 文件读取异常 → 400
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "failed to read upload file", ex);
+        }
+    }
+
+    /**
      * 查询文档分块预览（调试接口）。
      * 在处理文档提取完成后，用此接口可以查看知识库如何将文档文本进行切片（Chunk）分割的详细内容。
      *
@@ -389,6 +444,31 @@ public class DocumentIngestController {
                 item.failureReason(),
                 item.createdAt(),
                 item.updatedAt());
+    }
+
+    /**
+     * 将应用层版本上传结果映射为 REST 响应 DTO。
+     *
+     * <p>该映射方法将 {@link DocumentVersionUploadResult} 中的域字段
+     * 一一平迁到 {@link DocumentVersionUploadResponse}，
+     * 确保领域模型不直接暴露给 API 消费者。
+     *
+     * @param result 应用层版本上传结果
+     * @return REST 响应 DTO
+     */
+    private static DocumentVersionUploadResponse toDocumentVersionUploadResponse(DocumentVersionUploadResult result) {
+        return new DocumentVersionUploadResponse(
+                result.documentId(),
+                result.versionCreated(),
+                result.versionResultType(),
+                result.versionNumber(),
+                result.previousVersionNumber(),
+                result.reusedLatestVersionNumber(),
+                result.latestVersionNumber(),
+                result.askableVersionNumber(),
+                result.canAskNow(),
+                result.status(),
+                result.versionOriginType());
     }
 
     /**

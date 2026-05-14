@@ -48,4 +48,23 @@ class LocalDocumentSourceStorageTest {
 
         assertFalse(storage.load(documentId, "missing-name.txt").isPresent());
     }
+
+    @Test
+    @DisplayName("版本源文件应按版本号隔离，允许不同版本使用相同文件名")
+    void saveVersion_shouldIsolateContentByVersionNumber_whenFilenameIsSame() {
+        IngestProperties properties = new IngestProperties();
+        properties.getStorage().setRootDir(tempDir.toString());
+        LocalDocumentSourceStorage storage = new LocalDocumentSourceStorage(properties);
+        DocumentId documentId = new DocumentId("doc-source-3");
+
+        storage.saveVersion(documentId, 2, "same.pdf", "version-2".getBytes(StandardCharsets.UTF_8));
+        storage.saveVersion(documentId, 3, "same.pdf", "version-3".getBytes(StandardCharsets.UTF_8));
+
+        assertArrayEquals(
+                "version-2".getBytes(StandardCharsets.UTF_8),
+                storage.loadVersion(documentId, 2, "same.pdf").orElseThrow());
+        assertArrayEquals(
+                "version-3".getBytes(StandardCharsets.UTF_8),
+                storage.loadVersion(documentId, 3, "same.pdf").orElseThrow());
+    }
 }
