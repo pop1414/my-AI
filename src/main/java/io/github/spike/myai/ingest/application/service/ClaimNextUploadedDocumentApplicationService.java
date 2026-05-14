@@ -46,8 +46,6 @@ public class ClaimNextUploadedDocumentApplicationService implements ClaimNextUpl
         this.documentRepository = documentRepository;
     }
 
-    @Override
-    public Optional<DocumentId> handle() {
     /**
      * 抢占最早可处理的 UPLOADED 文档。
      *
@@ -61,6 +59,8 @@ public class ClaimNextUploadedDocumentApplicationService implements ClaimNextUpl
      *
      * @return 抢占成功的文档 ID，无可用文档时返回 {@link Optional#empty()}
      */
+    @Override
+    public Optional<DocumentId> handle() {
         // 始终取最早可处理的 UPLOADED，尽量保持处理顺序稳定。
         String workspaceId = WorkspaceConstants.DEFAULT_WORKSPACE_ID;
         Optional<Document> candidate = documentRepository.findOldestReadyForProcessing(workspaceId, Instant.now());

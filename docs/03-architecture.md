@@ -78,3 +78,10 @@
 - 分块参数初值：`chunk=500`, `overlap=100`
 - 失败策略：瞬时错误最多 3 次重试（指数退避 + jitter）
 - 幂等目标：同一 `documentId` 重复处理最终一致
+
+## 9. 当前架构摩擦（截至 2026-05-12）
+- 当前 `ingest.domain.model.Document` 仍是一个浅模块：同时承载文档资产身份、当前处理状态、文件事实、`splitVersion`、重试上下文与 `processingMetadata`，导致“文档版本治理”和“RAG 质量优化”容易在同一模块相撞。
+- `ProcessDocumentApplicationService` 是当前 ingest 主链路的共享 seam：解析、清洗、分块、向量写入、状态收口都在这里编排；当一条分支重塑 `document` / `document version` 模型时，另一条分支若同时改处理主流程，冲突概率会明显升高。
+- `qa` 检索与引用链路当前仍建立在最小元数据契约之上：检索结果与引用只稳定暴露 `documentId`、`kbId`、`chunkIndex` 与内容预览，尚未吸收版本语义；因此“版本治理升级”和“检索质量升级”都会争夺同一组 retrieval/reference 接口。
+- `vector_store` 元数据当前既服务于 RAG 检索，也承担 reprocess / splitVersion 幂等控制；一旦修改向量元数据结构，往往会同时影响 ingest、qa 与治理语义。
+- 与“文档版本治理”和“RAG 优化”并行开发相关的具体边界、禁改范围与合并顺序，详见 [docs/runbooks/plans/ingest-cleaning/并行开发边界约定-文档版本治理与RAG优化.md](./runbooks/plans/ingest-cleaning/并行开发边界约定-文档版本治理与RAG优化.md)。

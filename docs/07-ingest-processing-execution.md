@@ -28,7 +28,7 @@
 ## 4. 文本拆分策略（V1 可执行规则）
 ### 4.1 拆分总原则
 1. 先解析清洗再拆分  
-- 先把 PDF/Word/Markdown 解析为纯文本并清洗噪声，再进入拆分。
+- 先按文件类型路由解析并生成 `cleaned.md`，再进入拆分：PDF/Word 等复杂格式继续走 Tika XHTML；原生 Markdown 走最小破坏文本清洗；原生 HTML 绕过 Tika，直接进入 HTML 语义清洗与 Markdown 转换。
 
 2. 结构优先、长度兜底  
 - 能按标题/段落切分就按结构切；仅在段落过长时，才启用长度切分。
@@ -184,12 +184,15 @@
 2. 再看 `GET /actuator/metrics/{metricName}`，确认异常类型属于失败、重试还是删除冲突。
 3. 最后结合应用日志中的 `documentId/status/retryCount` 定位到具体文档并复现。
 
-## 11. 当前实现边界（2026-04-14）
+## 11. 当前实现边界（2026-05-13）
 - 已实现：
   - 上传受理幂等（`kbId + fileHash`）
   - 任务启动 `UPLOADED -> INGESTING` 的 CAS 抢占能力
   - 单进程异步 worker（轮询 + 抢占 + 调用处理用例）
-  - 处理主链路：源文件读取、Tika XHTML 解析、HTML 语义清洗、`cleaned.md` 落盘、分块、向量写入、状态推进到 `INDEXED/FAILED`
+  - 处理主链路：源文件读取、文件类型路由、Tika XHTML 或原生文本解析、HTML/Markdown 清洗、`cleaned.md` 落盘、分块、向量写入、状态推进到 `INDEXED/FAILED`
+  - 原生 Markdown 最小破坏路径：`md` / `markdown` / `mdown` / `mkd` 跳过 Tika 与 HTML 重解析链，保留标题、代码块、表格、列表和空行结构
+  - 原生 HTML 正文抽取路径：`html` / `htm` 绕过 Tika，直接执行 HTML 语义清洗与 Markdown 转换，剔除导航、侧栏、页脚、脚本、样式和元数据噪音
+  - chunk preview 标题上下文：Markdown 标题、中文/数字标题与 HTML 清洗后的独立短标题均可生成可解释 `sourceHint`，并对普通短正文误判补充负向回归
   - 瞬时错误重试（3 次指数退避 + jitter）
   - reprocess 接口与重建流程（含 `splitVersion++`）
   - 删除接口与资产下线流程（`DELETING -> DELETED`）
@@ -197,4 +200,4 @@
   - `processing_metadata` 的基础自动回填逻辑，当前由 parser 生成文档级基础元数据并在成功/失败终态写入数据库
 - 尚未实现：
   - OCR 场景与复杂排版优化（如扫描版 PDF、表格结构化提取）
-  - 更精细的文档质量分级、页码提取与标题路径稳定化
+  - 更精细的文档质量分级、页码提取与跨层级标题路径稳定化

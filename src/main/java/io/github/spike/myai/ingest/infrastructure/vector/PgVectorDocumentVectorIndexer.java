@@ -3,6 +3,7 @@ package io.github.spike.myai.ingest.infrastructure.vector;
 import io.github.spike.myai.ingest.domain.model.Document;
 import io.github.spike.myai.ingest.domain.model.DocumentChunk;
 import io.github.spike.myai.ingest.domain.model.DocumentId;
+import io.github.spike.myai.ingest.domain.model.SourceHint;
 import io.github.spike.myai.ingest.domain.port.DocumentVectorIndexer;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -48,6 +49,10 @@ public class PgVectorDocumentVectorIndexer implements DocumentVectorIndexer {
             DELETE FROM vector_store
             WHERE metadata->>'documentId' = ? AND metadata->>'splitVersion' = ?
             """;
+    /**
+     * 按 documentId 清理该文档所有版本向量的 SQL。
+     * 用于文档资产彻底下线时，一次性清除所有历史版本的向量数据。
+     */
     private static final String DELETE_BY_DOCUMENT_SQL = """
             DELETE FROM vector_store
             WHERE metadata->>'documentId' = ?
@@ -59,6 +64,15 @@ public class PgVectorDocumentVectorIndexer implements DocumentVectorIndexer {
      */
     private final JdbcTemplate jdbcTemplate;
 
+    /**
+     * 构造器注入：注入向量存储抽象和 JDBC 模板。
+     *
+     * <p>{@link VectorStore} 用于向量写入和批量删除，
+     * {@link JdbcTemplate} 用于原生元数据级 SQL 删除操作。
+     *
+     * @param vectorStore  Spring AI 向量存储抽象
+     * @param jdbcTemplate Spring JDBC 模板，用于底层表操作
+     */
     public PgVectorDocumentVectorIndexer(VectorStore vectorStore, JdbcTemplate jdbcTemplate) {
         this.vectorStore = vectorStore;
         this.jdbcTemplate = jdbcTemplate;
@@ -95,9 +109,10 @@ public class PgVectorDocumentVectorIndexer implements DocumentVectorIndexer {
             metadata.put("sourceFile", document.filename());        // 原始文件名
             metadata.put("contentHash", sha256(chunkText));         // 文本指纹（去重/校验）
             metadata.put("splitVersion", splitVersion);             // 逻辑版本锁
-            if (chunk.sourceHint() != null && !chunk.sourceHint().isBlank()) {
+            SourceHint sourceHint = chunk.sourceHint();
+            if (!sourceHint.isEmpty()) {
                 // 存储来自解析器的额外提示（如 PDF 页码、章节标题等 JSON 信息）。
-                metadata.put("sourceHint", chunk.sourceHint());
+                metadata.put("sourceHint", sourceHint.toStorageValue());
             }
 
             // 构建 Spring AI 标准的 Document 对象（包含文本、元数据和 ID）。
@@ -137,6 +152,15 @@ public class PgVectorDocumentVectorIndexer implements DocumentVectorIndexer {
         jdbcTemplate.update(DELETE_BY_DOCUMENT_AND_VERSION_SQL, documentId.value(), splitVersion);
     }
 
+    /**
+     * 删除指定文档的所有版本向量数据。
+     *
+     * <p>与 {@link #deleteByDocumentIdAndSplitVersion} 不同，
+     * 该方法不区分版本，会清除该文档的全部历史向量记录，
+     * 适用于文档资产彻底下线（物理删除）场景。
+     *
+     * @param documentId 待删除的文档标识
+     */
     @Override
     public void deleteByDocumentId(DocumentId documentId) {
         // 删除指定文档的所有版本向量，用于文档资产下线。
