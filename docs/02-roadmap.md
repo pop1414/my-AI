@@ -15,13 +15,14 @@
 - 文档列表与管理台：`GET /api/v1/documents`、`/ingest/documents`、统一进入状态 / 预览 / 重处理 / 删除
 - 文档版本链基础：`document` 主表 + `document version` 子表已形成基础读写边界，latest projection 与版本事实分离
 - 文档版本历史只读后端接口：`GET /api/v1/documents/{documentId}/versions`，按 `versionNumber,DESC` 返回版本历史、latest 标记与 askable 推导结果
+- 上传新版本后端接口：`POST /api/v1/documents/{documentId}/versions`，绑定既有 `document` 上下文，支持 `expectedLatestVersionNumber` 乐观并发校验、同内容复用与稳定版本结果 DTO
 - 文档详情页版本历史前端只读视图：详情页展示版本账本、历史版本查看态、差异摘要、返回最新版本入口和无管理权限不可见分支
 - 控制台默认落点切换为文档列表页，旧路由保留兼容重定向
 - `qa` 子域前端接入：单轮问答、结构化引用展示、无命中兜底提示
 - V1.1 管理基础收口：知识库主数据化 + 文档列表管理能力已形成当前基线
 - 本地端到端环境收敛：前后端联调路径、运行脚本与最小演示顺序
 - V1 发布归档：README / Roadmap / Release Notes / Runbook 状态收敛，并冻结 `v1.0.0` 里程碑标签
-- 文档版本链 issue 快照同步：#1、#2、#3、#19、#20 已完成关闭，版本历史只读前后端基线已完成
+- 文档版本链 issue 快照同步：#1、#2、#3、#4、#19、#20 已完成关闭，上传新版本后端契约与版本历史只读前后端基线已完成
 
 ### 进行中
 - 课程交付材料整理：报告、演示脚本、截图素材与最终导出件归集

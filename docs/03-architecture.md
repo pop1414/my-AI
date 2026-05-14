@@ -31,12 +31,13 @@
 - 数据层：MySQL / Vector DB / MinIO(S3)
 - 横切治理层：Tenant/Auth/RateLimit/Observability/Audit
 
-## 2.1 当前已实现子集（截至 2026-05-13）
-- 已实现：`ingest` 子域（上传受理、状态查询、文档列表、版本历史查询、分块预览、异步处理执行、重处理、资产删除）
+## 2.1 当前已实现子集（截至 2026-05-14）
+- 已实现：`ingest` 子域（上传受理、上传新版本、状态查询、文档列表、版本历史查询、分块预览、异步处理执行、重处理、资产删除）
 - 已实现：`knowledge` 子域（知识库列表与 INDEXED 统计）
 - 已实现：`qa` 子域（同步问答、结构化引用、无命中兜底）
-- 已实现 API：`GET /api/v1/documents`、`POST /api/v1/documents/upload`、`GET /api/v1/documents/{documentId}/status`、`GET /api/v1/documents/{documentId}/versions`、`GET /api/v1/documents/{documentId}/chunks/preview`、`POST /api/v1/documents/{documentId}/reprocess`、`DELETE /api/v1/documents/{documentId}`、`GET /api/v1/knowledge-bases`、`POST /api/v1/qa/ask`
+- 已实现 API：`GET /api/v1/documents`、`POST /api/v1/documents/upload`、`GET /api/v1/documents/{documentId}/status`、`GET /api/v1/documents/{documentId}/versions`、`POST /api/v1/documents/{documentId}/versions`、`GET /api/v1/documents/{documentId}/chunks/preview`、`POST /api/v1/documents/{documentId}/reprocess`、`DELETE /api/v1/documents/{documentId}`、`GET /api/v1/knowledge-bases`、`POST /api/v1/qa/ask`
 - 版本历史查询说明：接口只读 `ingest_document_versions` 与 latest projection，按 `versionNumber DESC` 暴露版本链，并由领域读模型推导 `isLatestVersion` 与 `isAskableVersion`
+- 上传新版本说明：接口绑定既有 `document` 上下文，应用层校验管理权限、`INDEXED` / `FAILED` 状态门禁与 `expectedLatestVersionNumber`，并在源文件版本化落盘成功后追加新的 `UPLOAD` 版本事实；同内容上传返回复用分支，不创建新版本
 - 说明：本文件第 2 章是目标架构蓝图，不等于当前全部实现
 
 ## 3. 核心链路

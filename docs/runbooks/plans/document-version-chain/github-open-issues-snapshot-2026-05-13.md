@@ -2,10 +2,10 @@
 
 ## 拉取信息
 
-- 更新时间：2026-05-14 09:55
-- 拉取方式：基于 GitHub Issues 当前状态更新；#1、#2、#3、#19、#20 已关闭，版本历史只读前后端基线已完成
+- 更新时间：2026-05-14 10:45
+- 拉取方式：基于 GitHub Issues 当前状态更新；#1、#2、#3、#4、#19、#20 已关闭，版本历史只读前后端基线与上传新版本后端契约已完成
 - 仓库：`pop1414/my-AI`
-- 范围：文档版本链相关 issues；#1、#2、#3、#19、#20 已完成关闭，当前仍需推进 #4-#12，共 9 个 open follow-up
+- 范围：文档版本链相关 issues；#1、#2、#3、#4、#19、#20 已完成关闭，当前仍需推进 #5-#12，共 8 个 open follow-up
 
 ## 收口状态
 
@@ -14,6 +14,7 @@
 - #1 保留的兼容式 seam 已由 #19 收口：生产读路径切到 `latest projection + ingest_document_versions`，并补齐 guard 与 ADR。
 - #20 已按“版本历史只读后端查询接口”完成并关闭：`GET /api/v1/documents/{documentId}/versions` 提供 #3 所需稳定后端契约。
 - #3 已按“文档详情页版本历史前端只读视图”完成并关闭，收口说明见 `document-detail-version-history-frontend-readonly-closure.md`。
+- #4 已按“上传新版本后端链路与契约”完成并关闭：`POST /api/v1/documents/{documentId}/versions` 提供 #5 所需稳定后端契约。
 
 ## 总览
 
@@ -22,15 +23,15 @@
 | [#1](https://github.com/pop1414/my-AI/issues/1) | document / document version 基础版本链后端落地 | CLOSED | `ready-for-agent` | 无 |
 | [#2](https://github.com/pop1414/my-AI/issues/2) | 文档详情页版本历史交互确认 | CLOSED | `ready-for-human` | #1 已完成 |
 | [#3](https://github.com/pop1414/my-AI/issues/3) | 文档详情页版本历史前端只读视图 | CLOSED | `ready-for-agent` | #1 已完成, #2 已完成, #20 已完成 |
-| [#4](https://github.com/pop1414/my-AI/issues/4) | 上传新版本后端链路与契约 | OPEN | `ready-for-agent` | #1 已完成, #19 已完成 |
-| [#5](https://github.com/pop1414/my-AI/issues/5) | 上传新版本前端交互与结果提示 | OPEN | `ready-for-agent` | #4 |
+| [#4](https://github.com/pop1414/my-AI/issues/4) | 上传新版本后端链路与契约 | CLOSED | `ready-for-agent` | #1 已完成, #19 已完成 |
+| [#5](https://github.com/pop1414/my-AI/issues/5) | 上传新版本前端交互与结果提示 | OPEN | `ready-for-agent` | #4 已完成 |
 | [#6](https://github.com/pop1414/my-AI/issues/6) | 版本回退后端链路与契约 | OPEN | `ready-for-agent` | #1 已完成, #19 已完成 |
 | [#7](https://github.com/pop1414/my-AI/issues/7) | 版本回退前端交互与结果提示 | OPEN | `ready-for-agent` | #3, #6 |
 | [#8](https://github.com/pop1414/my-AI/issues/8) | 删除与列表页适配版本语义后端 | OPEN | `ready-for-agent` | #1 已完成, #19 已完成 |
 | [#9](https://github.com/pop1414/my-AI/issues/9) | 删除确认与列表页版本语义前端 | OPEN | `ready-for-agent` | #8 |
 | [#10](https://github.com/pop1414/my-AI/issues/10) | qa 可问答版本选择与引用版本化后端 | OPEN | `ready-for-agent` | #1 已完成, #19 已完成 |
 | [#11](https://github.com/pop1414/my-AI/issues/11) | 问答页版本提示与引用版本展示前端 | OPEN | `ready-for-agent` | #10 |
-| [#12](https://github.com/pop1414/my-AI/issues/12) | 版本治理审计与冲突收口后端 | OPEN | `ready-for-agent` | #4, #6, #8 |
+| [#12](https://github.com/pop1414/my-AI/issues/12) | 版本治理审计与冲突收口后端 | OPEN | `ready-for-agent` | #4 已完成, #6, #8 |
 | [#19](https://github.com/pop1414/my-AI/issues/19) | 清理 document 主表旧版本事实字段与读写边界 | CLOSED | `ready-for-agent` | #1 已完成 |
 | [#20](https://github.com/pop1414/my-AI/issues/20) | 版本历史只读后端查询接口 | CLOSED | `ready-for-agent` | #1 已完成, #2 已完成 |
 
@@ -40,9 +41,10 @@
 2. #19 已完成关闭；后续后端任务默认以 `latest projection + ingest_document_versions` 为生产读路径，不再新增对主表旧版本事实列的读取依赖。
 3. #2 已完成关闭；后续前端与后端实现以交互确认文档为准。
 4. #20 已完成关闭，#3 已基于 `GET /api/v1/documents/{documentId}/versions` 完成版本历史前端只读视图。
-5. 后端推进 #4、#6、#8、#10，分别覆盖上传新版本、版本回退、删除与列表语义、qa 可问答版本选择；实现时应遵守 #19 已收紧的读写边界，并复用 #20 的版本历史读模型语义。
-6. 前端在后端契约稳定后推进 #5、#7、#9、#11；#7 可基于 #3 已落地的版本历史只读视图接入回退动作。
-7. 最后用 #12 收口治理动作之间的互斥、业务错误码、审计事件和竞争场景测试。
+5. #4 已完成关闭，#5 可基于 `POST /api/v1/documents/{documentId}/versions` 接入上传新版本前端交互与结果提示。
+6. 后端继续推进 #6、#8、#10，分别覆盖版本回退、删除与列表语义、qa 可问答版本选择；实现时应遵守 #19 已收紧的读写边界，并复用 #20 的版本历史读模型语义。
+7. 前端在后端契约稳定后推进 #5、#7、#9、#11；#7 可基于 #3 已落地的版本历史只读视图接入回退动作。
+8. 最后用 #12 收口治理动作之间的互斥、业务错误码、审计事件和竞争场景测试。
 
 ## Issue 摘要
 
@@ -111,6 +113,8 @@
 
 ### #4 上传新版本后端链路与契约
 
+状态：已关闭，按“上传新版本后端链路与契约”完成收口。
+
 目标是交付上传新版本的完整后端能力。用户可针对既有 `document` 发起上传新版本，系统以当前最新版本作为基线推进线性版本链。
 
 验收重点：
@@ -121,6 +125,16 @@
 - 新文件与当前最新版本同内容时按成功复用处理，不创建新版本。
 - 成功结果 DTO 返回 `documentId`、新版本号或复用结果、上一版本号、当前最新版本号、当前可问答版本号等上下文。
 - 后端测试覆盖权限、状态门禁、并发冲突与同内容复用。
+
+收口说明：
+
+- 已提供 `POST /api/v1/documents/{documentId}/versions`，接口阶段在 `docs/04-api-contract.yaml` 中标记为 `implemented`。
+- 接口请求使用 `multipart/form-data`，路径参数绑定目标 `documentId`，请求字段包含 `file` 与 `expectedLatestVersionNumber`。
+- 应用服务统一校验目标 document 存在性、文档管理权限、`expectedLatestVersionNumber` 与当前 latest 是否一致、当前最新版本状态是否为 `INDEXED` / `FAILED`。
+- 新文件与当前最新版本 `fileHash` 一致时返回 `versionCreated = false` 与 `versionResultType = REUSED_IDENTICAL_CONTENT`，不创建新版本也不消耗新的 `versionNumber`。
+- 创建新版本时返回 `documentId`、`versionNumber`、`previousVersionNumber`、`latestVersionNumber`、`askableVersionNumber`、`canAskNow`、`status` 与 `versionOriginType` 等上下文。
+- 源文件版本化落盘由应用服务编排，先保存源文件，再追加 DB 版本事实，避免 latest 指向缺失源文件。
+- 已覆盖应用服务与 REST controller 回归测试，包括权限拒绝、状态门禁、乐观并发冲突、CAS 冲突、同内容复用、源文件保存失败不追加版本、业务错误码透传。
 
 ### #5 上传新版本前端交互与结果提示
 

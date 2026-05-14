@@ -60,6 +60,7 @@
     - `POST /api/v1/documents/upload`
     - `GET /api/v1/documents/{documentId}/status`
     - `GET /api/v1/documents/{documentId}/versions`
+    - `POST /api/v1/documents/{documentId}/versions`
     - `GET /api/v1/documents/{documentId}/chunks/preview`
     - `POST /api/v1/documents/{documentId}/reprocess`
     - `DELETE /api/v1/documents/{documentId}`
