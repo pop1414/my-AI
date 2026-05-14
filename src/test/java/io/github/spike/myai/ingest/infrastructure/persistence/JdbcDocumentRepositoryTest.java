@@ -84,6 +84,7 @@ class JdbcDocumentRepositoryTest {
         assertTrue(sqlCaptor.getAllValues().get(0).contains("CAST(? AS JSONB)"));
         assertTrue(sqlCaptor.getAllValues().get(0).contains("latest_version_number"));
         assertTrue(sqlCaptor.getAllValues().get(1).contains("ingest_document_versions"));
+        assertTrue(sqlCaptor.getAllValues().get(1).contains("created_by_user_id"));
         assertTrue(sqlCaptor.getAllValues().get(2).contains("processing_metadata = CAST(? AS JSONB)"));
         assertTrue(sqlCaptor.getAllValues().get(3).contains("ingest_document_versions"));
     }

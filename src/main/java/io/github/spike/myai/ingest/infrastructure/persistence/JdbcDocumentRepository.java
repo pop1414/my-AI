@@ -76,12 +76,12 @@ public class JdbcDocumentRepository implements DocumentRepository {
                file_hash, filename, file_size, status, failure_reason,
                retry_count, retry_max, next_retry_at, last_error_code, last_error_message, last_error_at,
                reprocess_count, reprocess_requested_at, split_version, processing_metadata,
-               created_at, updated_at)
+               created_by_user_id, created_at, updated_at)
             VALUES (?, ?, ?, ?,
                     ?, ?, ?, ?, ?,
                     ?, ?, ?, ?, ?, ?,
                     ?, ?, ?, CAST(? AS JSONB),
-                    ?, ?)
+                    ?, ?, ?)
             ON CONFLICT (document_id, version_number) DO UPDATE SET
               version_origin_type = EXCLUDED.version_origin_type,
               rollback_from_version_number = EXCLUDED.rollback_from_version_number,
@@ -157,6 +157,7 @@ public class JdbcDocumentRepository implements DocumentRepository {
                    v.reprocess_requested_at,
                    v.split_version,
                    v.processing_metadata,
+                   v.created_by_user_id,
                    v.created_at,
                    v.updated_at
             FROM ingest_documents d
@@ -490,6 +491,7 @@ public class JdbcDocumentRepository implements DocumentRepository {
             toInstant(rs.getTimestamp("reprocess_requested_at")),
             rs.getString("split_version"),
             rs.getString("processing_metadata"),
+            rs.getString("created_by_user_id"),
             toInstant(rs.getTimestamp("created_at")),
             toInstant(rs.getTimestamp("updated_at")));
 
@@ -519,6 +521,20 @@ public class JdbcDocumentRepository implements DocumentRepository {
      */
     @Override
     public void save(Document document) {
+        save(document, null);
+    }
+
+    /**
+     * 保存文档聚合并写入初始版本创建人。
+     *
+     * <p>{@code createdByUserId} 仅写入版本事实表的插入列；若发生版本行冲突，
+     * 不覆盖既有创建人，避免兼容性更新误改审计事实。
+     *
+     * @param document 领域文档对象
+     * @param createdByUserId 初始版本创建人用户 ID，可为空
+     */
+    @Override
+    public void save(Document document, String createdByUserId) {
         // 写入主表：文档资产 + latest 版本快照投影
         jdbcTemplate.update(
                 UPSERT_DOCUMENT_SQL,
@@ -568,6 +584,7 @@ public class JdbcDocumentRepository implements DocumentRepository {
                 toTimestamp(document.reprocessRequestedAt()),
                 document.splitVersion(),
                 document.processingMetadata(),
+                createdByUserId,
                 Timestamp.from(document.createdAt()),
                 Timestamp.from(document.updatedAt()));
     }
@@ -995,6 +1012,7 @@ public class JdbcDocumentRepository implements DocumentRepository {
                 toTimestamp(newVersion.reprocessRequestedAt()),
                 newVersion.splitVersion(),
                 newVersion.processingMetadata(),
+                newVersion.createdByUserId(),
                 Timestamp.from(newVersion.createdAt()),
                 Timestamp.from(newVersion.updatedAt()));
         return true;

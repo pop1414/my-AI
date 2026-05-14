@@ -3,6 +3,7 @@ package io.github.spike.myai.ingest.application.service;
 import io.github.spike.myai.auth.application.context.CurrentUser;
 import io.github.spike.myai.auth.application.context.CurrentUserProvider;
 import io.github.spike.myai.auth.application.service.AuthorizationService;
+import io.github.spike.myai.auth.domain.port.AuditEventRepository;
 import io.github.spike.myai.ingest.application.command.AcceptUploadCommand;
 import io.github.spike.myai.ingest.application.usecase.AcceptUploadUseCase;
 import io.github.spike.myai.ingest.domain.model.Document;
@@ -18,7 +19,9 @@ import io.github.spike.myai.knowledge.domain.port.KnowledgeBaseRepository;
 import java.time.Instant;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * 受理上传应用服务（Application Service）。
@@ -52,6 +55,7 @@ import org.springframework.stereotype.Service;
  * @since 1.0.0
  */
 @Service
+@Transactional
 public class AcceptUploadApplicationService implements AcceptUploadUseCase {
 
     /** 日志记录器，用于记录上传受理的关键链路日志 */
@@ -107,6 +111,8 @@ public class AcceptUploadApplicationService implements AcceptUploadUseCase {
      * 角色（或工作区 OWNER / ADMIN）。
      */
     private final AuthorizationService authorizationService;
+    /** 审计事件仓储，用于记录文档上传请求 */
+    private final AuditEventRepository auditEventRepository;
 
     /**
      * 构造器注入。
@@ -120,18 +126,47 @@ public class AcceptUploadApplicationService implements AcceptUploadUseCase {
      * @param knowledgeBaseRepository 知识库仓储（领域端口）
      * @param currentUserProvider     当前用户上下文提供器（应用层端口）
      * @param authorizationService    授权服务（应用层）
+     * @param auditEventRepository    审计事件仓储
      */
+    @Autowired
     public AcceptUploadApplicationService(
             DocumentIdGenerator documentIdGenerator,
             DocumentRepository documentRepository,
             KnowledgeBaseRepository knowledgeBaseRepository,
             CurrentUserProvider currentUserProvider,
-            AuthorizationService authorizationService) {
+            AuthorizationService authorizationService,
+            AuditEventRepository auditEventRepository) {
         this.documentIdGenerator = documentIdGenerator;
         this.documentRepository = documentRepository;
         this.knowledgeBaseRepository = knowledgeBaseRepository;
         this.currentUserProvider = currentUserProvider;
         this.authorizationService = authorizationService;
+        this.auditEventRepository = auditEventRepository;
+    }
+
+    /**
+     * 兼容构造器：未显式接入审计仓储的单元测试保持原有调用形态。
+     *
+     * @param documentIdGenerator     文档 ID 生成器
+     * @param documentRepository      文档仓储
+     * @param knowledgeBaseRepository 知识库仓储
+     * @param currentUserProvider     当前用户上下文提供器
+     * @param authorizationService    授权服务
+     */
+    AcceptUploadApplicationService(
+            DocumentIdGenerator documentIdGenerator,
+            DocumentRepository documentRepository,
+            KnowledgeBaseRepository knowledgeBaseRepository,
+            CurrentUserProvider currentUserProvider,
+            AuthorizationService authorizationService) {
+        this(
+                documentIdGenerator,
+                documentRepository,
+                knowledgeBaseRepository,
+                currentUserProvider,
+                authorizationService,
+                event -> {
+                });
     }
 
     /**
@@ -196,6 +231,16 @@ public class AcceptUploadApplicationService implements AcceptUploadUseCase {
                     resolvedKbId,
                     command.filename(),
                     fileHash);
+            auditEventRepository.save(IngestAuditEvents.documentUploadRequested(
+                    currentUser,
+                    existingDocument.documentId(),
+                    resolvedKbId,
+                    existingDocument.latestVersionNumber(),
+                    command.filename(),
+                    command.fileSize(),
+                    fileHash,
+                    "REUSED_EXISTING_DOCUMENT",
+                    Instant.now()));
             return new UploadTicket(existingDocument.documentId(), UploadStatus.ACCEPTED);
         }
 
@@ -220,7 +265,7 @@ public class AcceptUploadApplicationService implements AcceptUploadUseCase {
                         command.fileSize(),
                         now);
         // 持久化文档聚合根到存储层
-        documentRepository.save(document);
+        documentRepository.save(document, currentUser.userId());
 
         // ---------- 步骤7：记录日志并返回票据 ----------
         // 记录关键链路日志：文档 ID、知识库、文件名、大小、哈希
@@ -232,6 +277,16 @@ public class AcceptUploadApplicationService implements AcceptUploadUseCase {
                 command.filename(),
                 command.fileSize(),
                 fileHash);
+        auditEventRepository.save(IngestAuditEvents.documentUploadRequested(
+                currentUser,
+                documentId,
+                resolvedKbId,
+                document.latestVersionNumber(),
+                command.filename(),
+                command.fileSize(),
+                fileHash,
+                "CREATED",
+                now));
 
         // 返回 ACCEPTED 票据——表示"请求已受理，异步处理中"
         // 客户端可使用 documentId 轮询处理进度

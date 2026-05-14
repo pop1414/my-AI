@@ -27,6 +27,7 @@ import java.time.Instant;
  * @param reprocessRequestedAt 最近一次重处理请求时间
  * @param splitVersion 当前版本对应的分块版本
  * @param processingMetadata 处理结果元数据
+ * @param createdByUserId 创建该版本的用户 ID；历史迁移数据允许为空
  * @param createdAt 版本创建时间
  * @param updatedAt 版本更新时间
  */
@@ -50,8 +51,81 @@ public record DocumentVersion(
         Instant reprocessRequestedAt,
         String splitVersion,
         String processingMetadata,
+        String createdByUserId,
         Instant createdAt,
         Instant updatedAt) {
+
+    /**
+     * 兼容构造器：历史测试与读取路径未显式传入创建人时，保留空创建人语义。
+     *
+     * @param documentId 文档资产 ID
+     * @param versionNumber 版本号
+     * @param versionOriginType 版本来源类型
+     * @param rollbackFromVersionNumber 回退来源版本号
+     * @param fileHash 文件内容哈希
+     * @param filename 来源文件名
+     * @param fileSize 文件大小
+     * @param status 版本处理状态
+     * @param failureReason 失败原因
+     * @param retryCount 当前重试次数
+     * @param retryMax 最大重试次数
+     * @param nextRetryAt 下次重试时间
+     * @param lastErrorCode 最近一次错误码
+     * @param lastErrorMessage 最近一次错误消息
+     * @param lastErrorAt 最近一次错误时间
+     * @param reprocessCount 当前版本的重处理次数
+     * @param reprocessRequestedAt 最近一次重处理请求时间
+     * @param splitVersion 当前版本对应的分块版本
+     * @param processingMetadata 处理结果元数据
+     * @param createdAt 版本创建时间
+     * @param updatedAt 版本更新时间
+     */
+    public DocumentVersion(
+            DocumentId documentId,
+            int versionNumber,
+            DocumentVersionOriginType versionOriginType,
+            Integer rollbackFromVersionNumber,
+            String fileHash,
+            String filename,
+            long fileSize,
+            UploadStatus status,
+            String failureReason,
+            int retryCount,
+            int retryMax,
+            Instant nextRetryAt,
+            String lastErrorCode,
+            String lastErrorMessage,
+            Instant lastErrorAt,
+            int reprocessCount,
+            Instant reprocessRequestedAt,
+            String splitVersion,
+            String processingMetadata,
+            Instant createdAt,
+            Instant updatedAt) {
+        this(
+                documentId,
+                versionNumber,
+                versionOriginType,
+                rollbackFromVersionNumber,
+                fileHash,
+                filename,
+                fileSize,
+                status,
+                failureReason,
+                retryCount,
+                retryMax,
+                nextRetryAt,
+                lastErrorCode,
+                lastErrorMessage,
+                lastErrorAt,
+                reprocessCount,
+                reprocessRequestedAt,
+                splitVersion,
+                processingMetadata,
+                null,
+                createdAt,
+                updatedAt);
+    }
 
     public DocumentVersion {
         if (documentId == null) {

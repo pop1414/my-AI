@@ -29,6 +29,19 @@ public interface DocumentRepository {
     void save(Document document);
 
     /**
+     * 保存文档聚合，并为初始版本记录创建人。
+     *
+     * <p>创建人属于版本事实字段，历史调用方未提供时保留空值；
+     * 上传受理链路必须传入当前用户，确保 version 1 可审计追溯。
+     *
+     * @param document 领域文档对象
+     * @param createdByUserId 创建初始版本的用户 ID
+     */
+    default void save(Document document, String createdByUserId) {
+        save(document);
+    }
+
+    /**
      * 按文档 ID 查询文档聚合。
      *
      * @param workspaceId 工作区标识

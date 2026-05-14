@@ -3,6 +3,7 @@ package io.github.spike.myai.ingest.application.service;
 import io.github.spike.myai.auth.application.context.CurrentUser;
 import io.github.spike.myai.auth.application.context.CurrentUserProvider;
 import io.github.spike.myai.auth.application.service.AuthorizationService;
+import io.github.spike.myai.auth.domain.port.AuditEventRepository;
 import io.github.spike.myai.ingest.application.command.UploadNewDocumentVersionCommand;
 import io.github.spike.myai.ingest.application.result.DocumentVersionUploadResult;
 import io.github.spike.myai.ingest.application.usecase.UploadNewDocumentVersionUseCase;
@@ -17,6 +18,7 @@ import io.github.spike.myai.shared.rest.BusinessException;
 import java.time.Instant;
 
 import io.github.spike.myai.shared.rest.GlobalRestExceptionHandler;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
@@ -59,6 +61,8 @@ public class UploadNewDocumentVersionApplicationService implements UploadNewDocu
     private final CurrentUserProvider currentUserProvider;
     /** 权限校验服务 */
     private final AuthorizationService authorizationService;
+    /** 审计事件仓储 */
+    private final AuditEventRepository auditEventRepository;
 
     /**
      * 构造器注入。
@@ -67,16 +71,42 @@ public class UploadNewDocumentVersionApplicationService implements UploadNewDocu
      * @param documentSourceStorage  源文件存储
      * @param currentUserProvider    当前用户提供者
      * @param authorizationService   权限校验服务
+     * @param auditEventRepository   审计事件仓储
      */
+    @Autowired
     public UploadNewDocumentVersionApplicationService(
             DocumentRepository documentRepository,
             DocumentSourceStorage documentSourceStorage,
             CurrentUserProvider currentUserProvider,
-            AuthorizationService authorizationService) {
+            AuthorizationService authorizationService,
+            AuditEventRepository auditEventRepository) {
         this.documentRepository = documentRepository;
         this.documentSourceStorage = documentSourceStorage;
         this.currentUserProvider = currentUserProvider;
         this.authorizationService = authorizationService;
+        this.auditEventRepository = auditEventRepository;
+    }
+
+    /**
+     * 兼容构造器：未显式接入审计仓储的单元测试保持原有调用形态。
+     *
+     * @param documentRepository     文档元数据仓储
+     * @param documentSourceStorage  源文件存储
+     * @param currentUserProvider    当前用户提供者
+     * @param authorizationService   权限校验服务
+     */
+    UploadNewDocumentVersionApplicationService(
+            DocumentRepository documentRepository,
+            DocumentSourceStorage documentSourceStorage,
+            CurrentUserProvider currentUserProvider,
+            AuthorizationService authorizationService) {
+        this(
+                documentRepository,
+                documentSourceStorage,
+                currentUserProvider,
+                authorizationService,
+                event -> {
+                });
     }
 
     /**
@@ -136,6 +166,17 @@ public class UploadNewDocumentVersionApplicationService implements UploadNewDocu
 
         // 步骤 7：同内容幂等复用 —— 如果 fileHash 与当前 latest 一致，不创建新版本
         if (document.fileHash().equals(command.fileHash())) {
+            auditEventRepository.save(IngestAuditEvents.documentVersionUploadRequested(
+                    currentUser,
+                    documentId,
+                    document.kbId(),
+                    latestVersionNumber,
+                    latestVersionNumber,
+                    command.filename(),
+                    command.fileSize(),
+                    command.fileHash(),
+                    RESULT_REUSED_IDENTICAL_CONTENT,
+                    Instant.now()));
             return new DocumentVersionUploadResult(
                     documentId.value(),
                     false,                              // 未创建新版本
@@ -171,6 +212,7 @@ public class UploadNewDocumentVersionApplicationService implements UploadNewDocu
                 null,                                    // reprocessRequestedAt 为空
                 "version-" + newVersionNumber + "-v1",   // 分块版本号
                 null,                                    // processingMetadata 为空
+                currentUser.userId(),                     // 创建人：当前上传操作者
                 now,
                 now);
 
@@ -194,6 +236,17 @@ public class UploadNewDocumentVersionApplicationService implements UploadNewDocu
         // 步骤 11：追加成功后重新查询可问答版本号（可能与追加前一致）
         Integer updatedAskableVersionNumber =
                 toNullableVersionNumber(documentRepository.findLatestIndexedVersionNumber(currentUser.workspaceId(), documentId));
+        auditEventRepository.save(IngestAuditEvents.documentVersionUploadRequested(
+                currentUser,
+                documentId,
+                document.kbId(),
+                newVersionNumber,
+                latestVersionNumber,
+                command.filename(),
+                command.fileSize(),
+                command.fileHash(),
+                RESULT_CREATED,
+                now));
         return new DocumentVersionUploadResult(
                 documentId.value(),
                 true,                                   // 成功创建新版本

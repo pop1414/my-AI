@@ -3,6 +3,7 @@ package io.github.spike.myai.ingest.application.service;
 import io.github.spike.myai.auth.application.context.CurrentUser;
 import io.github.spike.myai.auth.application.context.CurrentUserProvider;
 import io.github.spike.myai.auth.application.service.AuthorizationService;
+import io.github.spike.myai.auth.domain.port.AuditEventRepository;
 import io.github.spike.myai.ingest.application.command.RollbackDocumentVersionCommand;
 import io.github.spike.myai.ingest.application.result.DocumentVersionRollbackResult;
 import io.github.spike.myai.ingest.application.usecase.RollbackDocumentVersionUseCase;
@@ -16,6 +17,7 @@ import io.github.spike.myai.ingest.domain.port.DocumentSourceStorage;
 import io.github.spike.myai.shared.rest.BusinessException;
 import io.github.spike.myai.shared.rest.GlobalRestExceptionHandler;
 import java.time.Instant;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
@@ -43,6 +45,8 @@ public class RollbackDocumentVersionApplicationService implements RollbackDocume
     private final CurrentUserProvider currentUserProvider;
     /** 权限校验服务 */
     private final AuthorizationService authorizationService;
+    /** 审计事件仓储 */
+    private final AuditEventRepository auditEventRepository;
 
     /**
      * 构造器注入。
@@ -51,16 +55,42 @@ public class RollbackDocumentVersionApplicationService implements RollbackDocume
      * @param documentSourceStorage 源文件存储
      * @param currentUserProvider   当前用户提供者
      * @param authorizationService  权限校验服务
+     * @param auditEventRepository  审计事件仓储
      */
+    @Autowired
     public RollbackDocumentVersionApplicationService(
             DocumentRepository documentRepository,
             DocumentSourceStorage documentSourceStorage,
             CurrentUserProvider currentUserProvider,
-            AuthorizationService authorizationService) {
+            AuthorizationService authorizationService,
+            AuditEventRepository auditEventRepository) {
         this.documentRepository = documentRepository;
         this.documentSourceStorage = documentSourceStorage;
         this.currentUserProvider = currentUserProvider;
         this.authorizationService = authorizationService;
+        this.auditEventRepository = auditEventRepository;
+    }
+
+    /**
+     * 兼容构造器：未显式接入审计仓储的单元测试保持原有调用形态。
+     *
+     * @param documentRepository    文档元数据仓储
+     * @param documentSourceStorage 源文件存储
+     * @param currentUserProvider   当前用户提供者
+     * @param authorizationService  权限校验服务
+     */
+    RollbackDocumentVersionApplicationService(
+            DocumentRepository documentRepository,
+            DocumentSourceStorage documentSourceStorage,
+            CurrentUserProvider currentUserProvider,
+            AuthorizationService authorizationService) {
+        this(
+                documentRepository,
+                documentSourceStorage,
+                currentUserProvider,
+                authorizationService,
+                event -> {
+                });
     }
 
     /**
@@ -126,7 +156,12 @@ public class RollbackDocumentVersionApplicationService implements RollbackDocume
 
         int newVersionNumber = latestVersionNumber + 1;
         Instant now = Instant.now();
-        DocumentVersion rollbackVersion = buildRollbackVersion(documentId, newVersionNumber, targetVersion, now);
+        DocumentVersion rollbackVersion = buildRollbackVersion(
+                documentId,
+                newVersionNumber,
+                targetVersion,
+                currentUser.userId(),
+                now);
 
         byte[] sourceContent = documentSourceStorage
                 .loadVersion(documentId, targetVersion.versionNumber(), targetVersion.filename())
@@ -148,6 +183,14 @@ public class RollbackDocumentVersionApplicationService implements RollbackDocume
 
         Integer askableVersionNumber =
                 toNullableVersionNumber(documentRepository.findLatestIndexedVersionNumber(currentUser.workspaceId(), documentId));
+        auditEventRepository.save(IngestAuditEvents.documentVersionRollbackRequested(
+                currentUser,
+                documentId,
+                document.kbId(),
+                newVersionNumber,
+                targetVersion.versionNumber(),
+                latestVersionNumber,
+                now));
         return new DocumentVersionRollbackResult(
                 documentId.value(),
                 newVersionNumber,
@@ -188,6 +231,7 @@ public class RollbackDocumentVersionApplicationService implements RollbackDocume
      * @param documentId        文档资产 ID
      * @param newVersionNumber  新版本号
      * @param targetVersion     回退来源版本
+     * @param createdByUserId   创建该回退版本的用户 ID
      * @param now               当前时间
      * @return 新的 ROLLBACK 版本事实
      */
@@ -195,6 +239,7 @@ public class RollbackDocumentVersionApplicationService implements RollbackDocume
             DocumentId documentId,
             int newVersionNumber,
             DocumentVersion targetVersion,
+            String createdByUserId,
             Instant now) {
         return new DocumentVersion(
                 documentId,
@@ -216,6 +261,7 @@ public class RollbackDocumentVersionApplicationService implements RollbackDocume
                 null,
                 "version-" + newVersionNumber + "-v1",
                 null,
+                createdByUserId,
                 now,
                 now);
     }

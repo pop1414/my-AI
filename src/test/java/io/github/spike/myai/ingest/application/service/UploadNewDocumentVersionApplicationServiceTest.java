@@ -15,7 +15,9 @@ import static org.mockito.Mockito.when;
 import io.github.spike.myai.auth.application.context.CurrentUser;
 import io.github.spike.myai.auth.application.context.CurrentUserProvider;
 import io.github.spike.myai.auth.application.service.AuthorizationService;
+import io.github.spike.myai.auth.domain.model.AuditEvent;
 import io.github.spike.myai.auth.domain.model.WorkspaceRole;
+import io.github.spike.myai.auth.domain.port.AuditEventRepository;
 import io.github.spike.myai.ingest.application.command.UploadNewDocumentVersionCommand;
 import io.github.spike.myai.ingest.application.result.DocumentVersionUploadResult;
 import io.github.spike.myai.ingest.domain.model.Document;
@@ -44,6 +46,7 @@ class UploadNewDocumentVersionApplicationServiceTest {
         DocumentRepository repository = Mockito.mock(DocumentRepository.class);
         DocumentSourceStorage sourceStorage = Mockito.mock(DocumentSourceStorage.class);
         AuthorizationService authorizationService = Mockito.mock(AuthorizationService.class);
+        AuditEventRepository auditEventRepository = Mockito.mock(AuditEventRepository.class);
         CurrentUserProvider currentUserProvider = currentUserProvider();
         Document document = document("doc-1", 2, "hash-old", UploadStatus.INDEXED);
         when(repository.findById(eq("workspace-a"), eq(new DocumentId("doc-1")))).thenReturn(Optional.of(document));
@@ -53,7 +56,12 @@ class UploadNewDocumentVersionApplicationServiceTest {
         when(repository.appendUploadVersion(eq("workspace-a"), eq(new DocumentId("doc-1")), eq(2), any(DocumentVersion.class), any(Instant.class)))
                 .thenReturn(true);
         UploadNewDocumentVersionApplicationService service =
-                new UploadNewDocumentVersionApplicationService(repository, sourceStorage, currentUserProvider, authorizationService);
+                new UploadNewDocumentVersionApplicationService(
+                        repository,
+                        sourceStorage,
+                        currentUserProvider,
+                        authorizationService,
+                        auditEventRepository);
 
         DocumentVersionUploadResult result = service.handle(
                 new UploadNewDocumentVersionCommand("doc-1", " new.pdf ", 42L, "hash-new", 2, bytes("new content")));
@@ -74,6 +82,13 @@ class UploadNewDocumentVersionApplicationServiceTest {
         assertEquals("new.pdf", versionCaptor.getValue().filename());
         assertEquals(UploadStatus.UPLOADED, versionCaptor.getValue().status());
         assertEquals(DocumentVersionOriginType.UPLOAD, versionCaptor.getValue().versionOriginType());
+        assertEquals("user-1", versionCaptor.getValue().createdByUserId());
+        ArgumentCaptor<AuditEvent> auditCaptor = ArgumentCaptor.forClass(AuditEvent.class);
+        verify(auditEventRepository).save(auditCaptor.capture());
+        assertEquals("DOCUMENT_VERSION_UPLOAD_REQUESTED", auditCaptor.getValue().eventType());
+        assertEquals("DOCUMENT_VERSION", auditCaptor.getValue().targetType());
+        assertEquals("doc-1:3", auditCaptor.getValue().targetId());
+        assertTrue(auditCaptor.getValue().metadata().contains("\"versionResultType\":\"CREATED\""));
         InOrder inOrder = Mockito.inOrder(sourceStorage, repository);
         inOrder.verify(repository).appendUploadVersion(eq("workspace-a"), eq(new DocumentId("doc-1")), eq(2), any(DocumentVersion.class), any(Instant.class));
         inOrder.verify(sourceStorage).saveVersionIfAbsent(eq(new DocumentId("doc-1")), eq(3), eq("new.pdf"), eq(bytes("new content")));

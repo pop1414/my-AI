@@ -14,7 +14,9 @@ import static org.mockito.Mockito.when;
 import io.github.spike.myai.auth.application.context.CurrentUser;
 import io.github.spike.myai.auth.application.context.CurrentUserProvider;
 import io.github.spike.myai.auth.application.service.AuthorizationService;
+import io.github.spike.myai.auth.domain.model.AuditEvent;
 import io.github.spike.myai.auth.domain.model.WorkspaceRole;
+import io.github.spike.myai.auth.domain.port.AuditEventRepository;
 import io.github.spike.myai.ingest.application.command.RollbackDocumentVersionCommand;
 import io.github.spike.myai.ingest.application.result.DocumentVersionRollbackResult;
 import io.github.spike.myai.ingest.domain.model.Document;
@@ -43,6 +45,7 @@ class RollbackDocumentVersionApplicationServiceTest {
         DocumentRepository repository = Mockito.mock(DocumentRepository.class);
         DocumentSourceStorage sourceStorage = Mockito.mock(DocumentSourceStorage.class);
         AuthorizationService authorizationService = Mockito.mock(AuthorizationService.class);
+        AuditEventRepository auditEventRepository = Mockito.mock(AuditEventRepository.class);
         CurrentUserProvider currentUserProvider = currentUserProvider();
         DocumentId documentId = new DocumentId("doc-1");
         Document latest = document("doc-1", 3, "hash-latest", UploadStatus.INDEXED);
@@ -58,7 +61,12 @@ class RollbackDocumentVersionApplicationServiceTest {
                 .thenReturn(true);
         when(repository.findLatestIndexedVersionNumber(eq("workspace-a"), eq(documentId))).thenReturn(1);
         RollbackDocumentVersionApplicationService service =
-                new RollbackDocumentVersionApplicationService(repository, sourceStorage, currentUserProvider, authorizationService);
+                new RollbackDocumentVersionApplicationService(
+                        repository,
+                        sourceStorage,
+                        currentUserProvider,
+                        authorizationService,
+                        auditEventRepository);
 
         DocumentVersionRollbackResult result =
                 service.handle(new RollbackDocumentVersionCommand("doc-1", 1, 3));
@@ -81,6 +89,13 @@ class RollbackDocumentVersionApplicationServiceTest {
         assertEquals("hash-v1", rollbackVersion.fileHash());
         assertEquals("v1.pdf", rollbackVersion.filename());
         assertEquals(UploadStatus.UPLOADED, rollbackVersion.status());
+        assertEquals("user-1", rollbackVersion.createdByUserId());
+        ArgumentCaptor<AuditEvent> auditCaptor = ArgumentCaptor.forClass(AuditEvent.class);
+        verify(auditEventRepository).save(auditCaptor.capture());
+        assertEquals("DOCUMENT_VERSION_ROLLBACK_REQUESTED", auditCaptor.getValue().eventType());
+        assertEquals("DOCUMENT_VERSION", auditCaptor.getValue().targetType());
+        assertEquals("doc-1:4", auditCaptor.getValue().targetId());
+        assertTrue(auditCaptor.getValue().metadata().contains("\"versionResultType\":\"CREATED\""));
         InOrder inOrder = Mockito.inOrder(sourceStorage, repository);
         inOrder.verify(repository).appendRollbackVersion(eq("workspace-a"), eq(documentId), eq(3), any(DocumentVersion.class), any(Instant.class));
         inOrder.verify(sourceStorage).saveVersionIfAbsent(eq(documentId), eq(4), eq("v1.pdf"), eq(bytes("v1 content")));
