@@ -11,6 +11,7 @@
 - 本文档不是当前 `qa.ask` response 的定义
 - 本文档不是当前 `vector metadata shape` 的定义
 - 当前轮次不以落地本文档为目标
+- 2026-05-14 的纯文字阶段收口不改变本文档状态；图片、表格、OCR 或父子分块若要进入实现，仍需先把本文档升级为正式方案或拆出新的 ADR
 
 ---
 
@@ -116,6 +117,7 @@
 - 当前 `processingMetadata` 是文档级处理结果元数据，不是最终节点契约
 - 当前 `RetrievedChunk` / `AskReferenceResponse` 仍是较薄的现行契约
 - 当前 `vector metadata shape` 同时承担检索与幂等控制职责，不能轻率扩写
+- 当前图片仅在清洗阶段保留占位或说明文本，表格以 Markdown 可读形态进入 `cleaned.md`，OCR 尚未作为稳定能力落地
 
 因此，这份草案在正式落地前必须先回答：
 

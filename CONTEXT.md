@@ -33,7 +33,7 @@
 当前应把本仓库理解为：
 
 - **单工作区优先** 的内部协作型系统
-- **RAG 主链路已跑通**，正在持续增强解析质量、治理能力和工程稳定性
+- **RAG 主链路已跑通**，纯文字解析/清洗第一轮优化已落地，后续继续增强图片、表格、OCR、治理能力和工程稳定性
 - **V1.1 管理基线已形成**，后续重点会继续落在解析增强、权限完善和更真实的业务场景支持上
 
 不要把它理解成：
@@ -59,6 +59,15 @@
 - 删除
 
 这里的核心关注点是“文档能否被稳定处理并形成可追踪资产”，而不是回答生成本身。
+
+当前解析/清洗主链的实现事实：
+
+- 复杂格式（PDF、Word 等）走 `Tika -> raw XHTML -> HTML 语义清洗 -> Markdown 转换`
+- 原生 Markdown 按 `md` / `markdown` / `mdown` / `mkd` 扩展名绕过 Tika，只做最小破坏清洗
+- 原生 HTML 按 `html` / `htm` 扩展名绕过 Tika，直接进入 HTML 语义清洗与 Markdown 转换
+- `cleaned.md` 是正式中间文本产物，文档目录中强制落盘
+- `raw.xhtml`、`cleaned.html`、`parse-result.json` 是可配置调试产物，不是对外契约
+- 当前阶段偏向纯文字质量基线；图片只保留占位或说明文本，表格只保留 Markdown 可读形态，尚未做图片理解、表格结构化节点或 OCR 稳定支持
 
 ### 4.2 knowledge
 
@@ -367,6 +376,8 @@ chunk 是向量检索与引用展示的基本文本单元。
 
 - 它来自文档解析与清洗后的内容
 - 当前遵循“结构优先、长度兜底”的拆分策略
+- 当前实现先将 `cleaned.md` 切成结构片段，再按空白分隔 token 组装窗口；配置名仍是 `chunkSize` / `overlapSize`
+- `sourceHint` 当前主要承载标题上下文 JSON，用于解释 chunk 来源，不是完整节点元数据契约
 - chunk 是检索与引用单位，不等于原始段落，也不等于完整文档
 - `documents/chunks/preview` 是当前观察 chunk 质量和解析/清洗结果是否可用的主要验证面
 
@@ -383,6 +394,16 @@ chunk 是向量检索与引用展示的基本文本单元。
 它当前主要服务于处理终态追踪、调试和后续分块参考。
 
 当前 `ingest` 主链中的正式中间文本产物是 `cleaned.md`，而不是 `processingMetadata` 本身。
+
+当前 `processingMetadata` 的基础结构由 parser 生成，并在 `INDEXED` / `FAILED` 终态回填，主要包含：
+
+- `schema_version`
+- `stable.source_file`
+- `stable.file_ext`
+- `stable.mime_type`
+- `stable.quality`
+- `stable.created_at`
+- 条件性 `language`、`page_count`、`primary_title`、`title_outline_sample`
 
 ## 6. 关键状态语义
 
@@ -468,7 +489,8 @@ chunk 是向量检索与引用展示的基本文本单元。
 当前 ingest 不是单纯“上传文件到数据库”，而是包含一条真实的处理链路：
 
 - 源文件读取
-- 解析与清洗
+- 文件类型路由
+- 解析与清洗，生成 `cleaned.md`
 - 中间产物落盘
 - 文本分块
 - 向量化
@@ -476,7 +498,7 @@ chunk 是向量检索与引用展示的基本文本单元。
 
 其中当前主链的正式中间文本产物是 `cleaned.md`；围绕解析质量、清洗策略和现有 chunk 行为的优化，默认都应先回到这份文本产物本身判断是否变好。
 
-后续围绕解析质量、清洗策略、chunk 质量、OCR、多格式支持的讨论，都应被视为这条主链路的增强，而不是附属优化。
+纯文字阶段已经形成固定黄金样本与回归闭环：`weak-pdf-001 -> md-001 -> md-002 -> html-001 -> word-001`。后续围绕解析质量、清洗策略、chunk 质量、OCR、多格式支持、图片理解、表格结构化的讨论，都应被视为这条主链路的增强，而不是附属优化。
 
 ### 7.4 权限边界必须和问答边界一致
 
@@ -523,8 +545,8 @@ chunk 是向量检索与引用展示的基本文本单元。
 4. `reference/` 里的资料不是当前系统事实
 它们是技术参考、对照资料，不应直接当成“系统已经这样实现了”。
 
-5. 解析能力虽已升级，但 OCR 和复杂版式仍是增强项
-不要在任何总结中把“复杂扫描件稳定支持”表述成既成事实。
+5. 解析能力虽已升级，但图片、表格结构化、OCR 和复杂版式仍是增强项
+不要在任何总结中把“图片理解、复杂表格节点、复杂扫描件稳定支持”表述成既成事实。
 
 ## 10. 推荐阅读顺序
 
@@ -539,11 +561,13 @@ chunk 是向量检索与引用展示的基本文本单元。
 7. `docs/07-ingest-processing-execution.md`
 8. `docs/runbooks/plans/ingest-cleaning/RAG 文档解析与清洗方案.md`
 9. `docs/runbooks/plans/ingest-cleaning/黄金样本与验收说明.md`
-10. `docs/runbooks/plans/ingest-cleaning/并行开发边界约定-文档版本治理与RAG优化.md`
-11. `docs/adr/ADR-0001-v1-tech-baseline.md`
-12. `docs/adr/ADR-0003-v1-dashscope-pgvector.md`
-13. `docs/adr/ADR-0004-v1-ingest-processing-strategy.md`
-14. `docs/adr/ADR-0005-rag-access-control-foundation.md`
+10. `docs/runbooks/plans/ingest-cleaning/cleaned-md质量回归闭环.md`
+11. `docs/runbooks/handoffs/ingest-cleaning/2026-05-14-ingest-cleaning-text-stage-closure.md`
+12. `docs/runbooks/plans/ingest-cleaning/并行开发边界约定-文档版本治理与RAG优化.md`
+13. `docs/adr/ADR-0001-v1-tech-baseline.md`
+14. `docs/adr/ADR-0003-v1-dashscope-pgvector.md`
+15. `docs/adr/ADR-0004-v1-ingest-processing-strategy.md`
+16. `docs/adr/ADR-0005-rag-access-control-foundation.md`
 
 ## 11. 写作与评审约定
 

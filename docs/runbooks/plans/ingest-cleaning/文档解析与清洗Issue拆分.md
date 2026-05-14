@@ -1,8 +1,8 @@
 # 文档解析与清洗 Issue 拆分
 
-日期：2026-05-13
+日期：2026-05-14
 
-状态：已发布 GitHub Issues；#14、#15、#16、#17、#18 已关闭
+状态：已发布 GitHub Issues；#14、#15、#16、#17、#18 已关闭；纯文字阶段已完成收口
 
 关联 PRD：
 
@@ -147,6 +147,25 @@
 1. 先完成 #13，确保黄金样本输入和验收锚点可靠。
 2. #14、#15、#16、#17 已关闭。
 3. #18 已关闭，统一回归闭环已形成；后续 parser / cleaner 优化按 runbook 填写实际回归记录。
+
+## 当前代码映射
+
+后续排查或继续优化时，优先按下面的实现边界查找代码：
+
+- 文件类型路由：`DocumentParserRouter`
+- 解析入口：`TikaDocumentTextParser`
+- 原生文本解码：`NativeTextDecoder`
+- Tika 上下文与嵌入资源策略：`TikaParseContextFactory`
+- HTML 语义清洗：`HtmlSemanticCleaner`
+- HTML 转 Markdown：`HtmlToMarkdownRenderer`
+- Markdown 行级清洗：`MarkdownTextCleaner`
+- Markdown 结构修复：`MarkdownStructureRepairer`
+- 文档级处理元数据：`ProcessingMetadataBuilder`
+- 中间产物存储：`LocalDocumentProcessingArtifactStorage`
+- 结构优先分块：`StructuredFallbackDocumentChunker`
+- 标题上下文：`HeadingContextExtractor`
+
+这些实现共同支撑 #14 - #18 的完成口径。若后续改动需要新增图片理解、表格结构化、OCR、父子分块、向量 metadata 字段或 `qa.ask` 引用字段，应先新增方案或 issue，而不是复用 #14 - #18 的完成定义。
 
 ## 与版本治理 Issues 的关系
 

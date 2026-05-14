@@ -1,6 +1,6 @@
 # 并行开发边界约定：文档版本治理与 RAG 优化
 
-日期：2026-05-12
+日期：2026-05-14
 
 适用分支（示例）：
 
@@ -25,6 +25,7 @@
 - 当前这一轮 `ingest-cleaning` 已明确收敛为“`cleaned.md` 主链质量 + 现有 chunker 行为 + preview / `qa.ask` 回归验证”
 - 当前这一轮 `qa.ask` 只作为验证面，不作为 retrieval / reference 契约升级入口
 - 当前这一轮默认排除 `vector metadata shape`、`RetrievedChunk`、`AskReferenceResponse`、`Document` 主模型和 Flyway 迁移改动
+- 2026-05-14 纯文字阶段已经收口；下一轮若进入图片、表格、OCR 或 richer node model，应重新判断是否仍属于 RAG 优化分支的安全范围
 
 ## 2. 当前架构分析
 
@@ -166,6 +167,8 @@
 - 结构优先 chunking 的确定性优化
 - `documents/chunks/preview` 回归验证
 - 固定 QA 问题的离线回归、对比实验与结论文档
+- 图片 alt / caption 的纯文本保留增强，前提是不新增图片节点或 OCR 契约
+- 表格的 Markdown 可读性修复，前提是不新增表格节点、单元格级元数据或对外引用字段
 
 ## 4. `high-conflict` 范围（默认归文档版本治理分支所有）
 
@@ -188,6 +191,8 @@
 - 调整 `qa.ask` 引用结果结构
 - 调整 `vector_store` metadata shape
 - 调整 `processing_metadata` 的领域语义或持久化位置
+- 引入图片 OCR / 视觉理解结果并进入检索或引用契约
+- 引入表格结构化节点、父子分块或节点级持久化模型
 
 ## 5. 允许交叉但必须先同步的触发条件
 
@@ -201,6 +206,7 @@
 6. `qa.ask` 的 retrieval / reference 字段变化
 7. `ProcessDocumentApplicationService` 中的主链编排顺序变化
 8. `reprocess` 的幂等语义从 `splitVersion` 扩展到真正的 `document version`
+9. 图片、表格或 OCR 结果需要进入向量 metadata、问答引用 DTO 或节点契约
 
 同步要求：
 

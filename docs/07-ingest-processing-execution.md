@@ -17,8 +17,8 @@
 具体详见 ADR：`docs/adr/ADR-0004-v1-ingest-processing-strategy.md`
 
 - 处理模式：异步 worker（单进程）
-- 分块参数：`chunk=500`, `overlap=100`
-- 元数据最小集：`documentId`, `kbId`, `chunkIndex`, `sourceFile`, `contentHash`
+- 分块参数：`chunkSize=500`, `overlapSize=100`；当前实现按空白分隔的近似 token 组装窗口
+- 向量元数据当前集：`documentId`, `kbId`, `chunkIndex`, `sourceFile`, `contentHash`, `splitVersion`，有标题上下文时额外写入 `sourceHint`
 - 失败策略：瞬时错误重试 3 次，指数退避（1s/2s/4s + jitter）
 - 幂等策略：同一 `documentId` 重复处理最终一致
 - 状态可见性：V1 先不做百分比，保留阶段状态
@@ -37,15 +37,28 @@
 - `overlap=100` 仅用于跨段语义衔接，避免过大造成冗余与噪声放大。
 
 4. 元数据透传  
-- 每个 chunk 必须携带最小元数据：`documentId`, `kbId`, `chunkIndex`, `sourceFile`, `contentHash`。
+- 每个向量 chunk 必须携带当前检索与幂等所需元数据：`documentId`, `kbId`, `chunkIndex`, `sourceFile`, `contentHash`, `splitVersion`；若有标题上下文，则额外携带 `sourceHint`。
 
 5. 拆分结果应尽量确定性  
 - 同一输入文本 + 同一拆分参数，应产出一致的 chunk 序列（顺序与边界稳定）。
 
 ### 4.2 初始参数（可调）
-- `chunk = 500 tokens`
-- `overlap = 100 tokens`
+- `chunkSize = 500`
+- `overlapSize = 100`
+- 当前实现按空白分隔后的近似 token 计数，不是模型 tokenizer 的精确 token 数
 - 评估维度：召回命中率、答案引用准确度、处理成本与延迟
+
+### 4.3 当前解析与清洗实现
+
+当前 parser / cleaner 已完成纯文字阶段收口：
+
+- 原生 Markdown：`md` / `markdown` / `mdown` / `mkd` 走最小破坏清洗路径，保留标题、代码块、表格、列表和空行结构。
+- 原生 HTML：`html` / `htm` 绕过 Tika，直接执行 HTML 语义清洗与 Markdown 转换，剔除导航、侧栏、页脚、脚本、样式和元数据噪音。
+- PDF / Word 等复杂格式：继续通过 Tika 输出 XHTML，再由 Jsoup 清洗和 flexmark 转 Markdown。
+- Word 样式：常见 `MsoTitle` / `MsoHeading*` 会映射为标题。
+- 图片：当前只保留 `[图片]` 或 `[图片: alt]` 占位，不做视觉理解。
+- 表格：当前目标是保留 Markdown 可读形态，不生成表格节点或单元格级结构。
+- 结构修复：重点覆盖弱结构 PDF 的软换行、标题粘连、明显页眉页脚页码噪音。
 
 ## 5. 幂等控制清单（重点）
 以下环节都可能因重试/重复触发导致重复操作，必须做幂等控制：
@@ -184,7 +197,7 @@
 2. 再看 `GET /actuator/metrics/{metricName}`，确认异常类型属于失败、重试还是删除冲突。
 3. 最后结合应用日志中的 `documentId/status/retryCount` 定位到具体文档并复现。
 
-## 11. 当前实现边界（2026-05-13）
+## 11. 当前实现边界（2026-05-14）
 - 已实现：
   - 上传受理幂等（`kbId + fileHash`）
   - 任务启动 `UPLOADED -> INGESTING` 的 CAS 抢占能力
@@ -198,6 +211,8 @@
   - 删除接口与资产下线流程（`DELETING -> DELETED`）
   - `processing_metadata` 字段持久化、schema 自检与状态接口终态透传能力
   - `processing_metadata` 的基础自动回填逻辑，当前由 parser 生成文档级基础元数据并在成功/失败终态写入数据库
+  - 黄金样本回归闭环：`weak-pdf-001 -> md-001 -> md-002 -> html-001 -> word-001`
 - 尚未实现：
   - OCR 场景与复杂排版优化（如扫描版 PDF、表格结构化提取）
   - 更精细的文档质量分级、页码提取与跨层级标题路径稳定化
+  - 图片理解、表格结构化节点、父子分块与 richer node model

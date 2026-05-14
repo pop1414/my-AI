@@ -1,8 +1,10 @@
 # ingest-cleaning：高质量 cleaned.md 优先计划
 
-**版本**：1.3
+**版本**：1.4
 
-**适用场景**：当前仓库既有 ingest 主链中的 parser / cleaner 质量优化
+**适用场景**：当前仓库既有 ingest 主链中的 parser / cleaner 质量基线与后续增强边界
+
+**当前状态**：纯文字阶段已按当前代码实现收口；后续图片、表格、OCR 与 richer node model 需另行确认契约边界
 
 **技术栈**：Apache Tika + Jsoup + flexmark-java
 
@@ -18,10 +20,10 @@
 
 `源文件读取 -> 解析与清洗 -> cleaned.md 落盘 -> 分块 -> 向量化 -> 入库与状态收口`
 
-本轮要做的是：
+本轮已经完成的是：
 
-- 优先把 parser / cleaner 做到足够稳定
-- 让 `cleaned.md` 成为可信、可分块、可回归验证的中间文本产物
+- parser / cleaner 的纯文字质量基线
+- `cleaned.md` 作为可信、可分块、可回归验证的中间文本产物
 - 使用现有 `documents/chunks/preview` 与固定 `qa.ask` 问题验证清洗优化是否真实改善后续消费效果
 
 本轮**不做**的是：
@@ -31,6 +33,7 @@
 - 升级 `vector metadata shape`
 - 修改 `Document` 主模型、Flyway、版本治理语义或外部 API 契约
 - 落地父子分块或 richer node contract
+- 做图片理解、OCR 或表格结构化节点
 
 ---
 
@@ -38,14 +41,15 @@
 
 本轮主目标不是升级 chunk 契约或检索契约，而是让 parser / cleaner 稳定产出高质量、可分块、可回归验证的 `cleaned.md`。
 
-**本轮明确做**
+**本轮已经落地**
 
-- 文件类型路由优化：区分 PDF / Word / 原生 Markdown / 原生 HTML
+- 文件类型路由优化：区分 PDF / Word 等复杂格式、原生 Markdown、原生 HTML
 - XHTML/HTML 清洗质量优化
 - 标题、段落、列表、表格、代码块的 Markdown 还原质量优化
 - `cleaned.md` 的稳定落盘与人工审阅能力
 - 黄金样本、固定问题、人工审阅模板、回归基线准备
 - 通过现有 chunk preview 与 `qa.ask` 做回归验证
+- 基础 `processingMetadata` 自动构建与终态回填
 
 **本轮明确不做**
 
@@ -54,6 +58,7 @@
 - 检索与引用 DTO 升级
 - 页码保留作为硬性通过条件
 - 关键词抽取稳定作为硬性通过条件
+- 图片理解、OCR 或表格节点建模
 
 ---
 
@@ -109,7 +114,7 @@
 
 ---
 
-## 5. 当前建议流水线
+## 5. 当前已落地流水线
 
 ```mermaid
 graph LR
@@ -127,18 +132,19 @@ H --> I[现有 chunker / preview / qa 回归验证]
 
 这里要强调的是：
 
-- 本轮优化重点落在 `B/C/D/E/F/G/H`
+- 当前纯文字阶段优化重点已经落在 `B/C/D/E/F/G/H`
 - `I` 保持当前验证角色，不升级为新契约入口
 
 ---
 
-## 6. 实施要点
+## 6. 当前实现要点
 
 ### 6.1 文件类型路由
 
 - PDF / Word 等复杂格式继续走 `Tika -> Jsoup -> flexmark`
-- 原生 HTML 允许绕过 Tika，避免无谓语义降级
-- 原生 Markdown 允许绕过 Tika 和 HTML 清洗主链，只做最小必要的不可见字符与噪音修正
+- 原生 HTML 按 `html` / `htm` 扩展名绕过 Tika，避免无谓语义降级
+- 原生 Markdown 按 `md` / `markdown` / `mdown` / `mkd` 扩展名绕过 Tika 和 HTML 清洗主链，只做最小必要的不可见字符与噪音修正
+- 原生文本严格解码失败时，回退 Tika 让其执行字符集检测
 
 ### 6.2 清洗规则重点
 
@@ -147,10 +153,11 @@ H --> I[现有 chunker / preview / qa 回归验证]
 - 标题映射：重点覆盖 `MsoTitle`、`MsoHeading*`
 - 图片占位：保留最小描述，不在本轮引入视觉理解
 - 幽灵换行修复：重点面向弱结构 PDF 的错误断句
+- 表格：当前目标是保留 Markdown 可读形态，不生成表格节点或单元格级结构
 
 ### 6.3 内存与中间产物
 
-- 复杂文档优先考虑流式处理或分段处理，避免一次性放大 DOM
+- 复杂文档后续仍可考虑流式处理或分段处理，当前实现仍以字符串中间产物传递
 - `cleaned.md` 必须稳定落盘，作为当前主链正式中间文本产物
 - 如需保留 `raw.xhtml`、`cleaned.html`、`parse-result.json`，应作为调试产物，而不是本轮正式契约
 
@@ -202,12 +209,20 @@ H --> I[现有 chunker / preview / qa 回归验证]
 
 ## 9. 完成定义
 
-只有同时满足以下条件，本轮 `ingest-cleaning` 才能宣称完成：
+纯文字阶段只有同时满足以下条件，才能宣称本轮 `ingest-cleaning` 完成：
 
 - 黄金样本目录已落地
 - 每类样本具备原始文件、README 与固定 QA 问题
 - `cleaned.md` 在固定样本上满足 5 类硬性验收项
 - chunk preview 在固定样本上没有出现“标题更好看但正文仍断裂”的假改进
-- 固定 `qa.ask` 回归结果比基线更稳
+- 固定 `qa.ask` 回归结果比基线更稳，或已明确记录为模型偶然变化而非 parser / cleaner 改善
 
 如果优化不能在固定样本上让 `cleaned.md`、chunk preview 或固定 QA 结果变得更稳，就不应宣称本轮完成。
+
+## 10. 下一轮优化前置判断
+
+下一轮若进入图片、表格、OCR 或 richer node model，应先判断变化类型：
+
+- 只改 `cleaned.md` 内的文字保留与噪音清理：仍属于 parser / cleaner 内部优化。
+- 需要新增节点、父子关系、表格结构、图片 OCR 文本或引用字段：已经越过当前 `cleaned.md` 基线，需先同步契约。
+- 需要改 `vector_store.metadata`、`qa.ask` response、`AskReferenceResponse` 或 `RetrievedChunk`：应先更新方案/ADR，再实现。
