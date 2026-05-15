@@ -68,6 +68,15 @@
 - `cleaned.md` 是正式中间文本产物，文档目录中强制落盘
 - `版本正文` 指某个 `document version` 处理后形成的 `cleaned.md` 文本产物
 - 文档版本正文读取默认读取版本级 `cleaned.md`，不从源文件实时解析，也不从 `vector_store` chunk 拼接
+- 文档详情页未显式指定 `versionNumber` 时，正文读取默认读取当前最新版本的 `cleaned.md`
+- 文档详情页显式指定 `versionNumber` 时，正文读取定位到该历史版本的 `cleaned.md`
+- 问答引用侧栏读取文档正文时，应读取该 `document` 当前问答基线版本的 `cleaned.md`，而不是无条件读取最新版本
+- 普通 `KB_READER` 只能读取问答基线版本正文；具备目标 `document` 管理权限的用户才可读取任意历史版本正文
+- 正文读取不改变问答基线；查看历史版本正文不会让后续问答临时切换到该历史版本
+- `INDEXED` 与 `FAILED` 版本只要已形成 `cleaned.md`，都允许具备权限的用户读取正文
+- `UPLOADED` / `INGESTING` 版本若尚未形成 `cleaned.md`，正文读取应返回 `CONTENT_NOT_READY`
+- 若版本状态已表明处理完成但对应 `cleaned.md` 缺失，正文读取应返回 `CONTENT_ARTIFACT_MISSING`
+- 正文读取第一版返回完整 Markdown 文本，响应字段使用 `contentMarkdown`；后端应设置最大读取大小，超出上限时返回明确业务错误，后续再评估分页读取
 - 源文件用于下载、审计、重处理和原版预览，不作为文档版本正文读取的默认来源
 - 后续引入 MinIO 时，只改变源文件与处理产物的存储介质，不改变 `版本正文` 读取 `cleaned.md` 的语义
 - `raw.xhtml`、`cleaned.html`、`parse-result.json` 是可配置调试产物，不是对外契约
