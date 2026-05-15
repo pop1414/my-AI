@@ -114,7 +114,12 @@ class RollbackDocumentVersionApplicationServiceTest {
                 .when(authorizationService)
                 .requireCanManageDocument(any(CurrentUser.class), eq("doc-2"), eq("kb-1"));
         RollbackDocumentVersionApplicationService service =
-                new RollbackDocumentVersionApplicationService(repository, sourceStorage, currentUserProvider, authorizationService);
+                new RollbackDocumentVersionApplicationService(
+                        repository,
+                        sourceStorage,
+                        currentUserProvider,
+                        authorizationService,
+                        Mockito.mock(AuditEventRepository.class));
 
         BusinessException ex = assertThrows(BusinessException.class, () ->
                 service.handle(new RollbackDocumentVersionCommand("doc-2", 1, 2)));
@@ -133,7 +138,12 @@ class RollbackDocumentVersionApplicationServiceTest {
         when(repository.findById(eq("workspace-a"), eq(new DocumentId("doc-3"))))
                 .thenReturn(Optional.of(document("doc-3", 3, "hash-latest", UploadStatus.INDEXED)));
         RollbackDocumentVersionApplicationService service =
-                new RollbackDocumentVersionApplicationService(repository, sourceStorage, currentUserProvider, authorizationService);
+                new RollbackDocumentVersionApplicationService(
+                        repository,
+                        sourceStorage,
+                        currentUserProvider,
+                        authorizationService,
+                        Mockito.mock(AuditEventRepository.class));
 
         BusinessException ex = assertThrows(BusinessException.class, () ->
                 service.handle(new RollbackDocumentVersionCommand("doc-3", 1, 2)));
@@ -152,7 +162,12 @@ class RollbackDocumentVersionApplicationServiceTest {
         when(repository.findById(eq("workspace-a"), eq(new DocumentId("doc-4"))))
                 .thenReturn(Optional.of(document("doc-4", 3, "hash-latest", UploadStatus.INGESTING)));
         RollbackDocumentVersionApplicationService service =
-                new RollbackDocumentVersionApplicationService(repository, sourceStorage, currentUserProvider, authorizationService);
+                new RollbackDocumentVersionApplicationService(
+                        repository,
+                        sourceStorage,
+                        currentUserProvider,
+                        authorizationService,
+                        Mockito.mock(AuditEventRepository.class));
 
         BusinessException ex = assertThrows(BusinessException.class, () ->
                 service.handle(new RollbackDocumentVersionCommand("doc-4", 1, 3)));
@@ -171,7 +186,12 @@ class RollbackDocumentVersionApplicationServiceTest {
         when(repository.findById(eq("workspace-a"), eq(new DocumentId("doc-5"))))
                 .thenReturn(Optional.of(document("doc-5", 3, "hash-latest", UploadStatus.INDEXED)));
         RollbackDocumentVersionApplicationService service =
-                new RollbackDocumentVersionApplicationService(repository, sourceStorage, currentUserProvider, authorizationService);
+                new RollbackDocumentVersionApplicationService(
+                        repository,
+                        sourceStorage,
+                        currentUserProvider,
+                        authorizationService,
+                        Mockito.mock(AuditEventRepository.class));
 
         BusinessException ex = assertThrows(BusinessException.class, () ->
                 service.handle(new RollbackDocumentVersionCommand("doc-5", 3, 3)));
@@ -193,7 +213,12 @@ class RollbackDocumentVersionApplicationServiceTest {
         when(repository.findVersionByNumber(eq("workspace-a"), eq(documentId), eq(1)))
                 .thenReturn(Optional.of(version(documentId, 1, "hash-v1", "v1.pdf", UploadStatus.FAILED)));
         RollbackDocumentVersionApplicationService service =
-                new RollbackDocumentVersionApplicationService(repository, sourceStorage, currentUserProvider, authorizationService);
+                new RollbackDocumentVersionApplicationService(
+                        repository,
+                        sourceStorage,
+                        currentUserProvider,
+                        authorizationService,
+                        Mockito.mock(AuditEventRepository.class));
 
         BusinessException ex = assertThrows(BusinessException.class, () ->
                 service.handle(new RollbackDocumentVersionCommand("doc-6", 1, 3)));
@@ -222,7 +247,12 @@ class RollbackDocumentVersionApplicationServiceTest {
         when(repository.appendRollbackVersion(eq("workspace-a"), eq(documentId), eq(3), any(DocumentVersion.class), any(Instant.class)))
                 .thenReturn(false);
         RollbackDocumentVersionApplicationService service =
-                new RollbackDocumentVersionApplicationService(repository, sourceStorage, currentUserProvider, authorizationService);
+                new RollbackDocumentVersionApplicationService(
+                        repository,
+                        sourceStorage,
+                        currentUserProvider,
+                        authorizationService,
+                        Mockito.mock(AuditEventRepository.class));
 
         BusinessException ex = assertThrows(BusinessException.class, () ->
                 service.handle(new RollbackDocumentVersionCommand("doc-7", 1, 3)));
@@ -245,7 +275,12 @@ class RollbackDocumentVersionApplicationServiceTest {
                 .thenReturn(Optional.of(version(documentId, 1, "hash-v1", "v1.pdf", UploadStatus.INDEXED)));
         when(sourceStorage.loadVersion(eq(documentId), eq(1), eq("v1.pdf"))).thenReturn(Optional.empty());
         RollbackDocumentVersionApplicationService service =
-                new RollbackDocumentVersionApplicationService(repository, sourceStorage, currentUserProvider, authorizationService);
+                new RollbackDocumentVersionApplicationService(
+                        repository,
+                        sourceStorage,
+                        currentUserProvider,
+                        authorizationService,
+                        Mockito.mock(AuditEventRepository.class));
 
         BusinessException ex = assertThrows(BusinessException.class, () ->
                 service.handle(new RollbackDocumentVersionCommand("doc-8", 1, 3)));
@@ -274,7 +309,12 @@ class RollbackDocumentVersionApplicationServiceTest {
                 .when(sourceStorage)
                 .saveVersionIfAbsent(eq(documentId), eq(4), eq("v1.pdf"), eq(bytes("v1 content")));
         RollbackDocumentVersionApplicationService service =
-                new RollbackDocumentVersionApplicationService(repository, sourceStorage, currentUserProvider, authorizationService);
+                new RollbackDocumentVersionApplicationService(
+                        repository,
+                        sourceStorage,
+                        currentUserProvider,
+                        authorizationService,
+                        Mockito.mock(AuditEventRepository.class));
 
         BusinessException ex = assertThrows(BusinessException.class, () ->
                 service.handle(new RollbackDocumentVersionCommand("doc-9", 1, 3)));

@@ -145,31 +145,6 @@ public class AcceptUploadApplicationService implements AcceptUploadUseCase {
     }
 
     /**
-     * 兼容构造器：未显式接入审计仓储的单元测试保持原有调用形态。
-     *
-     * @param documentIdGenerator     文档 ID 生成器
-     * @param documentRepository      文档仓储
-     * @param knowledgeBaseRepository 知识库仓储
-     * @param currentUserProvider     当前用户上下文提供器
-     * @param authorizationService    授权服务
-     */
-    AcceptUploadApplicationService(
-            DocumentIdGenerator documentIdGenerator,
-            DocumentRepository documentRepository,
-            KnowledgeBaseRepository knowledgeBaseRepository,
-            CurrentUserProvider currentUserProvider,
-            AuthorizationService authorizationService) {
-        this(
-                documentIdGenerator,
-                documentRepository,
-                knowledgeBaseRepository,
-                currentUserProvider,
-                authorizationService,
-                event -> {
-                });
-    }
-
-    /**
      * 执行上传受理流程。
      *
      * <p>处理步骤（严格按顺序，每步失败即终止）：

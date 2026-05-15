@@ -72,28 +72,6 @@ public class RollbackDocumentVersionApplicationService implements RollbackDocume
     }
 
     /**
-     * 兼容构造器：未显式接入审计仓储的单元测试保持原有调用形态。
-     *
-     * @param documentRepository    文档元数据仓储
-     * @param documentSourceStorage 源文件存储
-     * @param currentUserProvider   当前用户提供者
-     * @param authorizationService  权限校验服务
-     */
-    RollbackDocumentVersionApplicationService(
-            DocumentRepository documentRepository,
-            DocumentSourceStorage documentSourceStorage,
-            CurrentUserProvider currentUserProvider,
-            AuthorizationService authorizationService) {
-        this(
-                documentRepository,
-                documentSourceStorage,
-                currentUserProvider,
-                authorizationService,
-                event -> {
-                });
-    }
-
-    /**
      * 执行版本回退。
      *
      * <p>处理顺序：

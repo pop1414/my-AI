@@ -88,28 +88,6 @@ public class UploadNewDocumentVersionApplicationService implements UploadNewDocu
     }
 
     /**
-     * 兼容构造器：未显式接入审计仓储的单元测试保持原有调用形态。
-     *
-     * @param documentRepository     文档元数据仓储
-     * @param documentSourceStorage  源文件存储
-     * @param currentUserProvider    当前用户提供者
-     * @param authorizationService   权限校验服务
-     */
-    UploadNewDocumentVersionApplicationService(
-            DocumentRepository documentRepository,
-            DocumentSourceStorage documentSourceStorage,
-            CurrentUserProvider currentUserProvider,
-            AuthorizationService authorizationService) {
-        this(
-                documentRepository,
-                documentSourceStorage,
-                currentUserProvider,
-                authorizationService,
-                event -> {
-                });
-    }
-
-    /**
      * 处理上传新版本命令的核心编排逻辑。
      *
      * <p>该方法按照以下步骤顺序执行，任一步骤失败即终止并抛出对应异常：

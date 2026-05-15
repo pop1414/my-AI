@@ -105,7 +105,12 @@ class UploadNewDocumentVersionApplicationServiceTest {
         when(repository.findById(eq("workspace-a"), eq(new DocumentId("doc-2")))).thenReturn(Optional.of(document));
         when(repository.findLatestIndexedVersionNumber(eq("workspace-a"), eq(new DocumentId("doc-2")))).thenReturn(4);
         UploadNewDocumentVersionApplicationService service =
-                new UploadNewDocumentVersionApplicationService(repository, sourceStorage, currentUserProvider, authorizationService);
+                new UploadNewDocumentVersionApplicationService(
+                        repository,
+                        sourceStorage,
+                        currentUserProvider,
+                        authorizationService,
+                        Mockito.mock(AuditEventRepository.class));
 
         DocumentVersionUploadResult result = service.handle(
                 new UploadNewDocumentVersionCommand("doc-2", "same-name.pdf", 42L, "hash-same", 4, bytes("same content")));
@@ -133,7 +138,12 @@ class UploadNewDocumentVersionApplicationServiceTest {
                 .when(authorizationService)
                 .requireCanManageDocument(any(CurrentUser.class), eq("doc-3"), eq("kb-1"));
         UploadNewDocumentVersionApplicationService service =
-                new UploadNewDocumentVersionApplicationService(repository, sourceStorage, currentUserProvider, authorizationService);
+                new UploadNewDocumentVersionApplicationService(
+                        repository,
+                        sourceStorage,
+                        currentUserProvider,
+                        authorizationService,
+                        Mockito.mock(AuditEventRepository.class));
 
         BusinessException ex = assertThrows(BusinessException.class, () -> service.handle(
                 new UploadNewDocumentVersionCommand("doc-3", "new.pdf", 42L, "hash-new", 1, bytes("new content"))));
@@ -152,7 +162,12 @@ class UploadNewDocumentVersionApplicationServiceTest {
         Document document = document("doc-4", 2, "hash-old", UploadStatus.INGESTING);
         when(repository.findById(eq("workspace-a"), eq(new DocumentId("doc-4")))).thenReturn(Optional.of(document));
         UploadNewDocumentVersionApplicationService service =
-                new UploadNewDocumentVersionApplicationService(repository, sourceStorage, currentUserProvider, authorizationService);
+                new UploadNewDocumentVersionApplicationService(
+                        repository,
+                        sourceStorage,
+                        currentUserProvider,
+                        authorizationService,
+                        Mockito.mock(AuditEventRepository.class));
 
         BusinessException ex = assertThrows(BusinessException.class, () -> service.handle(
                 new UploadNewDocumentVersionCommand("doc-4", "new.pdf", 42L, "hash-new", 2, bytes("new content"))));
@@ -171,7 +186,12 @@ class UploadNewDocumentVersionApplicationServiceTest {
         Document document = document("doc-5", 3, "hash-old", UploadStatus.INDEXED);
         when(repository.findById(eq("workspace-a"), eq(new DocumentId("doc-5")))).thenReturn(Optional.of(document));
         UploadNewDocumentVersionApplicationService service =
-                new UploadNewDocumentVersionApplicationService(repository, sourceStorage, currentUserProvider, authorizationService);
+                new UploadNewDocumentVersionApplicationService(
+                        repository,
+                        sourceStorage,
+                        currentUserProvider,
+                        authorizationService,
+                        Mockito.mock(AuditEventRepository.class));
 
         BusinessException ex = assertThrows(BusinessException.class, () -> service.handle(
                 new UploadNewDocumentVersionCommand("doc-5", "new.pdf", 42L, "hash-new", 2, bytes("new content"))));
@@ -196,7 +216,12 @@ class UploadNewDocumentVersionApplicationServiceTest {
         when(repository.appendUploadVersion(eq("workspace-a"), eq(new DocumentId("doc-6")), eq(2), any(DocumentVersion.class), any(Instant.class)))
                 .thenReturn(false);
         UploadNewDocumentVersionApplicationService service =
-                new UploadNewDocumentVersionApplicationService(repository, sourceStorage, currentUserProvider, authorizationService);
+                new UploadNewDocumentVersionApplicationService(
+                        repository,
+                        sourceStorage,
+                        currentUserProvider,
+                        authorizationService,
+                        Mockito.mock(AuditEventRepository.class));
 
         BusinessException ex = assertThrows(BusinessException.class, () -> service.handle(
                 new UploadNewDocumentVersionCommand("doc-6", "new.pdf", 42L, "hash-new", 2, bytes("new content"))));
@@ -221,7 +246,12 @@ class UploadNewDocumentVersionApplicationServiceTest {
                 .when(sourceStorage)
                 .saveVersionIfAbsent(eq(new DocumentId("doc-7")), eq(3), eq("new.pdf"), eq(bytes("new content")));
         UploadNewDocumentVersionApplicationService service =
-                new UploadNewDocumentVersionApplicationService(repository, sourceStorage, currentUserProvider, authorizationService);
+                new UploadNewDocumentVersionApplicationService(
+                        repository,
+                        sourceStorage,
+                        currentUserProvider,
+                        authorizationService,
+                        Mockito.mock(AuditEventRepository.class));
 
         assertThrows(IllegalStateException.class, () -> service.handle(
                 new UploadNewDocumentVersionCommand("doc-7", "new.pdf", 42L, "hash-new", 2, bytes("new content"))));
@@ -245,7 +275,12 @@ class UploadNewDocumentVersionApplicationServiceTest {
                 .when(sourceStorage)
                 .saveVersionIfAbsent(eq(new DocumentId("doc-8")), eq(3), eq("new.pdf"), eq(bytes("new content")));
         UploadNewDocumentVersionApplicationService service =
-                new UploadNewDocumentVersionApplicationService(repository, sourceStorage, currentUserProvider, authorizationService);
+                new UploadNewDocumentVersionApplicationService(
+                        repository,
+                        sourceStorage,
+                        currentUserProvider,
+                        authorizationService,
+                        Mockito.mock(AuditEventRepository.class));
 
         BusinessException ex = assertThrows(BusinessException.class, () -> service.handle(
                 new UploadNewDocumentVersionCommand("doc-8", "new.pdf", 42L, "hash-new", 2, bytes("new content"))));

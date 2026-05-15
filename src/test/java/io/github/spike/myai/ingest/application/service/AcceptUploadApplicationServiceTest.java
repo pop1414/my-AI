@@ -98,6 +98,7 @@ class AcceptUploadApplicationServiceTest {
         KnowledgeBaseRepository knowledgeBaseRepository = Mockito.mock(KnowledgeBaseRepository.class);
         CurrentUserProvider currentUserProvider = currentUserProvider();
         AuthorizationService authorizationService = Mockito.mock(AuthorizationService.class);
+        AuditEventRepository auditEventRepository = Mockito.mock(AuditEventRepository.class);
         when(generator.nextId()).thenReturn(new DocumentId("doc-blank-kb"));
         when(repository.findByKbIdAndFileHash(eq("workspace-a"), eq("default"), eq("hash-b")))
                 .thenReturn(Optional.empty());
@@ -109,7 +110,8 @@ class AcceptUploadApplicationServiceTest {
                 repository,
                 knowledgeBaseRepository,
                 currentUserProvider,
-                authorizationService);
+                authorizationService,
+                auditEventRepository);
         AcceptUploadCommand command = new AcceptUploadCommand("b.txt", 20L, " ", "hash-b");
 
         UploadTicket ticket = service.handle(command);
@@ -136,6 +138,7 @@ class AcceptUploadApplicationServiceTest {
         KnowledgeBaseRepository knowledgeBaseRepository = Mockito.mock(KnowledgeBaseRepository.class);
         CurrentUserProvider currentUserProvider = currentUserProvider();
         AuthorizationService authorizationService = Mockito.mock(AuthorizationService.class);
+        AuditEventRepository auditEventRepository = Mockito.mock(AuditEventRepository.class);
         Document existing = new Document(
                 new DocumentId("doc-existing"),
                 "workspace-a",
@@ -167,7 +170,8 @@ class AcceptUploadApplicationServiceTest {
                 repository,
                 knowledgeBaseRepository,
                 currentUserProvider,
-                authorizationService);
+                authorizationService,
+                auditEventRepository);
         AcceptUploadCommand command = new AcceptUploadCommand("new.txt", 99L, "kb-dup", "hash-dup");
 
         UploadTicket ticket = service.handle(command);
@@ -287,7 +291,8 @@ class AcceptUploadApplicationServiceTest {
                 repository,
                 knowledgeBaseRepository,
                 currentUserProvider,
-                authorizationService);
+                authorizationService,
+                Mockito.mock(AuditEventRepository.class));
 
         org.junit.jupiter.api.Assertions.assertThrows(
                 KnowledgeBaseNotFoundException.class,
@@ -310,7 +315,8 @@ class AcceptUploadApplicationServiceTest {
                 repository,
                 knowledgeBaseRepository,
                 currentUserProvider,
-                authorizationService);
+                authorizationService,
+                Mockito.mock(AuditEventRepository.class));
 
         org.junit.jupiter.api.Assertions.assertThrows(
                 KnowledgeBaseInactiveException.class,
@@ -333,7 +339,8 @@ class AcceptUploadApplicationServiceTest {
                 repository,
                 knowledgeBaseRepository,
                 currentUserProvider,
-                authorizationService);
+                authorizationService,
+                Mockito.mock(AuditEventRepository.class));
 
         assertThrows(
                 AccessDeniedException.class,
