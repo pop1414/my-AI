@@ -1,7 +1,11 @@
 package io.github.spike.myai.ingest.domain.port;
 
+import io.github.spike.myai.ingest.application.exception.DocumentVersionArtifactTooLargeException;
 import io.github.spike.myai.ingest.domain.model.DocumentId;
 import io.github.spike.myai.ingest.domain.model.DocumentParseResult;
+import io.github.spike.myai.ingest.domain.model.DocumentVersionArtifactContent;
+import io.github.spike.myai.shared.workspace.WorkspaceConstants;
+import java.util.Optional;
 
 /**
  * 文档处理中间产物存储端口（Domain Port）。
@@ -22,6 +26,9 @@ import io.github.spike.myai.ingest.domain.model.DocumentParseResult;
  */
 public interface DocumentProcessingArtifactStorage {
 
+    /** 主链正文处理产物名称。 */
+    String CLEANED_MARKDOWN_ARTIFACT_NAME = "cleaned.md";
+
     /**
      * 保存文档解析产物到存储介质。
      *
@@ -35,5 +42,41 @@ public interface DocumentProcessingArtifactStorage {
      * @param documentId  文档资产 ID，用于定位存储路径
      * @param parseResult 文档解析结果（含所有中间产物）
      */
-    void save(DocumentId documentId, DocumentParseResult parseResult);
+    default void save(DocumentId documentId, DocumentParseResult parseResult) {
+        saveVersion(WorkspaceConstants.DEFAULT_WORKSPACE_ID, documentId, 1, parseResult);
+    }
+
+    /**
+     * 保存指定版本的文档解析产物到存储介质。
+     *
+     * <p>版本级 artifact key 必须包含 workspaceId、documentId、versionNumber 和 artifact 名称，
+     * 避免不同版本复用同一份 cleaned.md。
+     *
+     * @param workspaceId 工作区 ID
+     * @param documentId 文档资产 ID
+     * @param versionNumber 版本号
+     * @param parseResult 文档解析结果（含所有中间产物）
+     */
+    void saveVersion(String workspaceId, DocumentId documentId, int versionNumber, DocumentParseResult parseResult);
+
+    /**
+     * 读取指定版本的处理产物。
+     *
+     * <p>缺失产物返回 {@link Optional#empty()}，作为稳定业务分支供上层映射
+     * {@code CONTENT_ARTIFACT_MISSING}；产物过大时抛出
+     * {@link DocumentVersionArtifactTooLargeException}。
+     *
+     * @param workspaceId 工作区 ID
+     * @param documentId 文档资产 ID
+     * @param versionNumber 版本号
+     * @param artifactName 产物名称
+     * @param maxBytes 允许读取的最大字节数
+     * @return 产物内容，未命中时为空
+     */
+    Optional<DocumentVersionArtifactContent> loadVersionArtifact(
+            String workspaceId,
+            DocumentId documentId,
+            int versionNumber,
+            String artifactName,
+            long maxBytes);
 }

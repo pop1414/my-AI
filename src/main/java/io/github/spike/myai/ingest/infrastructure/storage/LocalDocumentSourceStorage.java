@@ -3,6 +3,7 @@ package io.github.spike.myai.ingest.infrastructure.storage;
 import io.github.spike.myai.ingest.domain.model.DocumentId;
 import io.github.spike.myai.ingest.domain.port.DocumentSourceStorage;
 import io.github.spike.myai.ingest.infrastructure.config.IngestProperties;
+import io.github.spike.myai.shared.workspace.WorkspaceConstants;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -17,7 +18,8 @@ import org.springframework.stereotype.Component;
  * 本地文件系统文档源存储实现。
  *
  * <p>基于 {@link DocumentSourceStorage} 端口规范，提供原始上传文件在本地文件系统上的
- * 存取与删除能力。存储路径结构为：{@code {rootDir}/{documentId}/{filename}}。
+ * 存取与删除能力。版本化源文件路径由 {@link DocumentStorageKeyResolver} 统一生成，
+ * 当前格式为：{@code {rootDir}/source/{workspaceId}/documents/{documentId}/versions/{versionNumber}/{filename}}。
  *
  * <p>设计要点：
  * <ul>
@@ -46,6 +48,8 @@ public class LocalDocumentSourceStorage implements DocumentSourceStorage {
 
     /** 文件存储根目录路径 */
     private final Path rootDirectory;
+    /** 源文件与处理产物逻辑 key 解析器 */
+    private final DocumentStorageKeyResolver keyResolver = new DocumentStorageKeyResolver();
 
     /**
      * 构造器注入：从配置属性中读取存储根目录路径。
@@ -72,11 +76,9 @@ public class LocalDocumentSourceStorage implements DocumentSourceStorage {
      */
     @Override
     public void save(DocumentId documentId, String filename, byte[] content) {
-        // 文件名安全清洗：防止路径遍历攻击
-        String safeFilename = sanitizeFilename(filename);
-        Path filePath = resolveFilePath(documentId, safeFilename);
+        Path filePath = resolveVersionFilePath(documentId, 1, filename);
         try {
-            // 目录结构：{root}/{documentId}/{filename}
+            // 目录结构：{root}/source/{workspaceId}/documents/{documentId}/versions/1/{filename}
             Files.createDirectories(filePath.getParent());
             // 幂等写入：已存在时不覆盖，保持首份受理内容稳定
             if (Files.notExists(filePath)) {
@@ -119,8 +121,7 @@ public class LocalDocumentSourceStorage implements DocumentSourceStorage {
      */
     @Override
     public boolean saveVersionIfAbsent(DocumentId documentId, int versionNumber, String filename, byte[] content) {
-        String safeFilename = sanitizeFilename(filename);
-        Path filePath = resolveVersionFilePath(documentId, versionNumber, safeFilename);
+        Path filePath = resolveVersionFilePath(documentId, versionNumber, filename);
         try {
             Files.createDirectories(filePath.getParent());
             if (Files.exists(filePath)) {
@@ -139,12 +140,16 @@ public class LocalDocumentSourceStorage implements DocumentSourceStorage {
 
     @Override
     public Optional<byte[]> load(DocumentId documentId, String filename) {
-        String safeFilename = sanitizeFilename(filename);
-        Path filePath = resolveFilePath(documentId, safeFilename);
+        Path filePath = resolveVersionFilePath(documentId, 1, filename);
         try {
-            // 优先按“documentId + filename”精确读取。
+            // 优先按 source prefix 下的 version 1 文件精确读取。
             if (Files.exists(filePath)) {
                 return Optional.of(Files.readAllBytes(filePath));
+            }
+
+            Optional<byte[]> legacyExact = loadLegacyDocumentFile(documentId, filename);
+            if (legacyExact.isPresent()) {
+                return legacyExact;
             }
 
             // 兼容历史数据：若文件名不一致，回退读取该文档目录下首个文件。
@@ -181,11 +186,14 @@ public class LocalDocumentSourceStorage implements DocumentSourceStorage {
      */
     @Override
     public Optional<byte[]> loadVersion(DocumentId documentId, int versionNumber, String filename) {
-        String safeFilename = sanitizeFilename(filename);
-        Path filePath = resolveVersionFilePath(documentId, versionNumber, safeFilename);
+        Path filePath = resolveVersionFilePath(documentId, versionNumber, filename);
         try {
             if (Files.exists(filePath)) {
                 return Optional.of(Files.readAllBytes(filePath));
+            }
+            Path legacyVersionFilePath = resolveLegacyVersionFilePath(documentId, versionNumber, sanitizeFilename(filename));
+            if (Files.exists(legacyVersionFilePath)) {
+                return Optional.of(Files.readAllBytes(legacyVersionFilePath));
             }
             return load(documentId, filename);
         } catch (IOException ex) {
@@ -208,28 +216,22 @@ public class LocalDocumentSourceStorage implements DocumentSourceStorage {
     @Override
     public void deleteByDocumentId(DocumentId documentId) {
         // 路径归一化以防止路径遍历绕过安全校验
-        Path documentDirectory = rootDirectory.resolve(documentId.value()).normalize();
+        Path documentDirectory = rootDirectory
+                .resolve(DocumentStorageKeyResolver.SOURCE_PREFIX)
+                .resolve(WorkspaceConstants.DEFAULT_WORKSPACE_ID)
+                .resolve("documents")
+                .resolve(documentId.value())
+                .normalize();
+        Path legacyDocumentDirectory = rootDirectory.resolve(documentId.value()).normalize();
         Path normalizedRoot = rootDirectory.toAbsolutePath().normalize();
         Path normalizedTarget = documentDirectory.toAbsolutePath().normalize();
+        Path normalizedLegacyTarget = legacyDocumentDirectory.toAbsolutePath().normalize();
         // 防御性校验：确保删除目标始终在配置的 root 目录内
-        if (!normalizedTarget.startsWith(normalizedRoot)) {
+        if (!normalizedTarget.startsWith(normalizedRoot) || !normalizedLegacyTarget.startsWith(normalizedRoot)) {
             throw new IllegalStateException("invalid source directory path");
         }
-        if (Files.notExists(normalizedTarget)) {
-            return;
-        }
-        try (Stream<Path> stream = Files.walk(normalizedTarget)) {
-            // 按路径深度倒序排序：先删子文件再删父目录，避免目录非空报错
-            stream.sorted((a, b) -> b.getNameCount() - a.getNameCount()).forEach(path -> {
-                try {
-                    Files.deleteIfExists(path);
-                } catch (IOException ex) {
-                    throw new IllegalStateException("failed to delete source file", ex);
-                }
-            });
-        } catch (IOException ex) {
-            throw new IllegalStateException("failed to delete source directory", ex);
-        }
+        deleteDirectoryIfExists(normalizedTarget);
+        deleteDirectoryIfExists(normalizedLegacyTarget);
     }
 
     /**
@@ -242,8 +244,12 @@ public class LocalDocumentSourceStorage implements DocumentSourceStorage {
      * @param safeFilename 已清洗安全的文件名
      * @return 最终文件路径
      */
-    private Path resolveFilePath(DocumentId documentId, String safeFilename) {
-        return rootDirectory.resolve(documentId.value()).resolve(safeFilename);
+    private Optional<byte[]> loadLegacyDocumentFile(DocumentId documentId, String filename) throws IOException {
+        Path legacyFilePath = rootDirectory.resolve(documentId.value()).resolve(sanitizeFilename(filename));
+        if (Files.exists(legacyFilePath)) {
+            return Optional.of(Files.readAllBytes(legacyFilePath));
+        }
+        return Optional.empty();
     }
 
     /**
@@ -257,11 +263,38 @@ public class LocalDocumentSourceStorage implements DocumentSourceStorage {
      * @return 版本化文件的完整路径
      */
     private Path resolveVersionFilePath(DocumentId documentId, int versionNumber, String safeFilename) {
+        String sourceKey = keyResolver.resolveSourceKey(
+                WorkspaceConstants.DEFAULT_WORKSPACE_ID,
+                documentId,
+                versionNumber,
+                safeFilename);
+        return rootDirectory.resolve(Path.of(sourceKey)).normalize();
+    }
+
+    private Path resolveLegacyVersionFilePath(DocumentId documentId, int versionNumber, String safeFilename) {
         return rootDirectory
                 .resolve(documentId.value())
                 .resolve("versions")
                 .resolve(Integer.toString(versionNumber))
                 .resolve(safeFilename);
+    }
+
+    private static void deleteDirectoryIfExists(Path directory) {
+        if (Files.notExists(directory)) {
+            return;
+        }
+        try (Stream<Path> stream = Files.walk(directory)) {
+            // 按路径深度倒序排序：先删子文件再删父目录，避免目录非空报错
+            stream.sorted((a, b) -> b.getNameCount() - a.getNameCount()).forEach(path -> {
+                try {
+                    Files.deleteIfExists(path);
+                } catch (IOException ex) {
+                    throw new IllegalStateException("failed to delete source file", ex);
+                }
+            });
+        } catch (IOException ex) {
+            throw new IllegalStateException("failed to delete source directory", ex);
+        }
     }
 
     /**

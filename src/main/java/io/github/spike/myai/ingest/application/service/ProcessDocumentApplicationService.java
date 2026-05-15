@@ -139,9 +139,13 @@ public class ProcessDocumentApplicationService implements ProcessDocumentUseCase
                     .loadVersion(documentId, document.latestVersionNumber(), document.filename())
                     .orElseThrow(() -> new IllegalStateException("source file not found"));
 
-            // 步骤 2: 解析出一期中间产物，并将 cleaned.md 主链结果落盘。
+            // 步骤 2: 解析出一期中间产物，并将 cleaned.md 主链结果按版本落盘。
             parseResult = documentTextParser.parse(document.filename(), sourceBytes);
-            documentProcessingArtifactStorage.save(documentId, parseResult);
+            documentProcessingArtifactStorage.saveVersion(
+                    document.workspaceId(),
+                    documentId,
+                    document.latestVersionNumber(),
+                    parseResult);
 
             // 步骤 3: 分块（结构优先 + 长度兜底）。
             List<DocumentChunk> chunks = documentChunker.chunk(parseResult.cleanedMarkdown());

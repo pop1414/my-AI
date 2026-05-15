@@ -3,6 +3,7 @@ package io.github.spike.myai.ingest.infrastructure.storage;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.github.spike.myai.ingest.domain.model.DocumentId;
 import io.github.spike.myai.ingest.infrastructure.config.IngestProperties;
@@ -67,6 +68,15 @@ class LocalDocumentSourceStorageTest {
         assertArrayEquals(
                 "version-3".getBytes(StandardCharsets.UTF_8),
                 storage.loadVersion(documentId, 3, "same.pdf").orElseThrow());
+        assertTrue(Files.exists(tempDir
+                .resolve("source")
+                .resolve("default")
+                .resolve("documents")
+                .resolve("doc-source-3")
+                .resolve("versions")
+                .resolve("2")
+                .resolve("same.pdf")));
+        assertFalse(Files.exists(tempDir.resolve("artifacts").resolve("default")));
     }
 
     @Test
