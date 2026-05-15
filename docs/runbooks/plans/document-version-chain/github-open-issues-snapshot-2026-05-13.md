@@ -2,10 +2,10 @@
 
 ## 拉取信息
 
-- 更新时间：2026-05-14 20:29
-- 拉取方式：基于当前仓库实现、本地回归结果与 GitHub issue 状态更新；#1、#2、#3、#4、#5、#6、#7、#8、#9、#19、#20 已关闭，版本历史只读前后端基线、上传新版本前后端闭环、版本回退前后端链路、删除与列表版本语义前后端闭环已完成
+- 更新时间：2026-05-15
+- 拉取方式：基于当前仓库实现、本地回归结果与 GitHub issue 状态更新；#1、#2、#3、#4、#5、#6、#7、#8、#9、#10、#19、#20 已关闭，#11 本地验收通过并建议关闭，版本历史只读前后端基线、上传新版本前后端闭环、版本回退前后端链路、删除与列表版本语义前后端闭环、QA 版本链后端与问答页前端闭环已完成
 - 仓库：`pop1414/my-AI`
-- 范围：文档版本链相关 issues；#1、#2、#3、#4、#5、#6、#7、#8、#9、#19、#20 已完成关闭，当前仍需推进 #10-#12，共 3 个 open follow-up
+- 范围：文档版本链相关 issues；#1、#2、#3、#4、#5、#6、#7、#8、#9、#10、#19、#20 已完成关闭，#11 已满足验收且可关闭，当前仍需推进 #12，并等待人工关闭 #11
 
 ## 收口状态
 
@@ -20,6 +20,8 @@
 - #7 已按“版本回退前端交互与结果提示”完成并关闭，收口说明见 `document-version-rollback-frontend-closure.md`。
 - #8 已按“删除与列表页适配版本语义后端”完成并关闭，收口说明见 `document-delete-list-version-semantics-backend-closure.md`。
 - #9 已按“删除确认与列表页版本语义前端”完成并关闭，收口说明见 `document-delete-list-version-semantics-frontend-closure.md`。
+- #10 已按“qa 可问答版本选择与引用版本化后端”完成并关闭：`POST /api/v1/qa/ask` 已返回版本化引用字段与 `staleReferences` 汇总。
+- #11 已按“问答页版本提示与引用版本展示前端”完成本地验收，建议关闭；收口说明见 `qa-reference-version-frontend-closure(#11).md`。
 
 ## 总览
 
@@ -34,8 +36,8 @@
 | [#7](https://github.com/pop1414/my-AI/issues/7) | 版本回退前端交互与结果提示 | CLOSED | `ready-for-agent` | #3 已完成, #6 已完成 |
 | [#8](https://github.com/pop1414/my-AI/issues/8) | 删除与列表页适配版本语义后端 | CLOSED | `ready-for-agent` | #1 已完成, #19 已完成 |
 | [#9](https://github.com/pop1414/my-AI/issues/9) | 删除确认与列表页版本语义前端 | CLOSED | `ready-for-agent` | #8 已完成 |
-| [#10](https://github.com/pop1414/my-AI/issues/10) | qa 可问答版本选择与引用版本化后端 | OPEN | `ready-for-agent` | #1 已完成, #19 已完成 |
-| [#11](https://github.com/pop1414/my-AI/issues/11) | 问答页版本提示与引用版本展示前端 | OPEN | `ready-for-agent` | #10 |
+| [#10](https://github.com/pop1414/my-AI/issues/10) | qa 可问答版本选择与引用版本化后端 | CLOSED | `ready-for-agent` | #1 已完成, #19 已完成 |
+| [#11](https://github.com/pop1414/my-AI/issues/11) | 问答页版本提示与引用版本展示前端 | OPEN（可关闭） | `ready-for-agent` | #10 已完成 |
 | [#12](https://github.com/pop1414/my-AI/issues/12) | 版本治理审计与冲突收口后端 | OPEN | `ready-for-agent` | #4 已完成, #6 已完成, #8 已完成 |
 | [#19](https://github.com/pop1414/my-AI/issues/19) | 清理 document 主表旧版本事实字段与读写边界 | CLOSED | `ready-for-agent` | #1 已完成 |
 | [#20](https://github.com/pop1414/my-AI/issues/20) | 版本历史只读后端查询接口 | CLOSED | `ready-for-agent` | #1 已完成, #2 已完成 |
@@ -49,8 +51,8 @@
 5. #4 与 #5 已完成关闭，上传新版本前后端闭环已具备入口、提交流程、稳定结果提示和 E2E 覆盖。
 6. #6 与 #7 已完成关闭；版本回退前后端链路已形成稳定闭环，前端回退动作、确认交互、稳定结果提示与 E2E 覆盖均已落地。
 7. #8 与 #9 已完成关闭；删除与列表版本语义已形成前后端闭环，后续无需再保留删除确认与列表反馈 blocker。
-8. 后端继续推进 #10，覆盖 qa 可问答版本选择；实现时应遵守 #19 已收紧的读写边界，并复用 #20 的版本历史读模型语义。
-9. 前端在 #10 后端契约稳定后推进 #11，接入问答页引用版本提示与 stale reference 汇总。
+8. #10 已完成关闭，QA 后端已覆盖按文档独立选择可问答版本、版本化引用字段、`staleReferences` 汇总和检索阶段权限边界。
+9. #11 已完成本地验收并建议关闭，问答页已接入引用版本卡片、stale reference 顶部提示、无引用兜底规则和控制台顶部入口；收口说明见 `qa-reference-version-frontend-closure(#11).md`。
 10. 最后用 #12 收口治理动作之间的互斥、业务错误码、审计事件和竞争场景测试；#12 的 #8 blocker 已解除，仍需统筹 #4/#6/#8 已落地行为。
 
 ## Issue 摘要
@@ -259,6 +261,8 @@
 
 ### #10 qa 可问答版本选择与引用版本化后端
 
+状态：已关闭，按“qa 可问答版本选择与引用版本化后端”完成收口。
+
 目标是把 qa 接入版本链语义。问答对每个 document 独立选择当前可问答版本，在最新版本尚不可问答时回退到最近一个已 `INDEXED` 的版本。
 
 验收重点：
@@ -270,7 +274,17 @@
 - 保持 ADR-0005 的权限边界，不允许先越权召回再裁剪引用。
 - 后端测试覆盖可问答版本选择、版本字段输出与 stale reference 汇总。
 
+收口说明：
+
+- 问答链路已先按当前用户、目标知识库和文档级覆盖权限查询可问答范围，再将 `documentId + versionNumber` 成对条件下推到向量检索。
+- 每个 `document` 独立选择最近一个已 `INDEXED` 版本作为当前可问答版本，最新版本未可问答时不会阻塞该文档的问答。
+- `references[]` 已返回 `sourceVersionNumber`、`sourceUpdatedAt`、`isLatestVersion`、`latestVersionNumber` 与 `sourceFilename`。
+- 存在引用时返回 `staleReferences` 汇总；无引用时返回空汇总，前端不应展示版本提示。
+- 联调发现的 PGVector `ISNULL` 兼容问题已修复：版本过滤只生成 PGVector 支持的等值表达式，并兼容 `documentVersionNumber`、`splitVersion=version-{versionNumber}-v1` 与历史 `splitVersion=v1`。
+
 ### #11 问答页版本提示与引用版本展示前端
+
+状态：GitHub 当前仍 open；本地验收已通过，建议关闭。
 
 目标是在问答页接入引用版本信息和 stale reference 提示。
 
@@ -281,6 +295,15 @@
 - 问答页顶部仅在至少存在一条 stale reference 时展示版本提示。
 - 一次问答没有任何文档引用、仅返回模型兜底内容时，不展示版本提示。
 - 前端测试覆盖引用卡片字段展示与顶部版本提示显示规则。
+
+收口说明：
+
+- 问答 API client 已接入 #10 的版本化响应 schema，包括 `references[]` 版本字段与 `staleReferences` 顶层汇总。
+- 问答页引用来源已升级为卡片展示，展示来源文件名、`documentId`、分块序号、来源版本号与来源更新时间。
+- stale 引用卡片已明确提示当前最新版本号；顶部 stale 提示只在 `hasStaleReferences = true` 且存在引用时展示。
+- 无引用兜底回答展示“无命中”空态，不展示版本提示。
+- 控制台顶部已补充“问答控制台”快捷入口，避免入口只依赖侧边栏。
+- 已通过 `npm.cmd run build` 与 `qa-reference-version.spec.ts` 端到端测试；收口说明位于 `docs/runbooks/plans/document-version-chain/qa-reference-version-frontend-closure(#11).md`。
 
 ### #12 版本治理审计与冲突收口后端
 
@@ -345,7 +368,7 @@
 
 ## 审阅提示
 
-- 先核对总览表中的标签与阻塞关系是否和 GitHub Issues 当前状态一致，尤其是 #1/#2/#3/#19/#20 已关闭。
+- 先核对总览表中的标签与阻塞关系是否和 GitHub Issues 当前状态一致，尤其是 #1/#2/#3/#10/#19/#20 已关闭，#11 当前仍 open 但本地已可关闭。
 - 再按 #19、#20、#3、后端功能 issues、后续前端 issues、#12 的顺序审阅，确认执行顺序是否符合“后端契约先稳定，前端再接入”的原则。
-- 特别检查 #19 是否足以阻止后续代码继续依赖主表旧版本事实字段，#20 是否足以支撑 #3 不靠 mock 或临时接口推进，#3、#5 和 #6 是否足以作为 #7 回退前端交互的只读页面、稳定结果提示与后端动作契约基线。
+- 特别检查 #19 是否足以阻止后续代码继续依赖主表旧版本事实字段，#20 是否足以支撑 #3 不靠 mock 或临时接口推进，#10/#11 是否足以支撑问答版本化引用、stale 提示和 PGVector 过滤兼容。
 - 最后检查每个 issue 的验收重点是否足够指导后续领取任务；如果 GitHub issue 后续有更新，应重新拉取并更新本快照。

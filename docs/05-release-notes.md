@@ -23,6 +23,9 @@
 - 新增问答可问答版本范围：每个 `document` 独立选择最近一个已 `INDEXED` 版本，并将授权后的 `documentId + versionNumber` 范围下推到向量检索
 - 新增问答版本化引用字段：`sourceVersionNumber`、`sourceUpdatedAt`、`isLatestVersion`、`latestVersionNumber`、`sourceFilename`
 - 新增问答 `staleReferences` 顶层汇总：存在非最新版本引用时返回陈旧引用条数与文档明细，无引用时不返回版本提示
+- 新增问答页引用版本展示：引用卡片展示来源版本、来源更新时间、来源文件名，并在 stale reference 时提示当前最新版本
+- 新增问答页顶部 stale reference 提示：仅当本次回答至少存在一条非最新版本引用时展示，无引用兜底回答不展示版本提示
+- 新增控制台顶部问答入口：具备 `canAskQuestion` 能力的用户可直接进入问答控制台
 
 ### Changed
 - 知识库列表接口升级为“主数据 + `INDEXED` 统计”视图，保留既有 `id/name/indexedDocumentCount` 字段并新增 `description/status`
@@ -45,6 +48,7 @@
 - ingest parser 路由细化：原生 Markdown 走最小破坏清洗路径，原生 HTML 绕过 Tika 后进入 HTML 语义清洗与 Markdown 转换
 - 分块预览标题上下文增强：HTML 清洗后的独立短标题可生成可解释 `sourceHint`，并收窄普通短正文误判范围
 - 问答链路从“召回后按知识库过滤”调整为“先计算授权可问答版本范围，再带范围召回”，以保持 ADR-0005 的检索阶段权限边界
+- 问答检索版本过滤表达式收口为 PGVector 支持的等值条件，并兼容 `documentVersionNumber`、`splitVersion=version-{versionNumber}-v1` 与历史 `splitVersion=v1`
 
 ### Notes
 - 启动迁移会自动补齐 `default` 知识库，并从 `ingest_documents` 回填历史 `kb_id`，避免旧数据升级后失联
@@ -56,6 +60,7 @@
 - 版本治理收口（2026-05-14）：#6 已关闭，版本回退后端链路与 API 契约完成；回退基于已 `INDEXED` 历史版本创建 `ROLLBACK` 来源的新最新版本，并通过 `expectedLatestVersionNumber` 防止过期视图提交。
 - 版本治理收口（2026-05-14）：#7 已关闭，版本回退前端交互已完成；详情页版本历史现已支持回退入口、确认提示、回退后稳定结果提示，以及“回退产生 / 曾回退为最新版本”标记展示。
 - QA 版本链收口（2026-05-15）：#10 可关闭，后端问答已接入按文档独立选择可问答版本、版本化引用字段与 stale 汇总；相关公开文档和 API 契约已同步。
+- QA 版本链收口（2026-05-15）：#11 可关闭，问答页已接入引用版本卡片、stale reference 顶部提示、无引用兜底提示规则和顶栏问答入口；PGVector `ISNULL` 兼容问题已修复并补齐回归测试。
 
 ---
 
