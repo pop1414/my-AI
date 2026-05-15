@@ -10,7 +10,6 @@ import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.Arrays;
 import java.util.Optional;
-import java.util.Set;
 import java.util.stream.Stream;
 import org.springframework.stereotype.Component;
 
@@ -25,7 +24,7 @@ import org.springframework.stereotype.Component;
  * <ul>
  *   <li>写入幂等：已存在文件不覆盖，保持首次受理内容稳定；</li>
  *   <li>文件名清洗：去除路径分隔符防止目录穿越攻击；</li>
- *   <li>读取兼容：精确文件名未命中时，回退读取文档目录下首个非中间产物文件；</li>
+ *   <li>版本隔离：读取源文件时必须命中指定版本路径，缺失时返回空；</li>
  *   <li>安全删除：确保删除目标在配置的 root 目录内，防止越权删除。</li>
  * </ul>
  *
@@ -34,17 +33,6 @@ import org.springframework.stereotype.Component;
  */
 @Component
 public class LocalDocumentSourceStorage implements DocumentSourceStorage {
-
-    /**
-     * 保留的中间产物文件名集合。
-     * 在回退读取（按目录首个文件）时，需排除这些文件以免误将中间产物当作源文件返回。
-     * 包括：raw.xhtml、cleaned.html、cleaned.md、parse-result.json
-     */
-    private static final Set<String> RESERVED_ARTIFACT_FILENAMES = Set.of(
-            LocalDocumentProcessingArtifactStorage.RAW_XHTML_FILENAME,
-            LocalDocumentProcessingArtifactStorage.CLEANED_HTML_FILENAME,
-            LocalDocumentProcessingArtifactStorage.CLEANED_MARKDOWN_FILENAME,
-            LocalDocumentProcessingArtifactStorage.PARSE_RESULT_FILENAME);
 
     /** 文件存储根目录路径 */
     private final Path rootDirectory;
@@ -142,32 +130,10 @@ public class LocalDocumentSourceStorage implements DocumentSourceStorage {
     public Optional<byte[]> load(DocumentId documentId, String filename) {
         Path filePath = resolveVersionFilePath(documentId, 1, filename);
         try {
-            // 优先按 source prefix 下的 version 1 文件精确读取。
             if (Files.exists(filePath)) {
                 return Optional.of(Files.readAllBytes(filePath));
             }
-
-            Optional<byte[]> legacyExact = loadLegacyDocumentFile(documentId, filename);
-            if (legacyExact.isPresent()) {
-                return legacyExact;
-            }
-
-            // 兼容历史数据：若文件名不一致，回退读取该文档目录下首个文件。
-            Path documentDirectory = rootDirectory.resolve(documentId.value());
-            if (Files.notExists(documentDirectory) || !Files.isDirectory(documentDirectory)) {
-                return Optional.empty();
-            }
-            try (var stream = Files.list(documentDirectory)) {
-                Path firstFile = stream
-                        .filter(Files::isRegularFile)
-                        .filter(path -> !RESERVED_ARTIFACT_FILENAMES.contains(path.getFileName().toString()))
-                        .findFirst()
-                        .orElse(null);
-                if (firstFile == null) {
-                    return Optional.empty();
-                }
-                return Optional.of(Files.readAllBytes(firstFile));
-            }
+            return Optional.empty();
         } catch (IOException ex) {
             throw new IllegalStateException("failed to load source file", ex);
         }
@@ -176,8 +142,8 @@ public class LocalDocumentSourceStorage implements DocumentSourceStorage {
     /**
      * 读取指定版本的源文件。
      *
-     * <p>优先按版本路径精确读取；若版本路径下无文件，
-     * 则回退到 {@link #load(DocumentId, String)} 兼容历史数据。
+     * <p>读取必须命中 source prefix 下的指定版本路径；若版本路径下无文件，
+     * 返回空并交由上层按源文件缺失处理。
      *
      * @param documentId   文档资产 ID
      * @param versionNumber 版本号
@@ -191,11 +157,7 @@ public class LocalDocumentSourceStorage implements DocumentSourceStorage {
             if (Files.exists(filePath)) {
                 return Optional.of(Files.readAllBytes(filePath));
             }
-            Path legacyVersionFilePath = resolveLegacyVersionFilePath(documentId, versionNumber, sanitizeFilename(filename));
-            if (Files.exists(legacyVersionFilePath)) {
-                return Optional.of(Files.readAllBytes(legacyVersionFilePath));
-            }
-            return load(documentId, filename);
+            return Optional.empty();
         } catch (IOException ex) {
             throw new IllegalStateException("failed to load version source file", ex);
         }
@@ -222,34 +184,13 @@ public class LocalDocumentSourceStorage implements DocumentSourceStorage {
                 .resolve("documents")
                 .resolve(documentId.value())
                 .normalize();
-        Path legacyDocumentDirectory = rootDirectory.resolve(documentId.value()).normalize();
         Path normalizedRoot = rootDirectory.toAbsolutePath().normalize();
         Path normalizedTarget = documentDirectory.toAbsolutePath().normalize();
-        Path normalizedLegacyTarget = legacyDocumentDirectory.toAbsolutePath().normalize();
         // 防御性校验：确保删除目标始终在配置的 root 目录内
-        if (!normalizedTarget.startsWith(normalizedRoot) || !normalizedLegacyTarget.startsWith(normalizedRoot)) {
+        if (!normalizedTarget.startsWith(normalizedRoot)) {
             throw new IllegalStateException("invalid source directory path");
         }
         deleteDirectoryIfExists(normalizedTarget);
-        deleteDirectoryIfExists(normalizedLegacyTarget);
-    }
-
-    /**
-     * 读取旧版 document 级源文件路径。
-     *
-     * <p>该方法仅用于兼容迁移前写入到 {@code {root}/{documentId}/{safeFilename}}
-     * 的历史文件；新写入路径统一走 source prefix。
-     *
-     * @param documentId   文档资产 ID
-     * @param filename 原始文件名
-     * @return 历史源文件字节，未命中时为空
-     */
-    private Optional<byte[]> loadLegacyDocumentFile(DocumentId documentId, String filename) throws IOException {
-        Path legacyFilePath = rootDirectory.resolve(documentId.value()).resolve(sanitizeFilename(filename));
-        if (Files.exists(legacyFilePath)) {
-            return Optional.of(Files.readAllBytes(legacyFilePath));
-        }
-        return Optional.empty();
     }
 
     /**
@@ -270,14 +211,6 @@ public class LocalDocumentSourceStorage implements DocumentSourceStorage {
                 versionNumber,
                 safeFilename);
         return rootDirectory.resolve(Path.of(sourceKey)).normalize();
-    }
-
-    private Path resolveLegacyVersionFilePath(DocumentId documentId, int versionNumber, String safeFilename) {
-        return rootDirectory
-                .resolve(documentId.value())
-                .resolve("versions")
-                .resolve(Integer.toString(versionNumber))
-                .resolve(safeFilename);
     }
 
     private static void deleteDirectoryIfExists(Path directory) {

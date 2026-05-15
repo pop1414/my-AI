@@ -20,35 +20,26 @@ class LocalDocumentSourceStorageTest {
     Path tempDir;
 
     @Test
-    @DisplayName("回退读取首个文件时应跳过 cleaned.md 等中间产物")
-    void load_shouldIgnoreProcessingArtifacts_whenFallbackLoading() throws Exception {
+    @DisplayName("默认源文件读取应命中 source prefix 下的 version 1 路径")
+    void load_shouldReadVersionOneFromSourcePrefix() {
         IngestProperties properties = new IngestProperties();
         properties.getStorage().setRootDir(tempDir.toString());
         LocalDocumentSourceStorage storage = new LocalDocumentSourceStorage(properties);
         DocumentId documentId = new DocumentId("doc-source-1");
-        Path documentDirectory = tempDir.resolve("doc-source-1");
-        Files.createDirectories(documentDirectory);
-        Files.writeString(documentDirectory.resolve("cleaned.md"), "artifact", StandardCharsets.UTF_8);
-        Files.writeString(documentDirectory.resolve("origin.txt"), "source-content", StandardCharsets.UTF_8);
 
-        byte[] loaded = storage.load(documentId, "missing-name.txt").orElseThrow();
+        storage.save(documentId, "origin.txt", "source-content".getBytes(StandardCharsets.UTF_8));
 
-        assertArrayEquals("source-content".getBytes(StandardCharsets.UTF_8), loaded);
-    }
-
-    @Test
-    @DisplayName("当目录仅剩中间产物时，回退加载应返回空")
-    void load_shouldReturnEmpty_whenOnlyArtifactsRemain() throws Exception {
-        IngestProperties properties = new IngestProperties();
-        properties.getStorage().setRootDir(tempDir.toString());
-        LocalDocumentSourceStorage storage = new LocalDocumentSourceStorage(properties);
-        DocumentId documentId = new DocumentId("doc-source-2");
-        Path documentDirectory = tempDir.resolve("doc-source-2");
-        Files.createDirectories(documentDirectory);
-        Files.writeString(documentDirectory.resolve("cleaned.md"), "artifact", StandardCharsets.UTF_8);
-        Files.writeString(documentDirectory.resolve("parse-result.json"), "{}", StandardCharsets.UTF_8);
-
-        assertFalse(storage.load(documentId, "missing-name.txt").isPresent());
+        assertArrayEquals(
+                "source-content".getBytes(StandardCharsets.UTF_8),
+                storage.load(documentId, "origin.txt").orElseThrow());
+        assertTrue(Files.exists(tempDir
+                .resolve("source")
+                .resolve("default")
+                .resolve("documents")
+                .resolve("doc-source-1")
+                .resolve("versions")
+                .resolve("1")
+                .resolve("origin.txt")));
     }
 
     @Test
@@ -116,6 +107,22 @@ class LocalDocumentSourceStorageTest {
         org.junit.jupiter.api.Assertions.assertTrue(storage.saveVersionIfAbsent(documentId, 5, "same.pdf", content));
 
         assertFalse(storage.saveVersionIfAbsent(documentId, 5, "same.pdf", content));
+    }
+
+    @Test
+    @DisplayName("源文件缺失时不应回退到 document 级旧路径")
+    void loadVersion_shouldReturnEmpty_whenVersionFileMissingButDocumentLevelFileExists() throws Exception {
+        IngestProperties properties = new IngestProperties();
+        properties.getStorage().setRootDir(tempDir.toString());
+        LocalDocumentSourceStorage storage = new LocalDocumentSourceStorage(properties);
+        DocumentId documentId = new DocumentId("doc-source-6");
+        Path documentLevelDirectory = tempDir.resolve("doc-source-6");
+        Files.createDirectories(documentLevelDirectory);
+        Files.writeString(documentLevelDirectory.resolve("same.pdf"), "document-level-source", StandardCharsets.UTF_8);
+
+        assertFalse(storage.load(documentId, "same.pdf").isPresent());
+        assertFalse(storage.loadVersion(documentId, 1, "same.pdf").isPresent());
+        assertFalse(storage.loadVersion(documentId, 2, "same.pdf").isPresent());
     }
 
 }
