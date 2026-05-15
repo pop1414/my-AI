@@ -94,6 +94,61 @@ class DeleteDocumentApplicationServiceTest {
     }
 
     @Test
+    @DisplayName("删除成功后审计写入失败时，不应回滚删除结果")
+    void handle_shouldKeepDeleteSuccess_whenAuditSaveFailed() {
+        DocumentRepository repository = Mockito.mock(DocumentRepository.class);
+        DocumentSourceStorage sourceStorage = Mockito.mock(DocumentSourceStorage.class);
+        DocumentVectorIndexer vectorIndexer = Mockito.mock(DocumentVectorIndexer.class);
+        SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
+        CurrentUserProvider currentUserProvider = currentUserProvider();
+        AuthorizationService authorizationService = Mockito.mock(AuthorizationService.class);
+        AuditEventRepository auditEventRepository = Mockito.mock(AuditEventRepository.class);
+        DeleteDocumentApplicationService service =
+                new DeleteDocumentApplicationService(
+                        repository,
+                        sourceStorage,
+                        vectorIndexer,
+                        new IngestMetrics(meterRegistry),
+                        currentUserProvider,
+                        authorizationService,
+                        auditEventRepository);
+
+        DocumentId documentId = new DocumentId("doc-del-audit");
+        Document indexed = new Document(
+                documentId,
+                "workspace-a",
+                "kb-1",
+                "hash-audit",
+                "audit.txt",
+                1L,
+                UploadStatus.INDEXED,
+                null,
+                0,
+                3,
+                null,
+                null,
+                null,
+                null,
+                0,
+                null,
+                "v1",
+                null,
+                Instant.now(),
+                Instant.now());
+        when(repository.findById(anyString(), eq(documentId))).thenReturn(Optional.of(indexed));
+        when(repository.markDeleting(anyString(), eq(documentId), eq(UploadStatus.INDEXED), any(Instant.class))).thenReturn(true);
+        when(repository.markDeleted(anyString(), eq(documentId), any(Instant.class))).thenReturn(true);
+        Mockito.doThrow(new IllegalStateException("audit down")).when(auditEventRepository).save(any());
+
+        service.handle(new DeleteDocumentCommand("doc-del-audit"));
+
+        verify(repository, times(1)).markDeleted(anyString(), eq(documentId), any(Instant.class));
+        verify(repository, never()).rollbackDeleting(anyString(), any(), any(), any());
+        verify(sourceStorage, times(1)).deleteByDocumentId(documentId);
+        verify(vectorIndexer, times(1)).deleteByDocumentId(documentId);
+    }
+
+    @Test
     @DisplayName("删除不存在文档时应抛出 DocumentNotFoundException")
     void handle_shouldThrow_whenMissing() {
         DocumentRepository repository = Mockito.mock(DocumentRepository.class);

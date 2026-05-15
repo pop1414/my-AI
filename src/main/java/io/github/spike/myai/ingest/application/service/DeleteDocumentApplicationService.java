@@ -146,7 +146,7 @@ public class DeleteDocumentApplicationService implements DeleteDocumentUseCase {
         // 2. 幂等检查：如果文档已经是 DELETED 状态，视为成功
         if (status == UploadStatus.DELETED) {
             ingestMetrics.incrementDeleteSuccess();
-            auditEventRepository.save(IngestAuditEvents.documentGovernanceSucceeded(
+            IngestAuditEventRecorder.save(auditEventRepository, IngestAuditEvents.documentGovernanceSucceeded(
                     currentUser,
                     IngestAuditEvents.DOCUMENT_DELETE_REQUESTED,
                     documentId,
@@ -193,7 +193,7 @@ public class DeleteDocumentApplicationService implements DeleteDocumentUseCase {
                 throw new IllegalStateException("mark deleted failed by CAS");
             }
             ingestMetrics.incrementDeleteSuccess();
-            auditEventRepository.save(IngestAuditEvents.documentGovernanceSucceeded(
+            IngestAuditEventRecorder.save(auditEventRepository, IngestAuditEvents.documentGovernanceSucceeded(
                     currentUser,
                     IngestAuditEvents.DOCUMENT_DELETE_REQUESTED,
                     documentId,
@@ -304,7 +304,7 @@ public class DeleteDocumentApplicationService implements DeleteDocumentUseCase {
             Integer expectedLatestVersionNumber,
             String errorCode,
             String errorMessage) {
-        auditEventRepository.save(IngestAuditEvents.documentGovernanceFailed(
+        IngestAuditEventRecorder.save(auditEventRepository, IngestAuditEvents.documentGovernanceFailed(
                 currentUser,
                 IngestAuditEvents.DOCUMENT_DELETE_REQUESTED,
                 document.documentId(),

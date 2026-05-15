@@ -159,7 +159,7 @@ public class UploadNewDocumentVersionApplicationService implements UploadNewDocu
 
         // 步骤 7：同内容幂等复用 —— 如果 fileHash 与当前 latest 一致，不创建新版本
         if (document.fileHash().equals(command.fileHash())) {
-            auditEventRepository.save(IngestAuditEvents.documentVersionUploadRequested(
+            IngestAuditEventRecorder.save(auditEventRepository, IngestAuditEvents.documentVersionUploadRequested(
                     currentUser,
                     documentId,
                     document.kbId(),
@@ -233,7 +233,7 @@ public class UploadNewDocumentVersionApplicationService implements UploadNewDocu
         // 步骤 11：追加成功后重新查询可问答版本号（可能与追加前一致）
         Integer updatedAskableVersionNumber =
                 toNullableVersionNumber(documentRepository.findLatestIndexedVersionNumber(currentUser.workspaceId(), documentId));
-        auditEventRepository.save(IngestAuditEvents.documentVersionUploadRequested(
+        IngestAuditEventRecorder.save(auditEventRepository, IngestAuditEvents.documentVersionUploadRequested(
                 currentUser,
                 documentId,
                 document.kbId(),
@@ -389,7 +389,7 @@ public class UploadNewDocumentVersionApplicationService implements UploadNewDocu
             int versionNumber,
             int expectedLatestVersionNumber,
             BusinessException ex) {
-        auditEventRepository.save(IngestAuditEvents.documentVersionGovernanceFailed(
+        IngestAuditEventRecorder.save(auditEventRepository, IngestAuditEvents.documentVersionGovernanceFailed(
                 currentUser,
                 IngestAuditEvents.DOCUMENT_VERSION_UPLOAD_REQUESTED,
                 document.documentId(),

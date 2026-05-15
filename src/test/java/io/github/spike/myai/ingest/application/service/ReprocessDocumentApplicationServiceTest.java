@@ -132,6 +132,56 @@ class ReprocessDocumentApplicationServiceTest {
     }
 
     @Test
+    @DisplayName("重处理成功后审计写入失败时，仍应返回重处理状态")
+    void handle_shouldReturnStatus_whenAuditSaveFailed() {
+        DocumentRepository repository = Mockito.mock(DocumentRepository.class);
+        DocumentVectorIndexer vectorIndexer = Mockito.mock(DocumentVectorIndexer.class);
+        CurrentUserProvider currentUserProvider = currentUserProvider();
+        AuthorizationService authorizationService = Mockito.mock(AuthorizationService.class);
+        AuditEventRepository auditEventRepository = Mockito.mock(AuditEventRepository.class);
+        ReprocessDocumentApplicationService service = new ReprocessDocumentApplicationService(
+                repository,
+                vectorIndexer,
+                currentUserProvider,
+                authorizationService,
+                auditEventRepository);
+
+        DocumentId documentId = new DocumentId("doc-rep-audit");
+        Document failed = new Document(
+                documentId,
+                "workspace-a",
+                "kb-1",
+                3,
+                DocumentVersionOriginType.ROLLBACK,
+                "hash-audit",
+                "audit.txt",
+                1L,
+                UploadStatus.FAILED,
+                "error",
+                0,
+                3,
+                null,
+                null,
+                null,
+                null,
+                0,
+                null,
+                "v1",
+                null,
+                Instant.now(),
+                Instant.now());
+        when(repository.findById(anyString(), eq(documentId))).thenReturn(Optional.of(failed));
+        when(repository.requestReprocess(anyString(), eq(documentId), eq(UploadStatus.FAILED), eq("v2"), any(Instant.class)))
+                .thenReturn(true);
+        Mockito.doThrow(new IllegalStateException("audit down")).when(auditEventRepository).save(any());
+
+        DocumentStatusResult result = service.handle(new ReprocessDocumentCommand("doc-rep-audit"));
+
+        assertEquals(UploadStatus.UPLOADED, result.status());
+        verify(vectorIndexer, times(1)).deleteByDocumentIdAndSplitVersion(documentId, "v1");
+    }
+
+    @Test
     @DisplayName("文档不存在时应抛出 DocumentNotFoundException")
     void handle_shouldThrow_whenMissing() {
         DocumentRepository repository = Mockito.mock(DocumentRepository.class);

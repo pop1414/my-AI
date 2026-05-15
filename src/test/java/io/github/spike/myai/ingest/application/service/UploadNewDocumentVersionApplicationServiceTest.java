@@ -95,6 +95,38 @@ class UploadNewDocumentVersionApplicationServiceTest {
     }
 
     @Test
+    @DisplayName("上传新版本成功后审计写入失败时，仍应返回创建结果")
+    void handle_shouldReturnCreated_whenAuditSaveFailed() {
+        DocumentRepository repository = Mockito.mock(DocumentRepository.class);
+        DocumentSourceStorage sourceStorage = Mockito.mock(DocumentSourceStorage.class);
+        AuthorizationService authorizationService = Mockito.mock(AuthorizationService.class);
+        AuditEventRepository auditEventRepository = Mockito.mock(AuditEventRepository.class);
+        CurrentUserProvider currentUserProvider = currentUserProvider();
+        Document document = document("doc-audit", 2, "hash-old", UploadStatus.INDEXED);
+        DocumentId documentId = new DocumentId("doc-audit");
+        when(repository.findById(eq("workspace-a"), eq(documentId))).thenReturn(Optional.of(document));
+        when(repository.findLatestIndexedVersionNumber(eq("workspace-a"), eq(documentId))).thenReturn(2);
+        when(repository.appendUploadVersion(eq("workspace-a"), eq(documentId), eq(2), any(DocumentVersion.class), any(Instant.class)))
+                .thenReturn(true);
+        doThrow(new IllegalStateException("audit down")).when(auditEventRepository).save(any(AuditEvent.class));
+        UploadNewDocumentVersionApplicationService service =
+                new UploadNewDocumentVersionApplicationService(
+                        repository,
+                        sourceStorage,
+                        currentUserProvider,
+                        authorizationService,
+                        auditEventRepository);
+
+        DocumentVersionUploadResult result = service.handle(
+                new UploadNewDocumentVersionCommand("doc-audit", "new.pdf", 42L, "hash-new", 2, bytes("new content")));
+
+        assertTrue(result.versionCreated());
+        assertEquals(3, result.versionNumber());
+        verify(repository).appendUploadVersion(eq("workspace-a"), eq(documentId), eq(2), any(DocumentVersion.class), any(Instant.class));
+        verify(sourceStorage).saveVersionIfAbsent(eq(documentId), eq(3), eq("new.pdf"), eq(bytes("new content")));
+    }
+
+    @Test
     @DisplayName("新文件与当前最新版本同内容时，应成功复用且不创建新版本")
     void handle_shouldReuseLatestVersion_whenIdenticalContent() {
         DocumentRepository repository = Mockito.mock(DocumentRepository.class);

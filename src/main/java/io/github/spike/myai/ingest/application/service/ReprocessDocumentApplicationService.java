@@ -189,7 +189,7 @@ public class ReprocessDocumentApplicationService implements ReprocessDocumentUse
                 documentId.value(),
                 oldSplitVersion,
                 newSplitVersion);
-        auditEventRepository.save(IngestAuditEvents.documentGovernanceSucceeded(
+        IngestAuditEventRecorder.save(auditEventRepository, IngestAuditEvents.documentGovernanceSucceeded(
                 currentUser,
                 IngestAuditEvents.DOCUMENT_REPROCESS_REQUESTED,
                 documentId,
@@ -292,7 +292,7 @@ public class ReprocessDocumentApplicationService implements ReprocessDocumentUse
             Integer expectedLatestVersionNumber,
             String errorCode,
             String errorMessage) {
-        auditEventRepository.save(IngestAuditEvents.documentGovernanceFailed(
+        IngestAuditEventRecorder.save(auditEventRepository, IngestAuditEvents.documentGovernanceFailed(
                 currentUser,
                 IngestAuditEvents.DOCUMENT_REPROCESS_REQUESTED,
                 document.documentId(),

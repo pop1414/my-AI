@@ -222,7 +222,7 @@ public class RollbackDocumentVersionApplicationService implements RollbackDocume
 
         Integer askableVersionNumber =
                 toNullableVersionNumber(documentRepository.findLatestIndexedVersionNumber(currentUser.workspaceId(), documentId));
-        auditEventRepository.save(IngestAuditEvents.documentVersionRollbackRequested(
+        IngestAuditEventRecorder.save(auditEventRepository, IngestAuditEvents.documentVersionRollbackRequested(
                 currentUser,
                 documentId,
                 document.kbId(),
@@ -424,7 +424,7 @@ public class RollbackDocumentVersionApplicationService implements RollbackDocume
             int targetVersionNumber,
             int expectedLatestVersionNumber,
             BusinessException ex) {
-        auditEventRepository.save(IngestAuditEvents.documentVersionGovernanceFailed(
+        IngestAuditEventRecorder.save(auditEventRepository, IngestAuditEvents.documentVersionGovernanceFailed(
                 currentUser,
                 IngestAuditEvents.DOCUMENT_VERSION_ROLLBACK_REQUESTED,
                 document.documentId(),

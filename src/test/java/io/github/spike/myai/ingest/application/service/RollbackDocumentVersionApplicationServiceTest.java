@@ -102,6 +102,43 @@ class RollbackDocumentVersionApplicationServiceTest {
     }
 
     @Test
+    @DisplayName("版本回退成功后审计写入失败时，仍应返回回退结果")
+    void handle_shouldReturnRollbackResult_whenAuditSaveFailed() {
+        DocumentRepository repository = Mockito.mock(DocumentRepository.class);
+        DocumentSourceStorage sourceStorage = Mockito.mock(DocumentSourceStorage.class);
+        AuthorizationService authorizationService = Mockito.mock(AuthorizationService.class);
+        AuditEventRepository auditEventRepository = Mockito.mock(AuditEventRepository.class);
+        CurrentUserProvider currentUserProvider = currentUserProvider();
+        DocumentId documentId = new DocumentId("doc-audit");
+        Document latest = document("doc-audit", 3, "hash-latest", UploadStatus.INDEXED);
+        DocumentVersion targetVersion = version(documentId, 1, "hash-v1", "v1.pdf", UploadStatus.INDEXED);
+        when(repository.findById(eq("workspace-a"), eq(documentId))).thenReturn(Optional.of(latest));
+        when(repository.findVersionByNumber(eq("workspace-a"), eq(documentId), eq(1)))
+                .thenReturn(Optional.of(targetVersion));
+        when(sourceStorage.loadVersion(eq(documentId), eq(1), eq("v1.pdf")))
+                .thenReturn(Optional.of(bytes("v1 content")));
+        when(repository.appendRollbackVersion(eq("workspace-a"), eq(documentId), eq(3), any(DocumentVersion.class), any(Instant.class)))
+                .thenReturn(true);
+        when(repository.findLatestIndexedVersionNumber(eq("workspace-a"), eq(documentId))).thenReturn(1);
+        doThrow(new IllegalStateException("audit down")).when(auditEventRepository).save(any(AuditEvent.class));
+        RollbackDocumentVersionApplicationService service =
+                new RollbackDocumentVersionApplicationService(
+                        repository,
+                        sourceStorage,
+                        currentUserProvider,
+                        authorizationService,
+                        auditEventRepository);
+
+        DocumentVersionRollbackResult result =
+                service.handle(new RollbackDocumentVersionCommand("doc-audit", 1, 3));
+
+        assertEquals(4, result.versionNumber());
+        assertEquals(1, result.rollbackFromVersionNumber());
+        verify(repository).appendRollbackVersion(eq("workspace-a"), eq(documentId), eq(3), any(DocumentVersion.class), any(Instant.class));
+        verify(sourceStorage).saveVersionIfAbsent(eq(documentId), eq(4), eq("v1.pdf"), eq(bytes("v1 content")));
+    }
+
+    @Test
     @DisplayName("无管理权限时，应返回版本回退专用业务错误码")
     void handle_shouldThrowBusinessCode_whenManagePermissionDenied() {
         DocumentRepository repository = Mockito.mock(DocumentRepository.class);

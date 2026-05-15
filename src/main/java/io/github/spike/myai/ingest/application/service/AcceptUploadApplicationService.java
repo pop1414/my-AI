@@ -206,7 +206,7 @@ public class AcceptUploadApplicationService implements AcceptUploadUseCase {
                     resolvedKbId,
                     command.filename(),
                     fileHash);
-            auditEventRepository.save(IngestAuditEvents.documentUploadRequested(
+            IngestAuditEventRecorder.save(auditEventRepository, IngestAuditEvents.documentUploadRequested(
                     currentUser,
                     existingDocument.documentId(),
                     resolvedKbId,
@@ -252,7 +252,7 @@ public class AcceptUploadApplicationService implements AcceptUploadUseCase {
                 command.filename(),
                 command.fileSize(),
                 fileHash);
-        auditEventRepository.save(IngestAuditEvents.documentUploadRequested(
+        IngestAuditEventRecorder.save(auditEventRepository, IngestAuditEvents.documentUploadRequested(
                 currentUser,
                 documentId,
                 resolvedKbId,
