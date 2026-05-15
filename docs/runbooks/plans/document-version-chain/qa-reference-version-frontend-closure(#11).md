@@ -118,7 +118,7 @@ npm.cmd run lint
 
 ## 9. 关闭判断
 
-#11 当前可以关闭。
+#11 已于 2026-05-15 关闭。
 
 判断依据：
 
@@ -139,7 +139,7 @@ npm.cmd run lint
 
 ## Closure Summary
 
-#11 已完成，可以按 completed 关闭。
+#11 已完成并已按 completed 关闭。
 
 ### 已完成内容
 
