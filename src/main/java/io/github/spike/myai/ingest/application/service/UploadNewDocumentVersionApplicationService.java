@@ -52,6 +52,8 @@ public class UploadNewDocumentVersionApplicationService implements UploadNewDocu
     static final String RESULT_CREATED = "CREATED";
     /** 结果类型：因内容相同触发幂等复用，未创建新版本 */
     static final String RESULT_REUSED_IDENTICAL_CONTENT = "REUSED_IDENTICAL_CONTENT";
+    /** 结果类型：治理动作执行失败 */
+    static final String RESULT_FAILED = "FAILED";
 
     /** 文档元数据仓储 */
     private final DocumentRepository documentRepository;
@@ -117,14 +119,23 @@ public class UploadNewDocumentVersionApplicationService implements UploadNewDocu
                         HttpStatus.NOT_FOUND,
                         "VERSION_UPLOAD_DOCUMENT_NOT_FOUND",
                         "document not found: " + documentId.value()));
+        int latestVersionNumber = document.latestVersionNumber();
 
         // 步骤 3：校验当前用户对该文档的管理权限
-        requireManagePermission(currentUser, document);
+        try {
+            requireManagePermission(currentUser, document);
+        } catch (BusinessException ex) {
+            auditFailure(currentUser, document, latestVersionNumber + 1, command.expectedLatestVersionNumber(), ex);
+            throw ex;
+        }
 
         // 步骤 4：乐观锁校验 —— expectedLatestVersionNumber 必须与当前 latest 一致
-        int latestVersionNumber = document.latestVersionNumber();
         if (command.expectedLatestVersionNumber() != latestVersionNumber) {
-            throw business(
+            throw auditAndBusiness(
+                    currentUser,
+                    document,
+                    latestVersionNumber + 1,
+                    command.expectedLatestVersionNumber(),
                     HttpStatus.CONFLICT,
                     "VERSION_CONFLICT_STALE_LATEST_VERSION",
                     "当前最新版本已变化，请刷新详情后重试");
@@ -132,7 +143,11 @@ public class UploadNewDocumentVersionApplicationService implements UploadNewDocu
 
         // 步骤 5：状态校验 —— 仅 INDEXED 或 FAILED 状态下允许上传新版本
         if (document.status() != UploadStatus.INDEXED && document.status() != UploadStatus.FAILED) {
-            throw business(
+            throw auditAndBusiness(
+                    currentUser,
+                    document,
+                    latestVersionNumber + 1,
+                    command.expectedLatestVersionNumber(),
                     HttpStatus.CONFLICT,
                     "VERSION_UPLOAD_NOT_ALLOWED_STATUS",
                     "上传新版本仅允许在当前最新版本为 INDEXED 或 FAILED 时发起");
@@ -154,6 +169,8 @@ public class UploadNewDocumentVersionApplicationService implements UploadNewDocu
                     command.fileSize(),
                     command.fileHash(),
                     RESULT_REUSED_IDENTICAL_CONTENT,
+                    command.expectedLatestVersionNumber(),
+                    latestVersionNumber,
                     Instant.now()));
             return new DocumentVersionUploadResult(
                     documentId.value(),
@@ -203,13 +220,15 @@ public class UploadNewDocumentVersionApplicationService implements UploadNewDocu
                 now);
         if (!appended) {
             // CAS 失败说明在步骤 4~9 之间版本号已被其他请求修改
-            throw business(
-                    HttpStatus.CONFLICT,
-                    "VERSION_CONFLICT_STALE_LATEST_VERSION",
-                    "当前最新版本已变化，请刷新详情后重试");
+            throw latestConflict(currentUser, documentId, document, newVersionNumber, command.expectedLatestVersionNumber());
         }
         // 步骤 10：DB 版本事实已写入当前事务后，再保存版本源文件；保存失败会触发事务回滚。
-        saveNewVersionSource(documentId, newVersionNumber, command.filename(), command.sourceContent());
+        try {
+            saveNewVersionSource(documentId, newVersionNumber, command.filename(), command.sourceContent());
+        } catch (BusinessException ex) {
+            auditFailure(currentUser, document, newVersionNumber, command.expectedLatestVersionNumber(), ex);
+            throw ex;
+        }
 
         // 步骤 11：追加成功后重新查询可问答版本号（可能与追加前一致）
         Integer updatedAskableVersionNumber =
@@ -224,6 +243,8 @@ public class UploadNewDocumentVersionApplicationService implements UploadNewDocu
                 command.fileSize(),
                 command.fileHash(),
                 RESULT_CREATED,
+                command.expectedLatestVersionNumber(),
+                latestVersionNumber,
                 now));
         return new DocumentVersionUploadResult(
                 documentId.value(),
@@ -289,6 +310,99 @@ public class UploadNewDocumentVersionApplicationService implements UploadNewDocu
                     "VERSION_UPLOAD_NO_MANAGE_PERMISSION",
                     "你没有管理该文档版本的权限，请联系管理员");
         }
+    }
+
+    /**
+     * 按最新快照区分乐观并发冲突与状态变化冲突。
+     *
+     * @param currentUser 当前用户
+     * @param documentId 文档资产 ID
+     * @param originalDocument 初始读取的文档快照
+     * @param candidateVersionNumber 本次尝试创建的新版本号
+     * @param expectedLatestVersionNumber 请求期望的 latest 版本号
+     * @return 带业务错误码的异常
+     */
+    private BusinessException latestConflict(
+            CurrentUser currentUser,
+            DocumentId documentId,
+            Document originalDocument,
+            int candidateVersionNumber,
+            int expectedLatestVersionNumber) {
+        Document observedDocument = documentRepository.findById(currentUser.workspaceId(), documentId).orElse(originalDocument);
+        if (observedDocument.latestVersionNumber() != expectedLatestVersionNumber) {
+            return auditAndBusiness(
+                    currentUser,
+                    observedDocument,
+                    candidateVersionNumber,
+                    expectedLatestVersionNumber,
+                    HttpStatus.CONFLICT,
+                    "VERSION_CONFLICT_STALE_LATEST_VERSION",
+                    "当前最新版本已变化，请刷新详情后重试");
+        }
+        return auditAndBusiness(
+                currentUser,
+                observedDocument,
+                candidateVersionNumber,
+                expectedLatestVersionNumber,
+                HttpStatus.CONFLICT,
+                "VERSION_CONFLICT_STATE_CHANGED",
+                "当前文档状态已变化，请刷新详情后重试");
+    }
+
+    /**
+     * 写入上传新版本失败审计并返回业务异常。
+     *
+     * @param currentUser 当前用户
+     * @param document 文档快照
+     * @param versionNumber 相关版本号
+     * @param expectedLatestVersionNumber 请求期望的 latest 版本号
+     * @param status HTTP 状态码
+     * @param code 业务错误码
+     * @param message 错误消息
+     * @return 业务异常
+     */
+    private BusinessException auditAndBusiness(
+            CurrentUser currentUser,
+            Document document,
+            int versionNumber,
+            int expectedLatestVersionNumber,
+            HttpStatus status,
+            String code,
+            String message) {
+        BusinessException ex = business(status, code, message);
+        auditFailure(currentUser, document, versionNumber, expectedLatestVersionNumber, ex);
+        return ex;
+    }
+
+    /**
+     * 写入上传新版本失败审计。
+     *
+     * @param currentUser 当前用户
+     * @param document 文档快照
+     * @param versionNumber 相关版本号
+     * @param expectedLatestVersionNumber 请求期望的 latest 版本号
+     * @param ex 业务异常
+     */
+    private void auditFailure(
+            CurrentUser currentUser,
+            Document document,
+            int versionNumber,
+            int expectedLatestVersionNumber,
+            BusinessException ex) {
+        auditEventRepository.save(IngestAuditEvents.documentVersionGovernanceFailed(
+                currentUser,
+                IngestAuditEvents.DOCUMENT_VERSION_UPLOAD_REQUESTED,
+                document.documentId(),
+                document.kbId(),
+                versionNumber,
+                null,
+                expectedLatestVersionNumber,
+                document.latestVersionNumber(),
+                DocumentVersionOriginType.UPLOAD.name(),
+                RESULT_FAILED,
+                ex.code(),
+                ex.getMessage(),
+                Instant.now()));
     }
 
     /**

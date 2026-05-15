@@ -590,13 +590,17 @@ public class DocumentIngestController {
      * <p>接口契约：
      * <ul>
      *     <li>路径：POST /api/v1/documents/{documentId}/reprocess</li>
+     *     <li>参数：expectedLatestVersionNumber（可选，传入时用于识别过期页面请求）</li>
      * </ul>
      */
     @PostMapping(value = "/{documentId}/reprocess", produces = MediaType.APPLICATION_JSON_VALUE)
-    public DocumentStatusResponse reprocess(@PathVariable("documentId") String documentId) {
+    public DocumentStatusResponse reprocess(
+            @PathVariable("documentId") String documentId,
+            @RequestParam(value = "expectedLatestVersionNumber", required = false) Integer expectedLatestVersionNumber) {
         try {
             // 重处理只修改状态并进入队列，不在接口层做同步向量重建。
-            DocumentStatusResult result = reprocessDocumentUseCase.handle(new ReprocessDocumentCommand(documentId));
+            DocumentStatusResult result = reprocessDocumentUseCase.handle(
+                    new ReprocessDocumentCommand(documentId, expectedLatestVersionNumber));
             return toDocumentStatusResponse(result);
         } catch (DocumentNotFoundException ex) {
             // 如果找不到该文档标识，返回 404
@@ -616,6 +620,7 @@ public class DocumentIngestController {
      * <p>接口契约：
      * <ul>
      *   <li>路径：DELETE /api/v1/documents/{documentId}</li>
+     *   <li>参数：expectedLatestVersionNumber（可选，传入时用于识别过期页面请求）</li>
      *   <li>响应：204 No Content（删除成功或幂等删除）</li>
      * </ul>
      *
@@ -631,10 +636,12 @@ public class DocumentIngestController {
      * @return 204 No Content（无响应体）
      */
     @DeleteMapping(value = "/{documentId}")
-    public ResponseEntity<Void> delete(@PathVariable("documentId") String documentId) {
+    public ResponseEntity<Void> delete(
+            @PathVariable("documentId") String documentId,
+            @RequestParam(value = "expectedLatestVersionNumber", required = false) Integer expectedLatestVersionNumber) {
         try {
             // 委派给应用层用例处理删除逻辑（含源文件清理、向量删除、状态检查）
-            deleteDocumentUseCase.handle(new DeleteDocumentCommand(documentId));
+            deleteDocumentUseCase.handle(new DeleteDocumentCommand(documentId, expectedLatestVersionNumber));
             // 删除成功返回 204，无响应体
             return ResponseEntity.noContent().build();
         } catch (DocumentNotFoundException ex) {

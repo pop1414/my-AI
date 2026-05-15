@@ -37,6 +37,11 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional
 public class RollbackDocumentVersionApplicationService implements RollbackDocumentVersionUseCase {
 
+    /** 结果类型：成功创建回退版本 */
+    static final String RESULT_CREATED = "CREATED";
+    /** 结果类型：治理动作执行失败 */
+    static final String RESULT_FAILED = "FAILED";
+
     /** 文档元数据仓储 */
     private final DocumentRepository documentRepository;
     /** 源文件存储 */
@@ -97,20 +102,49 @@ public class RollbackDocumentVersionApplicationService implements RollbackDocume
                         "VERSION_ROLLBACK_DOCUMENT_NOT_FOUND",
                         "document not found: " + documentId.value()));
 
-        requireManagePermission(currentUser, document);
-
         int latestVersionNumber = document.latestVersionNumber();
+        try {
+            requireManagePermission(currentUser, document);
+        } catch (BusinessException ex) {
+            auditFailure(
+                    currentUser,
+                    document,
+                    null,
+                    command.targetVersionNumber(),
+                    command.expectedLatestVersionNumber(),
+                    ex);
+            throw ex;
+        }
+
         if (command.expectedLatestVersionNumber() != latestVersionNumber) {
-            throw staleLatestVersion();
+            throw auditAndBusiness(
+                    currentUser,
+                    document,
+                    null,
+                    command.targetVersionNumber(),
+                    command.expectedLatestVersionNumber(),
+                    HttpStatus.CONFLICT,
+                    "VERSION_CONFLICT_STALE_LATEST_VERSION",
+                    "当前最新版本已变化，请刷新详情后重试");
         }
         if (document.status() != UploadStatus.INDEXED && document.status() != UploadStatus.FAILED) {
-            throw business(
+            throw auditAndBusiness(
+                    currentUser,
+                    document,
+                    null,
+                    command.targetVersionNumber(),
+                    command.expectedLatestVersionNumber(),
                     HttpStatus.CONFLICT,
                     "VERSION_ROLLBACK_NOT_ALLOWED_STATUS",
                     "版本回退仅允许在当前最新版本为 INDEXED 或 FAILED 时发起");
         }
         if (command.targetVersionNumber() == latestVersionNumber) {
-            throw business(
+            throw auditAndBusiness(
+                    currentUser,
+                    document,
+                    null,
+                    command.targetVersionNumber(),
+                    command.expectedLatestVersionNumber(),
                     HttpStatus.CONFLICT,
                     "VERSION_ROLLBACK_TARGET_IS_LATEST",
                     "当前最新版本不能作为回退目标");
@@ -126,7 +160,12 @@ public class RollbackDocumentVersionApplicationService implements RollbackDocume
                         "document version not found: " + command.targetVersionNumber()));
 
         if (targetVersion.status() != UploadStatus.INDEXED) {
-            throw business(
+            throw auditAndBusiness(
+                    currentUser,
+                    document,
+                    null,
+                    command.targetVersionNumber(),
+                    command.expectedLatestVersionNumber(),
                     HttpStatus.CONFLICT,
                     "VERSION_ROLLBACK_TARGET_NOT_INDEXED",
                     "版本回退只允许选择已形成可用内容的历史版本");
@@ -143,7 +182,12 @@ public class RollbackDocumentVersionApplicationService implements RollbackDocume
 
         byte[] sourceContent = documentSourceStorage
                 .loadVersion(documentId, targetVersion.versionNumber(), targetVersion.filename())
-                .orElseThrow(() -> business(
+                .orElseThrow(() -> auditAndBusiness(
+                        currentUser,
+                        document,
+                        newVersionNumber,
+                        command.targetVersionNumber(),
+                        command.expectedLatestVersionNumber(),
                         HttpStatus.INTERNAL_SERVER_ERROR,
                         "VERSION_ROLLBACK_SOURCE_FILE_MISSING",
                         "回退来源版本文件缺失，请联系管理员修复版本源文件"));
@@ -155,9 +199,26 @@ public class RollbackDocumentVersionApplicationService implements RollbackDocume
                 rollbackVersion,
                 now);
         if (!appended) {
-            throw staleLatestVersion();
+            throw latestConflict(
+                    currentUser,
+                    documentId,
+                    document,
+                    newVersionNumber,
+                    command.targetVersionNumber(),
+                    command.expectedLatestVersionNumber());
         }
-        saveRollbackSource(documentId, newVersionNumber, targetVersion.filename(), sourceContent);
+        try {
+            saveRollbackSource(documentId, newVersionNumber, targetVersion.filename(), sourceContent);
+        } catch (BusinessException ex) {
+            auditFailure(
+                    currentUser,
+                    document,
+                    newVersionNumber,
+                    command.targetVersionNumber(),
+                    command.expectedLatestVersionNumber(),
+                    ex);
+            throw ex;
+        }
 
         Integer askableVersionNumber =
                 toNullableVersionNumber(documentRepository.findLatestIndexedVersionNumber(currentUser.workspaceId(), documentId));
@@ -167,6 +228,7 @@ public class RollbackDocumentVersionApplicationService implements RollbackDocume
                 document.kbId(),
                 newVersionNumber,
                 targetVersion.versionNumber(),
+                latestVersionNumber,
                 latestVersionNumber,
                 now));
         return new DocumentVersionRollbackResult(
@@ -197,7 +259,10 @@ public class RollbackDocumentVersionApplicationService implements RollbackDocume
             documentSourceStorage.saveVersionIfAbsent(documentId, versionNumber, filename, sourceContent);
         } catch (IllegalStateException ex) {
             if (DocumentSourceStorage.VERSION_SOURCE_CONTENT_CONFLICT_MESSAGE.equals(ex.getMessage())) {
-                throw staleLatestVersion();
+                throw business(
+                        HttpStatus.CONFLICT,
+                        "VERSION_CONFLICT_STALE_LATEST_VERSION",
+                        "当前最新版本已变化，请刷新详情后重试");
             }
             throw ex;
         }
@@ -275,15 +340,104 @@ public class RollbackDocumentVersionApplicationService implements RollbackDocume
     }
 
     /**
-     * 构造 latest 乐观并发冲突异常。
+     * 按最新快照区分乐观并发冲突与状态变化冲突。
      *
+     * @param currentUser 当前用户
+     * @param documentId 文档资产 ID
+     * @param originalDocument 初始读取的文档快照
+     * @param candidateVersionNumber 本次尝试创建的新版本号
+     * @param targetVersionNumber 回退目标版本号
+     * @param expectedLatestVersionNumber 请求期望的 latest 版本号
+     * @return 带业务错误码的异常
+     */
+    private BusinessException latestConflict(
+            CurrentUser currentUser,
+            DocumentId documentId,
+            Document originalDocument,
+            int candidateVersionNumber,
+            int targetVersionNumber,
+            int expectedLatestVersionNumber) {
+        Document observedDocument = documentRepository.findById(currentUser.workspaceId(), documentId).orElse(originalDocument);
+        if (observedDocument.latestVersionNumber() != expectedLatestVersionNumber) {
+            return auditAndBusiness(
+                    currentUser,
+                    observedDocument,
+                    candidateVersionNumber,
+                    targetVersionNumber,
+                    expectedLatestVersionNumber,
+                    HttpStatus.CONFLICT,
+                    "VERSION_CONFLICT_STALE_LATEST_VERSION",
+                    "当前最新版本已变化，请刷新详情后重试");
+        }
+        return auditAndBusiness(
+                currentUser,
+                observedDocument,
+                candidateVersionNumber,
+                targetVersionNumber,
+                expectedLatestVersionNumber,
+                HttpStatus.CONFLICT,
+                "VERSION_CONFLICT_STATE_CHANGED",
+                "当前文档状态已变化，请刷新详情后重试");
+    }
+
+    /**
+     * 写入回退失败审计并返回业务异常。
+     *
+     * @param currentUser 当前用户
+     * @param document 文档快照
+     * @param versionNumber 相关版本号
+     * @param targetVersionNumber 回退目标版本号
+     * @param expectedLatestVersionNumber 请求期望的 latest 版本号
+     * @param status HTTP 状态码
+     * @param code 业务错误码
+     * @param message 错误消息
      * @return 业务异常
      */
-    private static BusinessException staleLatestVersion() {
-        return business(
-                HttpStatus.CONFLICT,
-                "VERSION_CONFLICT_STALE_LATEST_VERSION",
-                "当前最新版本已变化，请刷新详情后重试");
+    private BusinessException auditAndBusiness(
+            CurrentUser currentUser,
+            Document document,
+            Integer versionNumber,
+            int targetVersionNumber,
+            int expectedLatestVersionNumber,
+            HttpStatus status,
+            String code,
+            String message) {
+        BusinessException ex = business(status, code, message);
+        auditFailure(currentUser, document, versionNumber, targetVersionNumber, expectedLatestVersionNumber, ex);
+        return ex;
+    }
+
+    /**
+     * 写入回退失败审计。
+     *
+     * @param currentUser 当前用户
+     * @param document 文档快照
+     * @param versionNumber 相关版本号
+     * @param targetVersionNumber 回退目标版本号
+     * @param expectedLatestVersionNumber 请求期望的 latest 版本号
+     * @param ex 业务异常
+     */
+    private void auditFailure(
+            CurrentUser currentUser,
+            Document document,
+            Integer versionNumber,
+            int targetVersionNumber,
+            int expectedLatestVersionNumber,
+            BusinessException ex) {
+        auditEventRepository.save(IngestAuditEvents.documentVersionGovernanceFailed(
+                currentUser,
+                IngestAuditEvents.DOCUMENT_VERSION_ROLLBACK_REQUESTED,
+                document.documentId(),
+                document.kbId(),
+                versionNumber,
+                targetVersionNumber,
+                expectedLatestVersionNumber,
+                document.latestVersionNumber(),
+                DocumentVersionOriginType.ROLLBACK.name(),
+                RESULT_FAILED,
+                ex.code(),
+                ex.getMessage(),
+                Instant.now()));
     }
 
     /**

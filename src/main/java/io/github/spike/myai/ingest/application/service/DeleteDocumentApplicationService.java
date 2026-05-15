@@ -3,8 +3,8 @@ package io.github.spike.myai.ingest.application.service;
 import io.github.spike.myai.auth.application.context.CurrentUser;
 import io.github.spike.myai.auth.application.context.CurrentUserProvider;
 import io.github.spike.myai.auth.application.service.AuthorizationService;
+import io.github.spike.myai.auth.domain.port.AuditEventRepository;
 import io.github.spike.myai.ingest.application.command.DeleteDocumentCommand;
-import io.github.spike.myai.ingest.application.exception.DocumentDeleteConflictException;
 import io.github.spike.myai.ingest.application.exception.DocumentDeleteFailedException;
 import io.github.spike.myai.ingest.application.exception.DocumentNotFoundException;
 import io.github.spike.myai.ingest.application.monitoring.IngestMetrics;
@@ -15,9 +15,12 @@ import io.github.spike.myai.ingest.domain.model.UploadStatus;
 import io.github.spike.myai.ingest.domain.port.DocumentRepository;
 import io.github.spike.myai.ingest.domain.port.DocumentSourceStorage;
 import io.github.spike.myai.ingest.domain.port.DocumentVectorIndexer;
+import io.github.spike.myai.shared.rest.BusinessException;
 import java.time.Instant;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpStatus;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 
 /**
@@ -70,6 +73,9 @@ public class DeleteDocumentApplicationService implements DeleteDocumentUseCase {
     /** 授权服务：用于校验当前用户是否具备文档管理权限 */
     private final AuthorizationService authorizationService;
 
+    /** 审计事件仓储：记录删除治理动作成功与失败上下文 */
+    private final AuditEventRepository auditEventRepository;
+
     /**
      * 构造器注入。
      *
@@ -79,6 +85,7 @@ public class DeleteDocumentApplicationService implements DeleteDocumentUseCase {
      * @param ingestMetrics          业务指标监控（应用层）
      * @param currentUserProvider    当前用户上下文提供器（应用层端口）
      * @param authorizationService   授权服务（应用层）
+     * @param auditEventRepository   审计事件仓储
      */
     public DeleteDocumentApplicationService(
             DocumentRepository documentRepository,
@@ -86,13 +93,15 @@ public class DeleteDocumentApplicationService implements DeleteDocumentUseCase {
             DocumentVectorIndexer documentVectorIndexer,
             IngestMetrics ingestMetrics,
             CurrentUserProvider currentUserProvider,
-            AuthorizationService authorizationService) {
+            AuthorizationService authorizationService,
+            AuditEventRepository auditEventRepository) {
         this.documentRepository = documentRepository;
         this.documentSourceStorage = documentSourceStorage;
         this.documentVectorIndexer = documentVectorIndexer;
         this.ingestMetrics = ingestMetrics;
         this.currentUserProvider = currentUserProvider;
         this.authorizationService = authorizationService;
+        this.auditEventRepository = auditEventRepository;
     }
 
     /**
@@ -100,7 +109,7 @@ public class DeleteDocumentApplicationService implements DeleteDocumentUseCase {
      *
      * @param command 包含待删除文档 ID 的命令对象
      * @throws DocumentNotFoundException 文档不存在
-     * @throws DocumentDeleteConflictException 状态冲突（如文档正在处理中）
+     * @throws BusinessException 状态冲突或权限不足
      * @throws DocumentDeleteFailedException 其他删除异常
      */
     @Override
@@ -111,12 +120,41 @@ public class DeleteDocumentApplicationService implements DeleteDocumentUseCase {
         // 1. 查询文档，确保文档存在
         Document document = documentRepository.findById(workspaceId, documentId)
                 .orElseThrow(() -> new DocumentNotFoundException("document not found: " + documentId.value()));
-        authorizationService.requireCanManageDocument(currentUser, documentId.value(), document.kbId());
+        try {
+            authorizationService.requireCanManageDocument(currentUser, documentId.value(), document.kbId());
+        } catch (AccessDeniedException ex) {
+            throw auditAndBusiness(
+                    currentUser,
+                    document,
+                    command.expectedLatestVersionNumber(),
+                    HttpStatus.FORBIDDEN,
+                    "DOCUMENT_DELETE_NO_MANAGE_PERMISSION",
+                    "你没有删除该文档的权限，请联系管理员");
+        }
         UploadStatus status = document.status();
+
+        if (isExpectedLatestVersionStale(command.expectedLatestVersionNumber(), document)) {
+            throw auditAndBusiness(
+                    currentUser,
+                    document,
+                    command.expectedLatestVersionNumber(),
+                    HttpStatus.CONFLICT,
+                    "VERSION_CONFLICT_STALE_LATEST_VERSION",
+                    "当前最新版本已变化，请刷新详情后重试");
+        }
 
         // 2. 幂等检查：如果文档已经是 DELETED 状态，视为成功
         if (status == UploadStatus.DELETED) {
             ingestMetrics.incrementDeleteSuccess();
+            auditEventRepository.save(IngestAuditEvents.documentGovernanceSucceeded(
+                    currentUser,
+                    IngestAuditEvents.DOCUMENT_DELETE_REQUESTED,
+                    documentId,
+                    document.kbId(),
+                    document.latestVersionNumber(),
+                    command.expectedLatestVersionNumber(),
+                    "ALREADY_DELETED",
+                    Instant.now()));
             return;
         }
 
@@ -124,7 +162,13 @@ public class DeleteDocumentApplicationService implements DeleteDocumentUseCase {
         if (isExecutionStatus(status)) {
             ingestMetrics.incrementDeleteConflict();
             log.warn("Delete rejected by conflict status. documentId={}, status={}", documentId.value(), status);
-            throw new DocumentDeleteConflictException("document is in conflict status: " + status);
+            throw auditAndBusiness(
+                    currentUser,
+                    document,
+                    command.expectedLatestVersionNumber(),
+                    HttpStatus.CONFLICT,
+                    "VERSION_CONFLICT_STATE_CHANGED",
+                    "当前文档状态已变化，请刷新详情后重试");
         }
 
         Instant now = Instant.now();
@@ -134,7 +178,7 @@ public class DeleteDocumentApplicationService implements DeleteDocumentUseCase {
             // 如果标记失败，说明在查询和标记之间状态由于并发操作发生了变化
             ingestMetrics.incrementDeleteConflict();
             log.warn("Delete rejected by CAS conflict. documentId={}, status={}", documentId.value(), status);
-            throw new DocumentDeleteConflictException("document status changed, delete aborted");
+            throw latestConflict(currentUser, workspaceId, documentId, document, command.expectedLatestVersionNumber());
         }
 
         try {
@@ -149,6 +193,15 @@ public class DeleteDocumentApplicationService implements DeleteDocumentUseCase {
                 throw new IllegalStateException("mark deleted failed by CAS");
             }
             ingestMetrics.incrementDeleteSuccess();
+            auditEventRepository.save(IngestAuditEvents.documentGovernanceSucceeded(
+                    currentUser,
+                    IngestAuditEvents.DOCUMENT_DELETE_REQUESTED,
+                    documentId,
+                    document.kbId(),
+                    document.latestVersionNumber(),
+                    command.expectedLatestVersionNumber(),
+                    "DELETED",
+                    Instant.now()));
             log.info("Document deleted. documentId={}", documentId.value());
         } catch (Exception ex) {
             // 7. 异常回滚：如果物理清理失败，尝试将状态回滚到删除前的原始状态，以便用户重试
@@ -157,8 +210,111 @@ public class DeleteDocumentApplicationService implements DeleteDocumentUseCase {
                 log.warn("Rollback deleting state failed by CAS. documentId={}", documentId.value());
             }
             log.error("Document delete failed. documentId={}", documentId.value(), ex);
+            auditFailure(
+                    currentUser,
+                    document,
+                    command.expectedLatestVersionNumber(),
+                    "DOCUMENT_DELETE_FAILED",
+                    "failed to delete document asset");
             throw new DocumentDeleteFailedException("failed to delete document asset", ex);
         }
+    }
+
+    /**
+     * 判断请求携带的 latest 版本号是否已过期。
+     *
+     * @param expectedLatestVersionNumber 调用方页面看到的 latest 版本号，可为空
+     * @param document 当前文档快照
+     * @return 是否过期
+     */
+    private static boolean isExpectedLatestVersionStale(Integer expectedLatestVersionNumber, Document document) {
+        return expectedLatestVersionNumber != null
+                && expectedLatestVersionNumber != document.latestVersionNumber();
+    }
+
+    /**
+     * CAS 失败后重读文档，区分页面过期和状态变化。
+     *
+     * @param currentUser 当前用户
+     * @param workspaceId 工作区标识
+     * @param documentId 文档资产 ID
+     * @param originalDocument 初始读取的文档快照
+     * @param expectedLatestVersionNumber 调用方页面看到的 latest 版本号，可为空
+     * @return 业务异常
+     */
+    private BusinessException latestConflict(
+            CurrentUser currentUser,
+            String workspaceId,
+            DocumentId documentId,
+            Document originalDocument,
+            Integer expectedLatestVersionNumber) {
+        Document observedDocument = documentRepository.findById(workspaceId, documentId).orElse(originalDocument);
+        if (isExpectedLatestVersionStale(expectedLatestVersionNumber, observedDocument)) {
+            return auditAndBusiness(
+                    currentUser,
+                    observedDocument,
+                    expectedLatestVersionNumber,
+                    HttpStatus.CONFLICT,
+                    "VERSION_CONFLICT_STALE_LATEST_VERSION",
+                    "当前最新版本已变化，请刷新详情后重试");
+        }
+        return auditAndBusiness(
+                currentUser,
+                observedDocument,
+                expectedLatestVersionNumber,
+                HttpStatus.CONFLICT,
+                "VERSION_CONFLICT_STATE_CHANGED",
+                "当前文档状态已变化，请刷新详情后重试");
+    }
+
+    /**
+     * 写入删除失败审计并返回业务异常。
+     *
+     * @param currentUser 当前用户
+     * @param document 文档快照
+     * @param expectedLatestVersionNumber 调用方页面看到的 latest 版本号，可为空
+     * @param status HTTP 状态码
+     * @param code 业务错误码
+     * @param message 错误消息
+     * @return 业务异常
+     */
+    private BusinessException auditAndBusiness(
+            CurrentUser currentUser,
+            Document document,
+            Integer expectedLatestVersionNumber,
+            HttpStatus status,
+            String code,
+            String message) {
+        auditFailure(currentUser, document, expectedLatestVersionNumber, code, message);
+        return new BusinessException(status, code, message);
+    }
+
+    /**
+     * 写入删除失败审计。
+     *
+     * @param currentUser 当前用户
+     * @param document 文档快照
+     * @param expectedLatestVersionNumber 调用方页面看到的 latest 版本号，可为空
+     * @param errorCode 业务错误码
+     * @param errorMessage 服务端错误消息
+     */
+    private void auditFailure(
+            CurrentUser currentUser,
+            Document document,
+            Integer expectedLatestVersionNumber,
+            String errorCode,
+            String errorMessage) {
+        auditEventRepository.save(IngestAuditEvents.documentGovernanceFailed(
+                currentUser,
+                IngestAuditEvents.DOCUMENT_DELETE_REQUESTED,
+                document.documentId(),
+                document.kbId(),
+                document.latestVersionNumber(),
+                expectedLatestVersionNumber,
+                "FAILED",
+                errorCode,
+                errorMessage,
+                Instant.now()));
     }
 
     /**

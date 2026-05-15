@@ -158,6 +158,7 @@ class UploadNewDocumentVersionApplicationServiceTest {
         DocumentRepository repository = Mockito.mock(DocumentRepository.class);
         DocumentSourceStorage sourceStorage = Mockito.mock(DocumentSourceStorage.class);
         AuthorizationService authorizationService = Mockito.mock(AuthorizationService.class);
+        AuditEventRepository auditEventRepository = Mockito.mock(AuditEventRepository.class);
         CurrentUserProvider currentUserProvider = currentUserProvider();
         Document document = document("doc-4", 2, "hash-old", UploadStatus.INGESTING);
         when(repository.findById(eq("workspace-a"), eq(new DocumentId("doc-4")))).thenReturn(Optional.of(document));
@@ -167,12 +168,17 @@ class UploadNewDocumentVersionApplicationServiceTest {
                         sourceStorage,
                         currentUserProvider,
                         authorizationService,
-                        Mockito.mock(AuditEventRepository.class));
+                        auditEventRepository);
 
         BusinessException ex = assertThrows(BusinessException.class, () -> service.handle(
                 new UploadNewDocumentVersionCommand("doc-4", "new.pdf", 42L, "hash-new", 2, bytes("new content"))));
 
         assertEquals("VERSION_UPLOAD_NOT_ALLOWED_STATUS", ex.code());
+        ArgumentCaptor<AuditEvent> auditCaptor = ArgumentCaptor.forClass(AuditEvent.class);
+        verify(auditEventRepository).save(auditCaptor.capture());
+        assertEquals("FAILURE", auditCaptor.getValue().outcome());
+        assertTrue(auditCaptor.getValue().metadata().contains("\"errorCode\":\"VERSION_UPLOAD_NOT_ALLOWED_STATUS\""));
+        assertTrue(auditCaptor.getValue().metadata().contains("\"errorMessage\":\"上传新版本仅允许在当前最新版本为 INDEXED 或 FAILED 时发起\""));
         verify(repository, never()).appendUploadVersion(any(), any(), any(Integer.class), any(), any());
     }
 
@@ -226,7 +232,7 @@ class UploadNewDocumentVersionApplicationServiceTest {
         BusinessException ex = assertThrows(BusinessException.class, () -> service.handle(
                 new UploadNewDocumentVersionCommand("doc-6", "new.pdf", 42L, "hash-new", 2, bytes("new content"))));
 
-        assertEquals("VERSION_CONFLICT_STALE_LATEST_VERSION", ex.code());
+        assertEquals("VERSION_CONFLICT_STATE_CHANGED", ex.code());
         verify(sourceStorage, never()).saveVersionIfAbsent(any(), anyInt(), any(), any());
     }
 

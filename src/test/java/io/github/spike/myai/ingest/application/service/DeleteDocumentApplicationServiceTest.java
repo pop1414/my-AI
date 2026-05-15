@@ -13,8 +13,8 @@ import io.github.spike.myai.auth.application.context.CurrentUser;
 import io.github.spike.myai.auth.application.context.CurrentUserProvider;
 import io.github.spike.myai.auth.application.service.AuthorizationService;
 import io.github.spike.myai.auth.domain.model.WorkspaceRole;
+import io.github.spike.myai.auth.domain.port.AuditEventRepository;
 import io.github.spike.myai.ingest.application.command.DeleteDocumentCommand;
-import io.github.spike.myai.ingest.application.exception.DocumentDeleteConflictException;
 import io.github.spike.myai.ingest.application.exception.DocumentDeleteFailedException;
 import io.github.spike.myai.ingest.application.exception.DocumentNotFoundException;
 import io.github.spike.myai.ingest.application.monitoring.IngestMetrics;
@@ -24,6 +24,7 @@ import io.github.spike.myai.ingest.domain.model.UploadStatus;
 import io.github.spike.myai.ingest.domain.port.DocumentRepository;
 import io.github.spike.myai.ingest.domain.port.DocumentSourceStorage;
 import io.github.spike.myai.ingest.domain.port.DocumentVectorIndexer;
+import io.github.spike.myai.shared.rest.BusinessException;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Instant;
 import java.util.Optional;
@@ -52,7 +53,8 @@ class DeleteDocumentApplicationServiceTest {
                         vectorIndexer,
                         new IngestMetrics(meterRegistry),
                         currentUserProvider,
-                        authorizationService);
+                        authorizationService,
+                        Mockito.mock(AuditEventRepository.class));
 
         DocumentId documentId = new DocumentId("doc-del-1");
         Document indexed = new Document(
@@ -107,7 +109,8 @@ class DeleteDocumentApplicationServiceTest {
                         vectorIndexer,
                         new IngestMetrics(meterRegistry),
                         currentUserProvider,
-                        authorizationService);
+                        authorizationService,
+                        Mockito.mock(AuditEventRepository.class));
         when(repository.findById(anyString(), eq(new DocumentId("doc-missing")))).thenReturn(Optional.empty());
 
         assertThrows(DocumentNotFoundException.class, () -> service.handle(new DeleteDocumentCommand("doc-missing")));
@@ -129,7 +132,8 @@ class DeleteDocumentApplicationServiceTest {
                         vectorIndexer,
                         new IngestMetrics(meterRegistry),
                         currentUserProvider,
-                        authorizationService);
+                        authorizationService,
+                        Mockito.mock(AuditEventRepository.class));
 
         DocumentId documentId = new DocumentId("doc-del-2");
         Document ingesting = new Document(
@@ -155,7 +159,8 @@ class DeleteDocumentApplicationServiceTest {
                 Instant.now());
         when(repository.findById(anyString(), eq(documentId))).thenReturn(Optional.of(ingesting));
 
-        assertThrows(DocumentDeleteConflictException.class, () -> service.handle(new DeleteDocumentCommand("doc-del-2")));
+        BusinessException ex = assertThrows(BusinessException.class, () -> service.handle(new DeleteDocumentCommand("doc-del-2")));
+        org.junit.jupiter.api.Assertions.assertEquals("VERSION_CONFLICT_STATE_CHANGED", ex.code());
         verify(repository, never()).markDeleting(anyString(), any(), any(), any());
         verify(authorizationService).requireCanManageDocument(any(CurrentUser.class), eq("doc-del-2"), eq("kb-1"));
         org.junit.jupiter.api.Assertions.assertEquals(
@@ -178,7 +183,8 @@ class DeleteDocumentApplicationServiceTest {
                         vectorIndexer,
                         new IngestMetrics(meterRegistry),
                         currentUserProvider,
-                        authorizationService);
+                        authorizationService,
+                        Mockito.mock(AuditEventRepository.class));
 
         DocumentId documentId = new DocumentId("doc-del-uploaded");
         Document uploaded = new Document(
@@ -204,7 +210,8 @@ class DeleteDocumentApplicationServiceTest {
                 Instant.now());
         when(repository.findById(anyString(), eq(documentId))).thenReturn(Optional.of(uploaded));
 
-        assertThrows(DocumentDeleteConflictException.class, () -> service.handle(new DeleteDocumentCommand("doc-del-uploaded")));
+        BusinessException ex = assertThrows(BusinessException.class, () -> service.handle(new DeleteDocumentCommand("doc-del-uploaded")));
+        org.junit.jupiter.api.Assertions.assertEquals("VERSION_CONFLICT_STATE_CHANGED", ex.code());
 
         verify(repository, never()).markDeleting(anyString(), any(), any(), any());
         verify(sourceStorage, never()).deleteByDocumentId(any());
@@ -212,6 +219,57 @@ class DeleteDocumentApplicationServiceTest {
         verify(authorizationService).requireCanManageDocument(any(CurrentUser.class), eq("doc-del-uploaded"), eq("kb-1"));
         org.junit.jupiter.api.Assertions.assertEquals(
                 1.0, meterRegistry.get("myai.ingest.delete.conflict.total").counter().count());
+    }
+
+    @Test
+    @DisplayName("expectedLatestVersionNumber 过期时，删除应返回 latest 冲突错误码")
+    void handle_shouldThrowStaleLatestVersion_whenExpectedVersionStale() {
+        DocumentRepository repository = Mockito.mock(DocumentRepository.class);
+        DocumentSourceStorage sourceStorage = Mockito.mock(DocumentSourceStorage.class);
+        DocumentVectorIndexer vectorIndexer = Mockito.mock(DocumentVectorIndexer.class);
+        SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
+        CurrentUserProvider currentUserProvider = currentUserProvider();
+        AuthorizationService authorizationService = Mockito.mock(AuthorizationService.class);
+        DeleteDocumentApplicationService service =
+                new DeleteDocumentApplicationService(
+                        repository,
+                        sourceStorage,
+                        vectorIndexer,
+                        new IngestMetrics(meterRegistry),
+                        currentUserProvider,
+                        authorizationService,
+                        Mockito.mock(AuditEventRepository.class));
+
+        DocumentId documentId = new DocumentId("doc-del-stale");
+        Document indexed = new Document(
+                documentId,
+                "workspace-a",
+                "kb-1",
+                "hash-stale",
+                "stale.txt",
+                1L,
+                UploadStatus.INDEXED,
+                null,
+                0,
+                3,
+                null,
+                null,
+                null,
+                null,
+                0,
+                null,
+                "v1",
+                null,
+                Instant.now(),
+                Instant.now());
+        when(repository.findById(anyString(), eq(documentId))).thenReturn(Optional.of(indexed));
+
+        BusinessException ex = assertThrows(
+                BusinessException.class,
+                () -> service.handle(new DeleteDocumentCommand("doc-del-stale", 2)));
+
+        org.junit.jupiter.api.Assertions.assertEquals("VERSION_CONFLICT_STALE_LATEST_VERSION", ex.code());
+        verify(repository, never()).markDeleting(anyString(), any(), any(), any());
     }
 
     @Test
@@ -230,7 +288,8 @@ class DeleteDocumentApplicationServiceTest {
                         vectorIndexer,
                         new IngestMetrics(meterRegistry),
                         currentUserProvider,
-                        authorizationService);
+                        authorizationService,
+                        Mockito.mock(AuditEventRepository.class));
 
         DocumentId documentId = new DocumentId("doc-del-3");
         Document failed = new Document(

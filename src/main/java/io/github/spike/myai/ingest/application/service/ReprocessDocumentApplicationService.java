@@ -3,6 +3,7 @@ package io.github.spike.myai.ingest.application.service;
 import io.github.spike.myai.auth.application.context.CurrentUser;
 import io.github.spike.myai.auth.application.context.CurrentUserProvider;
 import io.github.spike.myai.auth.application.service.AuthorizationService;
+import io.github.spike.myai.auth.domain.port.AuditEventRepository;
 import io.github.spike.myai.ingest.application.command.ReprocessDocumentCommand;
 import io.github.spike.myai.ingest.application.exception.DocumentNotFoundException;
 import io.github.spike.myai.ingest.application.result.DocumentStatusResult;
@@ -13,9 +14,12 @@ import io.github.spike.myai.ingest.domain.model.SplitVersion;
 import io.github.spike.myai.ingest.domain.model.UploadStatus;
 import io.github.spike.myai.ingest.domain.port.DocumentRepository;
 import io.github.spike.myai.ingest.domain.port.DocumentVectorIndexer;
+import io.github.spike.myai.shared.rest.BusinessException;
 import java.time.Instant;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpStatus;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 
 /**
@@ -60,6 +64,9 @@ public class ReprocessDocumentApplicationService implements ReprocessDocumentUse
     /** 授权服务：用于校验当前用户是否具备知识库贡献权限 */
     private final AuthorizationService authorizationService;
 
+    /** 审计事件仓储：记录重处理治理动作成功与失败上下文 */
+    private final AuditEventRepository auditEventRepository;
+
     /**
      * 构造器注入。
      *
@@ -67,16 +74,19 @@ public class ReprocessDocumentApplicationService implements ReprocessDocumentUse
      * @param documentVectorIndexer  矢量索引器（领域端口）
      * @param currentUserProvider    当前用户上下文提供器（应用层端口）
      * @param authorizationService   授权服务（应用层）
+     * @param auditEventRepository   审计事件仓储
      */
     public ReprocessDocumentApplicationService(
             DocumentRepository documentRepository,
             DocumentVectorIndexer documentVectorIndexer,
             CurrentUserProvider currentUserProvider,
-            AuthorizationService authorizationService) {
+            AuthorizationService authorizationService,
+            AuditEventRepository auditEventRepository) {
         this.documentRepository = documentRepository;
         this.documentVectorIndexer = documentVectorIndexer;
         this.currentUserProvider = currentUserProvider;
         this.authorizationService = authorizationService;
+        this.auditEventRepository = auditEventRepository;
     }
 
     @Override
@@ -86,14 +96,45 @@ public class ReprocessDocumentApplicationService implements ReprocessDocumentUse
         DocumentId documentId = new DocumentId(command.documentId());
         Document document = documentRepository.findById(workspaceId, documentId)
                 .orElseThrow(() -> new DocumentNotFoundException("document not found: " + documentId.value()));
-        authorizationService.requireCanContributeKnowledgeBase(currentUser, document.kbId());
+        try {
+            authorizationService.requireCanContributeKnowledgeBase(currentUser, document.kbId());
+        } catch (AccessDeniedException ex) {
+            throw auditAndBusiness(
+                    currentUser,
+                    document,
+                    command.expectedLatestVersionNumber(),
+                    HttpStatus.FORBIDDEN,
+                    "DOCUMENT_REPROCESS_NO_PERMISSION",
+                    "你没有重处理该文档的权限，请联系管理员");
+        }
+        if (isExpectedLatestVersionStale(command.expectedLatestVersionNumber(), document)) {
+            throw auditAndBusiness(
+                    currentUser,
+                    document,
+                    command.expectedLatestVersionNumber(),
+                    HttpStatus.CONFLICT,
+                    "VERSION_CONFLICT_STALE_LATEST_VERSION",
+                    "当前最新版本已变化，请刷新详情后重试");
+        }
         // INGESTING 阶段禁止重处理，避免与正在进行的分块/向量化冲突。
         if (document.status() == UploadStatus.INGESTING) {
-            throw new IllegalStateException("document is ingesting and cannot be reprocessed");
+            throw auditAndBusiness(
+                    currentUser,
+                    document,
+                    command.expectedLatestVersionNumber(),
+                    HttpStatus.CONFLICT,
+                    "VERSION_CONFLICT_STATE_CHANGED",
+                    "当前文档状态已变化，请刷新详情后重试");
         }
         // 仅允许 FAILED/INDEXED 进入重处理，避免跳过必要状态。
         if (document.status() != UploadStatus.FAILED && document.status() != UploadStatus.INDEXED) {
-            throw new IllegalStateException("document status not allowed for reprocess: " + document.status());
+            throw auditAndBusiness(
+                    currentUser,
+                    document,
+                    command.expectedLatestVersionNumber(),
+                    HttpStatus.CONFLICT,
+                    "DOCUMENT_REPROCESS_NOT_ALLOWED_STATUS",
+                    "重处理仅允许在当前最新版本为 INDEXED 或 FAILED 时发起");
         }
 
         // splitVersion 递增，用于区分新旧向量版本，确保删旧不误删新。
@@ -113,7 +154,7 @@ public class ReprocessDocumentApplicationService implements ReprocessDocumentUse
                 newSplitVersion,
                 now);
         if (!updated) {
-            throw new IllegalStateException("document status changed, reprocess aborted");
+            throw latestConflict(currentUser, workspaceId, documentId, document, command.expectedLatestVersionNumber());
         }
 
         try {
@@ -134,6 +175,12 @@ public class ReprocessDocumentApplicationService implements ReprocessDocumentUse
                     now,
                     now);
             log.warn("Reprocess cleanup failed. documentId={}, reason={}", documentId.value(), reason, ex);
+            auditFailure(
+                    currentUser,
+                    document,
+                    command.expectedLatestVersionNumber(),
+                    "DOCUMENT_REPROCESS_CLEANUP_FAILED",
+                    "reprocess cleanup failed");
             throw new IllegalStateException("reprocess cleanup failed");
         }
 
@@ -142,6 +189,15 @@ public class ReprocessDocumentApplicationService implements ReprocessDocumentUse
                 documentId.value(),
                 oldSplitVersion,
                 newSplitVersion);
+        auditEventRepository.save(IngestAuditEvents.documentGovernanceSucceeded(
+                currentUser,
+                IngestAuditEvents.DOCUMENT_REPROCESS_REQUESTED,
+                documentId,
+                document.kbId(),
+                document.latestVersionNumber(),
+                command.expectedLatestVersionNumber(),
+                "REQUESTED",
+                Instant.now()));
         // 重处理仅将文档回退到 UPLOADED 等待重新调度，此时所有旧元数据已清除，故 processingMetadata 传 null。
         return new DocumentStatusResult(
                 documentId,
@@ -150,6 +206,103 @@ public class ReprocessDocumentApplicationService implements ReprocessDocumentUse
                 document.latestVersionOriginType(),
                 UploadStatus.UPLOADED,
                 null);
+    }
+
+    /**
+     * 判断请求携带的 latest 版本号是否已过期。
+     *
+     * @param expectedLatestVersionNumber 调用方页面看到的 latest 版本号，可为空
+     * @param document 当前文档快照
+     * @return 是否过期
+     */
+    private static boolean isExpectedLatestVersionStale(Integer expectedLatestVersionNumber, Document document) {
+        return expectedLatestVersionNumber != null
+                && expectedLatestVersionNumber != document.latestVersionNumber();
+    }
+
+    /**
+     * CAS 失败后重读文档，区分页面过期和状态变化。
+     *
+     * @param currentUser 当前用户
+     * @param workspaceId 工作区标识
+     * @param documentId 文档资产 ID
+     * @param originalDocument 初始读取的文档快照
+     * @param expectedLatestVersionNumber 调用方页面看到的 latest 版本号，可为空
+     * @return 业务异常
+     */
+    private BusinessException latestConflict(
+            CurrentUser currentUser,
+            String workspaceId,
+            DocumentId documentId,
+            Document originalDocument,
+            Integer expectedLatestVersionNumber) {
+        Document observedDocument = documentRepository.findById(workspaceId, documentId).orElse(originalDocument);
+        if (isExpectedLatestVersionStale(expectedLatestVersionNumber, observedDocument)) {
+            return auditAndBusiness(
+                    currentUser,
+                    observedDocument,
+                    expectedLatestVersionNumber,
+                    HttpStatus.CONFLICT,
+                    "VERSION_CONFLICT_STALE_LATEST_VERSION",
+                    "当前最新版本已变化，请刷新详情后重试");
+        }
+        return auditAndBusiness(
+                currentUser,
+                observedDocument,
+                expectedLatestVersionNumber,
+                HttpStatus.CONFLICT,
+                "VERSION_CONFLICT_STATE_CHANGED",
+                "当前文档状态已变化，请刷新详情后重试");
+    }
+
+    /**
+     * 写入重处理失败审计并返回业务异常。
+     *
+     * @param currentUser 当前用户
+     * @param document 文档快照
+     * @param expectedLatestVersionNumber 调用方页面看到的 latest 版本号，可为空
+     * @param status HTTP 状态码
+     * @param code 业务错误码
+     * @param message 错误消息
+     * @return 业务异常
+     */
+    private BusinessException auditAndBusiness(
+            CurrentUser currentUser,
+            Document document,
+            Integer expectedLatestVersionNumber,
+            HttpStatus status,
+            String code,
+            String message) {
+        auditFailure(currentUser, document, expectedLatestVersionNumber, code, message);
+        return new BusinessException(status, code, message);
+    }
+
+    /**
+     * 写入重处理失败审计。
+     *
+     * @param currentUser 当前用户
+     * @param document 文档快照
+     * @param expectedLatestVersionNumber 调用方页面看到的 latest 版本号，可为空
+     * @param errorCode 业务错误码
+     * @param errorMessage 服务端错误消息
+     */
+    private void auditFailure(
+            CurrentUser currentUser,
+            Document document,
+            Integer expectedLatestVersionNumber,
+            String errorCode,
+            String errorMessage) {
+        auditEventRepository.save(IngestAuditEvents.documentGovernanceFailed(
+                currentUser,
+                IngestAuditEvents.DOCUMENT_REPROCESS_REQUESTED,
+                document.documentId(),
+                document.kbId(),
+                document.latestVersionNumber(),
+                expectedLatestVersionNumber,
+                "FAILED",
+                errorCode,
+                errorMessage,
+                Instant.now()));
     }
 
     private static String trimFailureReason(String reason) {

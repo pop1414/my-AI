@@ -257,7 +257,7 @@ class RollbackDocumentVersionApplicationServiceTest {
         BusinessException ex = assertThrows(BusinessException.class, () ->
                 service.handle(new RollbackDocumentVersionCommand("doc-7", 1, 3)));
 
-        assertEquals("VERSION_CONFLICT_STALE_LATEST_VERSION", ex.code());
+        assertEquals("VERSION_CONFLICT_STATE_CHANGED", ex.code());
         verify(sourceStorage, never()).saveVersionIfAbsent(any(), anyInt(), any(), any());
     }
 
