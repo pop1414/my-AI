@@ -66,6 +66,32 @@
 - 原生 Markdown 按 `md` / `markdown` / `mdown` / `mkd` 扩展名绕过 Tika，只做最小破坏清洗
 - 原生 HTML 按 `html` / `htm` 扩展名绕过 Tika，直接进入 HTML 语义清洗与 Markdown 转换
 - `cleaned.md` 是正式中间文本产物，文档目录中强制落盘
+- `版本正文` 指某个 `document version` 处理后形成的 `cleaned.md` 文本产物
+- 文档版本正文读取默认读取版本级 `cleaned.md`，不从源文件实时解析，也不从 `vector_store` chunk 拼接
+- `cleaned.md` 的存储归属是 `document version`，不是 `document`；任一版本正文都必须能由 `workspaceId + documentId + versionNumber` 唯一定位
+- 版本处理产物应通过存储端口读取，应用层不直接依赖本地路径、MinIO SDK 或具体对象存储实现
+- 版本处理产物 key 语义应包含 `workspaceId`、`documentId`、`versionNumber` 与 artifact 名称，例如 `artifacts/workspaces/{workspaceId}/documents/{documentId}/versions/{versionNumber}/cleaned.md`
+- 源文件与处理产物在对象存储中应逻辑隔离；首期可使用同一 MinIO bucket 的不同 prefix，例如 `source/...` 与 `artifacts/...`
+- 当前阶段不要求在数据库中持久化完整 artifact 路径，优先通过稳定规则计算 key；必要时只记录产物是否已生成等状态事实
+- 文档详情页未显式指定 `versionNumber` 时，正文读取默认读取当前最新版本的 `cleaned.md`
+- 文档详情页显式指定 `versionNumber` 时，正文读取定位到该历史版本的 `cleaned.md`
+- 问答引用侧栏读取文档正文时，应读取该 `document` 当前问答基线版本的 `cleaned.md`，而不是无条件读取最新版本
+- 文档详情默认正文接口语义固定为 `GET /api/v1/documents/{documentId}/content`
+- 文档指定版本正文接口语义固定为 `GET /api/v1/documents/{documentId}/versions/{versionNumber}/content`
+- 问答引用侧栏正文接口语义固定为 `GET /api/v1/documents/{documentId}/askable-content`
+- 普通 `KB_READER` 只能读取问答基线版本正文；具备目标 `document` 管理权限的用户才可读取任意历史版本正文
+- 正文读取不改变问答基线；查看历史版本正文不会让后续问答临时切换到该历史版本
+- `INDEXED` 与 `FAILED` 版本只要已形成 `cleaned.md`，都允许具备权限的用户读取正文
+- `UPLOADED` / `INGESTING` 版本若尚未形成 `cleaned.md`，正文读取应返回 `CONTENT_NOT_READY`
+- 若版本状态已表明处理完成但对应 `cleaned.md` 缺失，正文读取应返回 `CONTENT_ARTIFACT_MISSING`
+- 正文读取链路不允许在 artifact 缺失时同步重新解析源文件；缺失应由重处理、修复任务或人工排查处理
+- 回退产生的新版本应重新进入处理链路并形成自己的 `cleaned.md`；正文读取新版本时仍读取新版本 artifact，而不是直接读取被回退历史版本的正文产物
+- `DELETED` 文档不开放正文读取；管理人员仅可查看终态与版本历史元数据，不可继续读取已删除文档的正文
+- 正文读取第一版返回完整 Markdown 文本，响应字段使用 `contentMarkdown`；后端应设置最大读取大小，超出上限时返回明确业务错误，后续再评估分页读取
+- 正文读取响应应至少返回 `documentId`、`versionNumber`、`latestVersionNumber`、`isLatestVersion`、`isAskableVersion`、`source`、`status`、`filename`、`createdAt`、`updatedAt`、`contentMarkdown`、`contentLength`、`truncated`
+- 正文读取错误码至少覆盖 `DOCUMENT_NOT_FOUND`、`DOCUMENT_CONTENT_FORBIDDEN`、`CONTENT_NOT_READY`、`CONTENT_ARTIFACT_MISSING`、`CONTENT_TOO_LARGE`、`VERSION_NOT_FOUND`、`VERSION_CONTENT_FORBIDDEN`
+- 源文件用于审计、重处理和未来原版预览，不作为文档版本正文读取的默认来源；当前阶段不提供源文件下载能力
+- 后续引入 MinIO 时，只改变源文件与处理产物的存储介质，不改变 `版本正文` 读取 `cleaned.md` 的语义
 - `raw.xhtml`、`cleaned.html`、`parse-result.json` 是可配置调试产物，不是对外契约
 - 当前阶段偏向纯文字质量基线；图片只保留占位或说明文本，表格只保留 Markdown 可读形态，尚未做图片理解、表格结构化节点或 OCR 稳定支持
 
@@ -163,7 +189,8 @@
 - 当当前不存在任何已 `INDEXED` 的可问答版本时，新版本成功提示不显示“去问答”入口，并应明确提示“当前暂无可问答版本，请等待处理完成”
 - 新版本创建成功后，不单独提供“继续查看当前版本详情”动作；当前详情页已默认停留在新最新版本视图
 - UI 默认只展示 `document` 的最新版本，版本历史放在详情或治理页
-- 旧版本仅对目标 `document` 具备管理权限的用户保留与可见，普通用户不可见
+- 旧版本仅对目标 `document` 具备管理权限的用户保留与可见，普通用户不可浏览版本历史
+- 当问答基线临时落在旧的已 `INDEXED` 版本时，`KB_READER` 可查看该问答基线版本的正文，但这不是开放版本历史浏览能力
 - `document` 软删除后，重新上传同内容应生成新的 `documentId`
 - 删除确认必须明确告知：删除后同内容重新上传会生成新的 `documentId`
 - 旧 `documentId` 入口失效等派生影响不进入删除确认主文案，可由次级说明或后续结果提示承接
@@ -216,7 +243,7 @@
 - 同一 `document` 在任一时刻只允许一个治理动作进入执行态；治理动作包括上传新版本、版本回退、重处理、删除
 - 同一 `document` 的治理请求可以并发到达，但任一时刻只能有一个成功抢到执行资格，其余请求统一按状态变化或并发冲突拒绝
 - 问答不属于治理动作，不参与治理动作执行态互斥；但问答是否可用仍受当前 `document` 状态与问答基线规则约束
-- 文档旧版本仅允许对目标 `document` 具备管理权限的用户通过直接访问查看
+- 文档旧版本仅允许对目标 `document` 具备管理权限的用户通过直接访问查看；普通读者只能在旧版本成为当前问答基线时查看该基线版本正文
 - 版本回退与删除是两类不同治理动作：删除结束整个 `document` 资产，版本回退用于改变哪个版本成为当前最新版本
 - 版本回退应创建一个新的最新版本，其内容等同于被选中的历史版本，而不是直接改写既有版本链或回拨版本指针
 - 版本回退仅对具备目标 `document` 管理权限的用户开放
@@ -311,6 +338,25 @@
 - 查看历史版本时，详情页应提供“返回最新版本”快捷入口
 - 当最新版本处于 `FAILED` 时，详情页应提供“查看最近一个已 `INDEXED` 版本”或等价问答/查看快捷入口，但不将主视图自动回退到旧版本
 - 当最新版本处于 `FAILED` 且用户切换查看旧的已 `INDEXED` 版本时，详情页仍应同时明确：当前查看的是历史版本，系统当前认定的最新版本仍是失败的新最新版本
+- 文档详情页默认正文区应展示当前最新版本正文；若最新版本正文尚未生成，应展示“正文处理中”一类空态，不自动跳到旧版本正文
+- 当最新版本为 `FAILED` 且已形成 `cleaned.md` 时，详情页可展示失败版本正文，但必须同时提示处理失败状态
+- 问答引用侧栏打开文档正文时应展示问答基线版本正文，并在顶部展示版本号；若问答基线不是最新版本，应提示“当前问答基于 vN，最新版本为 vM”
+- 普通 `KB_READER` 的文档详情体验应保持只读：不显示版本历史入口、上传新版本、重处理、回退、删除或授权管理入口
+- 管理人员切换到历史版本正文时，详情页正文上方应稳定提示“当前正在查看历史版本 vN，最新版本为 vM；查看历史版本不会改变问答基线”，并提供“返回最新版本”入口
+- `CONTENT_NOT_READY` 前端应展示处理中空态，并提示稍后刷新
+- `CONTENT_ARTIFACT_MISSING` 前端对管理人员提示“正文产物缺失，请重处理或联系管理员”；对普通读者提示“正文暂不可用”
+- `CONTENT_TOO_LARGE` 前端应提示正文过大，当前版本暂不支持完整在线查看
+- 正文读取返回 `403` 时，前端不得展示正文区域内容
+- 正文渲染首期采用 Markdown 安全渲染和基础样式，不提供正文编辑、源文件原版预览或复杂目录联动
+- 源文件下载不进入当前阶段；正文查看不等于源文件下载，前端不展示源文件下载入口
+- 从问答引用侧栏跳转到文档详情页时，应保留问答上下文；若当前问答基线不是最新版本，详情页应提示“从问答引用进入，当前问答基于 vN”，但普通读者仍不能浏览任意历史版本
+- 文档版本正文读取后端测试至少覆盖：默认正文读取、问答基线正文读取、指定版本正文读取、普通读者禁止任意历史版本、`DELETED` 禁止正文读取、`CONTENT_NOT_READY`、`CONTENT_ARTIFACT_MISSING`、`CONTENT_TOO_LARGE`
+- 文档版本正文读取权限测试应覆盖 `WORKSPACE_ADMIN`、`KB_MANAGER`、`KB_CONTRIBUTOR`、`KB_READER`；`KB_ASKER` 不再作为新能力正向测试角色，仅保留必要兼容或迁移测试
+- 文档版本正文读取集成测试应重点验证“读到的是哪个版本”：latest 已 `INDEXED`、latest `INGESTING` 且旧版本已 `INDEXED`、latest `FAILED` 且有正文、指定历史版本管理读取
+- 版本处理产物存储测试应覆盖 key 包含 `workspaceId/documentId/versionNumber`、`source/...` 与 `artifacts/...` prefix 不混用、缺失 artifact 不触发源文件重解析
+- 前端测试应覆盖普通读者不显示版本历史与治理入口、问答侧栏版本提示、历史版本“不改变问答基线”提示、正文错误态文案和 `403` 不渲染正文
+- 文档版本正文读取验收样例应复用现有黄金样本链，并新增同一 `document` 的三版本场景：`v1 INDEXED`、`v2 INGESTING`、`v3 FAILED with cleaned.md`
+- E2E 纳入文档版本正文读取专项验收，但放在后端接口与前端单元/组件测试完成之后；首期 E2E 覆盖 `KB_READER` 从 QA 引用侧栏打开问答基线正文、`KB_MANAGER` 打开指定历史版本、`KB_READER` 不能通过 URL 直达历史版本正文
 - 失败版本经成功重处理后，应保持同一个版本号，仅更新该版本的处理状态，不因重处理成功额外生成新版本号
 - 上传成功后前端默认跳转到文档详情页
 - 文档详情页应提供重处理、删除、查看版本历史三个主操作入口
@@ -345,6 +391,7 @@
 - `document version` 应持久化可空的 `rollbackFromVersionNumber` 字段，用于表达回退产生的新版本源自哪个历史版本
 - `document version` 应持久化 `createdAt` 与 `updatedAt`
 - `document version` 应持久化版本级创建人/上传人字段
+- `document version` 是 `版本正文` 的归属边界；正文读取必须显式定位到 `documentId + versionNumber`
 - 回退操作者等更细粒度动作信息当前阶段优先通过审计事件查询，不额外在 `document version` 中单独持久化
 - 当前阶段“可问答”能力仍由处理状态与问答基线规则推导，不在 `document version` 中单独持久化 `askable` / `askableAt` 字段
 - 来源文件级字段如 `fileHash`、`filename`、`fileSize` 应下沉到 `document version`
@@ -429,24 +476,37 @@ chunk 是向量检索与引用展示的基本文本单元。
 
 ### 6.2 权限相关角色
 
+当前授权模型分三层：
+
+- 工作区角色决定用户是否拥有工作区级治理能力
+- 知识库角色决定成员在某个 `knowledge base` 内的默认能力
+- 文档覆盖权限用于处理少量文档级例外
+
+授权判断优先级：
+
+1. `WORKSPACE_OWNER` / `WORKSPACE_ADMIN` 拥有工作区内全量治理与资源访问能力
+2. `WORKSPACE_MEMBER` 必须继续命中知识库角色或文档覆盖权限
+3. `DOC_DENY` 用于拒绝普通成员访问特定文档
+4. 文档没有覆盖权限时，回退到知识库角色判断
+
 工作区角色：
 
-- `WORKSPACE_OWNER`
-- `WORKSPACE_ADMIN`
-- `WORKSPACE_MEMBER`
+- `WORKSPACE_OWNER`：工作区最终负责人，拥有成员治理、授权治理、审计查看和所有资源访问能力
+- `WORKSPACE_ADMIN`：工作区管理员，作为 owner 的治理代理，拥有工作区内全量管理能力
+- `WORKSPACE_MEMBER`：普通工作区成员，不默认拥有全部知识库或文档访问权，必须通过知识库角色或文档覆盖权限获得资源访问能力
 
 知识库角色：
 
-- `KB_MANAGER`
-- `KB_CONTRIBUTOR`
-- `KB_READER`
-- `KB_ASKER`
+- `KB_MANAGER`：知识库级最高角色，可管理知识库配置、成员授权、文档治理、版本历史、回退、删除、正文查看与问答
+- `KB_CONTRIBUTOR`：内容贡献角色，可上传、上传新版本、重处理、查看正文与问答，但不可管理授权、删除知识库或执行仅管理者可做的治理动作
+- `KB_READER`：普通只读角色，可问答、查看文档列表、查看问答基线版本正文和问答引用侧栏，不可上传、重处理、删除、回退、授权或浏览任意历史版本
+- `KB_ASKER`：废弃角色，不再作为新授权选项；后续迁移中应收敛到 `KB_READER` 或按兼容策略处理既有数据
 
 文档覆盖权限：
 
-- `DOC_ALLOW_READ`
-- `DOC_ALLOW_MANAGE`
-- `DOC_DENY`
+- `DOC_ALLOW_READ`：对单个 `document` 的只读例外授权，可让成员读取该文档当前可见正文和参与问答
+- `DOC_ALLOW_MANAGE`：对单个 `document` 的管理例外授权，可让成员管理该文档版本、重处理、回退、删除和查看历史版本，但不授予整个知识库的授权治理能力
+- `DOC_DENY`：对单个 `document` 的拒绝覆盖，用于从知识库授权范围中排除敏感文档
 
 讨论授权问题时，请使用这些权威枚举名，不要自造“编辑者”“浏览者”“超级管理员”等口语化替代词。
 
