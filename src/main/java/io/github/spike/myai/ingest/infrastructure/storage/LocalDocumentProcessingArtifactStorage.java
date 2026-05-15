@@ -4,7 +4,7 @@ import io.github.spike.myai.ingest.domain.model.DocumentId;
 import io.github.spike.myai.ingest.domain.model.DocumentParseResult;
 import io.github.spike.myai.ingest.domain.model.DocumentVersionArtifactContent;
 import io.github.spike.myai.ingest.domain.port.DocumentProcessingArtifactStorage;
-import io.github.spike.myai.ingest.application.exception.DocumentVersionArtifactTooLargeException;
+import io.github.spike.myai.ingest.domain.exception.DocumentVersionArtifactTooLargeException;
 import io.github.spike.myai.ingest.infrastructure.config.IngestProperties;
 import io.github.spike.myai.shared.workspace.WorkspaceConstants;
 import java.io.IOException;
@@ -13,6 +13,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.Optional;
+import java.util.stream.Stream;
 import org.springframework.stereotype.Component;
 
 /**
@@ -167,6 +168,30 @@ public class LocalDocumentProcessingArtifactStorage implements DocumentProcessin
         }
     }
 
+    /**
+     * 删除指定文档在 artifacts prefix 下的全部处理产物。
+     *
+     * <p>该方法只清理处理产物目录，不触碰 source prefix 下的源文件。
+     *
+     * @param workspaceId 工作区 ID
+     * @param documentId 文档资产 ID
+     */
+    @Override
+    public void deleteByDocumentId(String workspaceId, DocumentId documentId) {
+        Path artifactDirectory = rootDirectory
+                .resolve(DocumentStorageKeyResolver.ARTIFACTS_PREFIX)
+                .resolve(workspaceId)
+                .resolve("documents")
+                .resolve(documentId.value())
+                .normalize();
+        Path normalizedRoot = rootDirectory.toAbsolutePath().normalize();
+        Path normalizedTarget = artifactDirectory.toAbsolutePath().normalize();
+        if (!normalizedTarget.startsWith(normalizedRoot)) {
+            throw new IllegalStateException("invalid artifact directory path");
+        }
+        deleteDirectoryIfExists(normalizedTarget);
+    }
+
     private Path resolveArtifactDirectory(String workspaceId, DocumentId documentId, int versionNumber) {
         String artifactKey = keyResolver.resolveArtifactKey(
                 workspaceId,
@@ -178,6 +203,24 @@ public class LocalDocumentProcessingArtifactStorage implements DocumentProcessin
 
     private Path resolveKeyPath(String key) {
         return rootDirectory.resolve(Path.of(key)).normalize();
+    }
+
+    private static void deleteDirectoryIfExists(Path directory) {
+        if (Files.notExists(directory)) {
+            return;
+        }
+        try (Stream<Path> stream = Files.walk(directory)) {
+            // 按路径深度倒序删除，先删文件再删目录。
+            stream.sorted((a, b) -> b.getNameCount() - a.getNameCount()).forEach(path -> {
+                try {
+                    Files.deleteIfExists(path);
+                } catch (IOException ex) {
+                    throw new IllegalStateException("failed to delete processing artifact", ex);
+                }
+            });
+        } catch (IOException ex) {
+            throw new IllegalStateException("failed to delete processing artifact directory", ex);
+        }
     }
 
     /**

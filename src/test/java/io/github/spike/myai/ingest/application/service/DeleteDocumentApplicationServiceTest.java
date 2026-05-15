@@ -21,6 +21,7 @@ import io.github.spike.myai.ingest.application.monitoring.IngestMetrics;
 import io.github.spike.myai.ingest.domain.model.Document;
 import io.github.spike.myai.ingest.domain.model.DocumentId;
 import io.github.spike.myai.ingest.domain.model.UploadStatus;
+import io.github.spike.myai.ingest.domain.port.DocumentProcessingArtifactStorage;
 import io.github.spike.myai.ingest.domain.port.DocumentRepository;
 import io.github.spike.myai.ingest.domain.port.DocumentSourceStorage;
 import io.github.spike.myai.ingest.domain.port.DocumentVectorIndexer;
@@ -42,6 +43,7 @@ class DeleteDocumentApplicationServiceTest {
     void handle_shouldDeleteDocument_whenAllowed() {
         DocumentRepository repository = Mockito.mock(DocumentRepository.class);
         DocumentSourceStorage sourceStorage = Mockito.mock(DocumentSourceStorage.class);
+        DocumentProcessingArtifactStorage artifactStorage = Mockito.mock(DocumentProcessingArtifactStorage.class);
         DocumentVectorIndexer vectorIndexer = Mockito.mock(DocumentVectorIndexer.class);
         SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
         CurrentUserProvider currentUserProvider = currentUserProvider();
@@ -50,6 +52,7 @@ class DeleteDocumentApplicationServiceTest {
                 new DeleteDocumentApplicationService(
                         repository,
                         sourceStorage,
+                        artifactStorage,
                         vectorIndexer,
                         new IngestMetrics(meterRegistry),
                         currentUserProvider,
@@ -85,6 +88,7 @@ class DeleteDocumentApplicationServiceTest {
         service.handle(new DeleteDocumentCommand("doc-del-1"));
 
         verify(sourceStorage, times(1)).deleteByDocumentId(documentId);
+        verify(artifactStorage, times(1)).deleteByDocumentId("workspace-a", documentId);
         verify(vectorIndexer, times(1)).deleteByDocumentId(documentId);
         verify(repository, times(1)).markDeleted(anyString(), eq(documentId), any(Instant.class));
         verify(repository, never()).rollbackDeleting(anyString(), any(), any(), any());
@@ -98,6 +102,7 @@ class DeleteDocumentApplicationServiceTest {
     void handle_shouldKeepDeleteSuccess_whenAuditSaveFailed() {
         DocumentRepository repository = Mockito.mock(DocumentRepository.class);
         DocumentSourceStorage sourceStorage = Mockito.mock(DocumentSourceStorage.class);
+        DocumentProcessingArtifactStorage artifactStorage = Mockito.mock(DocumentProcessingArtifactStorage.class);
         DocumentVectorIndexer vectorIndexer = Mockito.mock(DocumentVectorIndexer.class);
         SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
         CurrentUserProvider currentUserProvider = currentUserProvider();
@@ -107,6 +112,7 @@ class DeleteDocumentApplicationServiceTest {
                 new DeleteDocumentApplicationService(
                         repository,
                         sourceStorage,
+                        artifactStorage,
                         vectorIndexer,
                         new IngestMetrics(meterRegistry),
                         currentUserProvider,
@@ -145,6 +151,7 @@ class DeleteDocumentApplicationServiceTest {
         verify(repository, times(1)).markDeleted(anyString(), eq(documentId), any(Instant.class));
         verify(repository, never()).rollbackDeleting(anyString(), any(), any(), any());
         verify(sourceStorage, times(1)).deleteByDocumentId(documentId);
+        verify(artifactStorage, times(1)).deleteByDocumentId("workspace-a", documentId);
         verify(vectorIndexer, times(1)).deleteByDocumentId(documentId);
     }
 
@@ -153,6 +160,7 @@ class DeleteDocumentApplicationServiceTest {
     void handle_shouldThrow_whenMissing() {
         DocumentRepository repository = Mockito.mock(DocumentRepository.class);
         DocumentSourceStorage sourceStorage = Mockito.mock(DocumentSourceStorage.class);
+        DocumentProcessingArtifactStorage artifactStorage = Mockito.mock(DocumentProcessingArtifactStorage.class);
         DocumentVectorIndexer vectorIndexer = Mockito.mock(DocumentVectorIndexer.class);
         SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
         CurrentUserProvider currentUserProvider = currentUserProvider();
@@ -161,6 +169,7 @@ class DeleteDocumentApplicationServiceTest {
                 new DeleteDocumentApplicationService(
                         repository,
                         sourceStorage,
+                        artifactStorage,
                         vectorIndexer,
                         new IngestMetrics(meterRegistry),
                         currentUserProvider,
@@ -176,6 +185,7 @@ class DeleteDocumentApplicationServiceTest {
     void handle_shouldThrowConflict_whenIngesting() {
         DocumentRepository repository = Mockito.mock(DocumentRepository.class);
         DocumentSourceStorage sourceStorage = Mockito.mock(DocumentSourceStorage.class);
+        DocumentProcessingArtifactStorage artifactStorage = Mockito.mock(DocumentProcessingArtifactStorage.class);
         DocumentVectorIndexer vectorIndexer = Mockito.mock(DocumentVectorIndexer.class);
         SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
         CurrentUserProvider currentUserProvider = currentUserProvider();
@@ -184,6 +194,7 @@ class DeleteDocumentApplicationServiceTest {
                 new DeleteDocumentApplicationService(
                         repository,
                         sourceStorage,
+                        artifactStorage,
                         vectorIndexer,
                         new IngestMetrics(meterRegistry),
                         currentUserProvider,
@@ -227,6 +238,7 @@ class DeleteDocumentApplicationServiceTest {
     void handle_shouldThrowConflict_whenUploaded() {
         DocumentRepository repository = Mockito.mock(DocumentRepository.class);
         DocumentSourceStorage sourceStorage = Mockito.mock(DocumentSourceStorage.class);
+        DocumentProcessingArtifactStorage artifactStorage = Mockito.mock(DocumentProcessingArtifactStorage.class);
         DocumentVectorIndexer vectorIndexer = Mockito.mock(DocumentVectorIndexer.class);
         SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
         CurrentUserProvider currentUserProvider = currentUserProvider();
@@ -235,6 +247,7 @@ class DeleteDocumentApplicationServiceTest {
                 new DeleteDocumentApplicationService(
                         repository,
                         sourceStorage,
+                        artifactStorage,
                         vectorIndexer,
                         new IngestMetrics(meterRegistry),
                         currentUserProvider,
@@ -270,6 +283,7 @@ class DeleteDocumentApplicationServiceTest {
 
         verify(repository, never()).markDeleting(anyString(), any(), any(), any());
         verify(sourceStorage, never()).deleteByDocumentId(any());
+        verify(artifactStorage, never()).deleteByDocumentId(anyString(), any());
         verify(vectorIndexer, never()).deleteByDocumentId(any());
         verify(authorizationService).requireCanManageDocument(any(CurrentUser.class), eq("doc-del-uploaded"), eq("kb-1"));
         org.junit.jupiter.api.Assertions.assertEquals(
@@ -281,6 +295,7 @@ class DeleteDocumentApplicationServiceTest {
     void handle_shouldThrowStaleLatestVersion_whenExpectedVersionStale() {
         DocumentRepository repository = Mockito.mock(DocumentRepository.class);
         DocumentSourceStorage sourceStorage = Mockito.mock(DocumentSourceStorage.class);
+        DocumentProcessingArtifactStorage artifactStorage = Mockito.mock(DocumentProcessingArtifactStorage.class);
         DocumentVectorIndexer vectorIndexer = Mockito.mock(DocumentVectorIndexer.class);
         SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
         CurrentUserProvider currentUserProvider = currentUserProvider();
@@ -289,6 +304,7 @@ class DeleteDocumentApplicationServiceTest {
                 new DeleteDocumentApplicationService(
                         repository,
                         sourceStorage,
+                        artifactStorage,
                         vectorIndexer,
                         new IngestMetrics(meterRegistry),
                         currentUserProvider,
@@ -332,6 +348,7 @@ class DeleteDocumentApplicationServiceTest {
     void handle_shouldRollback_whenDeleteFailed() {
         DocumentRepository repository = Mockito.mock(DocumentRepository.class);
         DocumentSourceStorage sourceStorage = Mockito.mock(DocumentSourceStorage.class);
+        DocumentProcessingArtifactStorage artifactStorage = Mockito.mock(DocumentProcessingArtifactStorage.class);
         DocumentVectorIndexer vectorIndexer = Mockito.mock(DocumentVectorIndexer.class);
         SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
         CurrentUserProvider currentUserProvider = currentUserProvider();
@@ -340,6 +357,7 @@ class DeleteDocumentApplicationServiceTest {
                 new DeleteDocumentApplicationService(
                         repository,
                         sourceStorage,
+                        artifactStorage,
                         vectorIndexer,
                         new IngestMetrics(meterRegistry),
                         currentUserProvider,

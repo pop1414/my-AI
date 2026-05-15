@@ -1,10 +1,10 @@
-package io.github.spike.myai.ingest.application.exception;
+package io.github.spike.myai.ingest.domain.exception;
 
 /**
  * 文档版本处理产物超过读取上限异常。
  *
  * <p>正文读取链路使用该稳定异常区分“产物存在但过大”的业务分支，
- * 供 REST 层后续映射为 {@code CONTENT_TOO_LARGE}。
+ * 供上层映射为 {@code CONTENT_TOO_LARGE}。
  */
 public class DocumentVersionArtifactTooLargeException extends RuntimeException {
 

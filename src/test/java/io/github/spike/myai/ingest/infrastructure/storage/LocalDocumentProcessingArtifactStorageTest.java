@@ -8,8 +8,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import io.github.spike.myai.ingest.domain.model.DocumentId;
 import io.github.spike.myai.ingest.domain.model.DocumentParseResult;
 import io.github.spike.myai.ingest.domain.model.DocumentVersionArtifactContent;
+import io.github.spike.myai.ingest.domain.exception.DocumentVersionArtifactTooLargeException;
 import io.github.spike.myai.ingest.domain.port.DocumentProcessingArtifactStorage;
-import io.github.spike.myai.ingest.application.exception.DocumentVersionArtifactTooLargeException;
 import io.github.spike.myai.ingest.infrastructure.config.IngestProperties;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -131,5 +131,33 @@ class LocalDocumentProcessingArtifactStorageTest {
 
         assertEquals(6, exception.contentLength());
         assertEquals(5, exception.maxBytes());
+    }
+
+    @Test
+    @DisplayName("删除文档 artifact 时只应清理 artifacts prefix，不应影响 source prefix")
+    void deleteByDocumentId_shouldDeleteOnlyArtifactsPrefix() throws Exception {
+        IngestProperties properties = new IngestProperties();
+        properties.getStorage().setRootDir(tempDir.toString());
+        LocalDocumentProcessingArtifactStorage storage = new LocalDocumentProcessingArtifactStorage(properties);
+        DocumentId documentId = new DocumentId("doc-artifact-delete");
+        storage.saveVersion("workspace-1", documentId, 1, new DocumentParseResult("raw", "html", "content", "{}"));
+        Path sourceDirectory = tempDir
+                .resolve("source")
+                .resolve("workspace-1")
+                .resolve("documents")
+                .resolve("doc-artifact-delete")
+                .resolve("versions")
+                .resolve("1");
+        Files.createDirectories(sourceDirectory);
+        Files.writeString(sourceDirectory.resolve("origin.pdf"), "source");
+
+        storage.deleteByDocumentId("workspace-1", documentId);
+
+        assertFalse(Files.exists(tempDir
+                .resolve("artifacts")
+                .resolve("workspace-1")
+                .resolve("documents")
+                .resolve("doc-artifact-delete")));
+        assertTrue(Files.exists(sourceDirectory.resolve("origin.pdf")));
     }
 }

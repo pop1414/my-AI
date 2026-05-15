@@ -1,6 +1,6 @@
 package io.github.spike.myai.ingest.domain.port;
 
-import io.github.spike.myai.ingest.application.exception.DocumentVersionArtifactTooLargeException;
+import io.github.spike.myai.ingest.domain.exception.DocumentVersionArtifactTooLargeException;
 import io.github.spike.myai.ingest.domain.model.DocumentId;
 import io.github.spike.myai.ingest.domain.model.DocumentParseResult;
 import io.github.spike.myai.ingest.domain.model.DocumentVersionArtifactContent;
@@ -79,4 +79,15 @@ public interface DocumentProcessingArtifactStorage {
             int versionNumber,
             String artifactName,
             long maxBytes);
+
+    /**
+     * 删除文档资产对应的全部处理产物。
+     *
+     * <p>删除文档时需要同步清理 artifacts prefix 下的正文产物，
+     * 避免源文件已删除但 cleaned.md 仍可被路径命中。
+     *
+     * @param workspaceId 工作区 ID
+     * @param documentId 文档资产 ID
+     */
+    void deleteByDocumentId(String workspaceId, DocumentId documentId);
 }

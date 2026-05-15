@@ -66,7 +66,7 @@ public class LocalDocumentSourceStorage implements DocumentSourceStorage {
      * <p>实现细节：
      * <ol>
      *   <li>对文件名进行安全清洗（去除路径分隔符）；</li>
-     *   <li>创建目录结构 {@code {root}/{documentId}/}；</li>
+     *   <li>创建目录结构 {@code {root}/source/{workspaceId}/documents/{documentId}/versions/1/}；</li>
      *   <li>幂等写入：文件已存在时静默跳过，不覆盖已有内容。</li>
      * </ol>
      *
@@ -94,7 +94,7 @@ public class LocalDocumentSourceStorage implements DocumentSourceStorage {
      *
      * <p>实现与 {@link #save(DocumentId, String, byte[])} 一致，
      * 区别在于存储路径携带版本号子目录：
-     * {@code {root}/{documentId}/versions/{versionNumber}/{safeFilename}}。
+     * {@code {root}/source/{workspaceId}/documents/{documentId}/versions/{versionNumber}/{safeFilename}}。
      *
      * @param documentId   文档资产 ID
      * @param versionNumber 版本号
@@ -235,14 +235,14 @@ public class LocalDocumentSourceStorage implements DocumentSourceStorage {
     }
 
     /**
-     * 统一路径拼装入口。
+     * 读取旧版 document 级源文件路径。
      *
-     * <p>统一构造 {@code {root}/{documentId}/{safeFilename}} 格式的路径，
-     * 避免业务层直接拼接本地路径导致不一致。
+     * <p>该方法仅用于兼容迁移前写入到 {@code {root}/{documentId}/{safeFilename}}
+     * 的历史文件；新写入路径统一走 source prefix。
      *
      * @param documentId   文档资产 ID
-     * @param safeFilename 已清洗安全的文件名
-     * @return 最终文件路径
+     * @param filename 原始文件名
+     * @return 历史源文件字节，未命中时为空
      */
     private Optional<byte[]> loadLegacyDocumentFile(DocumentId documentId, String filename) throws IOException {
         Path legacyFilePath = rootDirectory.resolve(documentId.value()).resolve(sanitizeFilename(filename));
@@ -255,7 +255,8 @@ public class LocalDocumentSourceStorage implements DocumentSourceStorage {
     /**
      * 组装版本化源文件的本地存储路径。
      *
-     * <p>路径格式：{@code {root}/{documentId}/versions/{versionNumber}/{safeFilename}}。
+     * <p>路径格式：
+     * {@code {root}/source/{workspaceId}/documents/{documentId}/versions/{versionNumber}/{safeFilename}}。
      *
      * @param documentId   文档资产 ID
      * @param versionNumber 版本号
