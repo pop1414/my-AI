@@ -35,7 +35,7 @@ Accepted
 - `DELETED` 文档不开放正文读取，即使是管理人员也只允许查看终态和版本历史元数据。
 - 正文响应以 Markdown 为契约，字段名使用 `contentMarkdown`；首期返回完整正文但必须设置服务端最大读取大小。
 - 正文读取超出服务端最大读取大小时返回 `CONTENT_TOO_LARGE`，不得静默截断正文。
-- 源文件只作为下载、审计、重处理和原版预览来源，不作为正文读取默认来源；`vector_store` chunk 只作为检索与分块预览事实源，不作为完整正文事实源。
+- 源文件只作为审计、重处理和未来原版预览来源，不作为正文读取默认来源；当前阶段不提供源文件下载能力；`vector_store` chunk 只作为检索与分块预览事实源，不作为完整正文事实源。
 - 知识库已索引文档计数读取 `ingest_documents.latest_status`。
 - schema 自检同时校验主表 latest projection、旧兼容镜像列、version 事实列与 version 文件哈希索引。
 
