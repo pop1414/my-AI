@@ -3,9 +3,9 @@
 ## 拉取信息
 
 - 更新时间：2026-05-15
-- 拉取方式：基于当前仓库实现、本地回归结果与 GitHub issue 状态更新；#1、#2、#3、#4、#5、#6、#7、#8、#9、#10、#19、#20 已关闭，#11 本地验收通过并建议关闭，版本历史只读前后端基线、上传新版本前后端闭环、版本回退前后端链路、删除与列表版本语义前后端闭环、QA 版本链后端与问答页前端闭环已完成
+- 拉取方式：基于当前仓库实现、本地回归结果与 GitHub issue 状态更新；#1、#2、#3、#4、#5、#6、#7、#8、#9、#10、#19、#20 已关闭，#11 本地验收通过并建议关闭，#12 本地定向后端验收通过并建议关闭，版本历史只读前后端基线、上传新版本前后端闭环、版本回退前后端链路、删除与列表版本语义前后端闭环、QA 版本链前后端闭环、版本治理审计与冲突后端闭环已完成
 - 仓库：`pop1414/my-AI`
-- 范围：文档版本链相关 issues；#1、#2、#3、#4、#5、#6、#7、#8、#9、#10、#19、#20 已完成关闭，#11 已满足验收且可关闭，当前仍需推进 #12，并等待人工关闭 #11
+- 范围：文档版本链相关 issues；#1、#2、#3、#4、#5、#6、#7、#8、#9、#10、#19、#20 已完成关闭，#11 与 #12 已满足验收且可关闭，等待人工关闭
 
 ## 收口状态
 
@@ -22,6 +22,7 @@
 - #9 已按“删除确认与列表页版本语义前端”完成并关闭，收口说明见 `document-delete-list-version-semantics-frontend-closure.md`。
 - #10 已按“qa 可问答版本选择与引用版本化后端”完成并关闭：`POST /api/v1/qa/ask` 已返回版本化引用字段与 `staleReferences` 汇总。
 - #11 已按“问答页版本提示与引用版本展示前端”完成本地验收，建议关闭；收口说明见 `qa-reference-version-frontend-closure(#11).md`。
+- #12 已按“版本治理审计与冲突收口后端”完成本地定向后端验收，建议关闭；收口说明见 `document-version-governance-audit-conflict-closure(#12).md`。
 
 ## 总览
 
@@ -38,7 +39,7 @@
 | [#9](https://github.com/pop1414/my-AI/issues/9) | 删除确认与列表页版本语义前端 | CLOSED | `ready-for-agent` | #8 已完成 |
 | [#10](https://github.com/pop1414/my-AI/issues/10) | qa 可问答版本选择与引用版本化后端 | CLOSED | `ready-for-agent` | #1 已完成, #19 已完成 |
 | [#11](https://github.com/pop1414/my-AI/issues/11) | 问答页版本提示与引用版本展示前端 | OPEN（可关闭） | `ready-for-agent` | #10 已完成 |
-| [#12](https://github.com/pop1414/my-AI/issues/12) | 版本治理审计与冲突收口后端 | OPEN | `ready-for-agent` | #4 已完成, #6 已完成, #8 已完成 |
+| [#12](https://github.com/pop1414/my-AI/issues/12) | 版本治理审计与冲突收口后端 | OPEN（可关闭） | `ready-for-agent` | #4 已完成, #6 已完成, #8 已完成 |
 | [#19](https://github.com/pop1414/my-AI/issues/19) | 清理 document 主表旧版本事实字段与读写边界 | CLOSED | `ready-for-agent` | #1 已完成 |
 | [#20](https://github.com/pop1414/my-AI/issues/20) | 版本历史只读后端查询接口 | CLOSED | `ready-for-agent` | #1 已完成, #2 已完成 |
 
@@ -53,7 +54,7 @@
 7. #8 与 #9 已完成关闭；删除与列表版本语义已形成前后端闭环，后续无需再保留删除确认与列表反馈 blocker。
 8. #10 已完成关闭，QA 后端已覆盖按文档独立选择可问答版本、版本化引用字段、`staleReferences` 汇总和检索阶段权限边界。
 9. #11 已完成本地验收并建议关闭，问答页已接入引用版本卡片、stale reference 顶部提示、无引用兜底规则和控制台顶部入口；收口说明见 `qa-reference-version-frontend-closure(#11).md`。
-10. 最后用 #12 收口治理动作之间的互斥、业务错误码、审计事件和竞争场景测试；#12 的 #8 blocker 已解除，仍需统筹 #4/#6/#8 已落地行为。
+10. #12 已完成本地定向后端验收并建议关闭；上传新版本、版本回退、删除、重处理的互斥、业务错误码、审计事件和竞争场景测试已收口，说明见 `document-version-governance-audit-conflict-closure(#12).md`。
 
 ## Issue 摘要
 
@@ -284,7 +285,7 @@
 
 ### #11 问答页版本提示与引用版本展示前端
 
-状态：GitHub 当前仍 open；本地验收已通过，建议关闭。
+状态：GitHub 当前仍 open；本地定向后端验收已通过，建议关闭。
 
 目标是在问答页接入引用版本信息和 stale reference 提示。
 
@@ -307,6 +308,8 @@
 
 ### #12 版本治理审计与冲突收口后端
 
+状态：GitHub 当前仍 open；本地验收已通过，建议关闭。
+
 目标是为版本治理动作补齐审计与冲突收口。上传新版本、版本回退、删除、重处理等治理动作应具备一致的互斥、错误码和审计上下文。
 
 验收重点：
@@ -317,6 +320,17 @@
 - 审计事件包含版本号、目标版本号、版本来源类型、结果类型与乐观并发上下文。
 - 失败场景的业务错误码与服务端 message 进入审计扩展信息。
 - 审计与冲突测试覆盖上传新版本、版本回退、删除和重处理之间的竞争场景。
+
+收口说明：
+
+- 上传新版本与版本回退均通过 `expectedLatestVersionNumber`、latest 状态门禁和仓储 CAS 创建线性新版本，仅允许 latest 为 `INDEXED` / `FAILED` 时发起。
+- 删除拒绝 `UPLOADED`、`INGESTING`、`DELETING` 执行态；重处理只允许 `INDEXED` / `FAILED`，对 `INGESTING` 统一返回状态变化冲突。
+- 并发冲突错误码已区分：`VERSION_CONFLICT_STALE_LATEST_VERSION` 表示页面基于旧 latest 提交，`VERSION_CONFLICT_STATE_CHANGED` 表示 latest 未变但状态在 CAS 窗口内变化。
+- 上传新版本审计事件 `DOCUMENT_VERSION_UPLOAD_REQUESTED` 与版本回退审计事件 `DOCUMENT_VERSION_ROLLBACK_REQUESTED` 已独立记录版本号、目标版本号、来源类型、结果类型和乐观并发上下文。
+- 删除与重处理分别记录 `DOCUMENT_DELETE_REQUESTED`、`DOCUMENT_REPROCESS_REQUESTED`，失败审计扩展信息包含 `errorCode` 与 `errorMessage`。
+- 审计写入采用 best-effort 策略，审计仓储异常不反向改变主业务结果。
+- 已覆盖上传新版本、版本回退、删除、重处理的状态门禁、过期 latest、CAS 冲突、审计写入失败与失败上下文测试。
+- 收口说明位于 `docs/runbooks/plans/document-version-chain/document-version-governance-audit-conflict-closure(#12).md`。
 
 ### #19 清理 document 主表旧版本事实字段与读写边界
 
@@ -368,7 +382,7 @@
 
 ## 审阅提示
 
-- 先核对总览表中的标签与阻塞关系是否和 GitHub Issues 当前状态一致，尤其是 #1/#2/#3/#10/#19/#20 已关闭，#11 当前仍 open 但本地已可关闭。
+- 先核对总览表中的标签与阻塞关系是否和 GitHub Issues 当前状态一致，尤其是 #1/#2/#3/#10/#19/#20 已关闭，#11/#12 当前仍 open 但本地已可关闭。
 - 再按 #19、#20、#3、后端功能 issues、后续前端 issues、#12 的顺序审阅，确认执行顺序是否符合“后端契约先稳定，前端再接入”的原则。
-- 特别检查 #19 是否足以阻止后续代码继续依赖主表旧版本事实字段，#20 是否足以支撑 #3 不靠 mock 或临时接口推进，#10/#11 是否足以支撑问答版本化引用、stale 提示和 PGVector 过滤兼容。
+- 特别检查 #19 是否足以阻止后续代码继续依赖主表旧版本事实字段，#20 是否足以支撑 #3 不靠 mock 或临时接口推进，#10/#11 是否足以支撑问答版本化引用、stale 提示和 PGVector 过滤兼容，#12 是否足以覆盖治理动作互斥、冲突分类与审计上下文。
 - 最后检查每个 issue 的验收重点是否足够指导后续领取任务；如果 GitHub issue 后续有更新，应重新拉取并更新本快照。
