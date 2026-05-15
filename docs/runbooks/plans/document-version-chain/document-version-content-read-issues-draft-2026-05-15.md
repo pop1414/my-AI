@@ -89,7 +89,7 @@ GitHub Issue：[#23](https://github.com/pop1414/my-AI/issues/23)
 
 Type：AFK
 
-Blocked by：DVCR-01
+Blocked by：#22
 
 User stories covered：8、13、14、15、16、17、23、24、25、26
 
@@ -117,7 +117,7 @@ latest 正文读取必须忠实表达 latest 状态：latest `INGESTING` 且正�
 
 #### Blocked by
 
-- DVCR-01
+- #22
 
 ### DVCR-03 统一正文接口 source=ASKABLE_BASELINE 后端契约
 
@@ -125,7 +125,7 @@ GitHub Issue：[#24](https://github.com/pop1414/my-AI/issues/24)
 
 Type：AFK
 
-Blocked by：DVCR-01、DVCR-02
+Blocked by：#22、#23
 
 User stories covered：1、2、3、6、13、22、23、24、25、26、27
 
@@ -152,8 +152,8 @@ PRD #21：文档版本正文读取专项
 
 #### Blocked by
 
-- DVCR-01
-- DVCR-02
+- #22
+- #23
 
 ### DVCR-04 统一正文接口 source=EXPLICIT_VERSION 权限与错误映射
 
@@ -161,7 +161,7 @@ GitHub Issue：[#25](https://github.com/pop1414/my-AI/issues/25)
 
 Type：AFK
 
-Blocked by：DVCR-01、DVCR-02
+Blocked by：#22、#23
 
 User stories covered：4、9、10、11、12、13、17、22、23、24、25、26
 
@@ -189,8 +189,8 @@ PRD #21：文档版本正文读取专项
 
 #### Blocked by
 
-- DVCR-01
-- DVCR-02
+- #22
+- #23
 
 ### DVCR-05 文档详情 latest 正文前端视图
 
@@ -198,7 +198,7 @@ GitHub Issue：[#26](https://github.com/pop1414/my-AI/issues/26)
 
 Type：AFK
 
-Blocked by：DVCR-02
+Blocked by：#23
 
 User stories covered：5、7、8、15、16、24、25、26
 
@@ -226,7 +226,7 @@ PRD #21：文档版本正文读取专项
 
 #### Blocked by
 
-- DVCR-02
+- #23
 
 ### DVCR-06 QA 引用侧栏 askable baseline 正文前端视图
 
@@ -234,7 +234,7 @@ GitHub Issue：[#27](https://github.com/pop1414/my-AI/issues/27)
 
 Type：AFK
 
-Blocked by：DVCR-03
+Blocked by：#24
 
 User stories covered：1、2、3、5、6、25、26、27
 
@@ -260,7 +260,7 @@ PRD #21：文档版本正文读取专项
 
 #### Blocked by
 
-- DVCR-03
+- #24
 
 ### DVCR-07 管理者历史版本正文前端视图
 
@@ -268,7 +268,7 @@ GitHub Issue：[#28](https://github.com/pop1414/my-AI/issues/28)
 
 Type：AFK
 
-Blocked by：DVCR-04、DVCR-05
+Blocked by：#25、#26
 
 User stories covered：4、9、10、11、12、25、26
 
@@ -294,8 +294,8 @@ PRD #21：文档版本正文读取专项
 
 #### Blocked by
 
-- DVCR-04
-- DVCR-05
+- #25
+- #26
 
 ### DVCR-08 正文读取后端契约与错误映射收口
 
@@ -303,7 +303,7 @@ GitHub Issue：[#29](https://github.com/pop1414/my-AI/issues/29)
 
 Type：AFK
 
-Blocked by：DVCR-02、DVCR-03、DVCR-04
+Blocked by：#23、#24、#25
 
 User stories covered：17、22、23、24、25、26
 
@@ -329,9 +329,9 @@ PRD #21：文档版本正文读取专项
 
 #### Blocked by
 
-- DVCR-02
-- DVCR-03
-- DVCR-04
+- #23
+- #24
+- #25
 
 ### DVCR-09 正文读取前端错误态与权限隐藏收口
 
@@ -339,7 +339,7 @@ GitHub Issue：[#30](https://github.com/pop1414/my-AI/issues/30)
 
 Type：AFK
 
-Blocked by：DVCR-05、DVCR-06、DVCR-07、DVCR-08
+Blocked by：#26、#27、#28、#29
 
 User stories covered：5、6、7、12、28
 
@@ -365,10 +365,10 @@ PRD #21：文档版本正文读取专项
 
 #### Blocked by
 
-- DVCR-05
-- DVCR-06
-- DVCR-07
-- DVCR-08
+- #26
+- #27
+- #28
+- #29
 
 ### DVCR-10 文档版本正文读取 E2E 专项验收
 
@@ -376,7 +376,7 @@ GitHub Issue：[#31](https://github.com/pop1414/my-AI/issues/31)
 
 Type：AFK
 
-Blocked by：DVCR-09
+Blocked by：#30
 
 User stories covered：1、3、4、8、9、10、16、29、30
 
@@ -403,7 +403,7 @@ PRD #21：文档版本正文读取专项
 
 #### Blocked by
 
-- DVCR-09
+- #30
 
 ## 审阅提示
 
