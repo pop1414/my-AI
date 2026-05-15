@@ -5,7 +5,7 @@
 - 生成日期：2026-05-15
 - 来源 PRD：`docs/runbooks/plans/document-version-chain/document-version-content-read-prd.md`
 - 关联 PRD Issue：[#21 PRD: 文档版本正文读取专项](https://github.com/pop1414/my-AI/issues/21)
-- 当前状态：仅本地草案，尚未上传 GitHub
+- 当前状态：已上传 GitHub Issues
 - 目标标签：上传 GitHub 时建议使用 `ready-for-agent`
 
 ## 拆分原则
@@ -17,18 +17,18 @@
 
 ## 总览
 
-| 本地编号 | 标题 | 类型 | 建议标签 | 阻塞 |
-| --- | --- | --- | --- | --- |
-| DVCR-01 | 版本正文 artifact storage port 与 key resolver 后端基线 | AFK | `ready-for-agent` | 无 |
-| DVCR-02 | latest 正文读取后端端到端契约 | AFK | `ready-for-agent` | DVCR-01 |
-| DVCR-03 | askable baseline 正文读取后端端到端契约 | AFK | `ready-for-agent` | DVCR-01, DVCR-02 |
-| DVCR-04 | 显式版本正文读取后端权限与错误映射 | AFK | `ready-for-agent` | DVCR-01, DVCR-02 |
-| DVCR-05 | 文档详情 latest 正文前端视图 | AFK | `ready-for-agent` | DVCR-02 |
-| DVCR-06 | QA 引用侧栏 askable baseline 正文前端视图 | AFK | `ready-for-agent` | DVCR-03 |
-| DVCR-07 | 管理者历史版本正文前端视图 | AFK | `ready-for-agent` | DVCR-04, DVCR-05 |
-| DVCR-08 | 正文读取后端契约与错误映射收口 | AFK | `ready-for-agent` | DVCR-02, DVCR-03, DVCR-04 |
-| DVCR-09 | 正文读取前端错误态与权限隐藏收口 | AFK | `ready-for-agent` | DVCR-05, DVCR-06, DVCR-07, DVCR-08 |
-| DVCR-10 | 文档版本正文读取 E2E 专项验收 | AFK | `ready-for-agent` | DVCR-09 |
+| 本地编号 | GitHub Issue | 标题 | 类型 | 标签 | 阻塞 |
+| --- | --- | --- | --- | --- | --- |
+| DVCR-01 | [#22](https://github.com/pop1414/my-AI/issues/22) | 版本正文 artifact storage port 与 key resolver 后端基线 | AFK | `ready-for-agent` | 无 |
+| DVCR-02 | [#23](https://github.com/pop1414/my-AI/issues/23) | latest 正文读取后端端到端契约 | AFK | `ready-for-agent` | #22 |
+| DVCR-03 | [#24](https://github.com/pop1414/my-AI/issues/24) | askable baseline 正文读取后端端到端契约 | AFK | `ready-for-agent` | #22, #23 |
+| DVCR-04 | [#25](https://github.com/pop1414/my-AI/issues/25) | 显式版本正文读取后端权限与错误映射 | AFK | `ready-for-agent` | #22, #23 |
+| DVCR-05 | [#26](https://github.com/pop1414/my-AI/issues/26) | 文档详情 latest 正文前端视图 | AFK | `ready-for-agent` | #23 |
+| DVCR-06 | [#27](https://github.com/pop1414/my-AI/issues/27) | QA 引用侧栏 askable baseline 正文前端视图 | AFK | `ready-for-agent` | #24 |
+| DVCR-07 | [#28](https://github.com/pop1414/my-AI/issues/28) | 管理者历史版本正文前端视图 | AFK | `ready-for-agent` | #25, #26 |
+| DVCR-08 | [#29](https://github.com/pop1414/my-AI/issues/29) | 正文读取后端契约与错误映射收口 | AFK | `ready-for-agent` | #23, #24, #25 |
+| DVCR-09 | [#30](https://github.com/pop1414/my-AI/issues/30) | 正文读取前端错误态与权限隐藏收口 | AFK | `ready-for-agent` | #26, #27, #28, #29 |
+| DVCR-10 | [#31](https://github.com/pop1414/my-AI/issues/31) | 文档版本正文读取 E2E 专项验收 | AFK | `ready-for-agent` | #30 |
 
 ## 建议执行顺序
 
@@ -43,6 +43,8 @@
 ## Issue 草案
 
 ### DVCR-01 版本正文 artifact storage port 与 key resolver 后端基线
+
+GitHub Issue：[#22](https://github.com/pop1414/my-AI/issues/22)
 
 Type：AFK
 
@@ -74,6 +76,8 @@ PRD #21：文档版本正文读取专项
 None - can start immediately
 
 ### DVCR-02 latest 正文读取后端端到端契约
+
+GitHub Issue：[#23](https://github.com/pop1414/my-AI/issues/23)
 
 Type：AFK
 
@@ -107,6 +111,8 @@ latest 正文读取必须忠实表达 latest 状态：latest `INGESTING` 且正�
 - DVCR-01
 
 ### DVCR-03 askable baseline 正文读取后端端到端契约
+
+GitHub Issue：[#24](https://github.com/pop1414/my-AI/issues/24)
 
 Type：AFK
 
@@ -142,6 +148,8 @@ PRD #21：文档版本正文读取专项
 
 ### DVCR-04 显式版本正文读取后端权限与错误映射
 
+GitHub Issue：[#25](https://github.com/pop1414/my-AI/issues/25)
+
 Type：AFK
 
 Blocked by：DVCR-01、DVCR-02
@@ -175,6 +183,8 @@ PRD #21：文档版本正文读取专项
 - DVCR-02
 
 ### DVCR-05 文档详情 latest 正文前端视图
+
+GitHub Issue：[#26](https://github.com/pop1414/my-AI/issues/26)
 
 Type：AFK
 
@@ -210,6 +220,8 @@ PRD #21：文档版本正文读取专项
 
 ### DVCR-06 QA 引用侧栏 askable baseline 正文前端视图
 
+GitHub Issue：[#27](https://github.com/pop1414/my-AI/issues/27)
+
 Type：AFK
 
 Blocked by：DVCR-03
@@ -241,6 +253,8 @@ PRD #21：文档版本正文读取专项
 - DVCR-03
 
 ### DVCR-07 管理者历史版本正文前端视图
+
+GitHub Issue：[#28](https://github.com/pop1414/my-AI/issues/28)
 
 Type：AFK
 
@@ -274,6 +288,8 @@ PRD #21：文档版本正文读取专项
 - DVCR-05
 
 ### DVCR-08 正文读取后端契约与错误映射收口
+
+GitHub Issue：[#29](https://github.com/pop1414/my-AI/issues/29)
 
 Type：AFK
 
@@ -309,6 +325,8 @@ PRD #21：文档版本正文读取专项
 
 ### DVCR-09 正文读取前端错误态与权限隐藏收口
 
+GitHub Issue：[#30](https://github.com/pop1414/my-AI/issues/30)
+
 Type：AFK
 
 Blocked by：DVCR-05、DVCR-06、DVCR-07、DVCR-08
@@ -343,6 +361,8 @@ PRD #21：文档版本正文读取专项
 - DVCR-08
 
 ### DVCR-10 文档版本正文读取 E2E 专项验收
+
+GitHub Issue：[#31](https://github.com/pop1414/my-AI/issues/31)
 
 Type：AFK
 
@@ -383,4 +403,4 @@ PRD #21：文档版本正文读取专项
 - 检查 DVCR-08 是否只处理后端契约与错误映射，不夹带前端页面实现。
 - 检查 DVCR-09 是否只处理前端错误态、权限隐藏和文案，不夹带后端 endpoint 实现。
 - 检查 DVCR-10 的 E2E 是否只做端到端验收，不替代后端和前端低层测试。
-- 如果后续上传 GitHub，建议按总览表顺序发布，并把本地 `DVCR-*` 编号替换成真实 issue 编号。
+- GitHub Issues 已按总览表顺序发布；后续执行时以真实 issue 编号为协作入口，本地 `DVCR-*` 编号仅作为专题内排序辅助。
