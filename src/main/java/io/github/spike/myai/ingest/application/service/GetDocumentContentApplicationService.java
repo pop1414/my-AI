@@ -3,6 +3,7 @@ package io.github.spike.myai.ingest.application.service;
 import io.github.spike.myai.auth.application.context.CurrentUser;
 import io.github.spike.myai.auth.application.context.CurrentUserProvider;
 import io.github.spike.myai.auth.application.service.AuthorizationService;
+import io.github.spike.myai.ingest.application.query.DocumentContentSource;
 import io.github.spike.myai.ingest.application.query.GetDocumentContentQuery;
 import io.github.spike.myai.ingest.application.result.DocumentContentResult;
 import io.github.spike.myai.ingest.application.usecase.GetDocumentContentUseCase;
@@ -22,17 +23,14 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 
 /**
- * 文档 latest 正文读取应用服务。
+ * 文档正文读取应用服务。
  *
- * <p>该服务固定读取目标 document 当前 latest version 的 {@code cleaned.md}，
- * 用于文档详情默认正文视图。latest 未生成正文时返回 {@code CONTENT_NOT_READY}，
- * 不自动回退到旧版本。
+ * <p>该服务按 {@link DocumentContentSource} 选择版本级 {@code cleaned.md}：
+ * {@code LATEST} 固定读取当前最新版本；{@code ASKABLE_BASELINE} 读取当前 QA
+ * 可问答基线版本。正文读取只读版本事实和 artifact，不改变后续问答基线。
  */
 @Service
 public class GetDocumentContentApplicationService implements GetDocumentContentUseCase {
-
-    /** 正文来源：当前最新版本。 */
-    static final String SOURCE_LATEST = "LATEST";
 
     /** 文档仓储，用于读取 document latest projection 与 version fact */
     private final DocumentRepository documentRepository;
@@ -68,18 +66,18 @@ public class GetDocumentContentApplicationService implements GetDocumentContentU
     }
 
     /**
-     * 读取 document 当前 latest version 的 Markdown 正文。
+     * 按来源读取 document 的 Markdown 正文。
      *
      * <p>处理顺序：
      * <ol>
      *   <li>定位当前用户工作区内的 document；</li>
      *   <li>拒绝已删除 document，并校验正文读取权限；</li>
-     *   <li>读取 latest version fact，确保返回版本上下文字段来自版本事实；</li>
-     *   <li>读取版本级 {@code cleaned.md} 并按状态映射缺失或过大分支。</li>
+     *   <li>根据来源选择 latest version 或 askable baseline version；</li>
+     *   <li>读取版本级 {@code cleaned.md} 并按来源映射缺失或过大分支。</li>
      * </ol>
      *
      * @param query 正文读取查询
-     * @return latest 正文结果
+     * @return 正文结果
      */
     @Override
     public DocumentContentResult handle(GetDocumentContentQuery query) {
@@ -97,57 +95,106 @@ public class GetDocumentContentApplicationService implements GetDocumentContentU
         requireReadPermission(currentUser, document);
 
         int latestVersionNumber = document.latestVersionNumber();
-        DocumentVersion latestVersion = documentRepository.findVersionByNumber(
-                        currentUser.workspaceId(),
-                        documentId,
-                        latestVersionNumber)
-                .orElseThrow(() -> business(
-                        HttpStatus.INTERNAL_SERVER_ERROR,
-                        "CONTENT_ARTIFACT_MISSING",
-                        "latest version fact is missing: " + latestVersionNumber));
-
-        DocumentVersionArtifactContent content = loadLatestContent(currentUser, documentId, latestVersion);
         int askableVersionNumber = documentRepository.findLatestIndexedVersionNumber(currentUser.workspaceId(), documentId);
+        DocumentVersion selectedVersion = selectVersion(
+                currentUser,
+                documentId,
+                query.source(),
+                latestVersionNumber,
+                askableVersionNumber);
+
+        DocumentVersionArtifactContent content = loadContent(currentUser, documentId, selectedVersion, query.source());
 
         return new DocumentContentResult(
                 documentId.value(),
-                latestVersion.versionNumber(),
+                selectedVersion.versionNumber(),
                 latestVersionNumber,
-                true,
-                askableVersionNumber == latestVersion.versionNumber(),
-                SOURCE_LATEST,
-                latestVersion.status().name(),
-                latestVersion.filename(),
-                latestVersion.createdAt(),
-                latestVersion.updatedAt(),
+                selectedVersion.versionNumber() == latestVersionNumber,
+                askableVersionNumber == selectedVersion.versionNumber(),
+                query.source().name(),
+                selectedVersion.status().name(),
+                selectedVersion.filename(),
+                selectedVersion.createdAt(),
+                selectedVersion.updatedAt(),
                 content.content(),
                 content.contentLength(),
                 false);
     }
 
     /**
-     * 读取 latest version 的 {@code cleaned.md} 并映射稳定业务错误。
+     * 根据正文来源选择目标版本事实。
      *
      * @param currentUser   当前用户
      * @param documentId    文档资产 ID
-     * @param latestVersion latest version fact
-     * @return 正文 artifact 内容
+     * @param source        正文来源
+     * @param latestVersionNumber 当前 latest 版本号
+     * @param askableVersionNumber 当前可问答版本号；不存在时为 0
+     * @return 目标版本事实
      */
-    private DocumentVersionArtifactContent loadLatestContent(
+    private DocumentVersion selectVersion(
             CurrentUser currentUser,
             DocumentId documentId,
-            DocumentVersion latestVersion) {
+            DocumentContentSource source,
+            int latestVersionNumber,
+            int askableVersionNumber) {
+        if (source == DocumentContentSource.ASKABLE_BASELINE) {
+            if (askableVersionNumber == 0) {
+                throw contentNotReady();
+            }
+            return findVersionFact(currentUser, documentId, askableVersionNumber, "askable baseline");
+        }
+        return findVersionFact(currentUser, documentId, latestVersionNumber, "latest");
+    }
+
+    /**
+     * 读取版本事实，缺失时映射为稳定业务错误。
+     *
+     * @param currentUser   当前用户
+     * @param documentId    文档资产 ID
+     * @param versionNumber 版本号
+     * @param sourceLabel   错误信息中的版本来源标签
+     * @return 版本事实
+     */
+    private DocumentVersion findVersionFact(
+            CurrentUser currentUser,
+            DocumentId documentId,
+            int versionNumber,
+            String sourceLabel) {
+        return documentRepository.findVersionByNumber(
+                        currentUser.workspaceId(),
+                        documentId,
+                        versionNumber)
+                .orElseThrow(() -> business(
+                        HttpStatus.INTERNAL_SERVER_ERROR,
+                        "CONTENT_ARTIFACT_MISSING",
+                        sourceLabel + " version fact is missing: " + versionNumber));
+    }
+
+    /**
+     * 读取目标 version 的 {@code cleaned.md} 并映射稳定业务错误。
+     *
+     * @param currentUser 当前用户
+     * @param documentId  文档资产 ID
+     * @param version     目标 version fact
+     * @param source      正文来源
+     * @return 正文 artifact 内容
+     */
+    private DocumentVersionArtifactContent loadContent(
+            CurrentUser currentUser,
+            DocumentId documentId,
+            DocumentVersion version,
+            DocumentContentSource source) {
         try {
             Optional<DocumentVersionArtifactContent> content = artifactStorage.loadVersionArtifact(
                     currentUser.workspaceId(),
                     documentId,
-                    latestVersion.versionNumber(),
+                    version.versionNumber(),
                     DocumentProcessingArtifactStorage.CLEANED_MARKDOWN_ARTIFACT_NAME,
                     maxReadBytes);
             if (content.isPresent()) {
                 return content.get();
             }
-            throw missingContent(latestVersion);
+            throw missingContent(version, source);
         } catch (DocumentVersionArtifactTooLargeException ex) {
             throw business(
                     HttpStatus.PAYLOAD_TOO_LARGE,
@@ -157,16 +204,28 @@ public class GetDocumentContentApplicationService implements GetDocumentContentU
     }
 
     /**
-     * 根据 latest 状态区分“尚未生成正文”和“产物异常缺失”。
+     * 根据版本状态与正文来源区分“尚未生成正文”和“产物异常缺失”。
      *
-     * @param version latest version fact
+     * @param version 版本事实
+     * @param source  正文来源
      * @return 业务异常
      */
-    private static BusinessException missingContent(DocumentVersion version) {
-        if (version.status() == UploadStatus.UPLOADED || version.status() == UploadStatus.INGESTING) {
-            return business(HttpStatus.CONFLICT, "CONTENT_NOT_READY", "文档正文仍在生成中，请稍后重试");
+    private static BusinessException missingContent(DocumentVersion version, DocumentContentSource source) {
+        if (source == DocumentContentSource.ASKABLE_BASELINE
+                || version.status() == UploadStatus.UPLOADED
+                || version.status() == UploadStatus.INGESTING) {
+            return contentNotReady();
         }
         return business(HttpStatus.INTERNAL_SERVER_ERROR, "CONTENT_ARTIFACT_MISSING", "文档正文产物缺失，请联系管理员修复");
+    }
+
+    /**
+     * 构造正文未就绪业务异常。
+     *
+     * @return 业务异常
+     */
+    private static BusinessException contentNotReady() {
+        return business(HttpStatus.CONFLICT, "CONTENT_NOT_READY", "文档正文仍在生成中，请稍后重试");
     }
 
     /**

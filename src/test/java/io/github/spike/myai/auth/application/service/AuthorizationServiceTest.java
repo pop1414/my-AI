@@ -209,6 +209,46 @@ class AuthorizationServiceTest {
     }
 
     @Test
+    @DisplayName("工作区管理员应允许读取 askable baseline 正文且不查询授权表")
+    void requireCanReadDocument_shouldAllowWorkspaceAdminForAskableBaselineContent() {
+        CurrentUser user = currentUser(WorkspaceRole.WORKSPACE_ADMIN);
+
+        assertDoesNotThrow(() -> service.requireCanReadDocument(user, "doc-1", "kb-1"));
+        verify(grantRepository, never()).findDocumentPermission("default", "doc-1", "user-1");
+        verify(grantRepository, never()).findKnowledgeBaseRole("default", "kb-1", "user-1");
+    }
+
+    @Test
+    @DisplayName("KB_MANAGER、KB_CONTRIBUTOR、KB_READER 应允许读取 askable baseline 正文")
+    void requireCanReadDocument_shouldAllowReadableKnowledgeBaseRolesForAskableBaselineContent() {
+        CurrentUser user = currentUser(WorkspaceRole.WORKSPACE_MEMBER);
+        when(grantRepository.findDocumentPermission("default", "doc-1", "user-1")).thenReturn(Optional.empty());
+
+        when(grantRepository.findKnowledgeBaseRole("default", "kb-1", "user-1"))
+                .thenReturn(Optional.of(KnowledgeBaseRole.KB_MANAGER));
+        assertDoesNotThrow(() -> service.requireCanReadDocument(user, "doc-1", "kb-1"));
+
+        when(grantRepository.findKnowledgeBaseRole("default", "kb-1", "user-1"))
+                .thenReturn(Optional.of(KnowledgeBaseRole.KB_CONTRIBUTOR));
+        assertDoesNotThrow(() -> service.requireCanReadDocument(user, "doc-1", "kb-1"));
+
+        when(grantRepository.findKnowledgeBaseRole("default", "kb-1", "user-1"))
+                .thenReturn(Optional.of(KnowledgeBaseRole.KB_READER));
+        assertDoesNotThrow(() -> service.requireCanReadDocument(user, "doc-1", "kb-1"));
+    }
+
+    @Test
+    @DisplayName("KB_ASKER 只能问答，不能读取 askable baseline 正文")
+    void requireCanReadDocument_shouldDenyKbAskerForAskableBaselineContent() {
+        CurrentUser user = currentUser(WorkspaceRole.WORKSPACE_MEMBER);
+        when(grantRepository.findDocumentPermission("default", "doc-1", "user-1")).thenReturn(Optional.empty());
+        when(grantRepository.findKnowledgeBaseRole("default", "kb-1", "user-1"))
+                .thenReturn(Optional.of(KnowledgeBaseRole.KB_ASKER));
+
+        assertThrows(AccessDeniedException.class, () -> service.requireCanReadDocument(user, "doc-1", "kb-1"));
+    }
+
+    @Test
     @DisplayName("KB_ASKER 应允许成员在问答场景访问文档")
     void requireCanAskDocument_shouldFallbackToKnowledgeBaseAskGrant() {
         when(currentUserProvider.requireCurrentUser()).thenReturn(currentUser(WorkspaceRole.WORKSPACE_MEMBER));

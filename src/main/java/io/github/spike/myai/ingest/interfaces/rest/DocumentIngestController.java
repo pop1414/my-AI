@@ -10,6 +10,7 @@ import io.github.spike.myai.ingest.application.command.UploadNewDocumentVersionC
 import io.github.spike.myai.ingest.application.exception.DocumentDeleteConflictException;
 import io.github.spike.myai.ingest.application.exception.DocumentDeleteFailedException;
 import io.github.spike.myai.ingest.application.exception.DocumentNotFoundException;
+import io.github.spike.myai.ingest.application.query.DocumentContentSource;
 import io.github.spike.myai.ingest.application.query.GetDocumentChunksPreviewQuery;
 import io.github.spike.myai.ingest.application.query.GetDocumentContentQuery;
 import io.github.spike.myai.ingest.application.query.GetDocumentStatusQuery;
@@ -86,9 +87,6 @@ import org.springframework.web.server.ResponseStatusException;
 @RestController
 @RequestMapping("/api/v1/documents")
 public class DocumentIngestController {
-
-    /** 正文来源：当前最新版本。 */
-    private static final String CONTENT_SOURCE_LATEST = "LATEST";
 
     /**
      * 上传受理用例。控制器只依赖用例接口，不依赖具体实现，符合依赖倒置原则。
@@ -345,28 +343,41 @@ public class DocumentIngestController {
     }
 
     /**
-     * 查询文档 latest 正文。
+     * 查询文档正文。
      *
      * <p>接口契约：
      * <ul>
-     *     <li>路径：GET /api/v1/documents/{documentId}/content?source=LATEST</li>
-     *     <li>语义：固定读取当前 latest version 的 {@code cleaned.md}</li>
-     *     <li>latest 未生成正文时返回不可用错误，不自动回退旧版本</li>
+     *     <li>路径：GET /api/v1/documents/{documentId}/content?source=LATEST|ASKABLE_BASELINE</li>
+     *     <li>{@code LATEST}：固定读取当前 latest version 的 {@code cleaned.md}</li>
+     *     <li>{@code ASKABLE_BASELINE}：读取当前 QA 可问答基线版本的 {@code cleaned.md}</li>
      * </ul>
      *
      * @param documentId 文档资产 ID
-     * @param source     正文来源，当前仅支持 {@code LATEST}
-     * @return latest 正文响应
+     * @param source     正文来源
+     * @return 正文响应
      */
     @GetMapping(value = "/{documentId}/content", produces = MediaType.APPLICATION_JSON_VALUE)
     public DocumentContentResponse getContent(
             @PathVariable("documentId") String documentId,
             @RequestParam("source") String source) {
-        if (!CONTENT_SOURCE_LATEST.equals(source)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "source must be LATEST");
-        }
-        DocumentContentResult result = getDocumentContentUseCase.handle(new GetDocumentContentQuery(documentId));
+        DocumentContentSource contentSource = parseDocumentContentSource(source);
+        DocumentContentResult result = getDocumentContentUseCase.handle(new GetDocumentContentQuery(documentId, contentSource));
         return toDocumentContentResponse(result);
+    }
+
+    /**
+     * 解析正文来源参数。
+     *
+     * @param source HTTP 查询参数
+     * @return 应用层正文来源枚举
+     * @throws ResponseStatusException 当 source 非法时返回 400
+     */
+    private static DocumentContentSource parseDocumentContentSource(String source) {
+        try {
+            return DocumentContentSource.valueOf(source);
+        } catch (IllegalArgumentException | NullPointerException ex) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "source must be LATEST or ASKABLE_BASELINE", ex);
+        }
     }
 
     /**

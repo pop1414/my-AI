@@ -654,13 +654,54 @@ class DocumentIngestControllerTest {
         ArgumentCaptor<GetDocumentContentQuery> captor = ArgumentCaptor.forClass(GetDocumentContentQuery.class);
         verify(getDocumentContentUseCase).handle(captor.capture());
         org.junit.jupiter.api.Assertions.assertEquals("doc-content-1", captor.getValue().documentId());
+        org.junit.jupiter.api.Assertions.assertEquals(
+                io.github.spike.myai.ingest.application.query.DocumentContentSource.LATEST,
+                captor.getValue().source());
     }
 
     @Test
-    @DisplayName("正文查询 source 非 LATEST 时，应返回 400 且不调用用例")
-    void getContent_shouldReturnBadRequest_whenSourceUnsupported() throws Exception {
+    @DisplayName("askable baseline 正文查询成功时，应返回 ASKABLE_BASELINE 响应")
+    void getContent_shouldReturnAskableBaselineContent() throws Exception {
+        when(getDocumentContentUseCase.handle(any(GetDocumentContentQuery.class)))
+                .thenReturn(new DocumentContentResult(
+                        "doc-content-1",
+                        1,
+                        2,
+                        false,
+                        true,
+                        "ASKABLE_BASELINE",
+                        "INDEXED",
+                        "demo-v1.md",
+                        java.time.Instant.parse("2026-05-14T08:00:00Z"),
+                        java.time.Instant.parse("2026-05-14T08:05:00Z"),
+                        "# 基线正文",
+                        18L,
+                        false));
+
         mockMvc.perform(get("/api/v1/documents/{documentId}/content", "doc-content-1")
                         .param("source", "ASKABLE_BASELINE"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.documentId").value("doc-content-1"))
+                .andExpect(jsonPath("$.versionNumber").value(1))
+                .andExpect(jsonPath("$.latestVersionNumber").value(2))
+                .andExpect(jsonPath("$.isLatestVersion").value(false))
+                .andExpect(jsonPath("$.isAskableVersion").value(true))
+                .andExpect(jsonPath("$.source").value("ASKABLE_BASELINE"))
+                .andExpect(jsonPath("$.contentMarkdown").value("# 基线正文"));
+
+        ArgumentCaptor<GetDocumentContentQuery> captor = ArgumentCaptor.forClass(GetDocumentContentQuery.class);
+        verify(getDocumentContentUseCase).handle(captor.capture());
+        org.junit.jupiter.api.Assertions.assertEquals("doc-content-1", captor.getValue().documentId());
+        org.junit.jupiter.api.Assertions.assertEquals(
+                io.github.spike.myai.ingest.application.query.DocumentContentSource.ASKABLE_BASELINE,
+                captor.getValue().source());
+    }
+
+    @Test
+    @DisplayName("正文查询 source 非法时，应返回 400 且不调用用例")
+    void getContent_shouldReturnBadRequest_whenSourceUnsupported() throws Exception {
+        mockMvc.perform(get("/api/v1/documents/{documentId}/content", "doc-content-1")
+                        .param("source", "EXPLICIT_VERSION"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("BAD_REQUEST"));
 
