@@ -47,10 +47,34 @@ const IngestUploadPage = lazy(() =>
 		default: m.IngestUploadPage,
 	})),
 );
+const IngestDocumentDetailPage = lazy(() =>
+	import("../features/ingest/pages/IngestDocumentDetailPage").then((m) => ({
+		default: m.IngestDocumentDetailPage,
+	})),
+);
+const IngestDocumentVersionReadPage = lazy(() =>
+	import("../features/ingest/pages/IngestDocumentVersionReadPage").then((m) => ({
+		default: m.IngestDocumentVersionReadPage,
+	})),
+);
 const IngestStatusPage = lazy(() =>
 	import("../features/ingest/pages/IngestStatusPage").then((m) => ({
 		default: m.IngestStatusPage,
 	})),
+);
+const IngestDocumentDetailPrototypePage = lazy(() =>
+	import("../features/ingest/pages/IngestDocumentDetailPrototypePage").then(
+		(m) => ({
+			default: m.IngestDocumentDetailPrototypePage,
+		}),
+	),
+);
+const IngestDocumentVersionReadPrototypePage = lazy(() =>
+	import("../features/ingest/pages/IngestDocumentVersionReadPrototypePage").then(
+		(m) => ({
+			default: m.IngestDocumentVersionReadPrototypePage,
+		}),
+	),
 );
 const IngestChunksPreviewPage = lazy(() =>
 	import("../features/ingest/pages/IngestChunksPreviewPage").then((m) => ({
@@ -124,6 +148,22 @@ export function AppRoutes() {
 					<Route
 						path="ingest/documents/:documentId/status"
 						element={<IngestStatusPage />}
+					/>
+					<Route
+						path="ingest/documents/:documentId"
+						element={<IngestDocumentDetailPage />}
+					/>
+					<Route
+						path="ingest/documents/:documentId/versions/:versionNumber/read"
+						element={<IngestDocumentVersionReadPage />}
+					/>
+					<Route
+						path="ingest/documents/:documentId/prototype"
+						element={<IngestDocumentDetailPrototypePage />}
+					/>
+					<Route
+						path="ingest/documents/:documentId/versions/:versionNumber/prototype-read"
+						element={<IngestDocumentVersionReadPrototypePage />}
 					/>
 					<Route
 						path="ingest/documents/:documentId/chunks-preview"

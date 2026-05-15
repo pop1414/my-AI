@@ -7,6 +7,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
+import java.util.Arrays;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Stream;
@@ -86,6 +87,56 @@ public class LocalDocumentSourceStorage implements DocumentSourceStorage {
         }
     }
 
+    /**
+     * 保存指定版本的源文件到本地文件系统。
+     *
+     * <p>实现与 {@link #save(DocumentId, String, byte[])} 一致，
+     * 区别在于存储路径携带版本号子目录：
+     * {@code {root}/{documentId}/versions/{versionNumber}/{safeFilename}}。
+     *
+     * @param documentId   文档资产 ID
+     * @param versionNumber 版本号
+     * @param filename     原始文件名
+     * @param content      文件字节内容
+     */
+    @Override
+    public void saveVersion(DocumentId documentId, int versionNumber, String filename, byte[] content) {
+        saveVersionIfAbsent(documentId, versionNumber, filename, content);
+    }
+
+    /**
+     * 幂等保存指定版本的源文件，并区分本次是否真正创建文件。
+     *
+     * <p>如果目标版本文件已存在，会读取已有内容与本次内容做字节级比较：
+     * 内容一致时视为幂等命中并返回 {@code false}；内容不一致时说明出现并发候选版本冲突，
+     * 直接抛出异常，避免同一版本号路径被错误内容污染。
+     *
+     * @param documentId   文档资产 ID
+     * @param versionNumber 版本号
+     * @param filename     原始文件名
+     * @param content      文件字节内容
+     * @return 本次调用是否创建了新文件
+     */
+    @Override
+    public boolean saveVersionIfAbsent(DocumentId documentId, int versionNumber, String filename, byte[] content) {
+        String safeFilename = sanitizeFilename(filename);
+        Path filePath = resolveVersionFilePath(documentId, versionNumber, safeFilename);
+        try {
+            Files.createDirectories(filePath.getParent());
+            if (Files.exists(filePath)) {
+                byte[] existingContent = Files.readAllBytes(filePath);
+                if (!Arrays.equals(existingContent, content)) {
+                    throw new IllegalStateException(VERSION_SOURCE_CONTENT_CONFLICT_MESSAGE);
+                }
+                return false;
+            }
+            Files.write(filePath, content, StandardOpenOption.CREATE_NEW);
+            return true;
+        } catch (IOException ex) {
+            throw new IllegalStateException("failed to save version source file", ex);
+        }
+    }
+
     @Override
     public Optional<byte[]> load(DocumentId documentId, String filename) {
         String safeFilename = sanitizeFilename(filename);
@@ -114,6 +165,31 @@ public class LocalDocumentSourceStorage implements DocumentSourceStorage {
             }
         } catch (IOException ex) {
             throw new IllegalStateException("failed to load source file", ex);
+        }
+    }
+
+    /**
+     * 读取指定版本的源文件。
+     *
+     * <p>优先按版本路径精确读取；若版本路径下无文件，
+     * 则回退到 {@link #load(DocumentId, String)} 兼容历史数据。
+     *
+     * @param documentId   文档资产 ID
+     * @param versionNumber 版本号
+     * @param filename     原始文件名
+     * @return 文件字节数组，未命中时返回空
+     */
+    @Override
+    public Optional<byte[]> loadVersion(DocumentId documentId, int versionNumber, String filename) {
+        String safeFilename = sanitizeFilename(filename);
+        Path filePath = resolveVersionFilePath(documentId, versionNumber, safeFilename);
+        try {
+            if (Files.exists(filePath)) {
+                return Optional.of(Files.readAllBytes(filePath));
+            }
+            return load(documentId, filename);
+        } catch (IOException ex) {
+            throw new IllegalStateException("failed to load version source file", ex);
         }
     }
 
@@ -168,6 +244,24 @@ public class LocalDocumentSourceStorage implements DocumentSourceStorage {
      */
     private Path resolveFilePath(DocumentId documentId, String safeFilename) {
         return rootDirectory.resolve(documentId.value()).resolve(safeFilename);
+    }
+
+    /**
+     * 组装版本化源文件的本地存储路径。
+     *
+     * <p>路径格式：{@code {root}/{documentId}/versions/{versionNumber}/{safeFilename}}。
+     *
+     * @param documentId   文档资产 ID
+     * @param versionNumber 版本号
+     * @param safeFilename  已清洗的安全文件名
+     * @return 版本化文件的完整路径
+     */
+    private Path resolveVersionFilePath(DocumentId documentId, int versionNumber, String safeFilename) {
+        return rootDirectory
+                .resolve(documentId.value())
+                .resolve("versions")
+                .resolve(Integer.toString(versionNumber))
+                .resolve(safeFilename);
     }
 
     /**

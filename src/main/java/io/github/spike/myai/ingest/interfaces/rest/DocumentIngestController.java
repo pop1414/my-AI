@@ -5,24 +5,33 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.spike.myai.ingest.application.command.AcceptUploadCommand;
 import io.github.spike.myai.ingest.application.command.DeleteDocumentCommand;
 import io.github.spike.myai.ingest.application.command.ReprocessDocumentCommand;
+import io.github.spike.myai.ingest.application.command.RollbackDocumentVersionCommand;
+import io.github.spike.myai.ingest.application.command.UploadNewDocumentVersionCommand;
 import io.github.spike.myai.ingest.application.exception.DocumentDeleteConflictException;
 import io.github.spike.myai.ingest.application.exception.DocumentDeleteFailedException;
 import io.github.spike.myai.ingest.application.exception.DocumentNotFoundException;
 import io.github.spike.myai.ingest.application.query.GetDocumentChunksPreviewQuery;
 import io.github.spike.myai.ingest.application.query.GetDocumentStatusQuery;
+import io.github.spike.myai.ingest.application.query.ListDocumentVersionsQuery;
 import io.github.spike.myai.ingest.application.query.ListDocumentsQuery;
 import io.github.spike.myai.ingest.application.result.DocumentChunkPreviewItemResult;
 import io.github.spike.myai.ingest.application.result.DocumentChunksPreviewResult;
 import io.github.spike.myai.ingest.application.result.DocumentListItemResult;
 import io.github.spike.myai.ingest.application.result.DocumentListPageResult;
+import io.github.spike.myai.ingest.application.result.DocumentVersionRollbackResult;
+import io.github.spike.myai.ingest.application.result.DocumentVersionUploadResult;
 import io.github.spike.myai.ingest.application.usecase.AcceptUploadUseCase;
 import io.github.spike.myai.ingest.application.usecase.DeleteDocumentUseCase;
 import io.github.spike.myai.ingest.application.usecase.GetDocumentChunksPreviewUseCase;
 import io.github.spike.myai.ingest.application.usecase.GetDocumentStatusUseCase;
+import io.github.spike.myai.ingest.application.usecase.ListDocumentVersionsUseCase;
 import io.github.spike.myai.ingest.application.usecase.ListDocumentsUseCase;
 import io.github.spike.myai.ingest.application.usecase.ReprocessDocumentUseCase;
+import io.github.spike.myai.ingest.application.usecase.RollbackDocumentVersionUseCase;
+import io.github.spike.myai.ingest.application.usecase.UploadNewDocumentVersionUseCase;
 import io.github.spike.myai.ingest.application.result.DocumentStatusResult;
 import org.springframework.http.ResponseEntity;
+import io.github.spike.myai.ingest.domain.model.DocumentId;
 import io.github.spike.myai.ingest.domain.model.UploadTicket;
 import io.github.spike.myai.ingest.domain.port.DocumentSourceStorage;
 import io.github.spike.myai.ingest.interfaces.rest.dto.DocumentChunkPreviewItemResponse;
@@ -30,6 +39,10 @@ import io.github.spike.myai.ingest.interfaces.rest.dto.DocumentChunksPreviewResp
 import io.github.spike.myai.ingest.interfaces.rest.dto.DocumentListItemResponse;
 import io.github.spike.myai.ingest.interfaces.rest.dto.DocumentListPageResponse;
 import io.github.spike.myai.ingest.interfaces.rest.dto.DocumentStatusResponse;
+import io.github.spike.myai.ingest.interfaces.rest.dto.DocumentVersionHistoryItemResponse;
+import io.github.spike.myai.ingest.interfaces.rest.dto.DocumentVersionHistoryResponse;
+import io.github.spike.myai.ingest.interfaces.rest.dto.DocumentVersionRollbackResponse;
+import io.github.spike.myai.ingest.interfaces.rest.dto.DocumentVersionUploadResponse;
 import io.github.spike.myai.ingest.interfaces.rest.dto.UploadResponse;
 import io.github.spike.myai.knowledge.application.exception.KnowledgeBaseInactiveException;
 import io.github.spike.myai.knowledge.application.exception.KnowledgeBaseNotFoundException;
@@ -83,6 +96,10 @@ public class DocumentIngestController {
      */
     private final GetDocumentStatusUseCase getDocumentStatusUseCase;
     /**
+     * 文档版本历史查询用例。
+     */
+    private final ListDocumentVersionsUseCase listDocumentVersionsUseCase;
+    /**
      * 文档分块预览查询用例。
      */
     private final GetDocumentChunksPreviewUseCase getDocumentChunksPreviewUseCase;
@@ -94,6 +111,14 @@ public class DocumentIngestController {
      * 文档删除用例。
      */
     private final DeleteDocumentUseCase deleteDocumentUseCase;
+    /**
+     * 上传新版本用例。
+     */
+    private final UploadNewDocumentVersionUseCase uploadNewDocumentVersionUseCase;
+    /**
+     * 版本回退用例。
+     */
+    private final RollbackDocumentVersionUseCase rollbackDocumentVersionUseCase;
     /**
      * 文档源文件存储端口：用于保存上传文件的原始内容，供异步处理链路读取。
      */
@@ -112,9 +137,12 @@ public class DocumentIngestController {
      * @param acceptUploadUseCase            上传受理用例
      * @param listDocumentsUseCase           文档列表查询用例
      * @param getDocumentStatusUseCase       文档状态查询用例
+     * @param listDocumentVersionsUseCase    文档版本历史查询用例
      * @param getDocumentChunksPreviewUseCase 文档分块预览用例
      * @param reprocessDocumentUseCase       文档重处理用例
      * @param deleteDocumentUseCase          文档删除用例
+     * @param uploadNewDocumentVersionUseCase 上传新版本用例
+     * @param rollbackDocumentVersionUseCase 版本回退用例
      * @param documentSourceStorage          源文件存储端口
      * @param objectMapper                   Jackson JSON 映射器
      */
@@ -122,17 +150,23 @@ public class DocumentIngestController {
             AcceptUploadUseCase acceptUploadUseCase,
             ListDocumentsUseCase listDocumentsUseCase,
             GetDocumentStatusUseCase getDocumentStatusUseCase,
+            ListDocumentVersionsUseCase listDocumentVersionsUseCase,
             GetDocumentChunksPreviewUseCase getDocumentChunksPreviewUseCase,
             ReprocessDocumentUseCase reprocessDocumentUseCase,
             DeleteDocumentUseCase deleteDocumentUseCase,
+            UploadNewDocumentVersionUseCase uploadNewDocumentVersionUseCase,
+            RollbackDocumentVersionUseCase rollbackDocumentVersionUseCase,
             DocumentSourceStorage documentSourceStorage,
             ObjectMapper objectMapper) {
         this.acceptUploadUseCase = acceptUploadUseCase;
         this.listDocumentsUseCase = listDocumentsUseCase;
         this.getDocumentStatusUseCase = getDocumentStatusUseCase;
+        this.listDocumentVersionsUseCase = listDocumentVersionsUseCase;
         this.getDocumentChunksPreviewUseCase = getDocumentChunksPreviewUseCase;
         this.reprocessDocumentUseCase = reprocessDocumentUseCase;
         this.deleteDocumentUseCase = deleteDocumentUseCase;
+        this.uploadNewDocumentVersionUseCase = uploadNewDocumentVersionUseCase;
+        this.rollbackDocumentVersionUseCase = rollbackDocumentVersionUseCase;
         this.documentSourceStorage = documentSourceStorage;
         this.objectMapper = objectMapper;
     }
@@ -253,6 +287,125 @@ public class DocumentIngestController {
     }
 
     /**
+     * 查询文档版本历史。
+     *
+     * <p>接口契约：
+     * <ul>
+     *     <li>路径：GET /api/v1/documents/{documentId}/versions</li>
+     *     <li>排序：versionNumber DESC</li>
+     *     <li>权限：当前用户必须对目标文档具备管理权限</li>
+     * </ul>
+     *
+     * @param documentId 文档资产 ID
+     * @return 文档版本历史
+     */
+    @GetMapping(value = "/{documentId}/versions", produces = MediaType.APPLICATION_JSON_VALUE)
+    public DocumentVersionHistoryResponse listVersions(@PathVariable("documentId") String documentId) {
+        try {
+            var result = listDocumentVersionsUseCase.handle(new ListDocumentVersionsQuery(documentId));
+            return new DocumentVersionHistoryResponse(
+                    result.documentId(),
+                    result.sort(),
+                    result.versions().stream()
+                            .map(item -> new DocumentVersionHistoryItemResponse(
+                                    item.documentId(),
+                                    item.versionNumber(),
+                                    item.versionOriginType(),
+                                    item.rollbackFromVersionNumber(),
+                                    item.filename(),
+                                    item.fileSize(),
+                                    item.status(),
+                                    item.failureReason(),
+                                    item.createdByUserId(),
+                                    item.createdByDisplayName(),
+                                    item.createdAt(),
+                                    item.updatedAt(),
+                                    item.isLatestVersion(),
+                                    item.isAskableVersion()))
+                            .toList());
+        } catch (DocumentNotFoundException ex) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, ex.getMessage(), ex);
+        } catch (IllegalArgumentException ex) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, ex.getMessage(), ex);
+        }
+    }
+
+    /**
+     * 针对既有 document 上传新版本。
+     *
+     * <p>接口契约：
+     * <ul>
+     *     <li>路径：POST /api/v1/documents/{documentId}/versions</li>
+     *     <li>请求：multipart/form-data</li>
+     *     <li>参数：file（必填），expectedLatestVersionNumber（必填）</li>
+     * </ul>
+     */
+    @PostMapping(value = "/{documentId}/versions", consumes = MediaType.MULTIPART_FORM_DATA_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
+    public DocumentVersionUploadResponse uploadNewVersion(
+            @PathVariable("documentId") String documentId,
+            @RequestParam("file") MultipartFile file,
+            @RequestParam("expectedLatestVersionNumber") int expectedLatestVersionNumber) {
+        // 安全阀：文件为空时直接拦截，避免无效请求进入应用层
+        if (file.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "file must not be empty");
+        }
+
+        // 计算文件 SHA-256 哈希，供应用层做同内容幂等复用判断
+        String fileHash = calculateFileHash(file);
+        try {
+            // 组装命令对象并委派给应用层用例处理
+            DocumentVersionUploadResult result = uploadNewDocumentVersionUseCase.handle(
+                    new UploadNewDocumentVersionCommand(
+                            documentId,
+                            file.getOriginalFilename(),
+                            file.getSize(),
+                            fileHash,
+                            expectedLatestVersionNumber,
+                            file.getBytes()));
+            // 将应用层结果映射为 REST 响应 DTO
+            return toDocumentVersionUploadResponse(result);
+        } catch (IllegalArgumentException ex) {
+            // 参数校验异常 → 400
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, ex.getMessage(), ex);
+        } catch (IOException ex) {
+            // 文件读取异常 → 400
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "failed to read upload file", ex);
+        }
+    }
+
+    /**
+     * 将指定历史版本回退为新的最新版本。
+     *
+     * <p>接口契约：
+     * <ul>
+     *     <li>路径：POST /api/v1/documents/{documentId}/versions/{versionNumber}/rollback</li>
+     *     <li>参数：expectedLatestVersionNumber（必填）</li>
+     *     <li>语义：创建 ROLLBACK 来源的新 latest 版本，不回拨历史版本指针</li>
+     * </ul>
+     *
+     * @param documentId                  文档资产 ID
+     * @param versionNumber               回退目标历史版本号
+     * @param expectedLatestVersionNumber 调用方页面看到的最新版本号
+     * @return 版本回退结果
+     */
+    @PostMapping(value = "/{documentId}/versions/{versionNumber}/rollback", produces = MediaType.APPLICATION_JSON_VALUE)
+    public DocumentVersionRollbackResponse rollbackVersion(
+            @PathVariable("documentId") String documentId,
+            @PathVariable("versionNumber") int versionNumber,
+            @RequestParam("expectedLatestVersionNumber") int expectedLatestVersionNumber) {
+        try {
+            DocumentVersionRollbackResult result = rollbackDocumentVersionUseCase.handle(
+                    new RollbackDocumentVersionCommand(
+                            documentId,
+                            versionNumber,
+                            expectedLatestVersionNumber));
+            return toDocumentVersionRollbackResponse(result);
+        } catch (IllegalArgumentException ex) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, ex.getMessage(), ex);
+        }
+    }
+
+    /**
      * 查询文档分块预览（调试接口）。
      * 在处理文档提取完成后，用此接口可以查看知识库如何将文档文本进行切片（Chunk）分割的详细内容。
      *
@@ -312,16 +465,71 @@ public class DocumentIngestController {
                 item.sourceHint());
     }
 
+    /**
+     * 将应用层文档列表项结果映射为 REST 响应 DTO。
+     *
+     * <p>该映射为纯字段对字段的一一映射，不涉及业务逻辑计算，
+     * 仅做 DTO 隔离，确保领域模型不直接暴露给 API 消费者。
+     *
+     * @param item 应用层文档列表项结果
+     * @return REST 响应 DTO
+     */
     private static DocumentListItemResponse toDocumentListItemResponse(DocumentListItemResult item) {
+        // DTO 映射：保持对外结构稳定，内部字段可演进
         return new DocumentListItemResponse(
                 item.documentId(),
                 item.kbId(),
+                item.latestVersionNumber(),
+                item.latestVersionOriginType(),
                 item.filename(),
                 item.fileSize(),
                 item.status(),
                 item.failureReason(),
                 item.createdAt(),
                 item.updatedAt());
+    }
+
+    /**
+     * 将应用层版本上传结果映射为 REST 响应 DTO。
+     *
+     * <p>该映射方法将 {@link DocumentVersionUploadResult} 中的域字段
+     * 一一平迁到 {@link DocumentVersionUploadResponse}，
+     * 确保领域模型不直接暴露给 API 消费者。
+     *
+     * @param result 应用层版本上传结果
+     * @return REST 响应 DTO
+     */
+    private static DocumentVersionUploadResponse toDocumentVersionUploadResponse(DocumentVersionUploadResult result) {
+        return new DocumentVersionUploadResponse(
+                result.documentId(),
+                result.versionCreated(),
+                result.versionResultType(),
+                result.versionNumber(),
+                result.previousVersionNumber(),
+                result.reusedLatestVersionNumber(),
+                result.latestVersionNumber(),
+                result.askableVersionNumber(),
+                result.canAskNow(),
+                result.status(),
+                result.versionOriginType());
+    }
+
+    /**
+     * 将应用层版本回退结果映射为 REST 响应 DTO。
+     *
+     * @param result 应用层版本回退结果
+     * @return REST 响应 DTO
+     */
+    private static DocumentVersionRollbackResponse toDocumentVersionRollbackResponse(DocumentVersionRollbackResult result) {
+        return new DocumentVersionRollbackResponse(
+                result.documentId(),
+                result.versionNumber(),
+                result.rollbackFromVersionNumber(),
+                result.latestVersionNumber(),
+                result.askableVersionNumber(),
+                result.canAskNow(),
+                result.status(),
+                result.versionOriginType());
     }
 
     /**
@@ -340,6 +548,9 @@ public class DocumentIngestController {
     private DocumentStatusResponse toDocumentStatusResponse(DocumentStatusResult result) {
         return new DocumentStatusResponse(
                 result.documentId().value(),
+                result.latestVersionNumber(),
+                result.latestFilename(),
+                result.latestVersionOriginType().name(),
                 result.status().name(),
                 parseProcessingMetadata(result.processingMetadata()));
     }
@@ -379,13 +590,17 @@ public class DocumentIngestController {
      * <p>接口契约：
      * <ul>
      *     <li>路径：POST /api/v1/documents/{documentId}/reprocess</li>
+     *     <li>参数：expectedLatestVersionNumber（可选，传入时用于识别过期页面请求）</li>
      * </ul>
      */
     @PostMapping(value = "/{documentId}/reprocess", produces = MediaType.APPLICATION_JSON_VALUE)
-    public DocumentStatusResponse reprocess(@PathVariable("documentId") String documentId) {
+    public DocumentStatusResponse reprocess(
+            @PathVariable("documentId") String documentId,
+            @RequestParam(value = "expectedLatestVersionNumber", required = false) Integer expectedLatestVersionNumber) {
         try {
             // 重处理只修改状态并进入队列，不在接口层做同步向量重建。
-            DocumentStatusResult result = reprocessDocumentUseCase.handle(new ReprocessDocumentCommand(documentId));
+            DocumentStatusResult result = reprocessDocumentUseCase.handle(
+                    new ReprocessDocumentCommand(documentId, expectedLatestVersionNumber));
             return toDocumentStatusResponse(result);
         } catch (DocumentNotFoundException ex) {
             // 如果找不到该文档标识，返回 404
@@ -405,6 +620,7 @@ public class DocumentIngestController {
      * <p>接口契约：
      * <ul>
      *   <li>路径：DELETE /api/v1/documents/{documentId}</li>
+     *   <li>参数：expectedLatestVersionNumber（可选，传入时用于识别过期页面请求）</li>
      *   <li>响应：204 No Content（删除成功或幂等删除）</li>
      * </ul>
      *
@@ -420,10 +636,12 @@ public class DocumentIngestController {
      * @return 204 No Content（无响应体）
      */
     @DeleteMapping(value = "/{documentId}")
-    public ResponseEntity<Void> delete(@PathVariable("documentId") String documentId) {
+    public ResponseEntity<Void> delete(
+            @PathVariable("documentId") String documentId,
+            @RequestParam(value = "expectedLatestVersionNumber", required = false) Integer expectedLatestVersionNumber) {
         try {
             // 委派给应用层用例处理删除逻辑（含源文件清理、向量删除、状态检查）
-            deleteDocumentUseCase.handle(new DeleteDocumentCommand(documentId));
+            deleteDocumentUseCase.handle(new DeleteDocumentCommand(documentId, expectedLatestVersionNumber));
             // 删除成功返回 204，无响应体
             return ResponseEntity.noContent().build();
         } catch (DocumentNotFoundException ex) {

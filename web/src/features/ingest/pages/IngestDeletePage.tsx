@@ -1,80 +1,39 @@
-﻿import { useState } from "react";
+import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
-import {
-	Alert,
-	Button,
-	Card,
-	Form,
-	Input,
-	Popconfirm,
-	Space,
-	Tag,
-	Typography,
-	message,
-} from "antd";
+import { Alert, Button, Card, Form, Input, Space, Typography } from "antd";
 import { useNavigate, useParams } from "react-router-dom";
 import { z } from "zod";
-import {
-	deleteDocument,
-	getDocumentStatus,
-	type DocumentStatusResponse,
-} from "../../../shared/api/ingestApi";
+import { deleteDocument } from "../../../shared/api/ingestApi";
 import { ApiErrorAlert } from "../../../shared/ui/ApiErrorAlert";
 import { ApiError } from "../../../shared/api/request";
+import { DeleteDocumentConfirmModal } from "./DeleteDocumentConfirmModal";
 
 const deleteFormSchema = z.object({
 	documentId: z.string().trim().min(1, "documentId 不能为空"),
 });
 
-function statusColor(status?: string): string {
-	switch (status) {
-		case "UPLOADED":
-			return "blue";
-		case "INGESTING":
-			return "processing";
-		case "INDEXED":
-			return "success";
-		case "FAILED":
-			return "error";
-		case "DELETING":
-			return "warning";
-		case "DELETED":
-			return "default";
-		default:
-			return "default";
-	}
-}
-
 export function IngestDeletePage() {
 	const navigate = useNavigate();
 	const { documentId: urlDocumentId } = useParams<{ documentId?: string }>();
 	const [form] = Form.useForm<{ documentId: string }>();
-	const [deletedDocumentId, setDeletedDocumentId] = useState<string | null>(
-		null,
-	);
-	const [statusSnapshot, setStatusSnapshot] =
-		useState<DocumentStatusResponse | null>(null);
+	const [confirmDocumentId, setConfirmDocumentId] = useState<string | null>(null);
 	const initialDocumentId =
 		urlDocumentId ?? localStorage.getItem("myai:lastDocumentId") ?? "";
 
 	const deleteMutation = useMutation({
 		mutationFn: (documentId: string) => deleteDocument(documentId),
-		onSuccess: async (_, documentId) => {
-			setDeletedDocumentId(documentId);
+		onSuccess: (_, documentId) => {
 			localStorage.setItem("myai:lastDocumentId", documentId);
-			message.success("文档删除请求已提交");
-			try {
-				const latestStatus = await getDocumentStatus(documentId);
-				setStatusSnapshot(latestStatus);
-			} catch {
-				setStatusSnapshot(null);
-			}
+			navigate(
+				`/ingest/documents?deletedDocumentId=${encodeURIComponent(documentId)}`,
+				{ replace: true },
+			);
 		},
 	});
 
-	const onDelete = async () => {
+	const openDeleteConfirm = () => {
 		const values = deleteFormSchema.parse(form.getFieldsValue());
-		await deleteMutation.mutateAsync(values.documentId);
+		setConfirmDocumentId(values.documentId);
 	};
 
 	const conflictWarning =
@@ -103,7 +62,8 @@ export function IngestDeletePage() {
 				}
 			>
 				<Typography.Paragraph type="secondary" style={{ marginTop: 0 }}>
-					删除操作会清理该文档对应的源文件和全部向量版本，请谨慎操作。
+					删除操作会清理整个 document 资产。确认前需要输入完整
+					documentId。
 				</Typography.Paragraph>
 
 				<Form
@@ -113,53 +73,41 @@ export function IngestDeletePage() {
 						documentId: initialDocumentId,
 					}}
 				>
-					<Form.Item
-						name="documentId"
-						style={{ flex: 1, minWidth: 320 }}
-					>
-						<Input placeholder="输入 documentId" allowClear />
+					<Form.Item name="documentId" style={{ flex: 1, minWidth: 320 }}>
+						<Input
+							aria-label="输入 documentId"
+							autoComplete="off"
+							spellCheck={false}
+							placeholder="输入 documentId"
+							allowClear
+						/>
 					</Form.Item>
-					<Popconfirm
-						title="确认删除该文档吗？"
-						description="删除后将清理源文件与向量数据。"
-						okText="确认删除"
-						cancelText="取消"
-						onConfirm={onDelete}
+					<Button
+						danger
+						type="primary"
+						loading={deleteMutation.isPending}
+						onClick={openDeleteConfirm}
 					>
-						<Button
-							danger
-							type="primary"
-							loading={deleteMutation.isPending}
-						>
-							删除文档
-						</Button>
-					</Popconfirm>
+						删除文档
+					</Button>
 				</Form>
 			</Card>
 
-			{deleteMutation.isError && (
-				<ApiErrorAlert error={deleteMutation.error} />
-			)}
+			{deleteMutation.isError && <ApiErrorAlert error={deleteMutation.error} />}
 			{conflictWarning}
 
-			{deletedDocumentId && (
-				<Card title="删除结果">
-					<p>
-						<strong>documentId:</strong> {deletedDocumentId}
-					</p>
-					<p>
-						<strong>HTTP:</strong> 204 No Content
-					</p>
-					{statusSnapshot && (
-						<p>
-							<strong>latest status:</strong>{" "}
-							<Tag color={statusColor(statusSnapshot.status)}>
-								{statusSnapshot.status}
-							</Tag>
-						</p>
-					)}
-				</Card>
-			)}
+			<DeleteDocumentConfirmModal
+				open={Boolean(confirmDocumentId)}
+				document={confirmDocumentId ? { documentId: confirmDocumentId } : null}
+				confirmLoading={deleteMutation.isPending}
+				error={deleteMutation.error}
+				onCancel={() => setConfirmDocumentId(null)}
+				onConfirm={() => {
+					if (confirmDocumentId) {
+						deleteMutation.mutate(confirmDocumentId);
+					}
+				}}
+			/>
 		</Space>
 	);
 }

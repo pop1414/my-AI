@@ -135,7 +135,7 @@ public class GetDocumentChunksPreviewApplicationService implements GetDocumentCh
                 chunk.sourceFile(),
                 chunk.contentHash(),
                 chunk.splitVersion(),
-                blankToNull(chunk.sourceHint()));
+                blankToNull(chunk.sourceHint().toStorageValue()));
     }
 
     /**

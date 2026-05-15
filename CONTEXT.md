@@ -33,7 +33,7 @@
 当前应把本仓库理解为：
 
 - **单工作区优先** 的内部协作型系统
-- **RAG 主链路已跑通**，正在持续增强解析质量、治理能力和工程稳定性
+- **RAG 主链路已跑通**，纯文字解析/清洗第一轮优化已落地，后续继续增强图片、表格、OCR、治理能力和工程稳定性
 - **V1.1 管理基线已形成**，后续重点会继续落在解析增强、权限完善和更真实的业务场景支持上
 
 不要把它理解成：
@@ -59,6 +59,15 @@
 - 删除
 
 这里的核心关注点是“文档能否被稳定处理并形成可追踪资产”，而不是回答生成本身。
+
+当前解析/清洗主链的实现事实：
+
+- 复杂格式（PDF、Word 等）走 `Tika -> raw XHTML -> HTML 语义清洗 -> Markdown 转换`
+- 原生 Markdown 按 `md` / `markdown` / `mdown` / `mkd` 扩展名绕过 Tika，只做最小破坏清洗
+- 原生 HTML 按 `html` / `htm` 扩展名绕过 Tika，直接进入 HTML 语义清洗与 Markdown 转换
+- `cleaned.md` 是正式中间文本产物，文档目录中强制落盘
+- `raw.xhtml`、`cleaned.html`、`parse-result.json` 是可配置调试产物，不是对外契约
+- 当前阶段偏向纯文字质量基线；图片只保留占位或说明文本，表格只保留 Markdown 可读形态，尚未做图片理解、表格结构化节点或 OCR 稳定支持
 
 ### 4.2 knowledge
 
@@ -239,7 +248,7 @@
 - “版本回退”权限拒绝时，前端提示应单独对应回退动作，例如“你没有回退该文档版本的权限”，而不是复用上传新版本的拒绝文案
 - 版本治理权限拒绝时，当前阶段应提供“联系管理员”作为后续指引，不引入复杂申请流
 - “上传新版本”相关错误响应至少应覆盖：`VERSION_UPLOAD_NOT_ALLOWED_STATUS`、`VERSION_UPLOAD_NO_MANAGE_PERMISSION`、`VERSION_UPLOAD_DOCUMENT_NOT_FOUND`
-- “版本回退”相关错误响应至少应覆盖：`VERSION_ROLLBACK_NOT_ALLOWED_STATUS`、`VERSION_ROLLBACK_NO_MANAGE_PERMISSION`、`VERSION_ROLLBACK_TARGET_NOT_INDEXED`、`VERSION_ROLLBACK_TARGET_IS_LATEST`、`VERSION_ROLLBACK_DOCUMENT_NOT_FOUND`、`VERSION_ROLLBACK_VERSION_NOT_FOUND`
+- “版本回退”相关错误响应至少应覆盖：`VERSION_ROLLBACK_NOT_ALLOWED_STATUS`、`VERSION_ROLLBACK_NO_MANAGE_PERMISSION`、`VERSION_ROLLBACK_TARGET_NOT_INDEXED`、`VERSION_ROLLBACK_TARGET_IS_LATEST`、`VERSION_ROLLBACK_DOCUMENT_NOT_FOUND`、`VERSION_ROLLBACK_VERSION_NOT_FOUND`、`VERSION_ROLLBACK_SOURCE_FILE_MISSING`
 - 版本治理相关错误响应应覆盖乐观并发校验失败场景，例如 `VERSION_CONFLICT_STALE_LATEST_VERSION`
 - 同内容未创建新版本不应建模为错误响应，而应建模为成功结果中的专用分支
 - “上传新版本”因当前最新版本状态不允许而被拒绝时，前端提示应明确写出当前仅允许在 `INDEXED`、`FAILED` 状态下发起
@@ -367,7 +376,10 @@ chunk 是向量检索与引用展示的基本文本单元。
 
 - 它来自文档解析与清洗后的内容
 - 当前遵循“结构优先、长度兜底”的拆分策略
+- 当前实现先将 `cleaned.md` 切成结构片段，再按空白分隔 token 组装窗口；配置名仍是 `chunkSize` / `overlapSize`
+- `sourceHint` 当前主要承载标题上下文 JSON，用于解释 chunk 来源，不是完整节点元数据契约
 - chunk 是检索与引用单位，不等于原始段落，也不等于完整文档
+- `documents/chunks/preview` 是当前观察 chunk 质量和解析/清洗结果是否可用的主要验证面
 
 ### 5.5 processing metadata
 
@@ -380,6 +392,18 @@ chunk 是向量检索与引用展示的基本文本单元。
 - 任意扩展字段的杂物箱
 
 它当前主要服务于处理终态追踪、调试和后续分块参考。
+
+当前 `ingest` 主链中的正式中间文本产物是 `cleaned.md`，而不是 `processingMetadata` 本身。
+
+当前 `processingMetadata` 的基础结构由 parser 生成，并在 `INDEXED` / `FAILED` 终态回填，主要包含：
+
+- `schema_version`
+- `stable.source_file`
+- `stable.file_ext`
+- `stable.mime_type`
+- `stable.quality`
+- `stable.created_at`
+- 条件性 `language`、`page_count`、`primary_title`、`title_outline_sample`
 
 ## 6. 关键状态语义
 
@@ -465,13 +489,16 @@ chunk 是向量检索与引用展示的基本文本单元。
 当前 ingest 不是单纯“上传文件到数据库”，而是包含一条真实的处理链路：
 
 - 源文件读取
-- 解析与清洗
+- 文件类型路由
+- 解析与清洗，生成 `cleaned.md`
 - 中间产物落盘
 - 文本分块
 - 向量化
 - 入库与状态收口
 
-后续围绕解析质量、清洗策略、chunk 质量、OCR、多格式支持的讨论，都应被视为这条主链路的增强，而不是附属优化。
+其中当前主链的正式中间文本产物是 `cleaned.md`；围绕解析质量、清洗策略和现有 chunk 行为的优化，默认都应先回到这份文本产物本身判断是否变好。
+
+纯文字阶段已经形成固定黄金样本与回归闭环：`weak-pdf-001 -> md-001 -> md-002 -> html-001 -> word-001`。后续围绕解析质量、清洗策略、chunk 质量、OCR、多格式支持、图片理解、表格结构化的讨论，都应被视为这条主链路的增强，而不是附属优化。
 
 ### 7.4 权限边界必须和问答边界一致
 
@@ -518,8 +545,8 @@ chunk 是向量检索与引用展示的基本文本单元。
 4. `reference/` 里的资料不是当前系统事实
 它们是技术参考、对照资料，不应直接当成“系统已经这样实现了”。
 
-5. 解析能力虽已升级，但 OCR 和复杂版式仍是增强项
-不要在任何总结中把“复杂扫描件稳定支持”表述成既成事实。
+5. 解析能力虽已升级，但图片、表格结构化、OCR 和复杂版式仍是增强项
+不要在任何总结中把“图片理解、复杂表格节点、复杂扫描件稳定支持”表述成既成事实。
 
 ## 10. 推荐阅读顺序
 
@@ -532,10 +559,15 @@ chunk 是向量检索与引用展示的基本文本单元。
 5. `docs/03-architecture.md`
 6. `docs/04-api-contract.yaml`
 7. `docs/07-ingest-processing-execution.md`
-8. `docs/adr/ADR-0001-v1-tech-baseline.md`
-9. `docs/adr/ADR-0003-v1-dashscope-pgvector.md`
-10. `docs/adr/ADR-0004-v1-ingest-processing-strategy.md`
-11. `docs/adr/ADR-0005-rag-access-control-foundation.md`
+8. `docs/runbooks/plans/ingest-cleaning/RAG 文档解析与清洗方案.md`
+9. `docs/runbooks/plans/ingest-cleaning/黄金样本与验收说明.md`
+10. `docs/runbooks/plans/ingest-cleaning/cleaned-md质量回归闭环.md`
+11. `docs/runbooks/handoffs/ingest-cleaning/2026-05-14-ingest-cleaning-text-stage-closure.md`
+12. `docs/runbooks/plans/ingest-cleaning/并行开发边界约定-文档版本治理与RAG优化.md`
+13. `docs/adr/ADR-0001-v1-tech-baseline.md`
+14. `docs/adr/ADR-0003-v1-dashscope-pgvector.md`
+15. `docs/adr/ADR-0004-v1-ingest-processing-strategy.md`
+16. `docs/adr/ADR-0005-rag-access-control-foundation.md`
 
 ## 11. 写作与评审约定
 
@@ -546,6 +578,7 @@ chunk 是向量检索与引用展示的基本文本单元。
 - 方案文档要明确 In Scope / Out of Scope
 - 涉及架构取舍时，优先回看 ADR，而不是只看当前代码实现
 - 涉及工作流或操作步骤时，优先落到 `docs/runbooks/`
+- 评审解析、清洗与分块质量时，优先基于固定样本、`documents/chunks/preview` 和问答回归，而不是只凭主观印象
 
 ## 12. 权威来源
 

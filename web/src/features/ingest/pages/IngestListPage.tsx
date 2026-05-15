@@ -1,6 +1,7 @@
-import { useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { type ReactNode, useEffect, useMemo, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+	Alert,
 	Button,
 	Card,
 	Empty,
@@ -21,9 +22,10 @@ import {
 	SearchOutlined,
 	ReloadOutlined,
 } from "@ant-design/icons";
-import { useNavigate } from "react-router-dom";
+import { Link, useLocation, useSearchParams } from "react-router-dom";
 import { z } from "zod";
 import {
+	deleteDocument,
 	listDocuments,
 	type DocumentListItem,
 } from "../../../shared/api/ingestApi";
@@ -31,6 +33,7 @@ import { listKnowledgeBases } from "../../../shared/api/knowledgeApi";
 import { ApiErrorAlert } from "../../../shared/ui/ApiErrorAlert";
 import { useAuth } from "../../../shared/auth/AuthContext";
 import { SafetyOutlined } from "@ant-design/icons";
+import { DeleteDocumentConfirmModal } from "./DeleteDocumentConfirmModal";
 
 const filterSchema = z.object({
 	kbId: z.string().optional(),
@@ -86,8 +89,82 @@ function formatTime(iso: string): string {
 	}
 }
 
+function parsePositiveInteger(value: string | null, fallback: number): number {
+	const parsed = Number(value);
+	return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function parseFilters(searchParams: URLSearchParams): {
+	kbId?: string;
+	status?: string;
+	filename?: string;
+} {
+	return {
+		kbId: searchParams.get("kbId") || undefined,
+		status: searchParams.get("status") || undefined,
+		filename: searchParams.get("filename") || undefined,
+	};
+}
+
+function buildListSearch(params: {
+	filters: { kbId?: string; status?: string; filename?: string };
+	page: number;
+	pageSize: number;
+	deletedDocumentId?: string | null;
+}): URLSearchParams {
+	const next = new URLSearchParams();
+	if (params.filters.kbId) next.set("kbId", params.filters.kbId);
+	if (params.filters.status) next.set("status", params.filters.status);
+	if (params.filters.filename) next.set("filename", params.filters.filename);
+	if (params.page !== 1) next.set("page", String(params.page));
+	if (params.pageSize !== 20) next.set("pageSize", String(params.pageSize));
+	if (params.deletedDocumentId) {
+		next.set("deletedDocumentId", params.deletedDocumentId);
+	}
+	return next;
+}
+
+function buildReturnTo(locationSearch: string): string {
+	const params = new URLSearchParams(locationSearch);
+	params.delete("deletedDocumentId");
+	const qs = params.toString();
+	return `/ingest/documents${qs ? `?${qs}` : ""}`;
+}
+
+function ActionIconLink({
+	to,
+	label,
+	icon,
+}: {
+	to: string;
+	label: string;
+	icon: ReactNode;
+}) {
+	return (
+		<Link
+			to={to}
+			aria-label={label}
+			style={{
+				display: "inline-flex",
+				alignItems: "center",
+				justifyContent: "center",
+				width: 24,
+				height: 24,
+				border: "1px solid #d9d9d9",
+				borderRadius: 6,
+				color: "rgba(0, 0, 0, 0.88)",
+				background: "#ffffff",
+			}}
+		>
+			{icon}
+		</Link>
+	);
+}
+
 export function IngestListPage() {
-	const navigate = useNavigate();
+	const location = useLocation();
+	const [searchParams, setSearchParams] = useSearchParams();
+	const queryClient = useQueryClient();
 	const { user } = useAuth();
 	const canAccessAdmin = Boolean(user?.capabilities.canAccessAdmin);
 	const [form] = Form.useForm<{
@@ -95,13 +172,16 @@ export function IngestListPage() {
 		status?: string;
 		filename?: string;
 	}>();
-	const [page, setPage] = useState(1);
-	const [pageSize, setPageSize] = useState(20);
-	const [filters, setFilters] = useState<{
-		kbId?: string;
-		status?: string;
-		filename?: string;
-	}>({});
+	const [deleteTarget, setDeleteTarget] = useState<DocumentListItem | null>(null);
+	const filters = useMemo(() => parseFilters(searchParams), [searchParams]);
+	const page = parsePositiveInteger(searchParams.get("page"), 1);
+	const pageSize = parsePositiveInteger(searchParams.get("pageSize"), 20);
+	const deletedDocumentId = searchParams.get("deletedDocumentId");
+	const returnTo = buildReturnTo(location.search);
+
+	useEffect(() => {
+		form.setFieldsValue(filters);
+	}, [filters, form]);
 
 	const knowledgeQuery = useQuery({
 		queryKey: ["knowledge-bases"],
@@ -120,6 +200,22 @@ export function IngestListPage() {
 			}),
 	});
 
+	const deleteMutation = useMutation({
+		mutationFn: (documentId: string) => deleteDocument(documentId),
+		onSuccess: async (_, documentId) => {
+			setDeleteTarget(null);
+			await queryClient.invalidateQueries({ queryKey: ["documents"] });
+			setSearchParams(
+				buildListSearch({
+					filters,
+					page,
+					pageSize,
+					deletedDocumentId: documentId,
+				}),
+			);
+		},
+	});
+
 	const knowledgeBaseOptions = useMemo(
 		() =>
 			(knowledgeQuery.data ?? [])
@@ -132,14 +228,28 @@ export function IngestListPage() {
 	);
 	const onSubmit = () => {
 		const values = filterSchema.parse(form.getFieldsValue());
-		setFilters(values);
-		setPage(1);
+		setSearchParams(
+			buildListSearch({
+				filters: values,
+				page: 1,
+				pageSize,
+			}),
+		);
 	};
 
 	const onReset = () => {
 		form.resetFields();
-		setFilters({});
-		setPage(1);
+		setSearchParams(new URLSearchParams());
+	};
+
+	const closeDeleteResult = () => {
+		setSearchParams(
+			buildListSearch({
+				filters,
+				page,
+				pageSize,
+			}),
+		);
 	};
 
 	const columns: ColumnsType<DocumentListItem> = [
@@ -160,7 +270,23 @@ export function IngestListPage() {
 			),
 		},
 		{ title: "知识库", dataIndex: "kbId", width: 160, ellipsis: true },
-		{ title: "文件名", dataIndex: "filename", width: 200, ellipsis: true },
+		{
+			title: "最新文件名",
+			dataIndex: "filename",
+			width: 220,
+			ellipsis: true,
+		},
+		{
+			title: "最新版本",
+			dataIndex: "latestVersionNumber",
+			width: 120,
+			render: (_: number, record) => (
+				<Space size={4} wrap>
+					<Tag color="gold">v{record.latestVersionNumber}</Tag>
+					<Tag>{record.latestVersionOriginType}</Tag>
+				</Space>
+			),
+		},
 		{
 			title: "大小",
 			dataIndex: "fileSize",
@@ -170,7 +296,7 @@ export function IngestListPage() {
 		{
 			title: "状态",
 			dataIndex: "status",
-			width: 100,
+			width: 120,
 			render: (value: string) => (
 				<Tag color={statusColor(value)}>{value}</Tag>
 			),
@@ -219,67 +345,48 @@ export function IngestListPage() {
 
 				return (
 					<Space size="small" wrap>
-						<Tooltip title="查看状态">
-							<Button
-								size="small"
+						<Tooltip title="查看详情">
+							<ActionIconLink
+								label="查看详情"
 								icon={<SearchOutlined />}
-								onClick={() =>
-									navigate(
-										`/ingest/documents/${encodeURIComponent(record.documentId)}/status`,
-									)
-								}
+								to={`/ingest/documents/${encodeURIComponent(record.documentId)}?returnTo=${encodeURIComponent(returnTo)}`}
 							/>
 						</Tooltip>
 						{showChunksPreview && (
 							<Tooltip title="分块预览">
-								<Button
-									size="small"
+								<ActionIconLink
+									label="分块预览"
 									icon={<FileSearchOutlined />}
-									onClick={() =>
-										navigate(
-											`/ingest/documents/${encodeURIComponent(record.documentId)}/chunks-preview`,
-										)
-									}
+									to={`/ingest/documents/${encodeURIComponent(record.documentId)}/chunks-preview`}
 								/>
 							</Tooltip>
 						)}
 						{showReprocess && (
 							<Tooltip title="重处理">
-								<Button
-									size="small"
+								<ActionIconLink
+									label="重处理"
 									icon={<FileSyncOutlined />}
-									onClick={() =>
-										navigate(
-											`/ingest/documents/${encodeURIComponent(record.documentId)}/reprocess`,
-										)
-									}
+									to={`/ingest/documents/${encodeURIComponent(record.documentId)}/reprocess`}
 								/>
 							</Tooltip>
 						)}
 						{showDelete && (
 							<Tooltip title="删除">
-								<Button
-									size="small"
-									danger
-									icon={<DeleteOutlined />}
-									onClick={() =>
-										navigate(
-											`/ingest/documents/${encodeURIComponent(record.documentId)}/delete`,
-										)
-									}
-								/>
-							</Tooltip>
-						)}
+							<Button
+								size="small"
+								danger
+								aria-label="删除"
+								icon={<DeleteOutlined />}
+								onClick={() => setDeleteTarget(record)}
+							/>
+						</Tooltip>
+					)}
 						{canAccessAdmin && (
 							<Tooltip title="授权管理">
-								<Button
-									size="small"
+								<ActionIconLink
+									label="授权管理"
 									icon={<SafetyOutlined />}
-									onClick={() =>
-										navigate(
-											`/admin/documents/${encodeURIComponent(record.documentId)}/grants`,
-										)
-									}
+									to={`/admin/documents/${encodeURIComponent(record.documentId)}/grants`}
 								/>
 							</Tooltip>
 						)}
@@ -304,7 +411,7 @@ export function IngestListPage() {
 				}
 			>
 				<Typography.Paragraph type="secondary" style={{ marginTop: 0 }}>
-					按知识库、处理状态或文件名筛选，浏览所有已上传文档的处理进度。
+					按知识库、当前最新版本状态或文件名筛选，浏览所有已上传文档的处理进度。
 				</Typography.Paragraph>
 
 				<Form
@@ -315,6 +422,7 @@ export function IngestListPage() {
 				>
 					<Form.Item name="kbId" style={{ minWidth: 200 }}>
 						<Select
+							aria-label="按知识库筛选文档"
 							allowClear
 							placeholder="选择知识库"
 							loading={knowledgeQuery.isLoading}
@@ -323,6 +431,7 @@ export function IngestListPage() {
 					</Form.Item>
 					<Form.Item name="status" style={{ minWidth: 150 }}>
 						<Select
+							aria-label="按处理状态筛选文档"
 							allowClear
 							placeholder="处理状态"
 							options={DOCUMENT_STATUSES.map((s) => ({
@@ -333,6 +442,8 @@ export function IngestListPage() {
 					</Form.Item>
 					<Form.Item name="filename" style={{ minWidth: 200 }}>
 						<Input
+							aria-label="按文件名搜索文档"
+							autoComplete="off"
 							allowClear
 							placeholder="搜索文件名（模糊匹配）"
 						/>
@@ -361,6 +472,25 @@ export function IngestListPage() {
 			)}
 			{docListQuery.isError && (
 				<ApiErrorAlert error={docListQuery.error} />
+			)}
+			{deletedDocumentId && (
+				<Alert
+					data-testid="document-delete-result"
+					aria-live="polite"
+					aria-atomic="true"
+					type="success"
+					showIcon
+					message="document 资产已删除"
+					description={`旧 documentId：${deletedDocumentId}。同内容重新上传会生成新的 documentId，新文档不会继承旧文档级授权；如需继续使用，请重新上传并重新配置授权。`}
+					action={
+						<Space wrap>
+							<Link to="/ingest/upload">上传新文档</Link>
+							<Button size="small" type="text" onClick={closeDeleteResult}>
+								关闭提示
+							</Button>
+						</Space>
+					}
+				/>
 			)}
 
 			{/* 数据表格 */}
@@ -398,13 +528,30 @@ export function IngestListPage() {
 							showTotal: (t, range) =>
 								`共 ${t} 条文档，当前 ${range[0]}-${range[1]}`,
 							onChange: (p, ps) => {
-								setPage(p);
-								setPageSize(ps);
+								setSearchParams(
+									buildListSearch({
+										filters,
+										page: p,
+										pageSize: ps,
+									}),
+								);
 							},
 						}}
 					/>
 				)}
 			</Card>
+			<DeleteDocumentConfirmModal
+				open={Boolean(deleteTarget)}
+				document={deleteTarget}
+				confirmLoading={deleteMutation.isPending}
+				error={deleteMutation.error}
+				onCancel={() => setDeleteTarget(null)}
+				onConfirm={() => {
+					if (deleteTarget) {
+						deleteMutation.mutate(deleteTarget.documentId);
+					}
+				}}
+			/>
 		</Space>
 	);
 }

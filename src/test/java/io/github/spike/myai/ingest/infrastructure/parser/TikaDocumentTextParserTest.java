@@ -3,6 +3,9 @@ package io.github.spike.myai.ingest.infrastructure.parser;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.verify;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -43,6 +46,87 @@ class TikaDocumentTextParserTest {
         JsonNode metadata = new ObjectMapper().readTree(result.processingMetadata());
         assertEquals("resume.txt", metadata.path("stable").path("source_file").asText());
         assertEquals("txt", metadata.path("stable").path("file_ext").asText());
+    }
+
+    @Test
+    @DisplayName("原生 Markdown 应走最小破坏路径并跳过 HTML 重解析链")
+    void parse_shouldUseNativeMarkdownPath_whenFileIsMarkdown() throws Exception {
+        TextCleaningService cleaningService = spy(new TextCleaningService());
+        TikaDocumentTextParser parser = new TikaDocumentTextParser(
+                cleaningService,
+                new ObjectMapper(),
+                properties(4000, false));
+        String raw = """
+                # 接手文档质量回归清单
+
+                ## 指标对照
+
+                | 检查项 | 通过标准 | 常见失真 |
+                | --- | --- | --- |
+                | 标题层级稳定 | `h1/h2` 与正文边界清晰可见 | 标题丢失 |
+
+                - 标题层级
+                  - 一级标题不能和正文粘连
+
+                ```bash
+                curl -X GET "http://localhost:8080/api/v1/documents/doc-1/chunks/preview"
+                ```
+
+                image1.jpeg
+                """;
+
+        DocumentParseResult result = parser.parse("handoff.md", raw.getBytes(StandardCharsets.UTF_8));
+
+        assertEquals("", result.rawXhtml());
+        assertEquals("", result.cleanedHtml());
+        assertTrue(result.cleanedMarkdown().contains("# 接手文档质量回归清单"));
+        assertTrue(result.cleanedMarkdown().contains("| 检查项 | 通过标准 | 常见失真 |"));
+        assertTrue(result.cleanedMarkdown().contains("  - 一级标题不能和正文粘连"));
+        assertTrue(result.cleanedMarkdown().contains("```bash"));
+        assertTrue(!result.cleanedMarkdown().contains("image1.jpeg"));
+
+        JsonNode metadata = new ObjectMapper().readTree(result.processingMetadata());
+        assertEquals("md", metadata.path("stable").path("file_ext").asText());
+        assertEquals("text/markdown; charset=UTF-8", metadata.path("stable").path("mime_type").asText());
+        assertEquals(
+                "接手文档质量回归清单",
+                metadata.path("conditional").path("primary_title").asText());
+        verify(cleaningService).cleanNativeMarkdown(raw);
+        verify(cleaningService, never()).cleanHtml(org.mockito.ArgumentMatchers.anyString());
+        verify(cleaningService, never()).toMarkdown(org.mockito.ArgumentMatchers.anyString());
+    }
+
+    @Test
+    @DisplayName("原生 Markdown 应识别 UTF-16 BOM 并避免乱码")
+    void parse_shouldDecodeNativeMarkdownWithUtf16Bom() throws Exception {
+        TextCleaningService cleaningService = spy(new TextCleaningService());
+        TikaDocumentTextParser parser = new TikaDocumentTextParser(
+                cleaningService,
+                new ObjectMapper(),
+                properties(4000, false));
+        String raw = """
+                # UTF16 标题
+
+                正文内容
+                """;
+        byte[] encoded = raw.getBytes(StandardCharsets.UTF_16LE);
+        byte[] content = new byte[encoded.length + 2];
+        content[0] = (byte) 0xFF;
+        content[1] = (byte) 0xFE;
+        System.arraycopy(encoded, 0, content, 2, encoded.length);
+
+        DocumentParseResult result = parser.parse("utf16.md", content);
+
+        assertEquals("", result.rawXhtml());
+        assertEquals("", result.cleanedHtml());
+        assertTrue(result.cleanedMarkdown().contains("# UTF16 标题"));
+        assertTrue(result.cleanedMarkdown().contains("正文内容"));
+
+        JsonNode metadata = new ObjectMapper().readTree(result.processingMetadata());
+        assertEquals("text/markdown; charset=UTF-16LE", metadata.path("stable").path("mime_type").asText());
+        verify(cleaningService).cleanNativeMarkdown(raw);
+        verify(cleaningService, never()).cleanHtml(org.mockito.ArgumentMatchers.anyString());
+        verify(cleaningService, never()).toMarkdown(org.mockito.ArgumentMatchers.anyString());
     }
 
     @Test

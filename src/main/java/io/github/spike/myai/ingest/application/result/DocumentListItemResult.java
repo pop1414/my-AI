@@ -8,6 +8,8 @@ import java.time.Instant;
 public record DocumentListItemResult(
         String documentId,
         String kbId,
+        int latestVersionNumber,
+        String latestVersionOriginType,
         String filename,
         long fileSize,
         String status,

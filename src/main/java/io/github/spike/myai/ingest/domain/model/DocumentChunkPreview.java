@@ -9,7 +9,7 @@ package io.github.spike.myai.ingest.domain.model;
  * @param sourceFile 源文件名
  * @param contentHash 分块内容哈希
  * @param splitVersion 分块版本
- * @param sourceHint 来源提示（例如标题/页码，JSON 字符串）
+ * @param sourceHint 来源提示
  */
 public record DocumentChunkPreview(
         int chunkIndex,
@@ -18,5 +18,29 @@ public record DocumentChunkPreview(
         String sourceFile,
         String contentHash,
         String splitVersion,
-        String sourceHint) {
+        SourceHint sourceHint) {
+
+    public DocumentChunkPreview(
+            int chunkIndex,
+            String content,
+            int contentLength,
+            String sourceFile,
+            String contentHash,
+            String splitVersion,
+            String sourceHint) {
+        this(
+                chunkIndex,
+                content,
+                contentLength,
+                sourceFile,
+                contentHash,
+                splitVersion,
+                SourceHint.fromStorageValue(sourceHint));
+    }
+
+    public DocumentChunkPreview {
+        if (sourceHint == null) {
+            sourceHint = SourceHint.none();
+        }
+    }
 }

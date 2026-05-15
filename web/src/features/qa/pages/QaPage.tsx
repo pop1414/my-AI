@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import {
+	Alert,
 	Button,
 	Card,
 	Empty,
@@ -9,11 +10,9 @@ import {
 	InputNumber,
 	Select,
 	Space,
-	Table,
 	Tag,
 	Typography,
 } from "antd";
-import type { ColumnsType } from "antd/es/table";
 import { useSearchParams } from "react-router-dom";
 import { z } from "zod";
 import {
@@ -23,6 +22,7 @@ import {
 } from "../../../shared/api/qaApi";
 import { listKnowledgeBases } from "../../../shared/api/knowledgeApi";
 import { ApiErrorAlert } from "../../../shared/ui/ApiErrorAlert";
+import "./QaPage.css";
 
 const qaFormSchema = z.object({
 	kbId: z.string().trim().min(1, "请选择知识库"),
@@ -30,16 +30,87 @@ const qaFormSchema = z.object({
 	topK: z.number().int().min(1, "topK 最小为 1").max(20, "topK 最大为 20"),
 });
 
-const referenceColumns: ColumnsType<AskReference> = [
-	{
-		title: "documentId",
-		dataIndex: "documentId",
-		width: 320,
-		ellipsis: true,
-	},
-	{ title: "chunkIndex", dataIndex: "chunkIndex", width: 110 },
-	{ title: "contentPreview", dataIndex: "contentPreview", ellipsis: true },
-];
+function formatVersionLabel(versionNumber?: number | null): string {
+	return typeof versionNumber === "number" ? `v${versionNumber}` : "未知版本";
+}
+
+function formatReferenceUpdatedAt(value?: string | null): string {
+	if (!value) {
+		return "未知更新时间";
+	}
+	const timestamp = Date.parse(value);
+	if (Number.isNaN(timestamp)) {
+		return value;
+	}
+	return new Intl.DateTimeFormat("zh-CN", {
+		year: "numeric",
+		month: "2-digit",
+		day: "2-digit",
+		hour: "2-digit",
+		minute: "2-digit",
+	}).format(new Date(timestamp));
+}
+
+function isStaleReference(reference: AskReference): boolean {
+	if (typeof reference.isLatestVersion === "boolean") {
+		return !reference.isLatestVersion;
+	}
+	if (
+		typeof reference.sourceVersionNumber === "number" &&
+		typeof reference.latestVersionNumber === "number"
+	) {
+		return reference.sourceVersionNumber < reference.latestVersionNumber;
+	}
+	return false;
+}
+
+function ReferenceCard({ reference }: { reference: AskReference }) {
+	const stale = isStaleReference(reference);
+
+	return (
+		<Card
+			size="small"
+			className={stale ? "qa-reference-card is-stale" : "qa-reference-card"}
+			data-testid={`reference-card-${reference.documentId}-${reference.chunkIndex}`}
+		>
+			<div className="qa-reference-card__head">
+				<div>
+					<Typography.Text className="qa-reference-card__filename">
+						{reference.sourceFilename || "未知来源文件"}
+					</Typography.Text>
+					<Typography.Text
+						type="secondary"
+						className="qa-reference-card__document"
+						copyable={{ text: reference.documentId }}
+					>
+						{reference.documentId}
+					</Typography.Text>
+				</div>
+				<Tag color={stale ? "warning" : "success"}>
+					{formatVersionLabel(reference.sourceVersionNumber)}
+				</Tag>
+			</div>
+
+			<div className="qa-reference-card__meta">
+				<span>来源更新时间：{formatReferenceUpdatedAt(reference.sourceUpdatedAt)}</span>
+				<span>分块：#{reference.chunkIndex}</span>
+			</div>
+
+			{stale && (
+				<div
+					className="qa-reference-card__stale"
+					data-testid={`reference-stale-${reference.documentId}-${reference.chunkIndex}`}
+				>
+					当前最新版本为 {formatVersionLabel(reference.latestVersionNumber)}
+				</div>
+			)}
+
+			<Typography.Paragraph className="qa-reference-card__preview">
+				{reference.contentPreview}
+			</Typography.Paragraph>
+		</Card>
+	);
+}
 
 export function QaPage() {
 	const [searchParams] = useSearchParams();
@@ -93,9 +164,18 @@ export function QaPage() {
 	};
 
 	const hasReferences = result && result.references.length > 0;
+	const staleSummary = result?.staleReferences;
+	const shouldShowStaleBanner = Boolean(
+		hasReferences && staleSummary?.hasStaleReferences,
+	);
 
 	return (
-		<Space direction="vertical" size={16} style={{ width: "100%" }}>
+		<Space
+			className="qa-page"
+			direction="vertical"
+			size={16}
+			style={{ width: "100%" }}
+		>
 			<Card
 				title="单轮文档问答"
 				extra={
@@ -158,6 +238,17 @@ export function QaPage() {
 
 			{result && (
 				<>
+					{shouldShowStaleBanner && staleSummary && (
+						<Alert
+							type="warning"
+							showIcon
+							className="qa-stale-banner"
+							data-testid="qa-stale-reference-banner"
+							message={`本次回答包含 ${staleSummary.staleReferenceCount} 条非最新版本引用`}
+							description={`涉及 ${staleSummary.staleDocumentCount} 个文档。页面下方引用卡片已标出对应 document 的当前最新版本。`}
+						/>
+					)}
+
 					<Card title="回答">
 						<Typography.Paragraph
 							style={{
@@ -172,6 +263,7 @@ export function QaPage() {
 					</Card>
 
 					<Card
+						className="qa-references-card"
 						title={
 							<Space>
 								<span>引用来源</span>
@@ -193,16 +285,14 @@ export function QaPage() {
 						}
 					>
 						{hasReferences ? (
-							<Table
-								rowKey={(row) =>
-									`${row.documentId}-${row.chunkIndex}`
-								}
-								columns={referenceColumns}
-								dataSource={result.references}
-								pagination={false}
-								scroll={{ x: 800 }}
-								size="small"
-							/>
+							<div className="qa-reference-list" data-testid="reference-list">
+								{result.references.map((reference) => (
+									<ReferenceCard
+										key={`${reference.documentId}-${reference.chunkIndex}`}
+										reference={reference}
+									/>
+								))}
+							</div>
 						) : (
 							<Empty
 								image={Empty.PRESENTED_IMAGE_SIMPLE}

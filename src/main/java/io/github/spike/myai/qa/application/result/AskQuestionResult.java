@@ -10,6 +10,20 @@ import java.util.List;
  *
  * @param answer 回答文本
  * @param references 引用分块列表，顺序与检索命中顺序一致
+ * @param staleReferences 陈旧引用汇总；无引用时为空
  */
-public record AskQuestionResult(String answer, List<AskReferenceResult> references) {
+public record AskQuestionResult(
+        String answer,
+        List<AskReferenceResult> references,
+        AskStaleReferenceSummaryResult staleReferences) {
+
+    /**
+     * 兼容旧调用方的简化构造器。
+     *
+     * @param answer 回答文本
+     * @param references 引用分块列表
+     */
+    public AskQuestionResult(String answer, List<AskReferenceResult> references) {
+        this(answer, references, null);
+    }
 }

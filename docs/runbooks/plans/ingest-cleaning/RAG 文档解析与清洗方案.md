@@ -1,224 +1,228 @@
-# RAG 文档处理一期执行计划
+# ingest-cleaning：高质量 cleaned.md 优先计划
 
-**版本**：1.2
+**版本**：1.4
 
-**适用场景**：多格式文档 → 清洗后 Markdown + 元数据
+**适用场景**：当前仓库既有 ingest 主链中的 parser / cleaner 质量基线与后续增强边界
 
-**技术栈**：Apache Tika + Jsoup + flexmark‑java
+**当前状态**：纯文字阶段已按当前代码实现收口；后续图片、表格、OCR 与 richer node model 需另行确认契约边界
+
+**技术栈**：Apache Tika + Jsoup + flexmark-java
 
 **模型生态**：阿里 DashScope（`text-embedding-v3`、`qwen3` 系列）
 
 ---
 
-## 1\. 项目目标与边界
+## 1. 文档定位
 
-将任意常规办公文档（PDF、Word、Markdown、HTML 等）转化为**干净、结构完整的 Markdown 全文**，并附带轻量元数据，为二期智能分块提供唯一可信数据源。
+本计划描述的是当前 `ingest-cleaning` 轮次的**可执行优化范围**，不是脱离现状重新定义整条 ingest 链路的新“一期”。
 
-**一期明确做**
+当前仓库事实仍然是：
 
-- 格式解析 → XHTML（Tika）
-- 语义清洗 → 净化 HTML（Jsoup）
-- 格式转换 → 标准 Markdown（flexmark）
-- Token 计数与元数据封装
+`源文件读取 -> 解析与清洗 -> cleaned.md 落盘 -> 分块 -> 向量化 -> 入库与状态收口`
 
-**一期明确不做**
+本轮已经完成的是：
 
-- 任何形式的分块（切分段落、窗口分割）
-- 构建带有 `index_content` / `display_content` 的 RAG 节点 JSON
-- 向量化、检索、存储到向量库
-- 多模态图片理解（仅为图片预留 token 预算）
+- parser / cleaner 的纯文字质量基线
+- `cleaned.md` 作为可信、可分块、可回归验证的中间文本产物
+- 使用现有 `documents/chunks/preview` 与固定 `qa.ask` 问题验证清洗优化是否真实改善后续消费效果
 
-**一期输出物**（每个文档）
+本轮**不做**的是：
 
-- `{doc_id}.clean.md`：清洗后的 Markdown 全文
-- `{doc_id}.meta.json`：轻量元数据（不含内容字段，仅供二期参考）
-
-> 这样划分的原因：一期专注于内容还原，生成可流式读取的 Markdown；二期专注于模型适配，按窗口切分并构建检索节点。两者解耦后，内存管理、独立测试、未来升级都变得简单。
+- 重定义当前系统存在的分块、向量化、检索链路
+- 升级 `RetrievedChunk`、`AskReferenceResponse` 或 `qa.ask` 对外契约
+- 升级 `vector metadata shape`
+- 修改 `Document` 主模型、Flyway、版本治理语义或外部 API 契约
+- 落地父子分块或 richer node contract
+- 做图片理解、OCR 或表格结构化节点
 
 ---
 
-## 2\. 数据流水线
+## 2. 本轮目标
+
+本轮主目标不是升级 chunk 契约或检索契约，而是让 parser / cleaner 稳定产出高质量、可分块、可回归验证的 `cleaned.md`。
+
+**本轮已经落地**
+
+- 文件类型路由优化：区分 PDF / Word 等复杂格式、原生 Markdown、原生 HTML
+- XHTML/HTML 清洗质量优化
+- 标题、段落、列表、表格、代码块的 Markdown 还原质量优化
+- `cleaned.md` 的稳定落盘与人工审阅能力
+- 黄金样本、固定问题、人工审阅模板、回归基线准备
+- 通过现有 chunk preview 与 `qa.ask` 做回归验证
+- 基础 `processingMetadata` 自动构建与终态回填
+
+**本轮明确不做**
+
+- 父子分块落地
+- 节点级 JSON 契约落地
+- 检索与引用 DTO 升级
+- 页码保留作为硬性通过条件
+- 关键词抽取稳定作为硬性通过条件
+- 图片理解、OCR 或表格节点建模
+
+---
+
+## 3. 验收口径
+
+本轮“高质量 `cleaned.md`”收敛为以下 5 类硬性验收项：
+
+1. **标题层级稳定**
+- `h1/h2/h3` 与正文边界不粘连
+- 不出现大段正文被误识别成标题
+
+2. **段落边界可信**
+- 重点解决弱结构 PDF 的幽灵换行、错误断段、错误拼接
+- 不为了“看起来顺”而错误合并本应保留的结构换行
+
+3. **结构块保真**
+- 列表、表格、代码块不能明显退化成普通正文
+- 原生 Markdown / HTML 不应被重解析链无谓破坏
+
+4. **噪音可控**
+- 页眉页脚、导航、重复块、非正文噪音应明显下降
+- 不通过激进清洗误删正文
+
+5. **对后续分块友好**
+- `cleaned.md` 需要让现有 chunk preview 边界更稳
+- `sourceHint` 需要更可解释
+- 固定 `qa.ask` 问题需要更容易命中正确正文位置
+
+以下内容**不纳入本轮硬性通过条件**：
+
+- 页码保留
+- 关键词抽取稳定
+- 父子节点关系
+- rich reference DTO
+- 版本信息透出
+
+---
+
+## 4. 验证面约束
+
+本轮允许使用 `documents/chunks/preview` 与固定 `qa.ask` 问题验证 `cleaned.md` 质量是否真实改善，但不以此为理由升级：
+
+- `RetrievedChunk`
+- `AskReferenceResponse`
+- `vector metadata shape`
+- `qa.ask` 对外契约
+
+换句话说：
+
+- `cleaned.md` 是主观察面
+- `documents/chunks/preview` 是辅助验证面
+- 固定 `qa.ask` 问题是最终回归面
+
+---
+
+## 5. 当前已落地流水线
 
 ```mermaid
 graph LR
 A[原始文件] --> B{文件类型路由}
-B -->|PDF/Word等| C[Tika: 提取 XHTML]
-B -->|原生 HTML| D[跳过 Tika]
-B -->|原生 MD| E[跳过 Tika 和 Jsoup]
-C -->|纯语义净化| F[Jsoup: HTML清洗]
-D -->|纯语义净化| F
-F -->|带换行修复| G[flexmark: 转标准 Markdown]
-E -->|仅正则清洗| H[最终纯净 Markdown]
+B -->|PDF/Word等| C[Tika 输出 XHTML]
+B -->|原生 HTML| D[最小破坏 HTML 清洗]
+B -->|原生 Markdown| E[最小破坏 Markdown 清洗]
+C --> F[Jsoup 语义清洗]
+D --> F
+F --> G[flexmark 转 Markdown]
+E --> H[最终 cleaned.md]
 G --> H
-H --> I[本地 Token 计数 + 元数据提取]
-I --> J[输出 clean.md + meta.json]
+H --> I[现有 chunker / preview / qa 回归验证]
 ```
 
-**各环节职责**
+这里要强调的是：
 
-| 组件            | 唯一作用                                | 特别说明                                                   |
-| --------------- | --------------------------------------- | ---------------------------------------------------------- |
-| 格式路由 (新增) | 根据源文件类型分发流水线                | .md 和规范 .html 绕过 Tika，防止原生代码块或锚点属性丢失。 |
-| Apache Tika     | 格式适配：读 PDF/Word 等，输出 XHTML    | 仅作为 fallback 解析器，不涉及清洗逻辑。                   |
-| Jsoup           | HTML 清洗：删除噪音标签，标准化语义结构 | 处理后输出干净 DOM。                                       |
-| flexmark-java   | 格式转换：洁净 HTML → 标准 Markdown     | 转换前后包含「幽灵换行修复」逻辑。                         |
-| 封装层          | Token 本地计算 + 生成 meta.json         | 绝对杜绝网络 IO 计算 Token。                               |
+- 当前纯文字阶段优化重点已经落在 `B/C/D/E/F/G/H`
+- `I` 保持当前验证角色，不升级为新契约入口
 
 ---
 
-## 3\. 实施要点
+## 6. 当前实现要点
 
-### 3.1 Tika 解析与内存安全
+### 6.1 文件类型路由
 
-**基础用法（仅小文档）**
+- PDF / Word 等复杂格式继续走 `Tika -> Jsoup -> flexmark`
+- 原生 HTML 按 `html` / `htm` 扩展名绕过 Tika，避免无谓语义降级
+- 原生 Markdown 按 `md` / `markdown` / `mdown` / `mkd` 扩展名绕过 Tika 和 HTML 清洗主链，只做最小必要的不可见字符与噪音修正
+- 原生文本严格解码失败时，回退 Tika 让其执行字符集检测
 
-```java
-String xhtml = new Tika().parseToString(inputStream);
-```
+### 6.2 清洗规则重点
 
-**强制规则**
+- 绝对删除：`script, style, noscript, link, meta, iframe, object, embed, applet` 与 HTML 注释
+- 结构噪音剥离：导航、页眉页脚、重复块
+- 标题映射：重点覆盖 `MsoTitle`、`MsoHeading*`
+- 图片占位：保留最小描述，不在本轮引入视觉理解
+- 幽灵换行修复：重点面向弱结构 PDF 的错误断句
+- 表格：当前目标是保留 Markdown 可读形态，不生成表格节点或单元格级结构
 
-- 单个原始文档 ≤ 50MB，超过则标记 `quality = "oversized"` 并跳过，不阻塞管线。
-- PDF 优先使用文本型解析；扫描件标记 `quality = "low"`，保证不中断工序。
+### 6.3 内存与中间产物
 
-#### 3.1.1 内存安全与中间产物落盘（重要）
+- 复杂文档后续仍可考虑流式处理或分段处理，当前实现仍以字符串中间产物传递
+- `cleaned.md` 必须稳定落盘，作为当前主链正式中间文本产物
+- 如需保留 `raw.xhtml`、`cleaned.html`、`parse-result.json`，应作为调试产物，而不是本轮正式契约
 
-为防止大文档（复杂排版、扫描件）消耗过多 JVM 堆内存，一期严格遵循：
+### 6.4 状态与质量语义
 
-- **流式解析优先**：对 PDF 等可分页格式，按页提取并清洗，避免一次性加载整份 XHTML。可使用 Tika 的 `Parser` + `ContentHandler` 或 Apache PDFBox 逐页产出 HTML 片段，再交给 Jsoup 处理，使内存开销与单页复杂度绑定。
-- **全量 DOM 仅为备选**：仅当文档体积较小（如 <10MB 的简单 Word）且结构简单时，才使用 `parseToString()` 全量加载。
-- **处理完立即释放**：一个文档结束后，主动将 DOM、大字符串等引用置 `null`，加速 GC。
-- **中间产物落盘**：清洗后的 Markdown 全文 **必须写入文件系统或对象存储**，不能仅保留在内存中。文件名与 `doc_id` 强关联（如 `doc_123.clean.md`），方便二期分块器流式读取。
-- **JVM 参数建议**：测试环境分配 `-Xmx2g`，避免正常波动导致 OOM。
+- `high` / `low` / `warning` / `oversized` 等仅作为质量观察标签
+- 它们不构成新的文档生命周期状态
+- 本轮不引入新的数据库主状态名
+- 若 parser 无法产出可继续消费的 `cleaned.md`，仍应按现有主链语义收口为 `FAILED`
+- 若文本可继续消费但质量较弱，可通过 `processingMetadata` 表达质量信息，而不是发明新状态
 
-### 3.2 Jsoup 分层清洗
+### 6.5 术语约束
 
-按 **删除 → 结构噪音 → 语义保留 → 格式抛光** 顺序处理：
+本轮文档与实现优先使用仓库既有术语：
 
-1. **绝对删除**：`script, style, noscript, link, meta, iframe, object, embed, applet` 以及 HTML 注释。
-2. **结构噪音剥离**
-    - 使用可配置黑名单选择器（`nav, footer, header, [class*='nav']` 等）。
-    - 保留含标题的 `header`（内部存在 `<h1>-<h6>` 且文本占比 >60%）。
-    - 可选去重逻辑：若分页场景下出现跨页重复块，自动去除。
+- `documentId`
+- `sourceFile`
+- `processingMetadata`
+- `cleaned.md`
+- `sourceHint`
 
-3. **语义标签标准化**
-    - 将 Word 转换出的 `p.MsoTitle` → `h1`，`p.MsoHeading1` → `h1` 等。
-    - 保留表格、列表、链接、代码块原样。
-
-4. **图片占位**
-    - 所有 `<img>` 替换为 `🖼️ {alt文本}`，保留描述信息；无 `alt` 时使用 `🖼️ 图片`。
-    - **说明**：该占位符留在 Markdown 中，二期仍以文本形式存在，可能略微干扰检索精准度，但可以保证图片信息不丢失并为多模态 token 预留空间；三期引入视觉描述后将自动替换。
-
-5. **去除内联样式**：移除所有 `style`、`class`、`id` 属性。
-6. **白名单终抛**：可选使用 `Jsoup.clean` 保留允许的标签，去除意外残留。
-7. **幽灵换行缝合（PDF 特供）**：
-    - 背景：Tika 解析 PDF 时常会把一段连贯的文字因排版原因强行加入 \n，导致转 Markdown 后句子被硬斩断，严重破坏二期按句分块的逻辑。
-    - 执行逻辑：在 Jsoup 提取纯文本或 flexmark 转换前，增加启发式正则替换拦截器。
-    - 参考正则规则：当探测到换行符前是“中文字符或逗号”，且换行符后紧接着“中文字符或小写字母”时，强制将 \n 替换为无空格或单空格缝合句子。（例如正则式：(?<=[，、\u4e00-\u9fa5])\n(?=[\u4e00-\u9fa5a-z])）。
-
-所有规则外部化到 `cleaner-config.yml`。
-
-### 3.3 flexmark‑java 转换
-
-```java
-String markdown = FlexmarkHtmlConverter.builder().build().convert(cleanHtml);
-```
-
-- 使用 `flexmark-html2md-converter` 扩展，支持表格、列表、代码块、图片占位。
-- 若个别复杂 HTML 转换不佳，可增补后处理规则（如多余空行合并）。
-
-### 3.4 最终产出：`clean.md` 与 `meta.json`
-
-**一期元数据 Schema（**`{doc_id}.meta.json`**）**
-
-```json
-{
-	"doc_id": "doc_123",
-	"source_file": "report.pdf",
-	"file_type": "pdf",
-	"total_pages": 15,
-	"language": "zh",
-	"token_count": 12400,
-	"tokenizer_type": "qwen_v3_base",
-	"h1": "第一章 概述",
-	"h2": "1.1 背景",
-	"h3": null,
-	"keywords": ["营收", "增长", "Q4"],
-	"quality": "high",
-	"created_at": "2025-03-27T10:00:00Z"
-}
-```
-
-| 字段             | 类型   | 必填 | 说明                                                 |
-| ---------------- | ------ | ---- | ---------------------------------------------------- |
-| `doc_id`         | string | ✅   | 文档唯一 ID，用于关联 `clean.md` 与最终节点。        |
-| `source_file`    | string | ✅   | 原始文件名。                                         |
-| `file_type`      | string | ❌   | 文件扩展名。                                         |
-| `total_pages`    | int    | ❌   | 总页数（可分页格式时填写）。                         |
-| `language`       | string | ❌   | 语言代码，可填 `"mixed"`。                           |
-| `token_count`    | int    | ❌   | 全文 token 总数（供分块决策）。                      |
-| `tokenizer_type` | string | ❌   | 分词器标识，固定 `"qwen_v3_base"`。                  |
-| `h1`, `h2`, `h3` | string | ❌   | 文档最高级别标题路径（二期注入用）。                 |
-| `keywords`       | array  | ❌   | 关键实体词。                                         |
-| `quality`        | string | ❌   | 解析质量：`high` / `low` / `warning` / `oversized`。 |
-| `created_at`     | string | ❌   | ISO 8601 时间戳。                                    |
-
-> 一期 **不产出** `chunk_index`、`total_chunks`、`index_content`、`display_content` 等字段，这些由二期分块器生成。
-
-### 3.5 模型生态与 Token 对齐
-
-#### 3.5.1 技术栈绑定
-
-全链路绑定阿里 DashScope 生态，一期预处理须与以下参数对齐：
-
-- 向量化：`text-embedding-v3`（最大 2048 Token）
-- 重排：`gte-rerank-v2`
-- 生成：`Qwen3` 系列
-- 多模态（未来）：`qwen3-vl` 系列
-
-#### 3.5.2 Token 本地化计数标准（去网络化）
-
-- **基准分词器与实现方式**：为彻底避免高并发文档处理时产生的 API 频控（Rate Limit）和网络 IO 阻塞，严禁通过 HTTP 调用 DashScope 云端 API 进行 Token 计算。
-- **本地加载方案**：在 Java 端直接引入 tiktoken-java（或类似 BPE 词表加载库），在资源目录存放千问开源的 qwen_v3_base.tiktoken 词表文件。系统初始化时加载至内存，实现纯本地、零延迟的毫秒级 Token 计算。
-- **多模态图片预留**：识别到 🖼️ 占位符时，计算逻辑在文本 Token 的基础上，为每个图片固定追加 448 token（参照 qwen3-vl 视觉输入底线），写入 token_count。
-- **tokenizer_type 字段**：在 meta.json 中固定声明为 "qwen_v3_base_local"。
-
-#### 3.5.3 为二期分块预留的硬性阈值
-
-以下参数仅记录在计划中，供二期分块器使用：
-
-- **子块目标区间**：**512 – 800 Tokens**（实验表明 512 左右忠实度最佳，且有利于重排任务）。
-- **安全冗余 (Buffer)**：预留 **15% Token 空间**，用于注入标题路径（如 `h1>h2>h3`），防止总长度超限。
-- **标题栈预记录**：一期在 `meta.json` 的 `h1`/`h2`/`h3` 中保存文档最高层级标题，二期分块时可据此构建注入前缀。
+不在当前执行文档中另起一套 `doc_id`、`source_file` 一类并行术语。
 
 ---
 
-## 4\. 潜在风险与解决方案
+## 7. 风险与取舍
 
-| 风险点                              | 表现                                                                  | 应对方案                                                                                                                                |
-| ----------------------------------- | --------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| 扫描件 PDF 无结构                   | Tika 输出纯 `<div>`，无标题                                           | ① 标记 `quality="low"`；② 降级为纯文本提取，按空行分段输出基础 Markdown。                                                               |
-| 超大文档一期产出远超 Embedding 窗口 | 清洗后 Markdown 全文达数万 token，若直接提交 Embedding 会被截断       | 一期**不负责保障单节点可送入向量库**；仅在 `meta.json` 中标记 `quality="warning"` 并记录 token 数；二期分块器会自动切分为多个窗口子块。 |
-| 表格过大导致单块超限                | 大表格 Markdown 化后超过 2048 token                                   | 一期不做拆分，仅记录 `token_count`；二期分块器可对表格按行切分并建立父子节点。                                                          |
-| 标题识别不准确                      | Word 文档标题使用非标准 class                                         | ① 配置多套候选选择器；② 允许人工映射（二期功能）。                                                                                      |
-| 清洗后图片信息丢失                  | 图片无 `alt` 或删除后语义断裂                                         | 自动填入 `🖼️ 图片` 占位符，并计入 448 token；二期文本检索时会保留该占位符，三期多模态可替换为描述。                                     |
-| 多语言混排误判                      | 语言检测偏向低频词                                                    | 使用 Tika 语言检测仅供参考，允许 `language="mixed"`，不强制单一语言。                                                                   |
-| Jsoup 内存溢出                      | 大型 XHTML DOM 树占用过高                                             | ① 文件大小限制；② 流式解析优先，避免整棵 DOM 树同时加载。                                                                               |
-| flexmark 转换异常                   | 特殊嵌套标签产出畸形 Markdown                                         | 前置 Jsoup 白名单已大幅降低风险；增加转换后规范性校验，异常时告警并回退存储原始文本。                                                   |
-| Tokenizer 调用延迟                  | 频繁调用 API 拖慢处理                                                 | ① 本地 LRU 缓存；② 批量接口调用；③ 未来可考虑离线分词器。                                                                               |
-| 中英混排 Token 激增                 | 纯英文分词器处理中文时 Token 膨胀 3 倍                                | 坚持使用阿里 Qwen 专属分词器（`qwen_v3_base`），双语优化确保计数准确。                                                                  |
-| 原生 Markdown 语义降级              | 原本带有特定格式（如代码高亮标注、表格公式）的 MD，过 Tika 后特征丢失 | 引入前端路由机制，检测为 .md 的文件跳过 Tika+Jsoup+Flexmark 的转化链，仅做不可见字符的正则过滤。                                        |
+### 7.1 当前接受的取舍
+
+- 先把纯文本质量做深，再考虑父子分块
+- 先把 `cleaned.md` 打牢，再考虑 richer node model
+- 先用现有 preview / `qa.ask` 回归验证，不借机改对外契约
+
+### 7.2 当前不接受的漂移
+
+- 为了携带更多调试信息，顺手扩 `qa.ask` DTO
+- 为了给未来父子分块埋字段，提前重塑当前检索契约
+- 为了表达清洗结果，顺手把 `processingMetadata` 写成最终节点契约
 
 ---
 
-## 5\. 一期产出与二期入口
+## 8. 与后续计划的关系
 
-- **一期交付物**：`clean.md`（流式可读） + `meta.json`（结构信息）。
-- **二期对接方式**：
-    - 分块器读取 `meta.json` 获取文档基础信息及 token 总数。
-    - 以流式方式（`BufferedReader` 逐行读取）消费 `clean.md`，根据标题、空行等语义边界实时计算 token 并生成子块。
-    - 分块器内存占用量与文档总大小无关，从根本上消除大文档 OOM 风险。
-
-- **二期将为每个子块构建完整的 RAG 节点 JSON**，此时才填充 `node_id`、`index_content`、`display_content`、`chunk_index`、`total_chunks`、`parent_id` 等字段。
+- 父子分块、`nodeId`、`parentNodeId`、`childNodeIds` 等 richer node model，不属于本轮落地范围
+- 如需讨论后续节点模型，统一参考同目录下的未来草案文档：
+  - `docs/runbooks/plans/ingest-cleaning/RAG 文档节点标准数据契约.md`
 
 ---
+
+## 9. 完成定义
+
+纯文字阶段只有同时满足以下条件，才能宣称本轮 `ingest-cleaning` 完成：
+
+- 黄金样本目录已落地
+- 每类样本具备原始文件、README 与固定 QA 问题
+- `cleaned.md` 在固定样本上满足 5 类硬性验收项
+- chunk preview 在固定样本上没有出现“标题更好看但正文仍断裂”的假改进
+- 固定 `qa.ask` 回归结果比基线更稳，或已明确记录为模型偶然变化而非 parser / cleaner 改善
+
+如果优化不能在固定样本上让 `cleaned.md`、chunk preview 或固定 QA 结果变得更稳，就不应宣称本轮完成。
+
+## 10. 下一轮优化前置判断
+
+下一轮若进入图片、表格、OCR 或 richer node model，应先判断变化类型：
+
+- 只改 `cleaned.md` 内的文字保留与噪音清理：仍属于 parser / cleaner 内部优化。
+- 需要新增节点、父子关系、表格结构、图片 OCR 文本或引用字段：已经越过当前 `cleaned.md` 基线，需先同步契约。
+- 需要改 `vector_store.metadata`、`qa.ask` response、`AskReferenceResponse` 或 `RetrievedChunk`：应先更新方案/ADR，再实现。

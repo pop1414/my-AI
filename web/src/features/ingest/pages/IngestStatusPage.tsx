@@ -14,6 +14,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { z } from "zod";
 import { getDocumentStatus } from "../../../shared/api/ingestApi";
 import { ApiErrorAlert } from "../../../shared/ui/ApiErrorAlert";
+import "./IngestStatusPage.css";
 
 const statusFormSchema = z.object({
 	documentId: z.string().trim().min(1, "documentId 不能为空"),
@@ -82,8 +83,14 @@ export function IngestStatusPage() {
 	};
 
 	return (
-		<Space direction="vertical" size={16} style={{ width: "100%" }}>
+		<Space
+			direction="vertical"
+			size={16}
+			style={{ width: "100%" }}
+			className="status-page"
+		>
 			<Card
+				className="status-page__card status-page__card--hero"
 				title="查询文档状态"
 				extra={
 					<Space>
@@ -99,6 +106,7 @@ export function IngestStatusPage() {
 				<Form
 					form={form}
 					layout="inline"
+					className="status-page__inline-form"
 					initialValues={{ documentId: initialDocumentId }}
 					onFinish={onSubmit}
 				>
@@ -115,6 +123,7 @@ export function IngestStatusPage() {
 			</Card>
 
 			<Card
+				className="status-page__card"
 				title="轮询控制"
 				extra={
 					<Space>
@@ -143,7 +152,7 @@ export function IngestStatusPage() {
 			{statusQuery.isError && <ApiErrorAlert error={statusQuery.error} />}
 
 			{statusQuery.data && (
-				<Card title="当前状态">
+				<Card title="当前状态" className="status-page__card">
 					<p>
 						<strong>documentId:</strong>{" "}
 						{statusQuery.data.documentId}
@@ -154,7 +163,7 @@ export function IngestStatusPage() {
 							{statusQuery.data.status}
 						</Tag>
 					</p>
-					<Space>
+					<Space className="status-page__actions">
 						{(statusQuery.data.status === "FAILED" ||
 							statusQuery.data.status === "INDEXED") && (
 							<Button

@@ -13,6 +13,7 @@ import io.github.spike.myai.ingest.domain.model.Document;
 import io.github.spike.myai.ingest.domain.model.DocumentChunk;
 import io.github.spike.myai.ingest.domain.model.DocumentId;
 import io.github.spike.myai.ingest.domain.model.DocumentParseResult;
+import io.github.spike.myai.ingest.domain.model.SourceHint;
 import io.github.spike.myai.ingest.domain.model.UploadStatus;
 import io.github.spike.myai.ingest.domain.port.DocumentChunker;
 import io.github.spike.myai.ingest.domain.port.DocumentProcessingArtifactStorage;
@@ -77,14 +78,14 @@ class ProcessDocumentApplicationServiceTest {
                 Instant.now(),
                 Instant.now());
         when(repository.findById(anyString(), eq(documentId))).thenReturn(Optional.of(ingesting));
-        when(sourceStorage.load(documentId, "a.txt")).thenReturn(Optional.of("hello world".getBytes()));
+        when(sourceStorage.loadVersion(documentId, 1, "a.txt")).thenReturn(Optional.of("hello world".getBytes()));
         DocumentParseResult parseResult = new DocumentParseResult(
                 "<html><body><p>hello world</p></body></html>",
                 "<p>hello world</p>",
                 "hello world",
                 "{\"schema_version\":\"v1\"}");
         when(parser.parse(eq("a.txt"), any(byte[].class))).thenReturn(parseResult);
-        when(chunker.chunk("hello world")).thenReturn(List.of(new DocumentChunk("hello world", null)));
+        when(chunker.chunk("hello world")).thenReturn(List.of(new DocumentChunk("hello world", SourceHint.none())));
         when(repository.markIndexed(
                         anyString(),
                         eq(documentId),
@@ -95,7 +96,7 @@ class ProcessDocumentApplicationServiceTest {
 
         service.handle(documentId);
 
-        verify(vectorIndexer, times(1)).index(eq(ingesting), eq(List.of(new DocumentChunk("hello world", null))));
+        verify(vectorIndexer, times(1)).index(eq(ingesting), eq(List.of(new DocumentChunk("hello world", SourceHint.none()))));
         verify(artifactStorage, times(1)).save(eq(documentId), eq(parseResult));
         verify(repository, times(1))
                 .markIndexed(
@@ -153,7 +154,7 @@ class ProcessDocumentApplicationServiceTest {
                 Instant.now(),
                 Instant.now());
         when(repository.findById(anyString(), eq(documentId))).thenReturn(Optional.of(ingesting));
-        when(sourceStorage.load(documentId, "b.txt")).thenReturn(Optional.empty());
+        when(sourceStorage.loadVersion(documentId, 1, "b.txt")).thenReturn(Optional.empty());
         when(repository.markFailed(
                         anyString(),
                         eq(documentId),
@@ -218,7 +219,7 @@ class ProcessDocumentApplicationServiceTest {
                 Instant.now(),
                 Instant.now());
         when(repository.findById(anyString(), eq(documentId))).thenReturn(Optional.of(ingesting));
-        when(sourceStorage.load(documentId, "c.txt"))
+        when(sourceStorage.loadVersion(documentId, 1, "c.txt"))
                 .thenThrow(new RuntimeException(new SocketTimeoutException("timeout")));
         when(repository.markRetry(
                         anyString(),

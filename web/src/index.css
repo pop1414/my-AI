@@ -39,8 +39,28 @@ body {
   border-bottom: 1px solid #e5e7eb;
   height: auto;
   line-height: normal;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
 }
 
 .console-content {
   padding: 20px 24px;
+}
+
+.console-header-actions {
+  flex-shrink: 0;
+}
+
+@media (max-width: 640px) {
+  .console-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .console-header-actions {
+    width: 100%;
+    justify-content: space-between;
+  }
 }

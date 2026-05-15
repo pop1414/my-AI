@@ -3,6 +3,7 @@ package io.github.spike.myai.ingest.application.service;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
@@ -13,7 +14,9 @@ import static org.mockito.Mockito.when;
 import io.github.spike.myai.auth.application.context.CurrentUser;
 import io.github.spike.myai.auth.application.context.CurrentUserProvider;
 import io.github.spike.myai.auth.application.service.AuthorizationService;
+import io.github.spike.myai.auth.domain.model.AuditEvent;
 import io.github.spike.myai.auth.domain.model.WorkspaceRole;
+import io.github.spike.myai.auth.domain.port.AuditEventRepository;
 import io.github.spike.myai.ingest.application.command.AcceptUploadCommand;
 import io.github.spike.myai.ingest.domain.model.Document;
 import io.github.spike.myai.ingest.domain.model.DocumentId;
@@ -53,6 +56,7 @@ class AcceptUploadApplicationServiceTest {
         KnowledgeBaseRepository knowledgeBaseRepository = Mockito.mock(KnowledgeBaseRepository.class);
         CurrentUserProvider currentUserProvider = currentUserProvider();
         AuthorizationService authorizationService = Mockito.mock(AuthorizationService.class);
+        AuditEventRepository auditEventRepository = Mockito.mock(AuditEventRepository.class);
         when(generator.nextId()).thenReturn(new DocumentId("doc-001"));
         when(repository.findByKbIdAndFileHash(eq("workspace-a"), eq("kb-x"), eq("hash-a")))
                 .thenReturn(Optional.empty());
@@ -64,7 +68,8 @@ class AcceptUploadApplicationServiceTest {
                 repository,
                 knowledgeBaseRepository,
                 currentUserProvider,
-                authorizationService);
+                authorizationService,
+                auditEventRepository);
         AcceptUploadCommand command = new AcceptUploadCommand("a.txt", 10L, "kb-x", "hash-a");
 
         UploadTicket ticket = service.handle(command);
@@ -74,7 +79,15 @@ class AcceptUploadApplicationServiceTest {
         assertEquals(UploadStatus.ACCEPTED, ticket.status());
         verify(authorizationService).requireCanContributeKnowledgeBase("kb-x");
         verify(generator, times(1)).nextId();
-        verify(repository, times(1)).save(any(Document.class));
+        verify(repository, times(1)).save(any(Document.class), eq("user-1"));
+        ArgumentCaptor<AuditEvent> auditCaptor = ArgumentCaptor.forClass(AuditEvent.class);
+        verify(auditEventRepository).save(auditCaptor.capture());
+        assertEquals("DOCUMENT_UPLOAD_REQUESTED", auditCaptor.getValue().eventType());
+        assertEquals("DOCUMENT", auditCaptor.getValue().targetType());
+        assertEquals("doc-001", auditCaptor.getValue().targetId());
+        assertEquals("user-1", auditCaptor.getValue().actorUserId());
+        assertEquals("SUCCESS", auditCaptor.getValue().outcome());
+        assertTrue(auditCaptor.getValue().metadata().contains("\"versionResultType\":\"CREATED\""));
     }
 
     @Test
@@ -85,6 +98,7 @@ class AcceptUploadApplicationServiceTest {
         KnowledgeBaseRepository knowledgeBaseRepository = Mockito.mock(KnowledgeBaseRepository.class);
         CurrentUserProvider currentUserProvider = currentUserProvider();
         AuthorizationService authorizationService = Mockito.mock(AuthorizationService.class);
+        AuditEventRepository auditEventRepository = Mockito.mock(AuditEventRepository.class);
         when(generator.nextId()).thenReturn(new DocumentId("doc-blank-kb"));
         when(repository.findByKbIdAndFileHash(eq("workspace-a"), eq("default"), eq("hash-b")))
                 .thenReturn(Optional.empty());
@@ -96,7 +110,8 @@ class AcceptUploadApplicationServiceTest {
                 repository,
                 knowledgeBaseRepository,
                 currentUserProvider,
-                authorizationService);
+                authorizationService,
+                auditEventRepository);
         AcceptUploadCommand command = new AcceptUploadCommand("b.txt", 20L, " ", "hash-b");
 
         UploadTicket ticket = service.handle(command);
@@ -106,7 +121,7 @@ class AcceptUploadApplicationServiceTest {
         verify(generator, times(1)).nextId();
 
         ArgumentCaptor<Document> documentCaptor = ArgumentCaptor.forClass(Document.class);
-        verify(repository, times(1)).save(documentCaptor.capture());
+        verify(repository, times(1)).save(documentCaptor.capture(), eq("user-1"));
         Document saved = documentCaptor.getValue();
         assertEquals("workspace-a", saved.workspaceId());
         assertEquals("default", saved.kbId());
@@ -123,6 +138,7 @@ class AcceptUploadApplicationServiceTest {
         KnowledgeBaseRepository knowledgeBaseRepository = Mockito.mock(KnowledgeBaseRepository.class);
         CurrentUserProvider currentUserProvider = currentUserProvider();
         AuthorizationService authorizationService = Mockito.mock(AuthorizationService.class);
+        AuditEventRepository auditEventRepository = Mockito.mock(AuditEventRepository.class);
         Document existing = new Document(
                 new DocumentId("doc-existing"),
                 "workspace-a",
@@ -154,7 +170,8 @@ class AcceptUploadApplicationServiceTest {
                 repository,
                 knowledgeBaseRepository,
                 currentUserProvider,
-                authorizationService);
+                authorizationService,
+                auditEventRepository);
         AcceptUploadCommand command = new AcceptUploadCommand("new.txt", 99L, "kb-dup", "hash-dup");
 
         UploadTicket ticket = service.handle(command);
@@ -163,7 +180,100 @@ class AcceptUploadApplicationServiceTest {
         assertEquals(UploadStatus.ACCEPTED, ticket.status());
         verify(authorizationService).requireCanContributeKnowledgeBase("kb-dup");
         verify(generator, never()).nextId();
-        verify(repository, never()).save(any(Document.class));
+        verify(repository, never()).save(any(Document.class), any());
+    }
+
+    @Test
+    @DisplayName("旧文档删除中同内容重新上传仍应复用原 documentId")
+    void handle_shouldReuseExistingDocument_whenDeletingDocumentMatchesDuplicateUpload() {
+        DocumentIdGenerator generator = Mockito.mock(DocumentIdGenerator.class);
+        DocumentRepository repository = Mockito.mock(DocumentRepository.class);
+        KnowledgeBaseRepository knowledgeBaseRepository = Mockito.mock(KnowledgeBaseRepository.class);
+        CurrentUserProvider currentUserProvider = currentUserProvider();
+        AuthorizationService authorizationService = Mockito.mock(AuthorizationService.class);
+        AuditEventRepository auditEventRepository = Mockito.mock(AuditEventRepository.class);
+        Document deleting = new Document(
+                new DocumentId("doc-deleting"),
+                "workspace-a",
+                "kb-dup",
+                "hash-dup",
+                "old.txt",
+                88L,
+                UploadStatus.DELETING,
+                null,
+                0,
+                3,
+                null,
+                null,
+                null,
+                null,
+                0,
+                null,
+                "v1",
+                null,
+                Instant.now(),
+                Instant.now());
+        when(repository.findByKbIdAndFileHash(eq("workspace-a"), eq("kb-dup"), eq("hash-dup")))
+                .thenReturn(Optional.of(deleting));
+        when(knowledgeBaseRepository.findByKbId(eq("workspace-a"), eq("kb-dup")))
+                .thenReturn(Optional.of(new KnowledgeBase("kb-dup", "workspace-a", "知识库", "", KnowledgeBaseStatus.ACTIVE, Instant.now(), Instant.now())));
+
+        AcceptUploadApplicationService service = new AcceptUploadApplicationService(
+                generator,
+                repository,
+                knowledgeBaseRepository,
+                currentUserProvider,
+                authorizationService,
+                auditEventRepository);
+
+        UploadTicket ticket = service.handle(new AcceptUploadCommand("same.txt", 99L, "kb-dup", "hash-dup"));
+
+        assertEquals("doc-deleting", ticket.documentId().value());
+        assertEquals(UploadStatus.ACCEPTED, ticket.status());
+        verify(generator, never()).nextId();
+        verify(repository, never()).save(any(Document.class), any());
+    }
+
+    @Test
+    @DisplayName("旧文档删除后同内容重新上传应生成新 documentId，且不继承旧文档级授权")
+    void handle_shouldCreateNewDocument_whenDeletedDocumentIsExcludedFromDuplicateLookup() {
+        DocumentIdGenerator generator = Mockito.mock(DocumentIdGenerator.class);
+        DocumentRepository repository = Mockito.mock(DocumentRepository.class);
+        KnowledgeBaseRepository knowledgeBaseRepository = Mockito.mock(KnowledgeBaseRepository.class);
+        CurrentUserProvider currentUserProvider = currentUserProvider();
+        AuthorizationService authorizationService = Mockito.mock(AuthorizationService.class);
+        AuditEventRepository auditEventRepository = Mockito.mock(AuditEventRepository.class);
+        when(generator.nextId()).thenReturn(new DocumentId("doc-new-after-delete"));
+        when(repository.findByKbIdAndFileHash(eq("workspace-a"), eq("kb-dup"), eq("hash-dup")))
+                .thenReturn(Optional.empty());
+        when(knowledgeBaseRepository.findByKbId(eq("workspace-a"), eq("kb-dup")))
+                .thenReturn(Optional.of(new KnowledgeBase(
+                        "kb-dup",
+                        "workspace-a",
+                        "知识库",
+                        "",
+                        KnowledgeBaseStatus.ACTIVE,
+                        Instant.now(),
+                        Instant.now())));
+
+        AcceptUploadApplicationService service = new AcceptUploadApplicationService(
+                generator,
+                repository,
+                knowledgeBaseRepository,
+                currentUserProvider,
+                authorizationService,
+                auditEventRepository);
+
+        UploadTicket ticket = service.handle(new AcceptUploadCommand("same.txt", 99L, "kb-dup", "hash-dup"));
+
+        assertEquals("doc-new-after-delete", ticket.documentId().value());
+        assertEquals(UploadStatus.ACCEPTED, ticket.status());
+        verify(authorizationService).requireCanContributeKnowledgeBase("kb-dup");
+        verify(generator, times(1)).nextId();
+        ArgumentCaptor<Document> documentCaptor = ArgumentCaptor.forClass(Document.class);
+        verify(repository).save(documentCaptor.capture(), eq("user-1"));
+        assertEquals("doc-new-after-delete", documentCaptor.getValue().documentId().value());
+        assertEquals("hash-dup", documentCaptor.getValue().fileHash());
     }
 
     @Test
@@ -181,7 +291,8 @@ class AcceptUploadApplicationServiceTest {
                 repository,
                 knowledgeBaseRepository,
                 currentUserProvider,
-                authorizationService);
+                authorizationService,
+                Mockito.mock(AuditEventRepository.class));
 
         org.junit.jupiter.api.Assertions.assertThrows(
                 KnowledgeBaseNotFoundException.class,
@@ -204,7 +315,8 @@ class AcceptUploadApplicationServiceTest {
                 repository,
                 knowledgeBaseRepository,
                 currentUserProvider,
-                authorizationService);
+                authorizationService,
+                Mockito.mock(AuditEventRepository.class));
 
         org.junit.jupiter.api.Assertions.assertThrows(
                 KnowledgeBaseInactiveException.class,
@@ -227,7 +339,8 @@ class AcceptUploadApplicationServiceTest {
                 repository,
                 knowledgeBaseRepository,
                 currentUserProvider,
-                authorizationService);
+                authorizationService,
+                Mockito.mock(AuditEventRepository.class));
 
         assertThrows(
                 AccessDeniedException.class,
@@ -236,7 +349,7 @@ class AcceptUploadApplicationServiceTest {
         verify(knowledgeBaseRepository, never()).findByKbId(any(), any());
         verify(repository, never()).findByKbIdAndFileHash(any(), any(), any());
         verify(generator, never()).nextId();
-        verify(repository, never()).save(any(Document.class));
+        verify(repository, never()).save(any(Document.class), any());
     }
 
     private static CurrentUserProvider currentUserProvider() {

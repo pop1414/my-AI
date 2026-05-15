@@ -6,17 +6,24 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import io.github.spike.myai.qa.application.result.AskQuestionResult;
 import io.github.spike.myai.qa.application.result.AskReferenceResult;
+import io.github.spike.myai.qa.application.result.AskStaleReferenceDocumentResult;
+import io.github.spike.myai.qa.application.result.AskStaleReferenceSummaryResult;
 import io.github.spike.myai.qa.application.usecase.AskQuestionUseCase;
 import io.github.spike.myai.knowledge.application.exception.KnowledgeBaseInactiveException;
 import io.github.spike.myai.knowledge.application.exception.KnowledgeBaseNotFoundException;
+import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 import org.springframework.http.MediaType;
+import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
@@ -32,15 +39,33 @@ class QaControllerTest {
     void setUp() {
         this.askQuestionUseCase = Mockito.mock(AskQuestionUseCase.class);
         QaController controller = new QaController(askQuestionUseCase);
-        this.mockMvc = MockMvcBuilders.standaloneSetup(controller).build();
+        ObjectMapper objectMapper = new ObjectMapper()
+                .registerModule(new JavaTimeModule())
+                .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
+        this.mockMvc = MockMvcBuilders.standaloneSetup(controller)
+                .setMessageConverters(new MappingJackson2HttpMessageConverter(objectMapper))
+                .build();
     }
 
     @Test
-    @DisplayName("问答命中时应返回 200、answer 与结构化 references")
+    @DisplayName("问答命中时应返回 200、answer、版本化 references 与 stale 汇总")
     void ask_shouldReturnAnswer_whenMatched() throws Exception {
         when(askQuestionUseCase.handle(any())).thenReturn(new AskQuestionResult(
                 "这是回答",
-                List.of(new AskReferenceResult("doc-1", 0, "片段预览"))));
+                List.of(new AskReferenceResult(
+                        "doc-1",
+                        0,
+                        "片段预览",
+                        2,
+                        Instant.parse("2026-05-09T10:00:00Z"),
+                        false,
+                        3,
+                        "doc-1-v2.pdf")),
+                new AskStaleReferenceSummaryResult(
+                        true,
+                        1,
+                        1,
+                        List.of(new AskStaleReferenceDocumentResult("doc-1", 2, 3, "doc-1-v2.pdf")))));
 
         mockMvc.perform(post("/api/v1/qa/ask")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -55,7 +80,18 @@ class QaControllerTest {
                 .andExpect(jsonPath("$.answer").value("这是回答"))
                 .andExpect(jsonPath("$.references[0].documentId").value("doc-1"))
                 .andExpect(jsonPath("$.references[0].chunkIndex").value(0))
-                .andExpect(jsonPath("$.references[0].contentPreview").value("片段预览"));
+                .andExpect(jsonPath("$.references[0].contentPreview").value("片段预览"))
+                .andExpect(jsonPath("$.references[0].sourceVersionNumber").value(2))
+                .andExpect(jsonPath("$.references[0].sourceUpdatedAt").value("2026-05-09T10:00:00Z"))
+                .andExpect(jsonPath("$.references[0].isLatestVersion").value(false))
+                .andExpect(jsonPath("$.references[0].latestVersionNumber").value(3))
+                .andExpect(jsonPath("$.references[0].sourceFilename").value("doc-1-v2.pdf"))
+                .andExpect(jsonPath("$.staleReferences.hasStaleReferences").value(true))
+                .andExpect(jsonPath("$.staleReferences.staleReferenceCount").value(1))
+                .andExpect(jsonPath("$.staleReferences.staleDocumentCount").value(1))
+                .andExpect(jsonPath("$.staleReferences.documents[0].documentId").value("doc-1"))
+                .andExpect(jsonPath("$.staleReferences.documents[0].sourceVersionNumber").value(2))
+                .andExpect(jsonPath("$.staleReferences.documents[0].latestVersionNumber").value(3));
     }
 
     @Test

@@ -3,7 +3,6 @@ package io.github.spike.myai.ingest.infrastructure.persistence;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.argThat;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
@@ -24,75 +23,80 @@ class IngestSchemaVerifierTest {
     void run_shouldPass_whenSchemaValid() {
         JdbcTemplate jdbcTemplate = Mockito.mock(JdbcTemplate.class);
         IngestProperties properties = new IngestProperties();
-
-        when(jdbcTemplate.queryForList(anyString(), eq("ingest_documents")))
-                .thenReturn(requiredColumns());
-        when(jdbcTemplate.query(
-                        argThat(sql -> sql != null && sql.contains("SELECT indexdef")),
-                        Mockito.<ResultSetExtractor<String>>any(),
-                        eq("ingest_documents"),
-                        eq("uk_ingest_documents_kb_file_hash")))
-                .thenReturn("CREATE UNIQUE INDEX uk_ingest_documents_kb_file_hash ON public.ingest_documents (kb_id, file_hash) WHERE file_hash IS NOT NULL AND status <> 'DELETED'");
-        when(jdbcTemplate.query(
-                        argThat(sql -> sql != null && sql.contains("SELECT pg_get_expr")),
-                        Mockito.<ResultSetExtractor<String>>any(),
-                        eq("ingest_documents"),
-                        eq("uk_ingest_documents_kb_file_hash")))
-                .thenReturn("((file_hash IS NOT NULL) AND (status <> 'DELETED'::text))");
+        stubValidSchema(jdbcTemplate);
 
         IngestSchemaVerifier verifier = new IngestSchemaVerifier(jdbcTemplate, properties);
         assertDoesNotThrow(() -> verifier.run(null));
     }
 
     @Test
-    @DisplayName("缺少关键列时，应拒绝启动")
-    void run_shouldFail_whenMissingColumn() {
+    @DisplayName("缺少主表兼容镜像列时，应拒绝启动")
+    void run_shouldFail_whenMissingDocumentCompatibilityColumn() {
         JdbcTemplate jdbcTemplate = Mockito.mock(JdbcTemplate.class);
         IngestProperties properties = new IngestProperties();
         when(jdbcTemplate.queryForList(anyString(), eq("ingest_documents")))
-                .thenReturn(requiredColumnsWithoutStatus());
+                .thenReturn(requiredDocumentColumnsWithoutStatus());
 
         IngestSchemaVerifier verifier = new IngestSchemaVerifier(jdbcTemplate, properties);
         assertThrows(IllegalStateException.class, () -> verifier.run(null));
     }
 
     @Test
-    @DisplayName("缺少唯一索引时，应拒绝启动")
-    void run_shouldFail_whenMissingIndex() {
+    @DisplayName("缺少 version 事实列时，应拒绝启动")
+    void run_shouldFail_whenMissingVersionFactColumn() {
         JdbcTemplate jdbcTemplate = Mockito.mock(JdbcTemplate.class);
         IngestProperties properties = new IngestProperties();
         when(jdbcTemplate.queryForList(anyString(), eq("ingest_documents")))
-                .thenReturn(requiredColumns());
-        when(jdbcTemplate.query(
-                        argThat(sql -> sql != null && sql.contains("SELECT indexdef")),
-                        Mockito.<ResultSetExtractor<String>>any(),
-                        eq("ingest_documents"),
-                        eq("uk_ingest_documents_kb_file_hash")))
-                .thenReturn(null);
+                .thenReturn(requiredDocumentColumns());
+        when(jdbcTemplate.queryForList(anyString(), eq("ingest_document_versions")))
+                .thenReturn(requiredVersionColumnsWithoutFileHash());
 
         IngestSchemaVerifier verifier = new IngestSchemaVerifier(jdbcTemplate, properties);
         assertThrows(IllegalStateException.class, () -> verifier.run(null));
     }
 
     @Test
-    @DisplayName("索引谓词不包含 status <> 'DELETED' 时，应拒绝启动")
-    void run_shouldFail_whenIndexPredicateMismatch() {
+    @DisplayName("缺少旧兼容唯一索引时，应拒绝启动")
+    void run_shouldFail_whenMissingLegacyIndex() {
         JdbcTemplate jdbcTemplate = Mockito.mock(JdbcTemplate.class);
         IngestProperties properties = new IngestProperties();
         when(jdbcTemplate.queryForList(anyString(), eq("ingest_documents")))
-                .thenReturn(requiredColumns());
-        when(jdbcTemplate.query(
-                        argThat(sql -> sql != null && sql.contains("SELECT indexdef")),
-                        Mockito.<ResultSetExtractor<String>>any(),
-                        eq("ingest_documents"),
-                        eq("uk_ingest_documents_kb_file_hash")))
-                .thenReturn("CREATE UNIQUE INDEX uk_ingest_documents_kb_file_hash ON public.ingest_documents (kb_id, file_hash)");
-        when(jdbcTemplate.query(
-                        argThat(sql -> sql != null && sql.contains("SELECT pg_get_expr")),
-                        Mockito.<ResultSetExtractor<String>>any(),
-                        eq("ingest_documents"),
-                        eq("uk_ingest_documents_kb_file_hash")))
-                .thenReturn("(file_hash IS NOT NULL)");
+                .thenReturn(requiredDocumentColumns());
+        when(jdbcTemplate.queryForList(anyString(), eq("ingest_document_versions")))
+                .thenReturn(requiredVersionColumns());
+        whenIndexDefinition(jdbcTemplate, "ingest_documents", "uk_ingest_documents_kb_file_hash", null);
+
+        IngestSchemaVerifier verifier = new IngestSchemaVerifier(jdbcTemplate, properties);
+        assertThrows(IllegalStateException.class, () -> verifier.run(null));
+    }
+
+    @Test
+    @DisplayName("旧兼容索引谓词不包含 status <> 'DELETED' 时，应拒绝启动")
+    void run_shouldFail_whenLegacyIndexPredicateMismatch() {
+        JdbcTemplate jdbcTemplate = Mockito.mock(JdbcTemplate.class);
+        IngestProperties properties = new IngestProperties();
+        when(jdbcTemplate.queryForList(anyString(), eq("ingest_documents")))
+                .thenReturn(requiredDocumentColumns());
+        when(jdbcTemplate.queryForList(anyString(), eq("ingest_document_versions")))
+                .thenReturn(requiredVersionColumns());
+        whenIndexDefinition(
+                jdbcTemplate,
+                "ingest_documents",
+                "uk_ingest_documents_kb_file_hash",
+                "CREATE UNIQUE INDEX uk_ingest_documents_kb_file_hash ON public.ingest_documents (kb_id, file_hash)");
+        whenLegacyPredicate(jdbcTemplate, "(file_hash IS NOT NULL)");
+
+        IngestSchemaVerifier verifier = new IngestSchemaVerifier(jdbcTemplate, properties);
+        assertThrows(IllegalStateException.class, () -> verifier.run(null));
+    }
+
+    @Test
+    @DisplayName("缺少 version 文件哈希索引时，应拒绝启动")
+    void run_shouldFail_whenVersionFactIndexMissing() {
+        JdbcTemplate jdbcTemplate = Mockito.mock(JdbcTemplate.class);
+        IngestProperties properties = new IngestProperties();
+        stubValidSchema(jdbcTemplate);
+        whenIndexDefinition(jdbcTemplate, "ingest_document_versions", "idx_ingest_document_versions_file_hash", null);
 
         IngestSchemaVerifier verifier = new IngestSchemaVerifier(jdbcTemplate, properties);
         assertThrows(IllegalStateException.class, () -> verifier.run(null));
@@ -108,31 +112,130 @@ class IngestSchemaVerifierTest {
         assertDoesNotThrow(() -> verifier.run(null));
     }
 
-    private static List<Map<String, Object>> requiredColumns() {
+    private static void stubValidSchema(JdbcTemplate jdbcTemplate) {
+        when(jdbcTemplate.queryForList(anyString(), eq("ingest_documents")))
+                .thenReturn(requiredDocumentColumns());
+        when(jdbcTemplate.queryForList(anyString(), eq("ingest_document_versions")))
+                .thenReturn(requiredVersionColumns());
+        whenIndexDefinition(
+                jdbcTemplate,
+                "ingest_documents",
+                "uk_ingest_documents_kb_file_hash",
+                "CREATE UNIQUE INDEX uk_ingest_documents_kb_file_hash ON public.ingest_documents (kb_id, file_hash) WHERE file_hash IS NOT NULL AND status <> 'DELETED'");
+        whenLegacyPredicate(jdbcTemplate, "((file_hash IS NOT NULL) AND (status <> 'DELETED'::text))");
+        whenIndexDefinition(
+                jdbcTemplate,
+                "ingest_document_versions",
+                "idx_ingest_document_versions_file_hash",
+                "CREATE INDEX idx_ingest_document_versions_file_hash ON public.ingest_document_versions USING btree (file_hash)");
+    }
+
+    private static void whenIndexDefinition(
+            JdbcTemplate jdbcTemplate,
+            String tableName,
+            String indexName,
+            String indexDefinition) {
+        when(jdbcTemplate.query(
+                        argThat(sql -> sql != null && sql.contains("SELECT indexdef")),
+                        Mockito.<ResultSetExtractor<String>>any(),
+                        eq(tableName),
+                        eq(indexName)))
+                .thenReturn(indexDefinition);
+    }
+
+    private static void whenLegacyPredicate(JdbcTemplate jdbcTemplate, String predicate) {
+        when(jdbcTemplate.query(
+                        argThat(sql -> sql != null && sql.contains("SELECT pg_get_expr")),
+                        Mockito.<ResultSetExtractor<String>>any(),
+                        eq("ingest_documents"),
+                        eq("uk_ingest_documents_kb_file_hash")))
+                .thenReturn(predicate);
+    }
+
+    private static List<Map<String, Object>> requiredDocumentColumns() {
         return List.of(
                 row("document_id"),
                 row("kb_id"),
                 row("workspace_id"),
-                row("file_hash"),
-                row("filename"),
-                row("status"),
+                row("latest_version_number"),
+                row("latest_status"),
+                row("latest_filename"),
+                row("latest_version_origin_type"),
                 row("retry_count"),
                 row("retry_max"),
+                row("split_version"),
+                row("file_hash"),
+                row("filename"),
+                row("file_size"),
+                row("status"),
+                row("processing_metadata"),
+                row("created_at"),
+                row("updated_at"));
+    }
+
+    private static List<Map<String, Object>> requiredDocumentColumnsWithoutStatus() {
+        return List.of(
+                row("document_id"),
+                row("kb_id"),
+                row("workspace_id"),
+                row("latest_version_number"),
+                row("latest_status"),
+                row("latest_filename"),
+                row("latest_version_origin_type"),
+                row("retry_count"),
+                row("retry_max"),
+                row("split_version"),
+                row("file_hash"),
+                row("filename"),
+                row("file_size"),
+                row("processing_metadata"),
+                row("created_at"),
+                row("updated_at"));
+    }
+
+    private static List<Map<String, Object>> requiredVersionColumns() {
+        return List.of(
+                row("document_id"),
+                row("version_number"),
+                row("version_origin_type"),
+                row("rollback_from_version_number"),
+                row("file_hash"),
+                row("filename"),
+                row("file_size"),
+                row("status"),
+                row("failure_reason"),
+                row("retry_count"),
+                row("retry_max"),
+                row("next_retry_at"),
+                row("last_error_code"),
+                row("last_error_message"),
+                row("last_error_at"),
+                row("reprocess_count"),
+                row("reprocess_requested_at"),
                 row("split_version"),
                 row("processing_metadata"),
                 row("created_at"),
                 row("updated_at"));
     }
 
-    private static List<Map<String, Object>> requiredColumnsWithoutStatus() {
+    private static List<Map<String, Object>> requiredVersionColumnsWithoutFileHash() {
         return List.of(
                 row("document_id"),
-                row("kb_id"),
-                row("workspace_id"),
-                row("file_hash"),
+                row("version_number"),
+                row("version_origin_type"),
+                row("rollback_from_version_number"),
                 row("filename"),
+                row("file_size"),
+                row("status"),
+                row("failure_reason"),
                 row("retry_count"),
                 row("retry_max"),
+                row("next_retry_at"),
+                row("last_error_code"),
+                row("last_error_message"),
+                row("last_error_at"),
+                row("reprocess_count"),
+                row("reprocess_requested_at"),
                 row("split_version"),
                 row("processing_metadata"),
                 row("created_at"),

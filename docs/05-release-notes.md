@@ -14,6 +14,19 @@
 - 新增账号生命周期后端能力：账号列表、创建账号、账号启用/停用、密码重置、成员移除
 - 新增知识库列表授权可见性收紧：工作区管理员看全部，普通成员仅看自己显式授权的知识库
 - 新增 `auth/me` 能力位返回：`capabilities.{canAccessDocumentList,canUploadDocument,canAccessKnowledge,canAskQuestion,canAccessAdmin}`
+- 新增文档版本历史只读查询接口：`GET /api/v1/documents/{documentId}/versions`
+- 新增文档版本历史 DTO：返回 `versionNumber`、`versionOriginType`、`rollbackFromVersionNumber`、来源文件、状态、失败原因、时间、`isLatestVersion` 与 `isAskableVersion`
+- 新增上传新版本接口：`POST /api/v1/documents/{documentId}/versions`，支持绑定既有 `document` 上下文、`expectedLatestVersionNumber` 乐观并发校验、同内容复用和稳定版本结果 DTO
+- 新增版本回退接口：`POST /api/v1/documents/{documentId}/versions/{versionNumber}/rollback`，基于已 `INDEXED` 历史版本创建 `ROLLBACK` 来源的新最新版本，并以 `UPLOADED` 状态重新进入处理链路
+- 新增文档详情页版本历史前端只读视图：展示版本账本、历史版本查看态、差异摘要、返回最新版本入口与无管理权限不可见分支
+- 新增版本回退前端交互：在文档详情页版本历史中接入“回退为最新版本”入口、确认弹窗、稳定结果提示与回退后版本标记刷新
+- 新增问答可问答版本范围：每个 `document` 独立选择最近一个已 `INDEXED` 版本，并将授权后的 `documentId + versionNumber` 范围下推到向量检索
+- 新增问答版本化引用字段：`sourceVersionNumber`、`sourceUpdatedAt`、`isLatestVersion`、`latestVersionNumber`、`sourceFilename`
+- 新增问答 `staleReferences` 顶层汇总：存在非最新版本引用时返回陈旧引用条数与文档明细，无引用时不返回版本提示
+- 新增问答页引用版本展示：引用卡片展示来源版本、来源更新时间、来源文件名，并在 stale reference 时提示当前最新版本
+- 新增问答页顶部 stale reference 提示：仅当本次回答至少存在一条非最新版本引用时展示，无引用兜底回答不展示版本提示
+- 新增控制台顶部问答入口：具备 `canAskQuestion` 能力的用户可直接进入问答控制台
+- 新增版本治理审计事件：上传新版本、版本回退、删除、重处理均记录成功/失败治理上下文，失败审计包含业务错误码与服务端 message
 
 ### Changed
 - 知识库列表接口升级为“主数据 + `INDEXED` 统计”视图，保留既有 `id/name/indexedDocumentCount` 字段并新增 `description/status`
@@ -23,6 +36,8 @@
 - 上传页与问答页改为以知识库选择器为主，知识库页升级为可创建、可编辑的管理台
 - 控制台默认落点从上传页切换为文档列表页，旧路由 `/ingest/list` 改为兼容重定向
 - 文档列表页行为与执行计划对齐：URL 路径参数传递 `documentId`、`kbId` 仅展示 `ACTIVE`、状态筛选与按钮显隐规则收紧
+- 文档版本链读边界收紧：版本历史查询按 `versionNumber,DESC` 读取版本事实，`isAskableVersion` 由最近已 `INDEXED` 版本推导，不落库为字段
+- 上传新版本后端链路收口：仅允许在当前最新版本为 `INDEXED` / `FAILED` 时创建新版本；源文件版本化落盘成功后再追加 DB 版本，避免 latest 指向缺失源文件
 - V1.1 范围调整：原“轻量认证与访问控制”从收口范围中拆出，转为独立的成熟 RAG 权限体系规划
 - 前端导航收口为能力位驱动模型：一级菜单按能力位显示，`系统管理` 收口为单一入口 `/admin`
 - 旧的无 `documentId` ingest 独立入口从侧边栏移除，仅保留兼容重定向
@@ -31,6 +46,11 @@
 - 成员维度授权配置页升级为知识库 / 文档双 Tab 的集中授权入口，支持按成员批量覆盖保存
 - 资源维度知识库授权页与文档授权页统一为批量勾选交互，但保存实现收口为单成员差量提交，不再依赖未稳定的 `grants:batch`
 - 文档授权管理页导航归属调整为文档列表链路，文档状态、分块预览、重处理、删除、授权管理页面统一提供“返回文档列表”按钮
+- ingest parser 路由细化：原生 Markdown 走最小破坏清洗路径，原生 HTML 绕过 Tika 后进入 HTML 语义清洗与 Markdown 转换
+- 分块预览标题上下文增强：HTML 清洗后的独立短标题可生成可解释 `sourceHint`，并收窄普通短正文误判范围
+- 问答链路从“召回后按知识库过滤”调整为“先计算授权可问答版本范围，再带范围召回”，以保持 ADR-0005 的检索阶段权限边界
+- 问答检索版本过滤表达式收口为 PGVector 支持的等值条件，并兼容 `documentVersionNumber`、`splitVersion=version-{versionNumber}-v1` 与历史 `splitVersion=v1`
+- 版本治理冲突语义收口：上传新版本、版本回退、删除、重处理统一通过 latest 版本号、latest 状态和 CAS 区分过期页面冲突与状态变化冲突
 
 ### Notes
 - 启动迁移会自动补齐 `default` 知识库，并从 `ingest_documents` 回填历史 `kb_id`，避免旧数据升级后失联
@@ -38,6 +58,12 @@
 - 文档治理（2026-05-08）：新增成熟 RAG 权限体系专题计划与 `ADR-0005`，将权限方向从路线级描述升级为可引用的正式规划与决策留痕
 - 权限治理进展（2026-05-11）：账号生命周期后端与知识库列表授权可见性收紧已完成，动态 CSRF token 仍在后续范围内
 - 权限治理联调收口（2026-05-11）：资源维度授权最终以单成员授权接口作为稳定保存链路，成员维度继续保留 `:batch` 批量覆盖接口
+- ingest-cleaning 同步（2026-05-14）：#14 - #18 已关闭，纯文字解析/清洗阶段完成收口；Markdown/HTML 绕行、Word/PDF 黄金样本、`cleaned.md` 质量回归闭环和基础 `processingMetadata` 回填均已纳入当前事实。图片理解、表格结构化节点、OCR 与 richer node model 仍属于后续增强。
+- 版本治理收口（2026-05-14）：#6 已关闭，版本回退后端链路与 API 契约完成；回退基于已 `INDEXED` 历史版本创建 `ROLLBACK` 来源的新最新版本，并通过 `expectedLatestVersionNumber` 防止过期视图提交。
+- 版本治理收口（2026-05-14）：#7 已关闭，版本回退前端交互已完成；详情页版本历史现已支持回退入口、确认提示、回退后稳定结果提示，以及“回退产生 / 曾回退为最新版本”标记展示。
+- QA 版本链收口（2026-05-15）：#10 可关闭，后端问答已接入按文档独立选择可问答版本、版本化引用字段与 stale 汇总；相关公开文档和 API 契约已同步。
+- QA 版本链收口（2026-05-15）：#11 可关闭，问答页已接入引用版本卡片、stale reference 顶部提示、无引用兜底提示规则和顶栏问答入口；PGVector `ISNULL` 兼容问题已修复并补齐回归测试。
+- 版本治理收口（2026-05-15）：#12 已关闭，后端治理动作已统一执行态互斥、`VERSION_CONFLICT_STALE_LATEST_VERSION` / `VERSION_CONFLICT_STATE_CHANGED` 错误码分类与审计扩展上下文。
 
 ---
 

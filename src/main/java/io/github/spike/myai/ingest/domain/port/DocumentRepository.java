@@ -2,6 +2,7 @@ package io.github.spike.myai.ingest.domain.port;
 
 import io.github.spike.myai.ingest.domain.model.Document;
 import io.github.spike.myai.ingest.domain.model.DocumentId;
+import io.github.spike.myai.ingest.domain.model.DocumentVersion;
 import io.github.spike.myai.ingest.domain.model.UploadStatus;
 import java.time.Instant;
 import java.util.Optional;
@@ -28,6 +29,19 @@ public interface DocumentRepository {
     void save(Document document);
 
     /**
+     * 保存文档聚合，并为初始版本记录创建人。
+     *
+     * <p>创建人属于版本事实字段，历史调用方未提供时保留空值；
+     * 上传受理链路必须传入当前用户，确保 version 1 可审计追溯。
+     *
+     * @param document 领域文档对象
+     * @param createdByUserId 创建初始版本的用户 ID
+     */
+    default void save(Document document, String createdByUserId) {
+        save(document);
+    }
+
+    /**
      * 按文档 ID 查询文档聚合。
      *
      * @param workspaceId 工作区标识
@@ -37,9 +51,25 @@ public interface DocumentRepository {
     Optional<Document> findById(String workspaceId, DocumentId documentId);
 
     /**
+     * 按文档 ID 与版本号查询版本事实。
+     *
+     * <p>该方法用于版本治理动作读取目标历史版本的文件事实与状态事实，
+     * 并通过 workspaceId 约束租户边界。
+     *
+     * @param workspaceId   工作区标识
+     * @param documentId    文档 ID
+     * @param versionNumber 版本号
+     * @return 查询结果，未命中时返回空
+     */
+    Optional<DocumentVersion> findVersionByNumber(String workspaceId, DocumentId documentId, int versionNumber);
+
+    /**
      * 按知识库和文件哈希查询文档，用于上传受理幂等。
      *
-     * <p>排除已删除（{@code DELETED}）状态的文档。
+     * <p>仅排除已删除（{@code DELETED}）状态的文档。删除中（{@code DELETING}）
+     * 的文档仍保留原 documentId 作为查重命中，直到删除最终完成。
+     * 因此同内容在旧文档删除完成后重新上传时，会分配新的 documentId，
+     * 旧 documentId 上的文档级授权不会被自动继承到新 document。
      *
      * @param workspaceId 工作区标识
      * @param kbId        知识库 ID
@@ -190,6 +220,55 @@ public interface DocumentRepository {
             UploadStatus expectedStatus,
             String newSplitVersion,
             Instant requestedAt);
+
+    /**
+     * 追加一个上传来源的新最新版本。
+     *
+     * <p>仅当当前 latestVersionNumber 与调用方期望值一致、且当前 latest 状态允许上传新版本时才成功。
+     *
+     * @param workspaceId 工作区标识
+     * @param documentId 文档资产 ID
+     * @param expectedLatestVersionNumber 调用方期望的当前最新版本号
+     * @param newVersion 新版本事实
+     * @param updatedAt 更新时间
+     * @return 是否成功追加
+     */
+    boolean appendUploadVersion(
+            String workspaceId,
+            DocumentId documentId,
+            int expectedLatestVersionNumber,
+            DocumentVersion newVersion,
+            Instant updatedAt);
+
+    /**
+     * 追加一个回退来源的新最新版本。
+     *
+     * <p>仅当当前 latestVersionNumber 与调用方期望值一致、且当前 latest 状态允许治理动作时才成功。
+     *
+     * @param workspaceId 工作区标识
+     * @param documentId 文档资产 ID
+     * @param expectedLatestVersionNumber 调用方期望的当前最新版本号
+     * @param newVersion 新版本事实，来源类型应为 ROLLBACK
+     * @param updatedAt 更新时间
+     * @return 是否成功追加
+     */
+    boolean appendRollbackVersion(
+            String workspaceId,
+            DocumentId documentId,
+            int expectedLatestVersionNumber,
+            DocumentVersion newVersion,
+            Instant updatedAt);
+
+    /**
+     * 查询当前可问答版本号。
+     *
+     * <p>当前规则：同一 document 下版本号最大的 INDEXED 版本。
+     *
+     * @param workspaceId 工作区标识
+     * @param documentId 文档资产 ID
+     * @return 可问答版本号；不存在时返回 0
+     */
+    int findLatestIndexedVersionNumber(String workspaceId, DocumentId documentId);
 
     /**
      * 将文档状态推进为 DELETING。

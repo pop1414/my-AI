@@ -50,6 +50,16 @@ public class WorkspaceMemberAdminController {
     private final ReplaceMemberDocumentGrantsUseCase replaceMemberDocumentGrantsUseCase;
     private final UpdateWorkspaceMemberRoleUseCase updateWorkspaceMemberRoleUseCase;
 
+    /**
+     * 构造函数注入所有依赖的用例。
+     *
+     * @param listWorkspaceMembersUseCase              查询工作区成员列表用例
+     * @param listMemberKnowledgeBaseGrantsUseCase     查询成员知识库授权列表用例
+     * @param replaceMemberKnowledgeBaseGrantsUseCase  批量替换成员知识库授权用例
+     * @param listMemberDocumentGrantsUseCase          查询成员文档授权列表用例
+     * @param replaceMemberDocumentGrantsUseCase       批量替换成员文档授权用例
+     * @param updateWorkspaceMemberRoleUseCase         更新成员工作区角色用例
+     */
     public WorkspaceMemberAdminController(
             ListWorkspaceMembersUseCase listWorkspaceMembersUseCase,
             ListMemberKnowledgeBaseGrantsUseCase listMemberKnowledgeBaseGrantsUseCase,
@@ -65,6 +75,13 @@ public class WorkspaceMemberAdminController {
         this.updateWorkspaceMemberRoleUseCase = updateWorkspaceMemberRoleUseCase;
     }
 
+    /**
+     * 查询当前工作区所有成员列表。
+     *
+     * <p>GET /api/v1/admin/members
+     *
+     * @return 当前工作区的成员列表，包含用户信息、角色和成员状态
+     */
     @GetMapping(value = {"", "/"}, produces = MediaType.APPLICATION_JSON_VALUE)
     public List<WorkspaceMemberResponse> listMembers() {
         return listWorkspaceMembersUseCase.handle().stream()
@@ -72,6 +89,17 @@ public class WorkspaceMemberAdminController {
                 .toList();
     }
 
+    /**
+     * 更新指定成员的工作区角色。
+     *
+     * <p>PATCH /api/v1/admin/members/{userId}/role
+     * <p>仅 WORKSPACE_OWNER 可变更 ADMIN 角色，ADMIN 不可变更同级角色。
+     *
+     * @param userId  目标成员的用户 ID
+     * @param request 含目标工作区角色的请求体
+     * @return 更新后的成员信息
+     * @throws ResponseStatusException 当成员不存在(404)或参数非法(400)时抛出
+     */
     @PatchMapping(value = "/{userId}/role", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     public WorkspaceMemberResponse updateMemberRole(
             @PathVariable("userId") String userId,
@@ -89,6 +117,15 @@ public class WorkspaceMemberAdminController {
         }
     }
 
+    /**
+     * 查询指定成员的知识库授权列表。
+     *
+     * <p>GET /api/v1/admin/members/{userId}/knowledge-base-grants
+     *
+     * @param userId 目标成员的用户 ID
+     * @return 该成员在当前工作区的所有知识库授权记录
+     * @throws ResponseStatusException 当成员不存在(404)或参数非法(400)时抛出
+     */
     @GetMapping(value = "/{userId}/knowledge-base-grants", produces = MediaType.APPLICATION_JSON_VALUE)
     public List<KnowledgeBaseGrantResponse> listMemberKnowledgeBaseGrants(
             @PathVariable("userId") String userId) {
@@ -103,6 +140,21 @@ public class WorkspaceMemberAdminController {
         }
     }
 
+    /**
+     * 批量替换指定成员的知识库授权（声明式同步）。
+     *
+     * <p>PUT /api/v1/admin/members/{userId}/knowledge-base-grants:batch
+     * <p>将成员的知识库授权集合整体替换为传入的期望授权列表：
+     * <ul>
+     *   <li>期望中有的新增或更新；</li>
+     *   <li>期望中没有的软删除。</li>
+     * </ul>
+     *
+     * @param userId  目标成员的用户 ID
+     * @param request 含期望授权列表的请求体
+     * @return 替换后的完整授权列表
+     * @throws ResponseStatusException 当成员不存在(404)或参数非法(400)时抛出
+     */
     @PutMapping(value = "/{userId}/knowledge-base-grants:batch", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     public List<KnowledgeBaseGrantResponse> replaceMemberKnowledgeBaseGrants(
             @PathVariable("userId") String userId,
@@ -130,6 +182,15 @@ public class WorkspaceMemberAdminController {
         }
     }
 
+    /**
+     * 查询指定成员的文档授权列表。
+     *
+     * <p>GET /api/v1/admin/members/{userId}/document-grants
+     *
+     * @param userId 目标成员的用户 ID
+     * @return 该成员在当前工作区的所有文档授权记录
+     * @throws ResponseStatusException 当成员不存在(404)或参数非法(400)时抛出
+     */
     @GetMapping(value = "/{userId}/document-grants", produces = MediaType.APPLICATION_JSON_VALUE)
     public List<DocumentGrantResponse> listMemberDocumentGrants(
             @PathVariable("userId") String userId) {
@@ -144,6 +205,17 @@ public class WorkspaceMemberAdminController {
         }
     }
 
+    /**
+     * 批量替换指定成员的文档授权（声明式同步）。
+     *
+     * <p>PUT /api/v1/admin/members/{userId}/document-grants:batch
+     * <p>将成员的文档授权集合整体替换为传入的期望授权列表。
+     *
+     * @param userId  目标成员的用户 ID
+     * @param request 含期望授权列表的请求体
+     * @return 替换后的完整授权列表
+     * @throws ResponseStatusException 当成员不存在(404)或参数非法(400)时抛出
+     */
     @PutMapping(value = "/{userId}/document-grants:batch", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     public List<DocumentGrantResponse> replaceMemberDocumentGrants(
             @PathVariable("userId") String userId,
@@ -171,6 +243,12 @@ public class WorkspaceMemberAdminController {
         }
     }
 
+    /**
+     * 将用例层成员结果转换为 REST 响应 DTO。
+     *
+     * @param result 用例层成员结果
+     * @return REST 成员响应 DTO
+     */
     private static WorkspaceMemberResponse toMemberResponse(WorkspaceMemberResult result) {
         return new WorkspaceMemberResponse(
                 result.userId(),
@@ -181,6 +259,12 @@ public class WorkspaceMemberAdminController {
                 result.membershipStatus());
     }
 
+    /**
+     * 将用例层知识库授权结果转换为 REST 响应 DTO。
+     *
+     * @param result 用例层知识库授权结果
+     * @return REST 知识库授权响应 DTO
+     */
     private static KnowledgeBaseGrantResponse toKnowledgeBaseGrantResponse(
             KnowledgeBaseGrantResult result) {
         return new KnowledgeBaseGrantResponse(
@@ -193,6 +277,12 @@ public class WorkspaceMemberAdminController {
                 result.status());
     }
 
+    /**
+     * 将用例层文档授权结果转换为 REST 响应 DTO。
+     *
+     * @param result 用例层文档授权结果
+     * @return REST 文档授权响应 DTO
+     */
     private static DocumentGrantResponse toDocumentGrantResponse(DocumentGrantResult result) {
         return new DocumentGrantResponse(
                 result.workspaceId(),

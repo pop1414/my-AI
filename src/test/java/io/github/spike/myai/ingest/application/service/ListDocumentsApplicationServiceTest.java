@@ -18,6 +18,7 @@ import io.github.spike.myai.ingest.application.result.DocumentListPageResult;
 import io.github.spike.myai.ingest.domain.model.DocumentId;
 import io.github.spike.myai.ingest.domain.model.DocumentListItem;
 import io.github.spike.myai.ingest.domain.model.DocumentListPage;
+import io.github.spike.myai.ingest.domain.model.DocumentVersionOriginType;
 import io.github.spike.myai.ingest.domain.model.UploadStatus;
 import io.github.spike.myai.ingest.domain.port.DocumentListRepository;
 import java.time.Instant;
@@ -63,6 +64,8 @@ class ListDocumentsApplicationServiceTest {
         assertTrue(captor.getValue().excludeDeleted());
         assertEquals("workspace-a", captor.getValue().workspaceId());
         assertEquals("INDEXED", result.items().getFirst().status());
+        assertEquals(1, result.items().getFirst().latestVersionNumber());
+        assertEquals("UPLOAD", result.items().getFirst().latestVersionOriginType());
         verify(authorizationService).requireCanReadDocument(any(CurrentUser.class), eq("doc-1"), eq("kb-1"));
     }
 
@@ -115,6 +118,8 @@ class ListDocumentsApplicationServiceTest {
                                 new DocumentId("doc-1"),
                                 "workspace-a",
                                 "kb-1",
+                                3,
+                                DocumentVersionOriginType.ROLLBACK,
                                 "allow.txt",
                                 128L,
                                 UploadStatus.INDEXED,
@@ -143,6 +148,8 @@ class ListDocumentsApplicationServiceTest {
         assertEquals(1, result.items().size());
         assertEquals(1L, result.total());
         assertEquals("doc-1", result.items().getFirst().documentId());
+        assertEquals(3, result.items().getFirst().latestVersionNumber());
+        assertEquals("ROLLBACK", result.items().getFirst().latestVersionOriginType());
     }
 
     private static CurrentUserProvider currentUserProvider() {

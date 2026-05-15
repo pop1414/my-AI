@@ -19,6 +19,8 @@ import java.time.Instant;
  * <ul>
  *   <li>{@code documentId} —— 文档唯一标识（值对象，不可为 {@code null}）；</li>
  *   <li>{@code kbId} —— 所属知识库业务键；</li>
+ *   <li>{@code latestVersionNumber} —— 当前最新版本号；</li>
+ *   <li>{@code latestVersionOriginType} —— 当前最新版本来源类型；</li>
  *   <li>{@code filename} —— 原始上传文件名；</li>
  *   <li>{@code fileSize} —— 文件大小（字节）；</li>
  *   <li>{@code status} —— 当前处理状态（不可为 {@code null}）；</li>
@@ -43,6 +45,8 @@ public record DocumentListItem(
         DocumentId documentId,
         String workspaceId,
         String kbId,
+        int latestVersionNumber,
+        DocumentVersionOriginType latestVersionOriginType,
         String filename,
         long fileSize,
         UploadStatus status,
@@ -78,6 +82,32 @@ public record DocumentListItem(
                 documentId,
                 WorkspaceConstants.DEFAULT_WORKSPACE_ID,
                 kbId,
+                1,
+                DocumentVersionOriginType.UPLOAD,
+                filename,
+                fileSize,
+                status,
+                failureReason,
+                createdAt,
+                updatedAt);
+    }
+
+    public DocumentListItem(
+            DocumentId documentId,
+            String workspaceId,
+            String kbId,
+            String filename,
+            long fileSize,
+            UploadStatus status,
+            String failureReason,
+            Instant createdAt,
+            Instant updatedAt) {
+        this(
+                documentId,
+                workspaceId,
+                kbId,
+                1,
+                DocumentVersionOriginType.UPLOAD,
                 filename,
                 fileSize,
                 status,
@@ -105,6 +135,12 @@ public record DocumentListItem(
         // kbId 不可为空，知识库归属是文档的基本属性
         if (kbId == null || kbId.isBlank()) {
             throw new IllegalArgumentException("kbId must not be blank");
+        }
+        if (latestVersionNumber < 1) {
+            throw new IllegalArgumentException("latestVersionNumber must be positive");
+        }
+        if (latestVersionOriginType == null) {
+            throw new IllegalArgumentException("latestVersionOriginType must not be null");
         }
         // 状态不可为空，每条文档必须有一个明确的状态
         if (status == null) {

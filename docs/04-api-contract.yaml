@@ -1082,6 +1082,213 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+  /api/v1/documents/{documentId}/versions:
+    get:
+      tags: [ingest]
+      summary: 查询文档版本历史
+      x-stage: implemented
+      description: |
+        当前用户必须对目标文档具备管理权限；
+        支持工作区所有者/管理员、知识库 `KB_MANAGER` 授权，以及文档级 `DOC_ALLOW_MANAGE`。
+        响应按 `versionNumber DESC` 稳定排序。
+
+        `isLatestVersion` 由 `ingest_documents.latest_version_number` 与版本号比较推导；
+        `isAskableVersion` 不持久化，由当前 QA 基线推导：优先使用已 `INDEXED` 的最新版本；
+        当最新版本尚未 `INDEXED` 时，回退到最近一个已 `INDEXED` 的历史版本；若不存在已 `INDEXED` 版本则全部为 false。
+        历史版本查询只读取版本事实，不修改 latest projection，也不改变 QA 可问答基线。
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: documentId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: 文档资产 ID
+      responses:
+        '200':
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentVersionHistoryResponse'
+        '400':
+          description: documentId 为空或非法
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: 当前用户无目标文档读取权限
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: 文档不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    post:
+      tags: [ingest]
+      summary: 上传既有 document 的新版本
+      x-stage: implemented
+      description: |
+        该接口只服务文档详情页的“上传新版本”流程，不复用通用上传接口。
+        目标 document 由路径参数绑定，目标知识库不可在此流程中切换。
+
+        当前用户必须具备目标 document 管理权限；当前最新版本仅允许为 `INDEXED` 或 `FAILED`。
+        调用方必须提交 `expectedLatestVersionNumber`，用于防止基于过期详情页提交新版本。
+        若新文件内容与当前最新版本完全相同，接口返回成功复用结果，不创建新版本。
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: documentId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: 文档资产 ID
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file, expectedLatestVersionNumber]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: 新版本来源文件
+                expectedLatestVersionNumber:
+                  type: integer
+                  minimum: 1
+                  description: 调用方页面看到的最新版本号
+      responses:
+        '200':
+          description: 创建新版本或同内容复用成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentVersionUploadResponse'
+        '400':
+          description: 参数非法或文件为空
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: 当前用户无目标文档管理权限，code 为 VERSION_UPLOAD_NO_MANAGE_PERMISSION
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: 文档不存在，code 为 VERSION_UPLOAD_DOCUMENT_NOT_FOUND
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: 状态不允许或 latest version 乐观并发冲突
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/documents/{documentId}/versions/{versionNumber}/rollback:
+    post:
+      tags: [ingest]
+      summary: 将指定历史版本回退为新的最新版本
+      x-stage: implemented
+      description: |
+        该接口只服务文档详情页版本历史中的“回退为最新版本”治理动作。
+        回退不会回拨旧版本指针，而是基于目标历史版本创建一个 `ROLLBACK`
+        来源的新 latest 版本，并让新版本以 `UPLOADED` 状态重新进入 ingest 处理链路。
+
+        当前用户必须具备目标 document 管理权限；回退目标必须是非 latest 的 `INDEXED`
+        历史版本。调用方必须提交 `expectedLatestVersionNumber`，用于防止基于过期详情页提交回退。
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: documentId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: 文档资产 ID
+        - name: versionNumber
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+          description: 要回退到的历史版本号
+        - name: expectedLatestVersionNumber
+          in: query
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+          description: 调用方页面看到的最新版本号
+      responses:
+        '200':
+          description: 版本回退成功并创建新的 latest 版本
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentVersionRollbackResponse'
+        '400':
+          description: 参数非法
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: 当前用户无目标文档管理权限，code 为 VERSION_ROLLBACK_NO_MANAGE_PERMISSION
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: 文档或目标版本不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: 状态不允许、目标版本不可回退或 latest version 乐观并发冲突
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: 回退来源版本文件缺失，code 为 VERSION_ROLLBACK_SOURCE_FILE_MISSING
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
   /api/v1/documents/{documentId}/chunks/preview:
     get:
       tags: [ingest]
@@ -1406,7 +1613,10 @@ paths:
         V1 先提供同步一次性返回能力；
         SSE 流式版本仅做文档预留，暂不开放新接口；
         当前用户必须对目标知识库具备问答权限；
-        召回结果会在生成前按文档授权过滤，过滤后若无可用内容则返回兜底回答，不返回 403。
+        问答会先按当前用户权限与目标知识库计算可问答 document/version 范围；
+        每个 document 独立选择最近一个已 INDEXED 版本作为当前可问答版本；
+        向量检索只在授权后的 document/version 范围内召回，避免先越权召回再裁剪引用；
+        无可问答版本或无命中内容时返回兜底回答与空 references，不展示版本提示。
       x-stage: implemented
       security:
         - cookieAuth: []
@@ -1665,6 +1875,16 @@ components:
         documentId:
           type: string
           description: 文档资产 ID
+        latestVersionNumber:
+          type: integer
+          description: 当前 latest projection 指向的版本号
+        latestFilename:
+          type: string
+          description: 当前 latest projection 指向版本的来源文件名
+        latestVersionOriginType:
+          type: string
+          enum: [UPLOAD, ROLLBACK]
+          description: 当前 latest projection 指向版本的来源类型
         status:
           type: string
           example: UPLOADED
@@ -1673,6 +1893,171 @@ components:
             - $ref: '#/components/schemas/ProcessingMetadata'
           nullable: true
           description: 仅 `INDEXED` / `FAILED` 终态允许返回的处理结果元数据
+
+    DocumentVersionHistoryResponse:
+      type: object
+      required: [documentId, sort, versions]
+      properties:
+        documentId:
+          type: string
+          description: 文档资产 ID
+        sort:
+          type: string
+          example: versionNumber,DESC
+          description: 版本历史排序契约，当前固定为版本号倒序
+        versions:
+          type: array
+          items:
+            $ref: '#/components/schemas/DocumentVersionHistoryItem'
+
+    DocumentVersionHistoryItem:
+      type: object
+      required:
+        - documentId
+        - versionNumber
+        - versionOriginType
+        - filename
+        - fileSize
+        - status
+        - createdAt
+        - updatedAt
+        - isLatestVersion
+        - isAskableVersion
+      properties:
+        documentId:
+          type: string
+          description: 文档资产 ID
+        versionNumber:
+          type: integer
+          description: 版本号，从 1 开始递增
+        versionOriginType:
+          type: string
+          enum: [UPLOAD, ROLLBACK]
+          description: 版本来源类型
+        rollbackFromVersionNumber:
+          type: integer
+          nullable: true
+          description: 回退来源版本号，仅 ROLLBACK 版本有值
+        filename:
+          type: string
+          description: 该版本来源文件名
+        fileSize:
+          type: integer
+          format: int64
+          description: 该版本文件大小，单位字节
+        status:
+          type: string
+          enum: [UPLOADED, INGESTING, INDEXED, FAILED, DELETING, DELETED]
+          description: 该版本处理状态
+        failureReason:
+          type: string
+          nullable: true
+          description: 仅 FAILED 状态返回失败原因，其余状态返回 null
+        createdAt:
+          type: string
+          format: date-time
+          description: 版本创建时间
+        updatedAt:
+          type: string
+          format: date-time
+          description: 版本更新时间
+        isLatestVersion:
+          type: boolean
+          description: 是否为当前 latest projection 指向版本
+        isAskableVersion:
+          type: boolean
+          description: 是否为当前 QA 基线使用的版本；优先 latest + INDEXED，否则回退到最近一个已 INDEXED 的历史版本；不持久化
+
+    DocumentVersionUploadResponse:
+      type: object
+      required:
+        - documentId
+        - versionCreated
+        - versionResultType
+        - latestVersionNumber
+        - canAskNow
+        - status
+        - versionOriginType
+      properties:
+        documentId:
+          type: string
+          description: 文档资产 ID
+        versionCreated:
+          type: boolean
+          description: 是否创建了新版本；同内容复用时为 false
+        versionResultType:
+          type: string
+          enum: [CREATED, REUSED_IDENTICAL_CONTENT]
+          description: 上传新版本结果分支
+        versionNumber:
+          type: integer
+          nullable: true
+          description: 新创建的版本号；同内容复用时为空
+        previousVersionNumber:
+          type: integer
+          nullable: true
+          description: 创建新版本前的最新版本号；同内容复用时等于当前最新版本号
+        reusedLatestVersionNumber:
+          type: integer
+          nullable: true
+          description: 同内容复用时仍停留的最新版本号；创建新版本时为空
+        latestVersionNumber:
+          type: integer
+          description: 系统当前认定的最新版本号
+        askableVersionNumber:
+          type: integer
+          nullable: true
+          description: 当前 QA 基线实际使用的版本号；不存在可问答版本时为空
+        canAskNow:
+          type: boolean
+          description: 当前是否存在可问答版本
+        status:
+          type: string
+          enum: [UPLOADED, INGESTING, INDEXED, FAILED, DELETING, DELETED]
+          description: 当前最新版本状态
+        versionOriginType:
+          type: string
+          enum: [UPLOAD, ROLLBACK]
+          description: 当前最新版本来源类型
+
+    DocumentVersionRollbackResponse:
+      type: object
+      required:
+        - documentId
+        - versionNumber
+        - rollbackFromVersionNumber
+        - latestVersionNumber
+        - canAskNow
+        - status
+        - versionOriginType
+      properties:
+        documentId:
+          type: string
+          description: 文档资产 ID
+        versionNumber:
+          type: integer
+          description: 回退创建的新最新版本号
+        rollbackFromVersionNumber:
+          type: integer
+          description: 回退来源历史版本号
+        latestVersionNumber:
+          type: integer
+          description: 系统当前认定的最新版本号，应等于 versionNumber
+        askableVersionNumber:
+          type: integer
+          nullable: true
+          description: 当前 QA 基线实际使用的版本号；不存在可问答版本时为空
+        canAskNow:
+          type: boolean
+          description: 当前是否存在可问答版本
+        status:
+          type: string
+          enum: [UPLOADED, INGESTING, INDEXED, FAILED, DELETING, DELETED]
+          description: 当前最新版本状态；回退创建成功后初始为 UPLOADED
+        versionOriginType:
+          type: string
+          enum: [ROLLBACK]
+          description: 当前最新版本来源类型，回退成功时固定为 ROLLBACK
 
     ProcessingMetadata:
       type: object
@@ -1851,6 +2236,7 @@ components:
 
     AskResponse:
       type: object
+      required: [answer, references]
       properties:
         answer:
           type: string
@@ -1858,9 +2244,23 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/AskReference'
+        staleReferences:
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/AskStaleReferenceSummary'
+          description: 存在引用时返回陈旧引用汇总；无引用时为空，调用方不应展示版本提示
 
     AskReference:
       type: object
+      required:
+        - documentId
+        - chunkIndex
+        - contentPreview
+        - sourceVersionNumber
+        - sourceUpdatedAt
+        - isLatestVersion
+        - latestVersionNumber
+        - sourceFilename
       properties:
         documentId:
           type: string
@@ -1868,3 +2268,59 @@ components:
           type: integer
         contentPreview:
           type: string
+        sourceVersionNumber:
+          type: integer
+          minimum: 1
+          description: 实际用于回答的 document version 号
+        sourceUpdatedAt:
+          type: string
+          format: date-time
+          description: 实际用于回答的版本更新时间
+        isLatestVersion:
+          type: boolean
+          description: 引用来源版本是否等于当前 latest version
+        latestVersionNumber:
+          type: integer
+          minimum: 1
+          description: 该 document 当前最新版本号
+        sourceFilename:
+          type: string
+          description: 实际用于回答的版本来源文件名
+
+    AskStaleReferenceSummary:
+      type: object
+      required: [hasStaleReferences, staleReferenceCount, staleDocumentCount, documents]
+      properties:
+        hasStaleReferences:
+          type: boolean
+          description: 是否存在非最新版本引用
+        staleReferenceCount:
+          type: integer
+          minimum: 0
+          description: 非最新版本引用条数
+        staleDocumentCount:
+          type: integer
+          minimum: 0
+          description: 涉及非最新版本引用的 document 数
+        documents:
+          type: array
+          items:
+            $ref: '#/components/schemas/AskStaleReferenceDocument'
+
+    AskStaleReferenceDocument:
+      type: object
+      required: [documentId, sourceVersionNumber, latestVersionNumber, sourceFilename]
+      properties:
+        documentId:
+          type: string
+        sourceVersionNumber:
+          type: integer
+          minimum: 1
+          description: 实际用于回答的可问答版本号
+        latestVersionNumber:
+          type: integer
+          minimum: 1
+          description: 当前最新版本号
+        sourceFilename:
+          type: string
+          description: 实际用于回答的版本来源文件名

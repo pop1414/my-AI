@@ -28,7 +28,7 @@ import org.springframework.stereotype.Repository;
  *   <li>保存采用 {@code INSERT ... ON CONFLICT DO UPDATE}（UPSERT），
  *       避免先查后写的并发窗口；</li>
  *   <li>列表查询通过 {@code LEFT JOIN ingest_documents} 并过滤
- *       {@code status = 'INDEXED'} 来实时计算已索引文档数；</li>
+ *       {@code latest_status = 'INDEXED'} 来实时计算已索引文档数；</li>
  * </ul>
  *
  * @author Spike
@@ -73,7 +73,7 @@ public class JdbcKnowledgeBaseRepository implements KnowledgeBaseRepository {
      * <ol>
      *   <li>{@code LEFT JOIN ingest_documents} —— 关联文档表，
      *       未关联的知识库文档计数为 0；</li>
-     *   <li>{@code doc.status = 'INDEXED'} —— 只统计已索引完成的文档；</li>
+     *   <li>{@code doc.latest_status = 'INDEXED'} —— 只统计当前 latest projection 已索引完成的文档；</li>
      *   <li>{@code COALESCE(COUNT(...), 0)} —— 无文档时计数为 0；</li>
      *   <li>{@code GROUP BY} —— 按知识库维度聚合；</li>
      *   <li>{@code ORDER BY created_at ASC, kb_id ASC} —— 按创建时间升序，
@@ -91,7 +91,7 @@ public class JdbcKnowledgeBaseRepository implements KnowledgeBaseRepository {
             LEFT JOIN ingest_documents doc
                    ON doc.kb_id = kb.kb_id
                   AND doc.workspace_id = kb.workspace_id
-                  AND doc.status = 'INDEXED'
+                  AND doc.latest_status = 'INDEXED'
             WHERE kb.workspace_id = ?
             GROUP BY kb.kb_id, kb.workspace_id, kb.name, kb.description, kb.status, kb.created_at
             ORDER BY kb.created_at ASC, kb.kb_id ASC

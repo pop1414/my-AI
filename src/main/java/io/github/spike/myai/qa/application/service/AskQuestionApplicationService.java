@@ -6,17 +6,22 @@ import io.github.spike.myai.auth.application.service.AuthorizationService;
 import io.github.spike.myai.qa.application.command.AskQuestionCommand;
 import io.github.spike.myai.qa.application.result.AskQuestionResult;
 import io.github.spike.myai.qa.application.result.AskReferenceResult;
+import io.github.spike.myai.qa.application.result.AskStaleReferenceDocumentResult;
+import io.github.spike.myai.qa.application.result.AskStaleReferenceSummaryResult;
 import io.github.spike.myai.qa.application.usecase.AskQuestionUseCase;
 import io.github.spike.myai.knowledge.application.exception.KnowledgeBaseInactiveException;
 import io.github.spike.myai.knowledge.application.exception.KnowledgeBaseNotFoundException;
 import io.github.spike.myai.knowledge.domain.model.KnowledgeBaseStatus;
 import io.github.spike.myai.knowledge.domain.port.KnowledgeBaseRepository;
+import io.github.spike.myai.qa.domain.model.AskableDocumentVersion;
 import io.github.spike.myai.qa.domain.model.RetrievedChunk;
+import io.github.spike.myai.qa.domain.port.AskableDocumentVersionPort;
 import io.github.spike.myai.qa.domain.port.AnswerGenerationPort;
 import io.github.spike.myai.qa.domain.port.ChunkRetrievalPort;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
-import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 
 /**
@@ -63,6 +68,8 @@ public class AskQuestionApplicationService implements AskQuestionUseCase {
     private final CurrentUserProvider currentUserProvider;
     /** 授权服务：用于知识库问答权限和文档级覆盖过滤 */
     private final AuthorizationService authorizationService;
+    /** 问答可用版本查询端口：用于按文档独立决定当前可问答版本 */
+    private final AskableDocumentVersionPort askableDocumentVersionPort;
 
     /**
      * 构造器注入。
@@ -72,18 +79,21 @@ public class AskQuestionApplicationService implements AskQuestionUseCase {
      * @param knowledgeBaseRepository 知识库仓储端口（校验存在性与状态）
      * @param currentUserProvider     当前用户上下文提供器（获取登录态与工作区）
      * @param authorizationService    授权服务（知识库问答权限与文档级覆盖过滤）
+     * @param askableDocumentVersionPort 问答可用版本查询端口（按文档选择可问答版本）
      */
     public AskQuestionApplicationService(
             ChunkRetrievalPort chunkRetrievalPort,
             AnswerGenerationPort answerGenerationPort,
             KnowledgeBaseRepository knowledgeBaseRepository,
             CurrentUserProvider currentUserProvider,
-            AuthorizationService authorizationService) {
+            AuthorizationService authorizationService,
+            AskableDocumentVersionPort askableDocumentVersionPort) {
         this.chunkRetrievalPort = chunkRetrievalPort;
         this.answerGenerationPort = answerGenerationPort;
         this.knowledgeBaseRepository = knowledgeBaseRepository;
         this.currentUserProvider = currentUserProvider;
         this.authorizationService = authorizationService;
+        this.askableDocumentVersionPort = askableDocumentVersionPort;
     }
 
     /**
@@ -112,18 +122,25 @@ public class AskQuestionApplicationService implements AskQuestionUseCase {
         authorizationService.requireCanAskKnowledgeBase(currentUser, kbId);
         int topK = command.resolvedTopK();
 
-        // 2. 扩大召回数量后按 kbId 过滤，可提升目标知识库的命中率
+        List<AskableDocumentVersion> askableVersionScope =
+                askableDocumentVersionPort.findAskableVersionsForQuestion(currentUser, kbId);
+        if (askableVersionScope.isEmpty()) {
+            return new AskQuestionResult(FALLBACK_ANSWER, List.of(), null);
+        }
+        Map<String, AskableDocumentVersion> askableVersions = askableVersionScope.stream()
+                .collect(Collectors.toUnmodifiableMap(AskableDocumentVersion::documentId, java.util.function.Function.identity()));
+
+        // 2. 扩大召回数量后在检索端按“已授权 + 当前可问答版本”范围过滤。
         //    公式：retrievalTopK = max(MIN_CANDIDATES, topK × MULTIPLIER)
         int retrievalTopK = Math.max(MIN_RETRIEVAL_CANDIDATES, topK * RETRIEVAL_CANDIDATE_MULTIPLIER);
-        List<RetrievedChunk> matchedChunks = chunkRetrievalPort.similaritySearch(question, retrievalTopK).stream()
-                .filter(chunk -> kbId.equals(chunk.kbId()))  // 只保留目标知识库的检索结果
-                .filter(chunk -> canAskChunk(currentUser, chunk))
+        List<RetrievedChunk> matchedChunks = chunkRetrievalPort.similaritySearch(question, retrievalTopK, askableVersionScope)
+                .stream()
                 .limit(topK)                                   // 截取实际需要的数量
                 .toList();
 
         if (matchedChunks.isEmpty()) {
             // 3. 无依据时直接返回兜底回答，避免调用模型产生幻觉
-            return new AskQuestionResult(FALLBACK_ANSWER, List.of());
+            return new AskQuestionResult(FALLBACK_ANSWER, List.of(), null);
         }
 
         // 4. 构造提示词并调用 LLM 生成回答
@@ -136,14 +153,11 @@ public class AskQuestionApplicationService implements AskQuestionUseCase {
 
         // 5. 构建引用片段列表（已截断预览长度）
         List<AskReferenceResult> references = matchedChunks.stream()
-                .map(chunk -> new AskReferenceResult(
-                        chunk.documentId(),
-                        chunk.chunkIndex(),
-                        trimPreview(chunk.content())))
+                .map(chunk -> toReferenceResult(chunk, askableVersions.get(chunk.documentId())))
                 .toList();
 
         // 6. 组装并返回最终结果
-        return new AskQuestionResult(answer, references);
+        return new AskQuestionResult(answer, references, buildStaleReferenceSummary(references));
     }
 
     /**
@@ -218,27 +232,55 @@ public class AskQuestionApplicationService implements AskQuestionUseCase {
     }
 
     /**
-     * 判断当前用户是否可在问答场景使用指定检索片段对应的文档。
+     * 将可用分块与版本事实合并为引用结果。
      *
-     * <p>该方法将授权检查结果转换为布尔值，用于流式过滤——
-     * 权限不足的文档片段会被静默排除，而非中断整个问答流程。
-     *
-     * <p>判定逻辑委托给 {@link AuthorizationService#requireCanAskDocument}，
-     * 遵循三级授权模型（工作区 → 文档覆盖 → 知识库回退）。
-     *
-     * @param currentUser 当前登录用户上下文
-     * @param chunk       检索命中的片段（包含所属文档 ID 与知识库 ID）
-     * @return {@code true} 当前用户有权限基于该片段所属文档进行问答
+     * @param chunk 已确认属于当前可问答版本的分块
+     * @param askableVersion 文档当前可问答版本事实
+     * @return 引用结果
      */
-    private boolean canAskChunk(CurrentUser currentUser, RetrievedChunk chunk) {
-        try {
-            // 委托授权服务进行文档级问答权限校验（含 DOC_DENY、DOC_ALLOW_* 与知识库回退）
-            authorizationService.requireCanAskDocument(currentUser, chunk.documentId(), chunk.kbId());
-            // 权限校验通过，该片段可用于问答
-            return true;
-        } catch (AccessDeniedException ex) {
-            // 权限不足时静默排除该片段，不中断整体问答流程
-            return false;
+    private static AskReferenceResult toReferenceResult(RetrievedChunk chunk, AskableDocumentVersion askableVersion) {
+        return new AskReferenceResult(
+                chunk.documentId(),
+                chunk.chunkIndex(),
+                trimPreview(chunk.content()),
+                askableVersion.askableVersionNumber(),
+                askableVersion.sourceUpdatedAt(),
+                askableVersion.isLatestVersion(),
+                askableVersion.latestVersionNumber(),
+                askableVersion.sourceFilename());
+    }
+
+    /**
+     * 构造顶层陈旧引用汇总。
+     *
+     * <p>无引用时返回 {@code null}，确保无依据回答不会展示版本提示。
+     * 有引用但全部来自最新版本时，仍返回空汇总对象，便于调用方获得稳定的响应语义。</p>
+     *
+     * @param references 引用结果列表
+     * @return 陈旧引用汇总；无引用时为空
+     */
+    private static AskStaleReferenceSummaryResult buildStaleReferenceSummary(List<AskReferenceResult> references) {
+        if (references.isEmpty()) {
+            return null;
         }
+
+        List<AskReferenceResult> staleReferences = references.stream()
+                .filter(reference -> !reference.isLatestVersion())
+                .toList();
+        Map<String, AskStaleReferenceDocumentResult> staleDocuments = new LinkedHashMap<>();
+        for (AskReferenceResult reference : staleReferences) {
+            staleDocuments.putIfAbsent(
+                    reference.documentId(),
+                    new AskStaleReferenceDocumentResult(
+                            reference.documentId(),
+                            reference.sourceVersionNumber(),
+                            reference.latestVersionNumber(),
+                            reference.sourceFilename()));
+        }
+        return new AskStaleReferenceSummaryResult(
+                !staleReferences.isEmpty(),
+                staleReferences.size(),
+                staleDocuments.size(),
+                List.copyOf(staleDocuments.values()));
     }
 }

@@ -10,6 +10,7 @@ import {
 } from "@ant-design/icons";
 import {
 	Breadcrumb,
+	Button,
 	Dropdown,
 	Layout,
 	Menu,
@@ -69,10 +70,17 @@ function buildMenuItems(visibleMenuKeys: string[]): MenuItem[] {
 }
 
 function resolveTitle(pathname: string): string {
+	if (pathname.includes("/prototype-read")) {
+		return "版本内容阅读原型";
+	}
+	if (pathname.includes("/versions/") && pathname.endsWith("/read")) {
+		return "版本内容阅读";
+	}
 	if (pathname.startsWith("/ingest/documents/")) {
 		const suffix = pathname.split("/").slice(3).join("/");
 		const map: Record<string, string> = {
 			status: "文档状态查询",
+			prototype: "文档详情原型",
 			"chunks-preview": "文档分块预览",
 			reprocess: "文档重处理",
 			delete: "删除文档资产",
@@ -133,6 +141,8 @@ export function ConsoleLayout() {
 
 	const menuItems = buildMenuItems(visibleMenuKeys);
 	const showSidebar = menuItems.length > 0;
+	const canOpenQa = visibleMenuKeys.includes("/qa");
+	const isQaPage = location.pathname === "/qa";
 
 	const roleColorMap: Record<string, string> = {
 		WORKSPACE_OWNER: "gold",
@@ -211,20 +221,32 @@ export function ConsoleLayout() {
 							V1 闭环：文档上传 · 分块检索 · 知识库统计 · 单轮问答
 						</Text>
 					</div>
-					<Dropdown menu={{ items: userMenuItems }} placement="bottomRight">
-						<Space style={{ cursor: "pointer" }}>
-							<UserOutlined />
-							<span>{user?.displayName ?? ""}</span>
-							{user?.workspaceRole && (
-								<Tag
-									color={roleColorMap[user.workspaceRole] ?? "default"}
-								>
-									{user.workspaceRole}
-								</Tag>
-							)}
-							<DownOutlined />
-						</Space>
-					</Dropdown>
+					<Space className="console-header-actions" size={12}>
+						{canOpenQa && !isQaPage && (
+							<Button
+								type="primary"
+								icon={<SearchOutlined />}
+								onClick={() => navigate("/qa")}
+								data-testid="header-qa-entry"
+							>
+								问答控制台
+							</Button>
+						)}
+						<Dropdown menu={{ items: userMenuItems }} placement="bottomRight">
+							<Space style={{ cursor: "pointer" }}>
+								<UserOutlined />
+								<span>{user?.displayName ?? ""}</span>
+								{user?.workspaceRole && (
+									<Tag
+										color={roleColorMap[user.workspaceRole] ?? "default"}
+									>
+										{user.workspaceRole}
+									</Tag>
+								)}
+								<DownOutlined />
+							</Space>
+						</Dropdown>
+					</Space>
 				</Header>
 				<Content className="console-content">{content}</Content>
 			</Layout>

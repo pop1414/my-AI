@@ -12,6 +12,8 @@ import static org.mockito.Mockito.when;
 
 import io.github.spike.myai.ingest.domain.model.Document;
 import io.github.spike.myai.ingest.domain.model.DocumentId;
+import io.github.spike.myai.ingest.domain.model.DocumentVersion;
+import io.github.spike.myai.ingest.domain.model.DocumentVersionOriginType;
 import io.github.spike.myai.ingest.domain.model.UploadStatus;
 import io.github.spike.myai.shared.workspace.WorkspaceConstants;
 import java.time.Instant;
@@ -39,7 +41,7 @@ class JdbcDocumentRepositoryTest {
     }
 
     @Test
-    @DisplayName("save 与 markIndexed 应透传 processing_metadata 字段")
+    @DisplayName("save 与 markIndexed 应同时维护 latest projection 与 version processing_metadata")
     void processingMetadataMethods_shouldIncludeJsonbColumn() {
         JdbcTemplate jdbcTemplate = Mockito.mock(JdbcTemplate.class);
         JdbcDocumentRepository repository = new JdbcDocumentRepository(jdbcTemplate);
@@ -67,6 +69,8 @@ class JdbcDocumentRepositoryTest {
                 now);
 
         repository.save(document);
+        when(jdbcTemplate.update(contains("SET status = 'INDEXED'"), any(), any(), eq(WorkspaceConstants.DEFAULT_WORKSPACE_ID), eq("doc-meta-1"), eq("INGESTING")))
+                .thenReturn(1);
         repository.markIndexed(
                 WorkspaceConstants.DEFAULT_WORKSPACE_ID,
                 new DocumentId("doc-meta-1"),
@@ -75,15 +79,19 @@ class JdbcDocumentRepositoryTest {
                 now);
 
         ArgumentCaptor<String> sqlCaptor = ArgumentCaptor.forClass(String.class);
-        verify(jdbcTemplate, times(2)).update(sqlCaptor.capture(), any(Object[].class));
+        verify(jdbcTemplate, times(4)).update(sqlCaptor.capture(), any(Object[].class));
         assertTrue(sqlCaptor.getAllValues().get(0).contains("processing_metadata"));
         assertTrue(sqlCaptor.getAllValues().get(0).contains("CAST(? AS JSONB)"));
-        assertTrue(sqlCaptor.getAllValues().get(1).contains("processing_metadata = CAST(? AS JSONB)"));
+        assertTrue(sqlCaptor.getAllValues().get(0).contains("latest_version_number"));
+        assertTrue(sqlCaptor.getAllValues().get(1).contains("ingest_document_versions"));
+        assertTrue(sqlCaptor.getAllValues().get(1).contains("created_by_user_id"));
+        assertTrue(sqlCaptor.getAllValues().get(2).contains("processing_metadata = CAST(? AS JSONB)"));
+        assertTrue(sqlCaptor.getAllValues().get(3).contains("ingest_document_versions"));
     }
 
     @Test
-    @DisplayName("findByKbIdAndFileHash 查询应包含 DELETED 过滤条件")
-    void findByKbIdAndFileHash_shouldExcludeDeletedStatus() {
+    @DisplayName("findByKbIdAndFileHash 应从 version 表读取文件哈希且仅排除已删除文档")
+    void findByKbIdAndFileHash_shouldReadFileHashFromVersionFacts() {
         JdbcTemplate jdbcTemplate = Mockito.mock(JdbcTemplate.class);
         JdbcDocumentRepository repository = new JdbcDocumentRepository(jdbcTemplate);
         when(jdbcTemplate.query(any(String.class), any(RowMapper.class), eq(WorkspaceConstants.DEFAULT_WORKSPACE_ID), eq("kb-1"), eq("hash-1")))
@@ -93,8 +101,118 @@ class JdbcDocumentRepositoryTest {
 
         ArgumentCaptor<String> sqlCaptor = ArgumentCaptor.forClass(String.class);
         verify(jdbcTemplate).query(sqlCaptor.capture(), any(RowMapper.class), eq(WorkspaceConstants.DEFAULT_WORKSPACE_ID), eq("kb-1"), eq("hash-1"));
-        assertTrue(sqlCaptor.getValue().contains("status <> 'DELETED'"));
-        assertTrue(sqlCaptor.getValue().contains("workspace_id = ?"));
+        assertTrue(sqlCaptor.getValue().contains("JOIN ingest_document_versions v"));
+        assertTrue(sqlCaptor.getValue().contains("v.file_hash = ?"));
+        assertTrue(sqlCaptor.getValue().contains("d.latest_status <> 'DELETED'"));
+        assertFalse(sqlCaptor.getValue().contains("DELETING"));
+        assertFalse(sqlCaptor.getValue().contains("d.file_hash = ?"));
+        assertFalse(sqlCaptor.getValue().contains("d.status <> 'DELETED'"));
+        assertTrue(sqlCaptor.getValue().contains("d.workspace_id = ?"));
+    }
+
+    @Test
+    @DisplayName("findVersionByNumber 应通过 workspace 与版本号读取版本事实")
+    void findVersionByNumber_shouldReadTargetVersionFactsWithinWorkspace() {
+        JdbcTemplate jdbcTemplate = Mockito.mock(JdbcTemplate.class);
+        JdbcDocumentRepository repository = new JdbcDocumentRepository(jdbcTemplate);
+        when(jdbcTemplate.query(any(String.class), any(RowMapper.class), eq(WorkspaceConstants.DEFAULT_WORKSPACE_ID), eq("doc-1"), eq(2)))
+                .thenReturn(List.of());
+
+        repository.findVersionByNumber(WorkspaceConstants.DEFAULT_WORKSPACE_ID, new DocumentId("doc-1"), 2);
+
+        ArgumentCaptor<String> sqlCaptor = ArgumentCaptor.forClass(String.class);
+        verify(jdbcTemplate).query(
+                sqlCaptor.capture(),
+                any(RowMapper.class),
+                eq(WorkspaceConstants.DEFAULT_WORKSPACE_ID),
+                eq("doc-1"),
+                eq(2));
+        assertTrue(sqlCaptor.getValue().contains("JOIN ingest_document_versions v"));
+        assertTrue(sqlCaptor.getValue().contains("d.workspace_id = ?"));
+        assertTrue(sqlCaptor.getValue().contains("v.version_number = ?"));
+    }
+
+    @Test
+    @DisplayName("appendRollbackVersion 后失败推进不应改写 latest 版本号与来源")
+    void appendRollbackVersionAndMarkFailed_shouldKeepLatestVersionProjection() {
+        JdbcTemplate jdbcTemplate = Mockito.mock(JdbcTemplate.class);
+        JdbcDocumentRepository repository = new JdbcDocumentRepository(jdbcTemplate);
+        DocumentId documentId = new DocumentId("doc-rollback");
+        Instant now = Instant.now();
+        DocumentVersion rollbackVersion = new DocumentVersion(
+                documentId,
+                4,
+                DocumentVersionOriginType.ROLLBACK,
+                1,
+                "hash-v1",
+                "v1.pdf",
+                128L,
+                UploadStatus.UPLOADED,
+                null,
+                0,
+                3,
+                null,
+                null,
+                null,
+                null,
+                0,
+                null,
+                "version-4-v1",
+                null,
+                now,
+                now);
+
+        when(jdbcTemplate.update(
+                        contains("latest_version_origin_type = ?"),
+                        eq("hash-v1"),
+                        eq("v1.pdf"),
+                        eq(128L),
+                        eq(4),
+                        eq("v1.pdf"),
+                        eq("ROLLBACK"),
+                        eq(3),
+                        eq("version-4-v1"),
+                        any(),
+                        eq(WorkspaceConstants.DEFAULT_WORKSPACE_ID),
+                        eq("doc-rollback"),
+                        eq(3)))
+                .thenReturn(1);
+        when(jdbcTemplate.update(
+                        contains("SET status = 'FAILED'"),
+                        eq("parse failed"),
+                        eq("{}"),
+                        eq("PARSE_FAILED"),
+                        eq("parse failed"),
+                        any(),
+                        any(),
+                        eq(WorkspaceConstants.DEFAULT_WORKSPACE_ID),
+                        eq("doc-rollback"),
+                        eq("UPLOADED")))
+                .thenReturn(1);
+
+        assertTrue(repository.appendRollbackVersion(
+                WorkspaceConstants.DEFAULT_WORKSPACE_ID,
+                documentId,
+                3,
+                rollbackVersion,
+                now));
+        assertTrue(repository.markFailed(
+                WorkspaceConstants.DEFAULT_WORKSPACE_ID,
+                documentId,
+                UploadStatus.UPLOADED,
+                "parse failed",
+                "{}",
+                "PARSE_FAILED",
+                "parse failed",
+                now,
+                now));
+
+        ArgumentCaptor<String> sqlCaptor = ArgumentCaptor.forClass(String.class);
+        verify(jdbcTemplate, times(4)).update(sqlCaptor.capture(), any(Object[].class));
+        assertTrue(sqlCaptor.getAllValues().get(0).contains("latest_version_number = ?"));
+        assertTrue(sqlCaptor.getAllValues().get(0).contains("latest_version_origin_type = ?"));
+        assertFalse(sqlCaptor.getAllValues().get(2).contains("latest_version_number = ?"));
+        assertFalse(sqlCaptor.getAllValues().get(2).contains("latest_version_origin_type = ?"));
     }
 
     @Test
@@ -110,7 +228,8 @@ class JdbcDocumentRepositoryTest {
         when(jdbcTemplate.update(contains("SET status = 'DELETED'"), any(), eq(WorkspaceConstants.DEFAULT_WORKSPACE_ID), eq("doc-1")))
                 .thenReturn(0);
         when(jdbcTemplate.update(
-                        contains("WHERE workspace_id = ? AND document_id = ? AND status = 'DELETING'"),
+                        contains("WHERE workspace_id = ? AND document_id = ? AND latest_status = 'DELETING'"),
+                        eq("FAILED"),
                         eq("FAILED"),
                         any(),
                         eq(WorkspaceConstants.DEFAULT_WORKSPACE_ID),
