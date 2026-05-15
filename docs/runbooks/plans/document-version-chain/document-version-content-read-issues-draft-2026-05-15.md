@@ -34,7 +34,8 @@
 
 - DVCR-01 / GitHub #22 已完成并形成收口说明：`docs/runbooks/plans/document-version-chain/github-issues-closure/#22-version-content-artifact-storage-port-closure.md`。
 - DVCR-02 / GitHub #23 已完成并形成收口说明：`docs/runbooks/plans/document-version-chain/github-issues-closure/#23-unified-content-latest-backend-closure.md`。
-- #22、#23 完成后，#24、#25 应继续在同一个后端正文读取 endpoint：`GET /api/v1/documents/{documentId}/content` 上补齐 `source=ASKABLE_BASELINE`、`source=EXPLICIT_VERSION&versionNumber=...` 两种语义。
+- DVCR-03 / GitHub #24 已完成并形成收口说明：`docs/runbooks/plans/document-version-chain/github-issues-closure/#24-unified-content-askable-baseline-backend-closure.md`。
+- #22、#23、#24 完成后，#25 应继续在同一个后端正文读取 endpoint：`GET /api/v1/documents/{documentId}/content` 上补齐 `source=EXPLICIT_VERSION&versionNumber=...` 语义。
 
 ## 建议执行顺序
 
