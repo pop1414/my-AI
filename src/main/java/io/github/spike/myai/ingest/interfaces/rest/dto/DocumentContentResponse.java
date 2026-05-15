@@ -5,8 +5,8 @@ import java.time.Instant;
 /**
  * 文档版本正文 REST 响应 DTO。
  *
- * <p>该 DTO 用于 latest、askable baseline 和显式版本正文三类接口。
- * 当前 #23 只接入 latest 来源，后续接口复用同一响应结构。
+ * <p>该 DTO 用于 latest、askable baseline 和显式版本正文三类来源，
+ * 字段语义必须与 OpenAPI 的 {@code DocumentContentResponse} 保持一致。
  *
  * @param documentId          文档资产 ID
  * @param versionNumber       本次返回正文对应的版本号

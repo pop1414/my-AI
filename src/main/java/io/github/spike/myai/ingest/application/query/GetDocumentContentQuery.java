@@ -41,6 +41,8 @@ public record GetDocumentContentQuery(String documentId, DocumentContentSource s
             if (versionNumber <= 0) {
                 throw new IllegalArgumentException("versionNumber must be positive");
             }
+        } else if (versionNumber != null) {
+            throw new IllegalArgumentException("versionNumber is only allowed when source is EXPLICIT_VERSION");
         }
     }
 }

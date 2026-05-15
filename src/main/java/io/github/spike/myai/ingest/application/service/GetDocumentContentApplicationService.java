@@ -104,6 +104,7 @@ public class GetDocumentContentApplicationService implements GetDocumentContentU
                 query.versionNumber(),
                 latestVersionNumber,
                 askableVersionNumber);
+        rejectDeletedVersion(selectedVersion);
 
         DocumentVersionArtifactContent content = loadContent(currentUser, documentId, selectedVersion, query.source());
 
@@ -223,7 +224,7 @@ public class GetDocumentContentApplicationService implements GetDocumentContentU
             if (content.isPresent()) {
                 return content.get();
             }
-            throw missingContent(version, source);
+            throw missingContent(version);
         } catch (DocumentVersionArtifactTooLargeException ex) {
             throw business(
                     HttpStatus.PAYLOAD_TOO_LARGE,
@@ -236,16 +237,28 @@ public class GetDocumentContentApplicationService implements GetDocumentContentU
      * 根据版本状态与正文来源区分“尚未生成正文”和“产物异常缺失”。
      *
      * @param version 版本事实
-     * @param source  正文来源
      * @return 业务异常
      */
-    private static BusinessException missingContent(DocumentVersion version, DocumentContentSource source) {
-        if (source == DocumentContentSource.ASKABLE_BASELINE
-                || version.status() == UploadStatus.UPLOADED
+    private static BusinessException missingContent(DocumentVersion version) {
+        if (version.status() == UploadStatus.UPLOADED
                 || version.status() == UploadStatus.INGESTING) {
             return contentNotReady();
         }
         return business(HttpStatus.INTERNAL_SERVER_ERROR, "CONTENT_ARTIFACT_MISSING", "文档正文产物缺失，请联系管理员修复");
+    }
+
+    /**
+     * 阻止已删除版本继续读取历史正文产物。
+     *
+     * @param version 版本事实
+     */
+    private static void rejectDeletedVersion(DocumentVersion version) {
+        if (version.status() == UploadStatus.DELETED) {
+            throw business(
+                    HttpStatus.NOT_FOUND,
+                    "VERSION_NOT_FOUND",
+                    "document version not found: " + version.versionNumber());
+        }
     }
 
     /**

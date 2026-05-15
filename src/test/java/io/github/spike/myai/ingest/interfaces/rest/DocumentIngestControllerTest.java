@@ -647,6 +647,8 @@ class DocumentIngestControllerTest {
                 .andExpect(jsonPath("$.source").value("LATEST"))
                 .andExpect(jsonPath("$.status").value("INDEXED"))
                 .andExpect(jsonPath("$.filename").value("demo-v2.md"))
+                .andExpect(jsonPath("$.createdAt").value("2026-05-15T08:00:00Z"))
+                .andExpect(jsonPath("$.updatedAt").value("2026-05-15T08:05:00Z"))
                 .andExpect(jsonPath("$.contentMarkdown").value("# 正文"))
                 .andExpect(jsonPath("$.contentLength").value(9))
                 .andExpect(jsonPath("$.truncated").value(false));
@@ -761,6 +763,18 @@ class DocumentIngestControllerTest {
     }
 
     @Test
+    @DisplayName("非显式来源携带 versionNumber 时，应返回 400 且不调用用例")
+    void getContent_shouldReturnBadRequest_whenVersionNumberProvidedForLatest() throws Exception {
+        mockMvc.perform(get("/api/v1/documents/{documentId}/content", "doc-content-1")
+                        .param("source", "LATEST")
+                        .param("versionNumber", "1"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("BAD_REQUEST"));
+
+        verify(getDocumentContentUseCase, never()).handle(any(GetDocumentContentQuery.class));
+    }
+
+    @Test
     @DisplayName("正文查询 source 非法时，应返回 400 且不调用用例")
     void getContent_shouldReturnBadRequest_whenSourceUnsupported() throws Exception {
         mockMvc.perform(get("/api/v1/documents/{documentId}/content", "doc-content-1")
@@ -845,6 +859,37 @@ class DocumentIngestControllerTest {
                         .param("versionNumber", "1"))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("VERSION_CONTENT_FORBIDDEN"));
+    }
+
+    @Test
+    @DisplayName("文档不存在时，应返回 404 与 DOCUMENT_NOT_FOUND")
+    void getContent_shouldReturnNotFound_whenDocumentMissing() throws Exception {
+        when(getDocumentContentUseCase.handle(any(GetDocumentContentQuery.class)))
+                .thenThrow(new BusinessException(
+                        HttpStatus.NOT_FOUND,
+                        "DOCUMENT_NOT_FOUND",
+                        "document not found: doc-missing"));
+
+        mockMvc.perform(get("/api/v1/documents/{documentId}/content", "doc-missing")
+                        .param("source", "LATEST"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("DOCUMENT_NOT_FOUND"));
+    }
+
+    @Test
+    @DisplayName("显式版本不存在时，应返回 404 与 VERSION_NOT_FOUND")
+    void getContent_shouldReturnNotFound_whenExplicitVersionMissing() throws Exception {
+        when(getDocumentContentUseCase.handle(any(GetDocumentContentQuery.class)))
+                .thenThrow(new BusinessException(
+                        HttpStatus.NOT_FOUND,
+                        "VERSION_NOT_FOUND",
+                        "document version not found: 99"));
+
+        mockMvc.perform(get("/api/v1/documents/{documentId}/content", "doc-content-1")
+                        .param("source", "EXPLICIT_VERSION")
+                        .param("versionNumber", "99"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("VERSION_NOT_FOUND"));
     }
 
     @Test

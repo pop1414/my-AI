@@ -1214,7 +1214,7 @@ paths:
     get:
       tags: [ingest]
       summary: 读取文档版本正文
-      x-stage: planned
+      x-stage: implemented
       description: |
         通过统一接口读取目标 document 的版本级 `cleaned.md`，正文来源固定为版本处理产物。
         调用方必须通过 `source` 查询参数表达读取意图，服务端按意图选择版本、校验权限并映射错误码。
@@ -2089,7 +2089,7 @@ components:
           description: 当前正文是否来自问答基线版本
         source:
           type: string
-          enum: [LATEST, EXPLICIT_VERSION, ASKABLE_BASELINE]
+          enum: [LATEST, ASKABLE_BASELINE, EXPLICIT_VERSION]
           description: 正文读取来源语义
         status:
           type: string
@@ -2111,7 +2111,7 @@ components:
           description: 当前返回版本的 cleaned.md 正文
         contentLength:
           type: integer
-          description: `contentMarkdown` 字符长度
+          description: `contentMarkdown` UTF-8 字节长度
         truncated:
           type: boolean
           description: 首期固定为 false；正文超过服务端读取上限时返回 CONTENT_TOO_LARGE，不静默截断

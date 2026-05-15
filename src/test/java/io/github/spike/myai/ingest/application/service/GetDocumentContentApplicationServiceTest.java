@@ -44,6 +44,16 @@ import org.springframework.security.access.AccessDeniedException;
 class GetDocumentContentApplicationServiceTest {
 
     @Test
+    @DisplayName("非显式版本来源携带 versionNumber 时，应拒绝查询对象创建")
+    void query_shouldRejectVersionNumber_whenSourceIsNotExplicitVersion() {
+        IllegalArgumentException ex = assertThrows(
+                IllegalArgumentException.class,
+                () -> new GetDocumentContentQuery("doc-content-1", DocumentContentSource.LATEST, 1));
+
+        assertEquals("versionNumber is only allowed when source is EXPLICIT_VERSION", ex.getMessage());
+    }
+
+    @Test
     @DisplayName("latest 为 INDEXED 且 cleaned.md 存在时，应返回 LATEST 正文")
     void handle_shouldReturnLatestContent_whenIndexedArtifactExists() {
         Fixture fixture = new Fixture();
@@ -331,8 +341,8 @@ class GetDocumentContentApplicationServiceTest {
     }
 
     @Test
-    @DisplayName("askable baseline 正文尚未生成时，应返回 CONTENT_NOT_READY")
-    void handle_shouldThrowContentNotReady_whenAskableBaselineArtifactMissing() {
+    @DisplayName("askable baseline 已完成版本正文产物缺失时，应返回 CONTENT_ARTIFACT_MISSING")
+    void handle_shouldThrowArtifactMissing_whenAskableBaselineArtifactMissing() {
         Fixture fixture = new Fixture();
         DocumentId documentId = new DocumentId("doc-askable-missing-artifact");
         Document document = document(documentId, 3, UploadStatus.INDEXED);
@@ -355,8 +365,8 @@ class GetDocumentContentApplicationServiceTest {
                         "doc-askable-missing-artifact",
                         DocumentContentSource.ASKABLE_BASELINE)));
 
-        assertEquals(HttpStatus.CONFLICT, ex.status());
-        assertEquals("CONTENT_NOT_READY", ex.code());
+        assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, ex.status());
+        assertEquals("CONTENT_ARTIFACT_MISSING", ex.code());
     }
 
     @Test
@@ -416,6 +426,30 @@ class GetDocumentContentApplicationServiceTest {
                         "doc-explicit-missing",
                         DocumentContentSource.EXPLICIT_VERSION,
                         99)));
+
+        assertEquals(HttpStatus.NOT_FOUND, ex.status());
+        assertEquals("VERSION_NOT_FOUND", ex.code());
+        verify(fixture.artifactStorage, never()).loadVersionArtifact(any(), any(), anyInt(), any(), eq(1024L));
+    }
+
+    @Test
+    @DisplayName("显式版本为 DELETED 时，应返回 VERSION_NOT_FOUND 且不读取正文产物")
+    void handle_shouldThrowVersionNotFound_whenExplicitVersionDeleted() {
+        Fixture fixture = new Fixture();
+        DocumentId documentId = new DocumentId("doc-explicit-deleted");
+        Document document = document(documentId, 3, UploadStatus.INDEXED);
+        DocumentVersion deletedVersion = version(documentId, 1, UploadStatus.DELETED);
+        when(fixture.documentRepository.findById("workspace-a", documentId)).thenReturn(Optional.of(document));
+        when(fixture.documentRepository.findLatestIndexedVersionNumber("workspace-a", documentId)).thenReturn(3);
+        when(fixture.documentRepository.findVersionByNumber("workspace-a", documentId, 1))
+                .thenReturn(Optional.of(deletedVersion));
+
+        BusinessException ex = assertThrows(
+                BusinessException.class,
+                () -> fixture.service.handle(new GetDocumentContentQuery(
+                        "doc-explicit-deleted",
+                        DocumentContentSource.EXPLICIT_VERSION,
+                        1)));
 
         assertEquals(HttpStatus.NOT_FOUND, ex.status());
         assertEquals("VERSION_NOT_FOUND", ex.code());

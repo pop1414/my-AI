@@ -374,6 +374,11 @@ public class DocumentIngestController {
                     HttpStatus.BAD_REQUEST,
                     "versionNumber must be positive");
         }
+        if (contentSource != DocumentContentSource.EXPLICIT_VERSION && versionNumber != null) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "versionNumber is only allowed when source is EXPLICIT_VERSION");
+        }
         DocumentContentResult result = getDocumentContentUseCase.handle(
                 new GetDocumentContentQuery(documentId, contentSource, versionNumber));
         return toDocumentContentResponse(result);
