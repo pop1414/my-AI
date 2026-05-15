@@ -20,11 +20,13 @@ import io.github.spike.myai.ingest.application.exception.DocumentDeleteConflictE
 import io.github.spike.myai.ingest.application.exception.DocumentDeleteFailedException;
 import io.github.spike.myai.ingest.application.exception.DocumentNotFoundException;
 import io.github.spike.myai.ingest.application.query.GetDocumentChunksPreviewQuery;
+import io.github.spike.myai.ingest.application.query.GetDocumentContentQuery;
 import io.github.spike.myai.ingest.application.query.GetDocumentStatusQuery;
 import io.github.spike.myai.ingest.application.query.ListDocumentVersionsQuery;
 import io.github.spike.myai.ingest.application.query.ListDocumentsQuery;
 import io.github.spike.myai.ingest.application.result.DocumentChunkPreviewItemResult;
 import io.github.spike.myai.ingest.application.result.DocumentChunksPreviewResult;
+import io.github.spike.myai.ingest.application.result.DocumentContentResult;
 import io.github.spike.myai.ingest.application.result.DocumentListItemResult;
 import io.github.spike.myai.ingest.application.result.DocumentListPageResult;
 import io.github.spike.myai.ingest.application.result.DocumentStatusResult;
@@ -35,6 +37,7 @@ import io.github.spike.myai.ingest.application.result.DocumentVersionUploadResul
 import io.github.spike.myai.ingest.application.usecase.AcceptUploadUseCase;
 import io.github.spike.myai.ingest.application.usecase.DeleteDocumentUseCase;
 import io.github.spike.myai.ingest.application.usecase.GetDocumentChunksPreviewUseCase;
+import io.github.spike.myai.ingest.application.usecase.GetDocumentContentUseCase;
 import io.github.spike.myai.ingest.application.usecase.GetDocumentStatusUseCase;
 import io.github.spike.myai.ingest.application.usecase.ListDocumentVersionsUseCase;
 import io.github.spike.myai.ingest.application.usecase.ListDocumentsUseCase;
@@ -81,6 +84,7 @@ class DocumentIngestControllerTest {
     private GetDocumentStatusUseCase getDocumentStatusUseCase;
     private ListDocumentVersionsUseCase listDocumentVersionsUseCase;
     private GetDocumentChunksPreviewUseCase getDocumentChunksPreviewUseCase;
+    private GetDocumentContentUseCase getDocumentContentUseCase;
     private ReprocessDocumentUseCase reprocessDocumentUseCase;
     private DeleteDocumentUseCase deleteDocumentUseCase;
     private UploadNewDocumentVersionUseCase uploadNewDocumentVersionUseCase;
@@ -95,6 +99,7 @@ class DocumentIngestControllerTest {
         this.getDocumentStatusUseCase = Mockito.mock(GetDocumentStatusUseCase.class);
         this.listDocumentVersionsUseCase = Mockito.mock(ListDocumentVersionsUseCase.class);
         this.getDocumentChunksPreviewUseCase = Mockito.mock(GetDocumentChunksPreviewUseCase.class);
+        this.getDocumentContentUseCase = Mockito.mock(GetDocumentContentUseCase.class);
         this.reprocessDocumentUseCase = Mockito.mock(ReprocessDocumentUseCase.class);
         this.deleteDocumentUseCase = Mockito.mock(DeleteDocumentUseCase.class);
         this.uploadNewDocumentVersionUseCase = Mockito.mock(UploadNewDocumentVersionUseCase.class);
@@ -110,6 +115,7 @@ class DocumentIngestControllerTest {
                 getDocumentStatusUseCase,
                 listDocumentVersionsUseCase,
                 getDocumentChunksPreviewUseCase,
+                getDocumentContentUseCase,
                 reprocessDocumentUseCase,
                 deleteDocumentUseCase,
                 uploadNewDocumentVersionUseCase,
@@ -609,6 +615,116 @@ class DocumentIngestControllerTest {
                 .andExpect(jsonPath("$.chunks[0].sourceFile").value("demo.txt"))
                 .andExpect(jsonPath("$.chunks[0].contentHash").value("hash-chunk-1"))
                 .andExpect(jsonPath("$.chunks[0].splitVersion").value("v1"));
+    }
+
+    @Test
+    @DisplayName("latest 正文查询成功时，应返回 DocumentContentResponse")
+    void getContent_shouldReturnLatestContent() throws Exception {
+        when(getDocumentContentUseCase.handle(any(GetDocumentContentQuery.class)))
+                .thenReturn(new DocumentContentResult(
+                        "doc-content-1",
+                        2,
+                        2,
+                        true,
+                        true,
+                        "LATEST",
+                        "INDEXED",
+                        "demo-v2.md",
+                        java.time.Instant.parse("2026-05-15T08:00:00Z"),
+                        java.time.Instant.parse("2026-05-15T08:05:00Z"),
+                        "# 正文",
+                        9L,
+                        false));
+
+        mockMvc.perform(get("/api/v1/documents/{documentId}/content", "doc-content-1")
+                        .param("source", "LATEST"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.documentId").value("doc-content-1"))
+                .andExpect(jsonPath("$.versionNumber").value(2))
+                .andExpect(jsonPath("$.latestVersionNumber").value(2))
+                .andExpect(jsonPath("$.isLatestVersion").value(true))
+                .andExpect(jsonPath("$.isAskableVersion").value(true))
+                .andExpect(jsonPath("$.source").value("LATEST"))
+                .andExpect(jsonPath("$.status").value("INDEXED"))
+                .andExpect(jsonPath("$.filename").value("demo-v2.md"))
+                .andExpect(jsonPath("$.contentMarkdown").value("# 正文"))
+                .andExpect(jsonPath("$.contentLength").value(9))
+                .andExpect(jsonPath("$.truncated").value(false));
+
+        ArgumentCaptor<GetDocumentContentQuery> captor = ArgumentCaptor.forClass(GetDocumentContentQuery.class);
+        verify(getDocumentContentUseCase).handle(captor.capture());
+        org.junit.jupiter.api.Assertions.assertEquals("doc-content-1", captor.getValue().documentId());
+    }
+
+    @Test
+    @DisplayName("正文查询 source 非 LATEST 时，应返回 400 且不调用用例")
+    void getContent_shouldReturnBadRequest_whenSourceUnsupported() throws Exception {
+        mockMvc.perform(get("/api/v1/documents/{documentId}/content", "doc-content-1")
+                        .param("source", "ASKABLE_BASELINE"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("BAD_REQUEST"));
+
+        verify(getDocumentContentUseCase, never()).handle(any(GetDocumentContentQuery.class));
+    }
+
+    @Test
+    @DisplayName("latest 正文尚未就绪时，应返回 409 与 CONTENT_NOT_READY")
+    void getContent_shouldReturnConflict_whenContentNotReady() throws Exception {
+        when(getDocumentContentUseCase.handle(any(GetDocumentContentQuery.class)))
+                .thenThrow(new BusinessException(
+                        HttpStatus.CONFLICT,
+                        "CONTENT_NOT_READY",
+                        "文档正文仍在生成中，请稍后重试"));
+
+        mockMvc.perform(get("/api/v1/documents/{documentId}/content", "doc-ingesting")
+                        .param("source", "LATEST"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("CONTENT_NOT_READY"));
+    }
+
+    @Test
+    @DisplayName("latest 正文超过读取上限时，应返回 413 与 CONTENT_TOO_LARGE")
+    void getContent_shouldReturnPayloadTooLarge_whenContentTooLarge() throws Exception {
+        when(getDocumentContentUseCase.handle(any(GetDocumentContentQuery.class)))
+                .thenThrow(new BusinessException(
+                        HttpStatus.PAYLOAD_TOO_LARGE,
+                        "CONTENT_TOO_LARGE",
+                        "正文超过服务端读取上限"));
+
+        mockMvc.perform(get("/api/v1/documents/{documentId}/content", "doc-large")
+                        .param("source", "LATEST"))
+                .andExpect(status().isPayloadTooLarge())
+                .andExpect(jsonPath("$.code").value("CONTENT_TOO_LARGE"));
+    }
+
+    @Test
+    @DisplayName("latest 正文产物缺失时，应返回 500 与 CONTENT_ARTIFACT_MISSING")
+    void getContent_shouldReturnInternalServerError_whenArtifactMissing() throws Exception {
+        when(getDocumentContentUseCase.handle(any(GetDocumentContentQuery.class)))
+                .thenThrow(new BusinessException(
+                        HttpStatus.INTERNAL_SERVER_ERROR,
+                        "CONTENT_ARTIFACT_MISSING",
+                        "文档正文产物缺失，请联系管理员修复"));
+
+        mockMvc.perform(get("/api/v1/documents/{documentId}/content", "doc-missing-artifact")
+                        .param("source", "LATEST"))
+                .andExpect(status().isInternalServerError())
+                .andExpect(jsonPath("$.code").value("CONTENT_ARTIFACT_MISSING"));
+    }
+
+    @Test
+    @DisplayName("无正文读取权限时，应返回 403 与 DOCUMENT_CONTENT_FORBIDDEN")
+    void getContent_shouldReturnForbidden_whenNoReadPermission() throws Exception {
+        when(getDocumentContentUseCase.handle(any(GetDocumentContentQuery.class)))
+                .thenThrow(new BusinessException(
+                        HttpStatus.FORBIDDEN,
+                        "DOCUMENT_CONTENT_FORBIDDEN",
+                        "你没有读取该文档正文的权限，请联系管理员"));
+
+        mockMvc.perform(get("/api/v1/documents/{documentId}/content", "doc-denied")
+                        .param("source", "LATEST"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("DOCUMENT_CONTENT_FORBIDDEN"));
     }
 
     @Test

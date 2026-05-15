@@ -11,11 +11,13 @@ import io.github.spike.myai.ingest.application.exception.DocumentDeleteConflictE
 import io.github.spike.myai.ingest.application.exception.DocumentDeleteFailedException;
 import io.github.spike.myai.ingest.application.exception.DocumentNotFoundException;
 import io.github.spike.myai.ingest.application.query.GetDocumentChunksPreviewQuery;
+import io.github.spike.myai.ingest.application.query.GetDocumentContentQuery;
 import io.github.spike.myai.ingest.application.query.GetDocumentStatusQuery;
 import io.github.spike.myai.ingest.application.query.ListDocumentVersionsQuery;
 import io.github.spike.myai.ingest.application.query.ListDocumentsQuery;
 import io.github.spike.myai.ingest.application.result.DocumentChunkPreviewItemResult;
 import io.github.spike.myai.ingest.application.result.DocumentChunksPreviewResult;
+import io.github.spike.myai.ingest.application.result.DocumentContentResult;
 import io.github.spike.myai.ingest.application.result.DocumentListItemResult;
 import io.github.spike.myai.ingest.application.result.DocumentListPageResult;
 import io.github.spike.myai.ingest.application.result.DocumentVersionRollbackResult;
@@ -23,6 +25,7 @@ import io.github.spike.myai.ingest.application.result.DocumentVersionUploadResul
 import io.github.spike.myai.ingest.application.usecase.AcceptUploadUseCase;
 import io.github.spike.myai.ingest.application.usecase.DeleteDocumentUseCase;
 import io.github.spike.myai.ingest.application.usecase.GetDocumentChunksPreviewUseCase;
+import io.github.spike.myai.ingest.application.usecase.GetDocumentContentUseCase;
 import io.github.spike.myai.ingest.application.usecase.GetDocumentStatusUseCase;
 import io.github.spike.myai.ingest.application.usecase.ListDocumentVersionsUseCase;
 import io.github.spike.myai.ingest.application.usecase.ListDocumentsUseCase;
@@ -36,6 +39,7 @@ import io.github.spike.myai.ingest.domain.model.UploadTicket;
 import io.github.spike.myai.ingest.domain.port.DocumentSourceStorage;
 import io.github.spike.myai.ingest.interfaces.rest.dto.DocumentChunkPreviewItemResponse;
 import io.github.spike.myai.ingest.interfaces.rest.dto.DocumentChunksPreviewResponse;
+import io.github.spike.myai.ingest.interfaces.rest.dto.DocumentContentResponse;
 import io.github.spike.myai.ingest.interfaces.rest.dto.DocumentListItemResponse;
 import io.github.spike.myai.ingest.interfaces.rest.dto.DocumentListPageResponse;
 import io.github.spike.myai.ingest.interfaces.rest.dto.DocumentStatusResponse;
@@ -83,6 +87,9 @@ import org.springframework.web.server.ResponseStatusException;
 @RequestMapping("/api/v1/documents")
 public class DocumentIngestController {
 
+    /** 正文来源：当前最新版本。 */
+    private static final String CONTENT_SOURCE_LATEST = "LATEST";
+
     /**
      * 上传受理用例。控制器只依赖用例接口，不依赖具体实现，符合依赖倒置原则。
      */
@@ -103,6 +110,10 @@ public class DocumentIngestController {
      * 文档分块预览查询用例。
      */
     private final GetDocumentChunksPreviewUseCase getDocumentChunksPreviewUseCase;
+    /**
+     * 文档 latest 正文读取用例。
+     */
+    private final GetDocumentContentUseCase getDocumentContentUseCase;
     /**
      * 文档重处理用例。
      */
@@ -139,6 +150,7 @@ public class DocumentIngestController {
      * @param getDocumentStatusUseCase       文档状态查询用例
      * @param listDocumentVersionsUseCase    文档版本历史查询用例
      * @param getDocumentChunksPreviewUseCase 文档分块预览用例
+     * @param getDocumentContentUseCase      文档 latest 正文读取用例
      * @param reprocessDocumentUseCase       文档重处理用例
      * @param deleteDocumentUseCase          文档删除用例
      * @param uploadNewDocumentVersionUseCase 上传新版本用例
@@ -152,6 +164,7 @@ public class DocumentIngestController {
             GetDocumentStatusUseCase getDocumentStatusUseCase,
             ListDocumentVersionsUseCase listDocumentVersionsUseCase,
             GetDocumentChunksPreviewUseCase getDocumentChunksPreviewUseCase,
+            GetDocumentContentUseCase getDocumentContentUseCase,
             ReprocessDocumentUseCase reprocessDocumentUseCase,
             DeleteDocumentUseCase deleteDocumentUseCase,
             UploadNewDocumentVersionUseCase uploadNewDocumentVersionUseCase,
@@ -163,6 +176,7 @@ public class DocumentIngestController {
         this.getDocumentStatusUseCase = getDocumentStatusUseCase;
         this.listDocumentVersionsUseCase = listDocumentVersionsUseCase;
         this.getDocumentChunksPreviewUseCase = getDocumentChunksPreviewUseCase;
+        this.getDocumentContentUseCase = getDocumentContentUseCase;
         this.reprocessDocumentUseCase = reprocessDocumentUseCase;
         this.deleteDocumentUseCase = deleteDocumentUseCase;
         this.uploadNewDocumentVersionUseCase = uploadNewDocumentVersionUseCase;
@@ -331,6 +345,31 @@ public class DocumentIngestController {
     }
 
     /**
+     * 查询文档 latest 正文。
+     *
+     * <p>接口契约：
+     * <ul>
+     *     <li>路径：GET /api/v1/documents/{documentId}/content?source=LATEST</li>
+     *     <li>语义：固定读取当前 latest version 的 {@code cleaned.md}</li>
+     *     <li>latest 未生成正文时返回不可用错误，不自动回退旧版本</li>
+     * </ul>
+     *
+     * @param documentId 文档资产 ID
+     * @param source     正文来源，当前仅支持 {@code LATEST}
+     * @return latest 正文响应
+     */
+    @GetMapping(value = "/{documentId}/content", produces = MediaType.APPLICATION_JSON_VALUE)
+    public DocumentContentResponse getContent(
+            @PathVariable("documentId") String documentId,
+            @RequestParam("source") String source) {
+        if (!CONTENT_SOURCE_LATEST.equals(source)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "source must be LATEST");
+        }
+        DocumentContentResult result = getDocumentContentUseCase.handle(new GetDocumentContentQuery(documentId));
+        return toDocumentContentResponse(result);
+    }
+
+    /**
      * 针对既有 document 上传新版本。
      *
      * <p>接口契约：
@@ -487,6 +526,29 @@ public class DocumentIngestController {
                 item.failureReason(),
                 item.createdAt(),
                 item.updatedAt());
+    }
+
+    /**
+     * 将应用层正文读取结果映射为 REST 响应 DTO。
+     *
+     * @param result 应用层正文读取结果
+     * @return REST 正文响应
+     */
+    private static DocumentContentResponse toDocumentContentResponse(DocumentContentResult result) {
+        return new DocumentContentResponse(
+                result.documentId(),
+                result.versionNumber(),
+                result.latestVersionNumber(),
+                result.isLatestVersion(),
+                result.isAskableVersion(),
+                result.source(),
+                result.status(),
+                result.filename(),
+                result.createdAt(),
+                result.updatedAt(),
+                result.contentMarkdown(),
+                result.contentLength(),
+                result.truncated());
     }
 
     /**
