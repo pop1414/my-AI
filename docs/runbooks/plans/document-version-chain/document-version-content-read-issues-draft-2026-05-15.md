@@ -30,6 +30,11 @@
 | DVCR-09 | [#30](https://github.com/pop1414/my-AI/issues/30) | 正文读取前端错误态与权限隐藏收口 | AFK | `ready-for-agent` | #26, #27, #28, #29 |
 | DVCR-10 | [#31](https://github.com/pop1414/my-AI/issues/31) | 文档版本正文读取 E2E 专项验收 | AFK | `ready-for-agent` | #30 |
 
+## 执行状态
+
+- DVCR-01 / GitHub #22 已完成并形成收口说明：`docs/runbooks/plans/document-version-chain/github-issues-closure/#22-version-content-artifact-storage-port-closure.md`。
+- #22 完成后，#23、#24、#25 的后端正文读取 endpoint 可继续基于 `DocumentProcessingArtifactStorage` 与 `DocumentStorageKeyResolver` 开发。
+
 ## 建议执行顺序
 
 1. 先完成 DVCR-01，建立 version-level artifact 读取边界，避免后续 endpoint 直接依赖本地路径、MinIO SDK、源文件或 chunk。
