@@ -18,15 +18,17 @@
 
 ## 解决方案
 
-实现“文档版本正文读取”专项，以 `document version` 的 `cleaned.md` 为唯一正文事实源，提供三类读取语义：
+实现“文档版本正文读取”专项，以 `document version` 的 `cleaned.md` 为唯一正文事实源，通过统一正文读取接口提供三类读取语义：
 
-- 默认 latest 正文：`GET /api/v1/documents/{documentId}/content`
-- QA 引用侧栏 askable baseline 正文：`GET /api/v1/documents/{documentId}/askable-content`
-- 管理人员显式版本正文：`GET /api/v1/documents/{documentId}/versions/{versionNumber}/content`
+- 默认 latest 正文：`GET /api/v1/documents/{documentId}/content?source=LATEST`
+- QA 引用侧栏 askable baseline 正文：`GET /api/v1/documents/{documentId}/content?source=ASKABLE_BASELINE`
+- 管理人员显式版本正文：`GET /api/v1/documents/{documentId}/content?source=EXPLICIT_VERSION&versionNumber={versionNumber}`
+
+`source` 是读取意图而不是展示标签：`LATEST` 表示“服务端选择当前最新版本并忠实表达 latest 状态”，`ASKABLE_BASELINE` 表示“服务端选择当前 QA 可问答基线版本”，`EXPLICIT_VERSION` 表示“调用方明确请求某个历史版本”。后端不能让前端通过直接传 `versionNumber = latestVersionNumber` 来模拟 latest，因为这会丢失调用方到底是要看当前 latest，还是要看某个显式版本的意图。
 
 后端通过版本处理产物存储端口读取 `cleaned.md`，定位必须包含 `workspaceId + documentId + versionNumber`。应用层不得直接依赖本地路径、MinIO SDK 或源文件解析逻辑。权限上延续 `ADR-0005` 与 `ADR-0006`：`KB_READER` 可问答、可查看问答基线版本正文，但不可浏览任意历史版本；`KB_MANAGER`、目标 `document` 管理权限用户和工作区管理员可读取任意历史版本正文。
 
-前端在文档详情页展示 latest 正文，在 QA 引用侧栏展示 askable baseline 正文，在管理人员历史版本视图展示指定版本正文，并对非 latest、历史版本、处理中、产物缺失、正文过大和无权限场景给出明确状态。首期只做 Markdown 安全渲染和基础样式，不做编辑、源文件原版预览、复杂目录联动或分页阅读。
+前端在文档详情页按当前视图意图调用统一正文接口：默认维护视图使用 `source=LATEST`，QA 引用侧栏使用 `source=ASKABLE_BASELINE`，管理人员历史版本视图使用 `source=EXPLICIT_VERSION&versionNumber=...`，并对非 latest、历史版本、处理中、产物缺失、正文过大和无权限场景给出明确状态。首期只做 Markdown 安全渲染和基础样式，不做编辑、源文件原版预览、复杂目录联动或分页阅读。
 
 ## 用户故事
 
@@ -70,7 +72,10 @@
 - 当前阶段不提供源文件下载。
 - 新增或调整版本处理产物存储端口，通过 `workspaceId + documentId + versionNumber + artifactName` 读取版本级处理产物。
 - 新增或调整稳定的 artifact key resolver，区分 `source/...` 与 `artifacts/...` prefix。
-- 新增或调整正文读取应用模块，解析三种来源语义：latest、askable baseline、explicit version。
+- 新增或调整统一正文读取应用模块，通过 `source` 参数解析三种来源语义：`LATEST`、`ASKABLE_BASELINE`、`EXPLICIT_VERSION`。
+- `source=LATEST` 必须由服务端读取 document 当前 latest projection 后选择版本，不能信任前端传入的版本号来表达 latest。
+- `source=ASKABLE_BASELINE` 必须由服务端读取当前可问答基线版本，普通 `KB_READER` 的正文核对入口应使用该语义，而不是 latest。
+- `source=EXPLICIT_VERSION` 必须同时校验 `versionNumber`，并按历史版本权限处理。
 - 授权集成需要覆盖：`WORKSPACE_OWNER` / `WORKSPACE_ADMIN` 工作区级访问，`KB_MANAGER` 与 `DOC_ALLOW_MANAGE` 历史版本读取，`KB_CONTRIBUTOR` 维护范围内正文读取，`KB_READER` 仅问答基线正文读取。
 - `DOC_DENY` 对普通成员保持最高优先级拒绝。
 - `KB_ASKER` 仅做废弃角色的必要兼容或迁移，不作为新能力正向角色。
@@ -81,13 +86,14 @@
 - 正文超过服务端读取上限映射为 `413`，业务码为 `CONTENT_TOO_LARGE`。
 - 正文产物缺失映射为 `500`，业务码为 `CONTENT_ARTIFACT_MISSING`。
 - 首期在 `contentMarkdown` 中返回完整 Markdown；`truncated` 固定为 `false`，超限直接失败，不静默截断。
-- latest `INDEXED` 时，`/content` 与 `/askable-content` 都返回 latest。
-- latest `INGESTING` 且存在旧 `INDEXED` 版本时，`/content` 返回 `CONTENT_NOT_READY`，`/askable-content` 返回旧 indexed askable baseline。
-- latest `FAILED` 且已有 `cleaned.md` 时，`/content` 返回 failed latest 正文，`/askable-content` 返回最近一个 indexed askable baseline。
+- `source=LATEST` 的业务目的不是普通读者正文核对，而是忠实表达 document 当前最新版本状态：latest 未就绪时不得自动回退，latest failed 且存在正文时允许维护人员排查 failed latest 产物。
+- latest `INDEXED` 时，`source=LATEST` 与 `source=ASKABLE_BASELINE` 可以返回同一 latest 版本，但仍保留不同读取意图。
+- latest `INGESTING` 且存在旧 `INDEXED` 版本时，`source=LATEST` 返回 `CONTENT_NOT_READY`，`source=ASKABLE_BASELINE` 返回旧 indexed askable baseline。
+- latest `FAILED` 且已有 `cleaned.md` 时，`source=LATEST` 返回 failed latest 正文，`source=ASKABLE_BASELINE` 返回最近一个 indexed askable baseline。
 - `DELETED` document 拒绝正文读取；管理人员最多查看终态元数据与版本历史元数据。
-- 前端文档详情默认读取 latest 正文，不自动回退到 askable baseline。
-- 前端 QA 引用侧栏使用 askable baseline endpoint，并展示返回版本号。
-- 前端历史版本正文视图使用 explicit version endpoint，并提示“查看历史版本不会改变问答基线”。
+- 前端文档详情的维护视图读取 `source=LATEST`，不自动回退到 askable baseline。
+- 前端 QA 引用侧栏读取 `source=ASKABLE_BASELINE`，并展示返回版本号。
+- 前端历史版本正文视图读取 `source=EXPLICIT_VERSION&versionNumber=...`，并提示“查看历史版本不会改变问答基线”。
 - 前端首期采用 Markdown 安全渲染和基础样式，不做正文编辑、源文件原版预览、复杂目录或 diff 交互。
 - 交付顺序按后端、前端、E2E 验收推进，符合本仓库“后端正确性先行，再接前端”的协作约定。
 
@@ -98,8 +104,8 @@
 - 权限测试应覆盖 `WORKSPACE_ADMIN`、`KB_MANAGER`、`KB_CONTRIBUTOR`、`KB_READER`，以及必要的 `KB_ASKER` 兼容或迁移行为。
 - 后端集成测试应重点验证“读到的是哪个版本”：latest `INDEXED`、latest `INGESTING` 且旧版本 `INDEXED`、latest `FAILED with cleaned.md`、管理人员读取指定历史版本。
 - 存储测试应验证 artifact key 包含 `workspaceId/documentId/versionNumber`，`source/...` 与 `artifacts/...` prefix 不混用，缺失 artifact 不触发源文件重解析。
-- REST controller 测试应覆盖三个 endpoint、响应体字段和业务错误到 HTTP 状态码的映射。
-- OpenAPI 契约检查应保持 `DocumentContentResponse` 与三个 planned endpoint 的实现一致。
+- REST controller 测试应覆盖统一 endpoint 的三种 `source` 分支、响应体字段和业务错误到 HTTP 状态码的映射。
+- OpenAPI 契约检查应保持 `DocumentContentResponse`、`source` 查询参数和 `versionNumber` 约束与实际实现一致。
 - 前端测试应验证普通读者不显示版本历史、治理入口或下载入口。
 - 前端测试应验证 QA 侧栏版本提示、历史版本“不改变问答基线”提示、正文错误态文案，以及 `403` 不渲染正文。
 - E2E 应在后端和前端单元/组件测试完成之后补齐。
@@ -125,8 +131,8 @@
 ## 补充说明
 
 - 本 PRD 基于交接包 `C:\Users\Ayanami\AppData\Local\Temp\tmpF308.tmp`、`CONTEXT.md`、`ADR-0005`、`ADR-0006`、RAG 权限体系专项计划和当前 OpenAPI 契约整理。
-- 当前 OpenAPI 契约已经将三个正文读取接口标记为 planned，实现应收敛到该契约，而不是新增并行 API 形态。
-- 最重要的产品区分是：latest 正文、askable baseline 正文和 explicit historical version 正文是三种不同用户意图，应保持三种不同 endpoint 语义。
+- 当前 OpenAPI 契约若仍保留三个 planned endpoint，应调整为统一正文读取接口，并通过 `source` 参数表达三种读取意图。
+- 最重要的产品区分是：latest 正文、askable baseline 正文和 explicit historical version 正文是三种不同用户意图，应保持三种不同 `source` 语义，而不是只靠 `versionNumber` 表达。
 - 最重要的安全区分是：普通读者能读取 askable baseline 正文，不代表可以浏览任意历史版本。
 - 最重要的存储区分是：版本正文属于 `document version`，不是共享的 document 文件，也不是 chunk 的拼接视图。
 - GitHub Issue 适合作为协作和实施跟踪入口；本地文档更适合作为长期事实源。后续若 issue 与本文档冲突，应以本文档、ADR 和 `CONTEXT.md` 为准。

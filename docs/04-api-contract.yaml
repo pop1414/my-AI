@@ -1213,12 +1213,15 @@ paths:
   /api/v1/documents/{documentId}/content:
     get:
       tags: [ingest]
-      summary: 读取文档默认正文
+      summary: 读取文档版本正文
       x-stage: planned
       description: |
-        读取目标 document 当前最新版本的版本正文，正文来源固定为该版本处理产物 `cleaned.md`。
-        该接口用于文档详情默认正文视图；普通读者若当前问答基线不是最新版本，不应使用该接口打开历史正文，
-        问答引用侧栏应使用 `/api/v1/documents/{documentId}/askable-content`。
+        通过统一接口读取目标 document 的版本级 `cleaned.md`，正文来源固定为版本处理产物。
+        调用方必须通过 `source` 查询参数表达读取意图，服务端按意图选择版本、校验权限并映射错误码。
+
+        `source=LATEST`：读取当前 latest version，用于文档详情维护视图表达最新处理状态。latest 正文未生成时返回 `CONTENT_NOT_READY`，不得自动回退旧版本。
+        `source=ASKABLE_BASELINE`：读取当前 QA 可问答基线版本，用于 QA 引用侧栏和普通读者正文核对。
+        `source=EXPLICIT_VERSION`：读取指定历史版本，必须同时传入 `versionNumber`，且当前用户必须具备目标 document 管理权限。
 
         响应以 Markdown 为契约，字段为 `contentMarkdown`；首期返回完整正文，但服务端必须设置最大读取大小。
       security:
@@ -1230,141 +1233,20 @@ paths:
           schema:
             type: string
           description: 文档资产 ID
-      responses:
-        '200':
-          description: 读取成功
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/DocumentContentResponse'
-        '401':
-          description: 未登录
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '403':
-          description: 当前用户无目标正文读取权限，code 为 DOCUMENT_CONTENT_FORBIDDEN
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '404':
-          description: 文档不存在，code 为 DOCUMENT_NOT_FOUND
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '409':
-          description: 正文尚未生成，code 为 CONTENT_NOT_READY
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '413':
-          description: 正文超过服务端读取上限，code 为 CONTENT_TOO_LARGE
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '500':
-          description: 正文产物缺失，code 为 CONTENT_ARTIFACT_MISSING
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-
-  /api/v1/documents/{documentId}/askable-content:
-    get:
-      tags: [ingest]
-      summary: 读取文档当前问答基线正文
-      x-stage: planned
-      description: |
-        读取目标 document 当前问答基线版本的 `cleaned.md`，用于 QA 引用侧栏和回答依据核对。
-        当最新版本尚未 `INDEXED` 或处理失败时，该接口可返回最近一个已 `INDEXED` 的历史版本正文。
-        普通 `KB_READER` 只能通过该语义读取问答基线版本正文，不能浏览任意历史版本。
-
-        前端展示时必须标注当前返回版本号；当 `isLatestVersion=false` 时，应提示“当前问答基于 vN，最新版本为 vM”。
-      security:
-        - cookieAuth: []
-      parameters:
-        - name: documentId
-          in: path
+        - name: source
+          in: query
           required: true
           schema:
             type: string
-          description: 文档资产 ID
-      responses:
-        '200':
-          description: 读取成功
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/DocumentContentResponse'
-        '401':
-          description: 未登录
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '403':
-          description: 当前用户无目标问答基线正文读取权限，code 为 DOCUMENT_CONTENT_FORBIDDEN
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '404':
-          description: 文档不存在，code 为 DOCUMENT_NOT_FOUND
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '409':
-          description: 当前不存在可问答版本或正文尚未生成，code 为 CONTENT_NOT_READY
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '413':
-          description: 正文超过服务端读取上限，code 为 CONTENT_TOO_LARGE
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '500':
-          description: 正文产物缺失，code 为 CONTENT_ARTIFACT_MISSING
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-
-  /api/v1/documents/{documentId}/versions/{versionNumber}/content:
-    get:
-      tags: [ingest]
-      summary: 读取文档指定版本正文
-      x-stage: planned
-      description: |
-        读取指定 `documentId + versionNumber` 对应版本的 `cleaned.md`。
-        该接口用于管理人员查看历史版本、版本差异核对和治理排查；
-        当前用户必须具备目标 document 管理权限，不向普通 `KB_READER` 开放任意历史版本正文读取。
-
-        前端展示历史版本正文时，应提示查看历史版本不会改变问答基线，并提供“返回最新版本”入口。
-      security:
-        - cookieAuth: []
-      parameters:
-        - name: documentId
-          in: path
-          required: true
-          schema:
-            type: string
-          description: 文档资产 ID
+            enum: [LATEST, ASKABLE_BASELINE, EXPLICIT_VERSION]
+          description: 正文读取意图
         - name: versionNumber
-          in: path
-          required: true
+          in: query
+          required: false
           schema:
             type: integer
             minimum: 1
-          description: 版本号
+          description: 当 source=EXPLICIT_VERSION 时必填；其他 source 不应传入
       responses:
         '200':
           description: 读取成功
@@ -1372,6 +1254,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/DocumentContentResponse'
+        '400':
+          description: source 非法，或 source=EXPLICIT_VERSION 时缺少 versionNumber
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '401':
           description: 未登录
           content:
@@ -1379,7 +1267,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
         '403':
-          description: 当前用户无目标版本正文读取权限，code 为 VERSION_CONTENT_FORBIDDEN
+          description: 当前用户无目标正文读取权限，code 为 DOCUMENT_CONTENT_FORBIDDEN 或 VERSION_CONTENT_FORBIDDEN
           content:
             application/json:
               schema:
