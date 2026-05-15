@@ -68,6 +68,11 @@
 - `cleaned.md` 是正式中间文本产物，文档目录中强制落盘
 - `版本正文` 指某个 `document version` 处理后形成的 `cleaned.md` 文本产物
 - 文档版本正文读取默认读取版本级 `cleaned.md`，不从源文件实时解析，也不从 `vector_store` chunk 拼接
+- `cleaned.md` 的存储归属是 `document version`，不是 `document`；任一版本正文都必须能由 `workspaceId + documentId + versionNumber` 唯一定位
+- 版本处理产物应通过存储端口读取，应用层不直接依赖本地路径、MinIO SDK 或具体对象存储实现
+- 版本处理产物 key 语义应包含 `workspaceId`、`documentId`、`versionNumber` 与 artifact 名称，例如 `artifacts/workspaces/{workspaceId}/documents/{documentId}/versions/{versionNumber}/cleaned.md`
+- 源文件与处理产物在对象存储中应逻辑隔离；首期可使用同一 MinIO bucket 的不同 prefix，例如 `source/...` 与 `artifacts/...`
+- 当前阶段不要求在数据库中持久化完整 artifact 路径，优先通过稳定规则计算 key；必要时只记录产物是否已生成等状态事实
 - 文档详情页未显式指定 `versionNumber` 时，正文读取默认读取当前最新版本的 `cleaned.md`
 - 文档详情页显式指定 `versionNumber` 时，正文读取定位到该历史版本的 `cleaned.md`
 - 问答引用侧栏读取文档正文时，应读取该 `document` 当前问答基线版本的 `cleaned.md`，而不是无条件读取最新版本
@@ -79,6 +84,9 @@
 - `INDEXED` 与 `FAILED` 版本只要已形成 `cleaned.md`，都允许具备权限的用户读取正文
 - `UPLOADED` / `INGESTING` 版本若尚未形成 `cleaned.md`，正文读取应返回 `CONTENT_NOT_READY`
 - 若版本状态已表明处理完成但对应 `cleaned.md` 缺失，正文读取应返回 `CONTENT_ARTIFACT_MISSING`
+- 正文读取链路不允许在 artifact 缺失时同步重新解析源文件；缺失应由重处理、修复任务或人工排查处理
+- 回退产生的新版本应重新进入处理链路并形成自己的 `cleaned.md`；正文读取新版本时仍读取新版本 artifact，而不是直接读取被回退历史版本的正文产物
+- `DELETED` 文档不开放正文读取；管理人员仅可查看终态与版本历史元数据，不可继续读取已删除文档的正文
 - 正文读取第一版返回完整 Markdown 文本，响应字段使用 `contentMarkdown`；后端应设置最大读取大小，超出上限时返回明确业务错误，后续再评估分页读取
 - 正文读取响应应至少返回 `documentId`、`versionNumber`、`latestVersionNumber`、`isLatestVersion`、`isAskableVersion`、`source`、`status`、`filename`、`createdAt`、`updatedAt`、`contentMarkdown`、`contentLength`、`truncated`
 - 正文读取错误码至少覆盖 `DOCUMENT_NOT_FOUND`、`DOCUMENT_CONTENT_FORBIDDEN`、`CONTENT_NOT_READY`、`CONTENT_ARTIFACT_MISSING`、`CONTENT_TOO_LARGE`、`VERSION_NOT_FOUND`、`VERSION_CONTENT_FORBIDDEN`
