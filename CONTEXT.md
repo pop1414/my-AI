@@ -66,6 +66,10 @@
 - 原生 Markdown 按 `md` / `markdown` / `mdown` / `mkd` 扩展名绕过 Tika，只做最小破坏清洗
 - 原生 HTML 按 `html` / `htm` 扩展名绕过 Tika，直接进入 HTML 语义清洗与 Markdown 转换
 - `cleaned.md` 是正式中间文本产物，文档目录中强制落盘
+- `版本正文` 指某个 `document version` 处理后形成的 `cleaned.md` 文本产物
+- 文档版本正文读取默认读取版本级 `cleaned.md`，不从源文件实时解析，也不从 `vector_store` chunk 拼接
+- 源文件用于下载、审计、重处理和原版预览，不作为文档版本正文读取的默认来源
+- 后续引入 MinIO 时，只改变源文件与处理产物的存储介质，不改变 `版本正文` 读取 `cleaned.md` 的语义
 - `raw.xhtml`、`cleaned.html`、`parse-result.json` 是可配置调试产物，不是对外契约
 - 当前阶段偏向纯文字质量基线；图片只保留占位或说明文本，表格只保留 Markdown 可读形态，尚未做图片理解、表格结构化节点或 OCR 稳定支持
 
@@ -345,6 +349,7 @@
 - `document version` 应持久化可空的 `rollbackFromVersionNumber` 字段，用于表达回退产生的新版本源自哪个历史版本
 - `document version` 应持久化 `createdAt` 与 `updatedAt`
 - `document version` 应持久化版本级创建人/上传人字段
+- `document version` 是 `版本正文` 的归属边界；正文读取必须显式定位到 `documentId + versionNumber`
 - 回退操作者等更细粒度动作信息当前阶段优先通过审计事件查询，不额外在 `document version` 中单独持久化
 - 当前阶段“可问答”能力仍由处理状态与问答基线规则推导，不在 `document version` 中单独持久化 `askable` / `askableAt` 字段
 - 来源文件级字段如 `fileHash`、`filename`、`fileSize` 应下沉到 `document version`

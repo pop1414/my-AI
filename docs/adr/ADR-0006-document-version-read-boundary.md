@@ -19,6 +19,8 @@ Accepted
 - 上传幂等只排除 `DELETED`。`DELETING` 期间仍命中原 document，以保持应用层查重、兼容唯一索引 `uk_ingest_documents_kb_file_hash` 和删除失败回滚语义一致。
 - 文档列表读取 `latest_filename/latest_status` 与 version 表中的 `file_size/failure_reason`。
 - 文档详情状态读取同样以 latest projection + latest version fact 为主视图事实源，返回当前最新版本的状态、来源文件名、版本号和来源类型。
+- 文档版本正文读取通过 `documentId + versionNumber` 定位版本级处理产物，并读取该版本对应的 `cleaned.md`。
+- 源文件只作为下载、审计、重处理和原版预览来源，不作为正文读取默认来源；`vector_store` chunk 只作为检索与分块预览事实源，不作为完整正文事实源。
 - 知识库已索引文档计数读取 `ingest_documents.latest_status`。
 - schema 自检同时校验主表 latest projection、旧兼容镜像列、version 事实列与 version 文件哈希索引。
 
@@ -27,6 +29,7 @@ Accepted
 主表旧版本事实字段仍会被写入，但它们只是迁移兼容镜像。
 后续代码审阅时，若发现生产读路径使用 `ingest_documents.file_hash/filename/file_size/status/processing_metadata`
 推导版本语义，应视为边界回退。
+若发现文档版本正文读取从源文件实时解析，或从 `vector_store` chunk 拼接完整正文，也应视为边界回退。
 
 ## Physical Drop Plan
 
