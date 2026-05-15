@@ -1,6 +1,7 @@
 package io.github.spike.myai.qa.infrastructure.retrieval;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -16,6 +17,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 import org.springframework.ai.vectorstore.SearchRequest;
 import org.springframework.ai.vectorstore.VectorStore;
+import org.springframework.ai.vectorstore.pgvector.PgVectorFilterExpressionConverter;
 
 /**
  * PgVectorChunkRetrievalAdapter 单元测试。
@@ -110,5 +112,30 @@ class PgVectorChunkRetrievalAdapterTest {
         org.junit.jupiter.api.Assertions.assertTrue(filterExpression.contains("version-2-v1"));
         org.junit.jupiter.api.Assertions.assertTrue(filterExpression.contains("doc-1"));
         org.junit.jupiter.api.Assertions.assertTrue(filterExpression.contains("doc-2"));
+    }
+
+    @Test
+    @DisplayName("similaritySearch 构造的版本过滤表达式应兼容 PGVector 转换器")
+    void similaritySearch_shouldBuildPgVectorCompatibleFilterExpression() {
+        VectorStore vectorStore = Mockito.mock(VectorStore.class);
+        PgVectorChunkRetrievalAdapter adapter = new PgVectorChunkRetrievalAdapter(vectorStore);
+        PgVectorFilterExpressionConverter converter = new PgVectorFilterExpressionConverter();
+        when(vectorStore.similaritySearch(any(SearchRequest.class))).thenAnswer(invocation -> {
+            SearchRequest request = invocation.getArgument(0);
+            assertDoesNotThrow(() -> converter.convertExpression(request.getFilterExpression()));
+            return List.of();
+        });
+
+        adapter.similaritySearch(
+                "what is rag",
+                7,
+                List.of(new AskableDocumentVersion(
+                        "doc-1",
+                        1,
+                        1,
+                        "doc-1-v1.pdf",
+                        Instant.parse("2026-05-09T10:00:00Z"))));
+
+        verify(vectorStore).similaritySearch(any(SearchRequest.class));
     }
 }

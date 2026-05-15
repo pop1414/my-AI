@@ -57,6 +57,10 @@ public class PgVectorChunkRetrievalAdapter implements ChunkRetrievalPort {
     private static final String METADATA_SOURCE_UPDATED_AT = "sourceUpdatedAt";
     /** 向量文档元数据中“分块版本”字段名。 */
     private static final String METADATA_SPLIT_VERSION = "splitVersion";
+    /** 初始文档版本号。 */
+    private static final int INITIAL_DOCUMENT_VERSION_NUMBER = 1;
+    /** 历史初始向量使用的分块版本号。 */
+    private static final String LEGACY_INITIAL_SPLIT_VERSION = "v1";
 
     /** Spring AI 向量存储抽象，底层可由 PGVector 等实现。 */
     private final VectorStore vectorStore;
@@ -128,6 +132,9 @@ public class PgVectorChunkRetrievalAdapter implements ChunkRetrievalPort {
      * <p>每个 document 的可问答版本可能不同，因此必须构造成成对条件：
      * {@code (documentId = A AND version = 2) OR (documentId = B AND version = 4)}。</p>
      *
+     * <p>PGVector 转换器不支持 {@code ISNULL}，因此初始版本的历史向量兼容通过
+     * {@code splitVersion = v1} 表达，避免问答检索在底层过滤转换阶段抛出异常。</p>
+     *
      * @param scope 可问答文档版本范围
      * @return 过滤表达式；scope 为空时返回 null
      */
@@ -138,21 +145,34 @@ public class PgVectorChunkRetrievalAdapter implements ChunkRetrievalPort {
         FilterExpressionBuilder builder = new FilterExpressionBuilder();
         List<FilterExpressionBuilder.Op> documentVersionFilters = new ArrayList<>();
         for (AskableDocumentVersion item : scope) {
-            FilterExpressionBuilder.Op versionFilter = builder.or(
-                    builder.eq(METADATA_DOCUMENT_VERSION_NUMBER, item.askableVersionNumber()),
-                    builder.eq(METADATA_SPLIT_VERSION, "version-" + item.askableVersionNumber() + "-v1"));
-            if (item.askableVersionNumber() == 1) {
-                versionFilter = builder.or(versionFilter, builder.isNull(METADATA_DOCUMENT_VERSION_NUMBER));
-            }
             documentVersionFilters.add(builder.and(
                     builder.eq(METADATA_DOCUMENT_ID, item.documentId()),
-                    builder.group(versionFilter)));
+                    builder.group(buildVersionFilter(builder, item.askableVersionNumber()))));
         }
         FilterExpressionBuilder.Op result = documentVersionFilters.getFirst();
         for (int i = 1; i < documentVersionFilters.size(); i++) {
             result = builder.or(result, documentVersionFilters.get(i));
         }
         return result.build();
+    }
+
+    /**
+     * 构造单个文档版本的向量元数据过滤条件。
+     *
+     * @param builder 过滤表达式构造器
+     * @param askableVersionNumber 当前可问答版本号
+     * @return 可被 PGVector 转换器处理的版本过滤条件
+     */
+    private static FilterExpressionBuilder.Op buildVersionFilter(
+            FilterExpressionBuilder builder,
+            int askableVersionNumber) {
+        FilterExpressionBuilder.Op versionFilter = builder.or(
+                builder.eq(METADATA_DOCUMENT_VERSION_NUMBER, askableVersionNumber),
+                builder.eq(METADATA_SPLIT_VERSION, "version-" + askableVersionNumber + "-v1"));
+        if (askableVersionNumber == INITIAL_DOCUMENT_VERSION_NUMBER) {
+            versionFilter = builder.or(versionFilter, builder.eq(METADATA_SPLIT_VERSION, LEGACY_INITIAL_SPLIT_VERSION));
+        }
+        return versionFilter;
     }
 
     /**
