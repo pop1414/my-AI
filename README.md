@@ -69,8 +69,9 @@
     - `GET /api/v1/knowledge-bases`（知识库主数据 + `INDEXED` 统计；普通成员仅可见自己具备显式知识库授权的知识库）
     - `PATCH /api/v1/knowledge-bases/{kbId}`（编辑 `name/description/status`）
     - `POST /api/v1/qa/ask`（同步返回）
-    - 无命中场景：`200 + 兜底回答 + 空 references`
-    - `references` 结构：`documentId/chunkIndex/contentPreview`
+    - 无可问答版本或无命中场景：`200 + 兜底回答 + 空 references`，且不返回版本提示
+    - `references` 结构：`documentId/chunkIndex/contentPreview/sourceVersionNumber/sourceUpdatedAt/isLatestVersion/latestVersionNumber/sourceFilename`
+    - `staleReferences` 汇总非最新版本引用；仅在存在引用时返回，便于前端按需展示版本提示
     - 上传/问答显式传入不存在知识库时返回 `400`，传入停用知识库时返回 `409`
 - 已实现 API（auth / governance）：
     - `POST /api/v1/auth/login`
@@ -394,8 +395,21 @@ curl -sS "http://localhost:8080/actuator/metrics/myai.ingest.delete.success.tota
         - `documentId`
         - `chunkIndex`
         - `contentPreview`
+        - `sourceVersionNumber`
+        - `sourceUpdatedAt`
+        - `isLatestVersion`
+        - `latestVersionNumber`
+        - `sourceFilename`
+    - `staleReferences`（存在引用时返回）
+        - `hasStaleReferences`
+        - `staleReferenceCount`
+        - `staleDocumentCount`
+        - `documents`
 - 说明：
     - 当前仅支持同步返回
+    - 问答会先按当前用户权限和目标知识库计算可问答版本范围，再将 `documentId + versionNumber` 成对条件下推到向量检索
+    - 每个 `document` 独立选择最近一个已 `INDEXED` 的版本作为当前可问答版本；当最新版本尚未 `INDEXED` 时，引用会标记为非最新版本
+    - 无引用响应不返回 `staleReferences`，前端不应展示版本提示
     - SSE 仅文档预留，暂不开放接口
 
 ## 7. 当前边界与注意事项

@@ -1613,7 +1613,10 @@ paths:
         V1 先提供同步一次性返回能力；
         SSE 流式版本仅做文档预留，暂不开放新接口；
         当前用户必须对目标知识库具备问答权限；
-        召回结果会在生成前按文档授权过滤，过滤后若无可用内容则返回兜底回答，不返回 403。
+        问答会先按当前用户权限与目标知识库计算可问答 document/version 范围；
+        每个 document 独立选择最近一个已 INDEXED 版本作为当前可问答版本；
+        向量检索只在授权后的 document/version 范围内召回，避免先越权召回再裁剪引用；
+        无可问答版本或无命中内容时返回兜底回答与空 references，不展示版本提示。
       x-stage: implemented
       security:
         - cookieAuth: []
@@ -2233,6 +2236,7 @@ components:
 
     AskResponse:
       type: object
+      required: [answer, references]
       properties:
         answer:
           type: string
@@ -2240,9 +2244,23 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/AskReference'
+        staleReferences:
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/AskStaleReferenceSummary'
+          description: 存在引用时返回陈旧引用汇总；无引用时为空，调用方不应展示版本提示
 
     AskReference:
       type: object
+      required:
+        - documentId
+        - chunkIndex
+        - contentPreview
+        - sourceVersionNumber
+        - sourceUpdatedAt
+        - isLatestVersion
+        - latestVersionNumber
+        - sourceFilename
       properties:
         documentId:
           type: string
@@ -2250,3 +2268,59 @@ components:
           type: integer
         contentPreview:
           type: string
+        sourceVersionNumber:
+          type: integer
+          minimum: 1
+          description: 实际用于回答的 document version 号
+        sourceUpdatedAt:
+          type: string
+          format: date-time
+          description: 实际用于回答的版本更新时间
+        isLatestVersion:
+          type: boolean
+          description: 引用来源版本是否等于当前 latest version
+        latestVersionNumber:
+          type: integer
+          minimum: 1
+          description: 该 document 当前最新版本号
+        sourceFilename:
+          type: string
+          description: 实际用于回答的版本来源文件名
+
+    AskStaleReferenceSummary:
+      type: object
+      required: [hasStaleReferences, staleReferenceCount, staleDocumentCount, documents]
+      properties:
+        hasStaleReferences:
+          type: boolean
+          description: 是否存在非最新版本引用
+        staleReferenceCount:
+          type: integer
+          minimum: 0
+          description: 非最新版本引用条数
+        staleDocumentCount:
+          type: integer
+          minimum: 0
+          description: 涉及非最新版本引用的 document 数
+        documents:
+          type: array
+          items:
+            $ref: '#/components/schemas/AskStaleReferenceDocument'
+
+    AskStaleReferenceDocument:
+      type: object
+      required: [documentId, sourceVersionNumber, latestVersionNumber, sourceFilename]
+      properties:
+        documentId:
+          type: string
+        sourceVersionNumber:
+          type: integer
+          minimum: 1
+          description: 实际用于回答的可问答版本号
+        latestVersionNumber:
+          type: integer
+          minimum: 1
+          description: 当前最新版本号
+        sourceFilename:
+          type: string
+          description: 实际用于回答的版本来源文件名
