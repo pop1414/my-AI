@@ -359,6 +359,182 @@ class GetDocumentContentApplicationServiceTest {
         assertEquals("CONTENT_NOT_READY", ex.code());
     }
 
+    @Test
+    @DisplayName("显式版本正文查询成功时，应返回指定版本且不改变 QA baseline")
+    void handle_shouldReturnExplicitVersionContent_withoutChangingAskableBaseline() {
+        Fixture fixture = new Fixture();
+        DocumentId documentId = new DocumentId("doc-explicit");
+        Document document = document(documentId, 3, UploadStatus.INDEXED);
+        DocumentVersion explicitVersion = version(documentId, 1, UploadStatus.INDEXED);
+        when(fixture.documentRepository.findById("workspace-a", documentId)).thenReturn(Optional.of(document));
+        when(fixture.documentRepository.findLatestIndexedVersionNumber("workspace-a", documentId)).thenReturn(2);
+        when(fixture.documentRepository.findVersionByNumber("workspace-a", documentId, 1))
+                .thenReturn(Optional.of(explicitVersion));
+        when(fixture.artifactStorage.loadVersionArtifact(
+                "workspace-a",
+                documentId,
+                1,
+                DocumentProcessingArtifactStorage.CLEANED_MARKDOWN_ARTIFACT_NAME,
+                1024L))
+                .thenReturn(Optional.of(new DocumentVersionArtifactContent("key", "历史版本正文", 18L)));
+
+        DocumentContentResult result = fixture.service.handle(new GetDocumentContentQuery(
+                "doc-explicit",
+                DocumentContentSource.EXPLICIT_VERSION,
+                1));
+
+        assertEquals(1, result.versionNumber());
+        assertEquals(3, result.latestVersionNumber());
+        assertFalse(result.isLatestVersion());
+        assertFalse(result.isAskableVersion());
+        assertEquals("EXPLICIT_VERSION", result.source());
+        assertEquals("历史版本正文", result.contentMarkdown());
+        verify(fixture.authorizationService).requireCanManageDocument(
+                any(CurrentUser.class),
+                eq("doc-explicit"),
+                eq("kb-1"));
+        verify(fixture.authorizationService, never()).requireCanReadDocument(
+                any(CurrentUser.class),
+                eq("doc-explicit"),
+                eq("kb-1"));
+        verify(fixture.documentRepository, never()).save(any(Document.class));
+    }
+
+    @Test
+    @DisplayName("显式版本不存在时，应返回 VERSION_NOT_FOUND")
+    void handle_shouldThrowVersionNotFound_whenExplicitVersionMissing() {
+        Fixture fixture = new Fixture();
+        DocumentId documentId = new DocumentId("doc-explicit-missing");
+        Document document = document(documentId, 3, UploadStatus.INDEXED);
+        when(fixture.documentRepository.findById("workspace-a", documentId)).thenReturn(Optional.of(document));
+        when(fixture.documentRepository.findLatestIndexedVersionNumber("workspace-a", documentId)).thenReturn(2);
+        when(fixture.documentRepository.findVersionByNumber("workspace-a", documentId, 99)).thenReturn(Optional.empty());
+
+        BusinessException ex = assertThrows(
+                BusinessException.class,
+                () -> fixture.service.handle(new GetDocumentContentQuery(
+                        "doc-explicit-missing",
+                        DocumentContentSource.EXPLICIT_VERSION,
+                        99)));
+
+        assertEquals(HttpStatus.NOT_FOUND, ex.status());
+        assertEquals("VERSION_NOT_FOUND", ex.code());
+        verify(fixture.artifactStorage, never()).loadVersionArtifact(any(), any(), anyInt(), any(), eq(1024L));
+    }
+
+    @Test
+    @DisplayName("普通读者显式读取历史版本时，应返回 VERSION_CONTENT_FORBIDDEN")
+    void handle_shouldThrowVersionContentForbidden_whenExplicitVersionPermissionDenied() {
+        Fixture fixture = new Fixture();
+        DocumentId documentId = new DocumentId("doc-explicit-denied");
+        Document document = document(documentId, 3, UploadStatus.INDEXED);
+        when(fixture.documentRepository.findById("workspace-a", documentId)).thenReturn(Optional.of(document));
+        Mockito.doThrow(new AccessDeniedException("denied"))
+                .when(fixture.authorizationService)
+                .requireCanManageDocument(any(CurrentUser.class), eq("doc-explicit-denied"), eq("kb-1"));
+
+        BusinessException ex = assertThrows(
+                BusinessException.class,
+                () -> fixture.service.handle(new GetDocumentContentQuery(
+                        "doc-explicit-denied",
+                        DocumentContentSource.EXPLICIT_VERSION,
+                        1)));
+
+        assertEquals(HttpStatus.FORBIDDEN, ex.status());
+        assertEquals("VERSION_CONTENT_FORBIDDEN", ex.code());
+        verify(fixture.artifactStorage, never()).loadVersionArtifact(any(), any(), anyInt(), any(), eq(1024L));
+    }
+
+    @Test
+    @DisplayName("显式版本正文尚未生成时，应返回 CONTENT_NOT_READY")
+    void handle_shouldThrowContentNotReady_whenExplicitVersionArtifactMissingAndProcessing() {
+        Fixture fixture = new Fixture();
+        DocumentId documentId = new DocumentId("doc-explicit-ingesting");
+        Document document = document(documentId, 3, UploadStatus.INGESTING);
+        DocumentVersion explicitVersion = version(documentId, 3, UploadStatus.INGESTING);
+        when(fixture.documentRepository.findById("workspace-a", documentId)).thenReturn(Optional.of(document));
+        when(fixture.documentRepository.findLatestIndexedVersionNumber("workspace-a", documentId)).thenReturn(2);
+        when(fixture.documentRepository.findVersionByNumber("workspace-a", documentId, 3))
+                .thenReturn(Optional.of(explicitVersion));
+        when(fixture.artifactStorage.loadVersionArtifact(
+                "workspace-a",
+                documentId,
+                3,
+                DocumentProcessingArtifactStorage.CLEANED_MARKDOWN_ARTIFACT_NAME,
+                1024L))
+                .thenReturn(Optional.empty());
+
+        BusinessException ex = assertThrows(
+                BusinessException.class,
+                () -> fixture.service.handle(new GetDocumentContentQuery(
+                        "doc-explicit-ingesting",
+                        DocumentContentSource.EXPLICIT_VERSION,
+                        3)));
+
+        assertEquals(HttpStatus.CONFLICT, ex.status());
+        assertEquals("CONTENT_NOT_READY", ex.code());
+    }
+
+    @Test
+    @DisplayName("显式版本正文产物缺失时，应返回 CONTENT_ARTIFACT_MISSING")
+    void handle_shouldThrowArtifactMissing_whenExplicitTerminalArtifactMissing() {
+        Fixture fixture = new Fixture();
+        DocumentId documentId = new DocumentId("doc-explicit-missing-artifact");
+        Document document = document(documentId, 3, UploadStatus.INDEXED);
+        DocumentVersion explicitVersion = version(documentId, 1, UploadStatus.INDEXED);
+        when(fixture.documentRepository.findById("workspace-a", documentId)).thenReturn(Optional.of(document));
+        when(fixture.documentRepository.findLatestIndexedVersionNumber("workspace-a", documentId)).thenReturn(3);
+        when(fixture.documentRepository.findVersionByNumber("workspace-a", documentId, 1))
+                .thenReturn(Optional.of(explicitVersion));
+        when(fixture.artifactStorage.loadVersionArtifact(
+                "workspace-a",
+                documentId,
+                1,
+                DocumentProcessingArtifactStorage.CLEANED_MARKDOWN_ARTIFACT_NAME,
+                1024L))
+                .thenReturn(Optional.empty());
+
+        BusinessException ex = assertThrows(
+                BusinessException.class,
+                () -> fixture.service.handle(new GetDocumentContentQuery(
+                        "doc-explicit-missing-artifact",
+                        DocumentContentSource.EXPLICIT_VERSION,
+                        1)));
+
+        assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, ex.status());
+        assertEquals("CONTENT_ARTIFACT_MISSING", ex.code());
+    }
+
+    @Test
+    @DisplayName("显式版本正文超过读取上限时，应返回 CONTENT_TOO_LARGE")
+    void handle_shouldThrowTooLarge_whenExplicitArtifactExceedsLimit() {
+        Fixture fixture = new Fixture();
+        DocumentId documentId = new DocumentId("doc-explicit-large");
+        Document document = document(documentId, 2, UploadStatus.INDEXED);
+        DocumentVersion explicitVersion = version(documentId, 1, UploadStatus.INDEXED);
+        when(fixture.documentRepository.findById("workspace-a", documentId)).thenReturn(Optional.of(document));
+        when(fixture.documentRepository.findLatestIndexedVersionNumber("workspace-a", documentId)).thenReturn(2);
+        when(fixture.documentRepository.findVersionByNumber("workspace-a", documentId, 1))
+                .thenReturn(Optional.of(explicitVersion));
+        when(fixture.artifactStorage.loadVersionArtifact(
+                "workspace-a",
+                documentId,
+                1,
+                DocumentProcessingArtifactStorage.CLEANED_MARKDOWN_ARTIFACT_NAME,
+                1024L))
+                .thenThrow(new DocumentVersionArtifactTooLargeException(2048L, 1024L));
+
+        BusinessException ex = assertThrows(
+                BusinessException.class,
+                () -> fixture.service.handle(new GetDocumentContentQuery(
+                        "doc-explicit-large",
+                        DocumentContentSource.EXPLICIT_VERSION,
+                        1)));
+
+        assertEquals(HttpStatus.PAYLOAD_TOO_LARGE, ex.status());
+        assertEquals("CONTENT_TOO_LARGE", ex.code());
+    }
+
     private static Document document(DocumentId documentId, int latestVersionNumber, UploadStatus status) {
         Instant now = Instant.parse("2026-05-15T08:00:00Z");
         return new Document(

@@ -347,21 +347,35 @@ public class DocumentIngestController {
      *
      * <p>接口契约：
      * <ul>
-     *     <li>路径：GET /api/v1/documents/{documentId}/content?source=LATEST|ASKABLE_BASELINE</li>
+     *     <li>路径：GET /api/v1/documents/{documentId}/content?source=LATEST|ASKABLE_BASELINE|EXPLICIT_VERSION</li>
      *     <li>{@code LATEST}：固定读取当前 latest version 的 {@code cleaned.md}</li>
      *     <li>{@code ASKABLE_BASELINE}：读取当前 QA 可问答基线版本的 {@code cleaned.md}</li>
+     *     <li>{@code EXPLICIT_VERSION}：读取 versionNumber 指定历史版本的 {@code cleaned.md}</li>
      * </ul>
      *
-     * @param documentId 文档资产 ID
-     * @param source     正文来源
+     * @param documentId    文档资产 ID
+     * @param source        正文来源
+     * @param versionNumber 显式版本读取时的目标版本号
      * @return 正文响应
      */
     @GetMapping(value = "/{documentId}/content", produces = MediaType.APPLICATION_JSON_VALUE)
     public DocumentContentResponse getContent(
             @PathVariable("documentId") String documentId,
-            @RequestParam("source") String source) {
+            @RequestParam("source") String source,
+            @RequestParam(value = "versionNumber", required = false) Integer versionNumber) {
         DocumentContentSource contentSource = parseDocumentContentSource(source);
-        DocumentContentResult result = getDocumentContentUseCase.handle(new GetDocumentContentQuery(documentId, contentSource));
+        if (contentSource == DocumentContentSource.EXPLICIT_VERSION && versionNumber == null) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "versionNumber is required when source is EXPLICIT_VERSION");
+        }
+        if (contentSource == DocumentContentSource.EXPLICIT_VERSION && versionNumber <= 0) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "versionNumber must be positive");
+        }
+        DocumentContentResult result = getDocumentContentUseCase.handle(
+                new GetDocumentContentQuery(documentId, contentSource, versionNumber));
         return toDocumentContentResponse(result);
     }
 
@@ -376,7 +390,10 @@ public class DocumentIngestController {
         try {
             return DocumentContentSource.valueOf(source);
         } catch (IllegalArgumentException | NullPointerException ex) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "source must be LATEST or ASKABLE_BASELINE", ex);
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "source must be LATEST, ASKABLE_BASELINE or EXPLICIT_VERSION",
+                    ex);
         }
     }
 

@@ -11,5 +11,8 @@ public enum DocumentContentSource {
     LATEST,
 
     /** 读取当前 QA 可问答基线版本的正文。 */
-    ASKABLE_BASELINE
+    ASKABLE_BASELINE,
+
+    /** 读取调用方显式指定版本的正文。 */
+    EXPLICIT_VERSION
 }

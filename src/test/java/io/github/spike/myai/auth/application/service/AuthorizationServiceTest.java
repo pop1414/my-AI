@@ -136,6 +136,49 @@ class AuthorizationServiceTest {
         assertThrows(AccessDeniedException.class, () -> service.requireCanManageKnowledgeBase("kb-1"));
     }
 
+    @Test
+    @DisplayName("工作区管理员应允许管理文档且不查询授权表")
+    void requireCanManageDocument_shouldAllowWorkspaceAdminForExplicitVersionContent() {
+        CurrentUser user = currentUser(WorkspaceRole.WORKSPACE_ADMIN);
+
+        assertDoesNotThrow(() -> service.requireCanManageDocument(user, "doc-1", "kb-1"));
+        verify(grantRepository, never()).findDocumentPermission("default", "doc-1", "user-1");
+        verify(grantRepository, never()).findKnowledgeBaseRole("default", "kb-1", "user-1");
+    }
+
+    @Test
+    @DisplayName("KB_MANAGER 应允许成员管理文档")
+    void requireCanManageDocument_shouldAllowKbManagerForExplicitVersionContent() {
+        CurrentUser user = currentUser(WorkspaceRole.WORKSPACE_MEMBER);
+        when(grantRepository.findDocumentPermission("default", "doc-1", "user-1")).thenReturn(Optional.empty());
+        when(grantRepository.findKnowledgeBaseRole("default", "kb-1", "user-1"))
+                .thenReturn(Optional.of(KnowledgeBaseRole.KB_MANAGER));
+
+        assertDoesNotThrow(() -> service.requireCanManageDocument(user, "doc-1", "kb-1"));
+    }
+
+    @Test
+    @DisplayName("DOC_ALLOW_MANAGE 应允许成员管理文档")
+    void requireCanManageDocument_shouldAllowDocumentManageGrantForExplicitVersionContent() {
+        CurrentUser user = currentUser(WorkspaceRole.WORKSPACE_MEMBER);
+        when(grantRepository.findDocumentPermission("default", "doc-1", "user-1"))
+                .thenReturn(Optional.of(DocumentPermission.DOC_ALLOW_MANAGE));
+
+        assertDoesNotThrow(() -> service.requireCanManageDocument(user, "doc-1", "kb-1"));
+        verify(grantRepository, never()).findKnowledgeBaseRole("default", "kb-1", "user-1");
+    }
+
+    @Test
+    @DisplayName("DOC_DENY 应覆盖文档管理授权回退")
+    void requireCanManageDocument_shouldDenyWhenDocumentGrantIsDeny() {
+        CurrentUser user = currentUser(WorkspaceRole.WORKSPACE_MEMBER);
+        when(grantRepository.findDocumentPermission("default", "doc-1", "user-1"))
+                .thenReturn(Optional.of(DocumentPermission.DOC_DENY));
+
+        assertThrows(AccessDeniedException.class, () -> service.requireCanManageDocument(user, "doc-1", "kb-1"));
+        verify(grantRepository, never()).findKnowledgeBaseRole("default", "kb-1", "user-1");
+    }
+
     /**
      * 验证知识库级拒绝规则：普通 MEMBER 在无显式知识库授权时，
      * 读取知识库应被拒绝（抛出 AccessDeniedException）。

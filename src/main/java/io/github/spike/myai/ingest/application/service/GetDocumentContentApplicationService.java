@@ -27,7 +27,8 @@ import org.springframework.stereotype.Service;
  *
  * <p>该服务按 {@link DocumentContentSource} 选择版本级 {@code cleaned.md}：
  * {@code LATEST} 固定读取当前最新版本；{@code ASKABLE_BASELINE} 读取当前 QA
- * 可问答基线版本。正文读取只读版本事实和 artifact，不改变后续问答基线。
+ * 可问答基线版本；{@code EXPLICIT_VERSION} 读取调用方指定的历史版本。
+ * 正文读取只读版本事实和 artifact，不改变后续问答基线。
  */
 @Service
 public class GetDocumentContentApplicationService implements GetDocumentContentUseCase {
@@ -71,8 +72,8 @@ public class GetDocumentContentApplicationService implements GetDocumentContentU
      * <p>处理顺序：
      * <ol>
      *   <li>定位当前用户工作区内的 document；</li>
-     *   <li>拒绝已删除 document，并校验正文读取权限；</li>
-     *   <li>根据来源选择 latest version 或 askable baseline version；</li>
+     *   <li>拒绝已删除 document，并按来源校验正文读取或历史版本读取权限；</li>
+     *   <li>根据来源选择 latest、askable baseline 或显式指定版本；</li>
      *   <li>读取版本级 {@code cleaned.md} 并按来源映射缺失或过大分支。</li>
      * </ol>
      *
@@ -92,7 +93,7 @@ public class GetDocumentContentApplicationService implements GetDocumentContentU
         if (document.status() == UploadStatus.DELETED) {
             throw business(HttpStatus.NOT_FOUND, "DOCUMENT_NOT_FOUND", "document not found: " + documentId.value());
         }
-        requireReadPermission(currentUser, document);
+        requireContentPermission(currentUser, document, query.source());
 
         int latestVersionNumber = document.latestVersionNumber();
         int askableVersionNumber = documentRepository.findLatestIndexedVersionNumber(currentUser.workspaceId(), documentId);
@@ -100,6 +101,7 @@ public class GetDocumentContentApplicationService implements GetDocumentContentU
                 currentUser,
                 documentId,
                 query.source(),
+                query.versionNumber(),
                 latestVersionNumber,
                 askableVersionNumber);
 
@@ -127,6 +129,7 @@ public class GetDocumentContentApplicationService implements GetDocumentContentU
      * @param currentUser   当前用户
      * @param documentId    文档资产 ID
      * @param source        正文来源
+     * @param versionNumber 显式版本读取时的目标版本号
      * @param latestVersionNumber 当前 latest 版本号
      * @param askableVersionNumber 当前可问答版本号；不存在时为 0
      * @return 目标版本事实
@@ -135,6 +138,7 @@ public class GetDocumentContentApplicationService implements GetDocumentContentU
             CurrentUser currentUser,
             DocumentId documentId,
             DocumentContentSource source,
+            Integer versionNumber,
             int latestVersionNumber,
             int askableVersionNumber) {
         if (source == DocumentContentSource.ASKABLE_BASELINE) {
@@ -143,7 +147,32 @@ public class GetDocumentContentApplicationService implements GetDocumentContentU
             }
             return findVersionFact(currentUser, documentId, askableVersionNumber, "askable baseline");
         }
+        if (source == DocumentContentSource.EXPLICIT_VERSION) {
+            return findExplicitVersionFact(currentUser, documentId, versionNumber);
+        }
         return findVersionFact(currentUser, documentId, latestVersionNumber, "latest");
+    }
+
+    /**
+     * 读取显式指定的版本事实，未命中时映射为对外稳定的版本不存在错误。
+     *
+     * @param currentUser   当前用户
+     * @param documentId    文档资产 ID
+     * @param versionNumber 目标版本号
+     * @return 版本事实
+     */
+    private DocumentVersion findExplicitVersionFact(
+            CurrentUser currentUser,
+            DocumentId documentId,
+            int versionNumber) {
+        return documentRepository.findVersionByNumber(
+                        currentUser.workspaceId(),
+                        documentId,
+                        versionNumber)
+                .orElseThrow(() -> business(
+                        HttpStatus.NOT_FOUND,
+                        "VERSION_NOT_FOUND",
+                        "document version not found: " + versionNumber));
     }
 
     /**
@@ -229,12 +258,17 @@ public class GetDocumentContentApplicationService implements GetDocumentContentU
     }
 
     /**
-     * 校验正文读取权限并映射为稳定业务错误码。
+     * 按正文来源校验读取权限并映射为稳定业务错误码。
      *
      * @param currentUser 当前用户
      * @param document    目标文档
+     * @param source      正文来源
      */
-    private void requireReadPermission(CurrentUser currentUser, Document document) {
+    private void requireContentPermission(CurrentUser currentUser, Document document, DocumentContentSource source) {
+        if (source == DocumentContentSource.EXPLICIT_VERSION) {
+            requireExplicitVersionPermission(currentUser, document);
+            return;
+        }
         try {
             authorizationService.requireCanReadDocument(
                     currentUser,
@@ -245,6 +279,26 @@ public class GetDocumentContentApplicationService implements GetDocumentContentU
                     HttpStatus.FORBIDDEN,
                     "DOCUMENT_CONTENT_FORBIDDEN",
                     "你没有读取该文档正文的权限，请联系管理员");
+        }
+    }
+
+    /**
+     * 校验显式历史版本正文读取权限。
+     *
+     * @param currentUser 当前用户
+     * @param document    目标文档
+     */
+    private void requireExplicitVersionPermission(CurrentUser currentUser, Document document) {
+        try {
+            authorizationService.requireCanManageDocument(
+                    currentUser,
+                    document.documentId().value(),
+                    document.kbId());
+        } catch (AccessDeniedException ex) {
+            throw business(
+                    HttpStatus.FORBIDDEN,
+                    "VERSION_CONTENT_FORBIDDEN",
+                    "你没有读取该历史版本正文的权限，请联系管理员");
         }
     }
 

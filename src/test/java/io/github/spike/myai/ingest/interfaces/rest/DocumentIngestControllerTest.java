@@ -698,10 +698,73 @@ class DocumentIngestControllerTest {
     }
 
     @Test
+    @DisplayName("显式版本正文查询成功时，应传递 versionNumber 并返回 EXPLICIT_VERSION 响应")
+    void getContent_shouldReturnExplicitVersionContent() throws Exception {
+        when(getDocumentContentUseCase.handle(any(GetDocumentContentQuery.class)))
+                .thenReturn(new DocumentContentResult(
+                        "doc-content-1",
+                        1,
+                        3,
+                        false,
+                        false,
+                        "EXPLICIT_VERSION",
+                        "INDEXED",
+                        "demo-v1.md",
+                        java.time.Instant.parse("2026-05-13T08:00:00Z"),
+                        java.time.Instant.parse("2026-05-13T08:05:00Z"),
+                        "# 历史正文",
+                        18L,
+                        false));
+
+        mockMvc.perform(get("/api/v1/documents/{documentId}/content", "doc-content-1")
+                        .param("source", "EXPLICIT_VERSION")
+                        .param("versionNumber", "1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.documentId").value("doc-content-1"))
+                .andExpect(jsonPath("$.versionNumber").value(1))
+                .andExpect(jsonPath("$.latestVersionNumber").value(3))
+                .andExpect(jsonPath("$.isLatestVersion").value(false))
+                .andExpect(jsonPath("$.isAskableVersion").value(false))
+                .andExpect(jsonPath("$.source").value("EXPLICIT_VERSION"))
+                .andExpect(jsonPath("$.contentMarkdown").value("# 历史正文"));
+
+        ArgumentCaptor<GetDocumentContentQuery> captor = ArgumentCaptor.forClass(GetDocumentContentQuery.class);
+        verify(getDocumentContentUseCase).handle(captor.capture());
+        org.junit.jupiter.api.Assertions.assertEquals("doc-content-1", captor.getValue().documentId());
+        org.junit.jupiter.api.Assertions.assertEquals(
+                io.github.spike.myai.ingest.application.query.DocumentContentSource.EXPLICIT_VERSION,
+                captor.getValue().source());
+        org.junit.jupiter.api.Assertions.assertEquals(1, captor.getValue().versionNumber());
+    }
+
+    @Test
+    @DisplayName("显式版本正文缺少 versionNumber 时，应返回 400 且不调用用例")
+    void getContent_shouldReturnBadRequest_whenExplicitVersionNumberMissing() throws Exception {
+        mockMvc.perform(get("/api/v1/documents/{documentId}/content", "doc-content-1")
+                        .param("source", "EXPLICIT_VERSION"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("BAD_REQUEST"));
+
+        verify(getDocumentContentUseCase, never()).handle(any(GetDocumentContentQuery.class));
+    }
+
+    @Test
+    @DisplayName("显式版本正文 versionNumber 非正数时，应返回 400 且不调用用例")
+    void getContent_shouldReturnBadRequest_whenExplicitVersionNumberInvalid() throws Exception {
+        mockMvc.perform(get("/api/v1/documents/{documentId}/content", "doc-content-1")
+                        .param("source", "EXPLICIT_VERSION")
+                        .param("versionNumber", "0"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("BAD_REQUEST"));
+
+        verify(getDocumentContentUseCase, never()).handle(any(GetDocumentContentQuery.class));
+    }
+
+    @Test
     @DisplayName("正文查询 source 非法时，应返回 400 且不调用用例")
     void getContent_shouldReturnBadRequest_whenSourceUnsupported() throws Exception {
         mockMvc.perform(get("/api/v1/documents/{documentId}/content", "doc-content-1")
-                        .param("source", "EXPLICIT_VERSION"))
+                        .param("source", "UNSUPPORTED"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("BAD_REQUEST"));
 
@@ -766,6 +829,22 @@ class DocumentIngestControllerTest {
                         .param("source", "LATEST"))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("DOCUMENT_CONTENT_FORBIDDEN"));
+    }
+
+    @Test
+    @DisplayName("无历史版本正文读取权限时，应返回 403 与 VERSION_CONTENT_FORBIDDEN")
+    void getContent_shouldReturnForbidden_whenNoExplicitVersionPermission() throws Exception {
+        when(getDocumentContentUseCase.handle(any(GetDocumentContentQuery.class)))
+                .thenThrow(new BusinessException(
+                        HttpStatus.FORBIDDEN,
+                        "VERSION_CONTENT_FORBIDDEN",
+                        "你没有读取该历史版本正文的权限，请联系管理员"));
+
+        mockMvc.perform(get("/api/v1/documents/{documentId}/content", "doc-denied")
+                        .param("source", "EXPLICIT_VERSION")
+                        .param("versionNumber", "1"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("VERSION_CONTENT_FORBIDDEN"));
     }
 
     @Test
