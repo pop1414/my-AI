@@ -17,18 +17,18 @@
 
 ## 总览
 
-| 本地编号 | GitHub Issue | 标题 | 类型 | 标签 | 阻塞 |
-| --- | --- | --- | --- | --- | --- |
-| DVCR-01 | [#22](https://github.com/pop1414/my-AI/issues/22) | 版本正文 artifact storage port 与 key resolver 后端基线 | AFK | `ready-for-agent` | 无 |
-| DVCR-02 | [#23](https://github.com/pop1414/my-AI/issues/23) | 统一正文接口 source=LATEST 后端契约 | AFK | `ready-for-agent` | #22 |
-| DVCR-03 | [#24](https://github.com/pop1414/my-AI/issues/24) | 统一正文接口 source=ASKABLE_BASELINE 后端契约 | AFK | `ready-for-agent` | #22, #23 |
-| DVCR-04 | [#25](https://github.com/pop1414/my-AI/issues/25) | 统一正文接口 source=EXPLICIT_VERSION 权限与错误映射 | AFK | `ready-for-agent` | #22, #23 |
-| DVCR-05 | [#26](https://github.com/pop1414/my-AI/issues/26) | 文档详情 latest 正文前端视图 | AFK | `ready-for-agent` | #23 |
-| DVCR-06 | [#27](https://github.com/pop1414/my-AI/issues/27) | QA 引用侧栏 askable baseline 正文前端视图 | AFK | `ready-for-agent` | #24 |
-| DVCR-07 | [#28](https://github.com/pop1414/my-AI/issues/28) | 管理者历史版本正文前端视图 | AFK | `ready-for-agent` | #25, #26 |
-| DVCR-08 | [#29](https://github.com/pop1414/my-AI/issues/29) | 正文读取后端契约与错误映射收口 | AFK | `ready-for-agent` | #23, #24, #25 |
-| DVCR-09 | [#30](https://github.com/pop1414/my-AI/issues/30) | 正文读取前端错误态与权限隐藏收口 | AFK | `ready-for-agent` | #26, #27, #28, #29 |
-| DVCR-10 | [#31](https://github.com/pop1414/my-AI/issues/31) | 文档版本正文读取 E2E 专项验收 | AFK | `ready-for-agent` | #30 |
+| 本地编号 | GitHub Issue                                      | 标题                                                    | 类型 | 标签              | 阻塞               |
+| -------- | ------------------------------------------------- | ------------------------------------------------------- | ---- | ----------------- | ------------------ |
+| DVCR-01  | [#22](https://github.com/pop1414/my-AI/issues/22) | 版本正文 artifact storage port 与 key resolver 后端基线 | AFK  | `ready-for-agent` | 无                 |
+| DVCR-02  | [#23](https://github.com/pop1414/my-AI/issues/23) | 统一正文接口 source=LATEST 后端契约                     | AFK  | `ready-for-agent` | #22                |
+| DVCR-03  | [#24](https://github.com/pop1414/my-AI/issues/24) | 统一正文接口 source=ASKABLE_BASELINE 后端契约           | AFK  | `ready-for-agent` | #22, #23           |
+| DVCR-04  | [#25](https://github.com/pop1414/my-AI/issues/25) | 统一正文接口 source=EXPLICIT_VERSION 权限与错误映射     | AFK  | `ready-for-agent` | #22, #23           |
+| DVCR-05  | [#26](https://github.com/pop1414/my-AI/issues/26) | 文档详情 latest 正文前端视图                            | AFK  | `ready-for-agent` | #23                |
+| DVCR-06  | [#27](https://github.com/pop1414/my-AI/issues/27) | QA 引用侧栏 askable baseline 正文前端视图               | AFK  | `ready-for-agent` | #24                |
+| DVCR-07  | [#28](https://github.com/pop1414/my-AI/issues/28) | 管理者历史版本正文前端视图                              | AFK  | `ready-for-agent` | #25, #26           |
+| DVCR-08  | [#29](https://github.com/pop1414/my-AI/issues/29) | 正文读取后端契约与错误映射收口                          | AFK  | `ready-for-agent` | #23, #24, #25      |
+| DVCR-09  | [#30](https://github.com/pop1414/my-AI/issues/30) | 正文读取前端错误态与权限隐藏收口                        | AFK  | `ready-for-agent` | #26, #27, #28, #29 |
+| DVCR-10  | [#31](https://github.com/pop1414/my-AI/issues/31) | 文档版本正文读取 E2E 专项验收                           | AFK  | `ready-for-agent` | #30                |
 
 ## 执行状态
 
