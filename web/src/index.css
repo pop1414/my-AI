@@ -1,17 +1,21 @@
 :root {
-  --console-ink: #0f172a;
-  --console-muted: #475569;
-  --console-surface: rgba(255, 255, 255, 0.92);
-  --console-border: rgba(15, 23, 42, 0.08);
-  --console-accent: #0f766e;
-  --console-accent-soft: rgba(15, 118, 110, 0.12);
+  --console-ink: #172554;
+  --console-muted: #5b6b8c;
+  --console-surface: rgba(255, 255, 255, 0.96);
+  --console-panel: rgba(244, 248, 255, 0.9);
+  --console-sidebar-surface: linear-gradient(180deg, #f8fbff, #eef4ff 48%, #e8f0ff);
+  --console-border: rgba(96, 126, 188, 0.18);
+  --console-accent: #2563eb;
+  --console-accent-strong: #1d4ed8;
+  --console-accent-soft: rgba(37, 99, 235, 0.12);
+  --console-shadow: 0 20px 48px rgba(37, 99, 235, 0.08);
   font-family: 'Segoe UI Variable', 'PingFang SC', 'Microsoft YaHei UI', sans-serif;
   line-height: 1.5;
   font-weight: 400;
   color: var(--console-ink);
   background:
-    radial-gradient(circle at top, rgba(15, 118, 110, 0.1), transparent 22%),
-    linear-gradient(180deg, #f3f6f8, #edf2f7);
+    radial-gradient(circle at top, rgba(96, 165, 250, 0.18), transparent 24%),
+    linear-gradient(180deg, #f7faff, #edf4ff);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -25,9 +29,10 @@
 body {
   margin: 0;
   min-height: 100vh;
+  color: var(--console-ink);
   background:
-    radial-gradient(circle at top, rgba(15, 118, 110, 0.1), transparent 22%),
-    linear-gradient(180deg, #f3f6f8, #edf2f7);
+    radial-gradient(circle at top, rgba(96, 165, 250, 0.18), transparent 24%),
+    linear-gradient(180deg, #f7faff, #edf4ff);
 }
 
 .console-root {
@@ -36,25 +41,27 @@ body {
 }
 
 .console-sidebar {
-  background: linear-gradient(180deg, #0f172a, #111827 48%, #172554);
-  border-right: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--console-sidebar-surface) !important;
+  border-right: 1px solid var(--console-border);
+  box-shadow: inset -1px 0 0 rgba(255, 255, 255, 0.4);
 }
 
 .console-logo {
-  color: #f8fafc;
-  font-weight: 700;
+  color: #17336d;
+  font-weight: 800;
   letter-spacing: 0.12em;
   text-transform: uppercase;
   height: 72px;
   display: flex;
   align-items: center;
   padding: 0 20px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  border-bottom: 1px solid rgba(96, 126, 188, 0.16);
+  background: rgba(255, 255, 255, 0.44);
 }
 
 .console-sidebar-menu {
   background: transparent !important;
-  color: rgba(226, 232, 240, 0.92);
+  color: var(--console-ink);
   padding: 12px 10px 20px;
 }
 
@@ -62,11 +69,59 @@ body {
   border-inline-end: none !important;
 }
 
+.console-sidebar-menu .ant-menu-submenu-title,
+.console-sidebar-menu .ant-menu-item {
+  color: #31456f !important;
+  border-radius: 14px;
+  margin-inline: 0 !important;
+  width: 100% !important;
+}
+
+.console-sidebar-menu .ant-menu-submenu-title:hover,
+.console-sidebar-menu .ant-menu-item:hover {
+  color: var(--console-accent-strong) !important;
+  background: rgba(37, 99, 235, 0.08) !important;
+}
+
+.console-sidebar-menu .ant-menu-submenu-selected > .ant-menu-submenu-title,
+.console-sidebar-menu .ant-menu-submenu-open > .ant-menu-submenu-title {
+  color: var(--console-accent-strong) !important;
+}
+
+.console-sidebar-menu .ant-menu-item-selected,
+.console-sidebar-menu .ant-menu-item-active {
+  color: var(--console-accent-strong) !important;
+  background: linear-gradient(90deg, rgba(191, 219, 254, 0.92), rgba(219, 234, 254, 0.86)) !important;
+  box-shadow: inset 0 0 0 1px rgba(37, 99, 235, 0.14);
+}
+
+.console-sidebar-menu .ant-menu-item-selected::after,
+.console-sidebar-menu .ant-menu-item::after,
+.console-sidebar-menu .ant-menu-submenu-title::after {
+  border-inline-end: none !important;
+}
+
+.console-sidebar-menu .ant-menu-inline .ant-menu-item,
+.console-sidebar-menu .ant-menu-inline .ant-menu-submenu-title {
+  height: 44px;
+  line-height: 44px;
+}
+
+.console-sidebar-menu .ant-menu-inline .ant-menu-item-group-list,
+.console-sidebar-menu .ant-menu-sub.ant-menu-inline {
+  background: transparent !important;
+}
+
+.console-sidebar-menu .ant-menu-sub {
+  background: transparent !important;
+}
+
 .console-header {
-  background: rgba(255, 255, 255, 0.72);
+  background: rgba(255, 255, 255, 0.8);
   backdrop-filter: blur(18px);
   padding: 18px 24px;
   border-bottom: 1px solid var(--console-border);
+  box-shadow: 0 10px 30px rgba(148, 163, 184, 0.08);
   height: auto;
   line-height: normal;
   display: flex;

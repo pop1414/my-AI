@@ -24,8 +24,12 @@ createRoot(document.getElementById("root")!).render(
 			locale={zhCN}
 			theme={{
 				token: {
-					colorPrimary: "#0f766e",
-					borderRadius: 10,
+					colorPrimary: "#2563eb",
+					colorInfo: "#2563eb",
+					colorLink: "#2563eb",
+					colorSuccess: "#3b82f6",
+					borderRadius: 12,
+					controlOutline: "rgba(37, 99, 235, 0.18)",
 				},
 			}}
 		>

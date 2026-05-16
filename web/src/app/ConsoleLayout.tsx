@@ -14,7 +14,6 @@ import {
 } from "@ant-design/icons";
 import {
 	Breadcrumb,
-	Button,
 	Dropdown,
 	Layout,
 	Menu,
@@ -242,8 +241,6 @@ export function ConsoleLayout() {
 
 	const menuItems = buildMenuItems(visibleMenuKeys);
 	const showSidebar = menuItems.length > 0;
-	const canOpenQa = visibleMenuKeys.includes("/qa");
-	const isQaPage = location.pathname === "/qa";
 	const routeMeta = resolveRouteMeta(location.pathname, location.search);
 
 	const roleColorMap: Record<string, string> = {
@@ -313,7 +310,7 @@ export function ConsoleLayout() {
 				<Header className="console-header">
 					<div className="console-header-copy">
 						<Space size={[8, 8]} wrap>
-							<Tag color="cyan">{routeMeta.moduleLabel}</Tag>
+							<Tag color="blue">{routeMeta.moduleLabel}</Tag>
 							<Text type="secondary">外层模块导航 + 统一页面骨架</Text>
 						</Space>
 						<Title level={4} style={{ margin: 0 }} data-testid="console-title">
@@ -324,16 +321,6 @@ export function ConsoleLayout() {
 						</Text>
 					</div>
 					<Space className="console-header-actions" size={12}>
-						{canOpenQa && !isQaPage && (
-							<Button
-								type="primary"
-								icon={<SearchOutlined />}
-								onClick={() => navigate("/qa")}
-								data-testid="header-qa-entry"
-							>
-								问答控制台
-							</Button>
-						)}
 						<Dropdown menu={{ items: userMenuItems }} placement="bottomRight">
 							<Space style={{ cursor: "pointer" }}>
 								<UserOutlined />
