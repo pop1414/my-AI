@@ -64,6 +64,10 @@ body {
   box-shadow: inset -1px 0 0 rgba(255, 255, 255, 0.46);
 }
 
+.console-sidebar--qa {
+  border-right-color: rgba(60, 60, 67, 0.08);
+}
+
 .console-logo {
   color: #0f2c68;
   font-weight: 800;
@@ -76,6 +80,13 @@ body {
   border-bottom: 1px solid var(--console-border);
   background: rgba(255, 255, 255, 0.42);
   backdrop-filter: blur(16px);
+}
+
+.console-logo--qa {
+  justify-content: center;
+  padding: 0;
+  font-size: 18px;
+  letter-spacing: 0.18em;
 }
 
 .console-sidebar-menu {
@@ -137,6 +148,30 @@ body {
   line-height: 44px;
 }
 
+.console-root--qa .console-sidebar-menu {
+  padding-inline: 8px;
+}
+
+.console-root--qa .console-sidebar-menu .ant-menu-item,
+.console-root--qa .console-sidebar-menu .ant-menu-submenu-title {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding-inline: 0 !important;
+}
+
+.console-root--qa .console-sidebar-menu .ant-menu-item .ant-menu-title-content,
+.console-root--qa .console-sidebar-menu .ant-menu-submenu-title .ant-menu-title-content,
+.console-root--qa .console-sidebar-menu .ant-menu-submenu-arrow {
+  display: none !important;
+}
+
+.console-root--qa .console-sidebar-menu .ant-menu-item .ant-menu-item-icon,
+.console-root--qa .console-sidebar-menu .ant-menu-submenu-title .ant-menu-item-icon {
+  margin-inline-end: 0 !important;
+  font-size: 18px;
+}
+
 .console-sidebar-menu .ant-menu-inline .ant-menu-item-group-list,
 .console-sidebar-menu .ant-menu-sub.ant-menu-inline,
 .console-sidebar-menu .ant-menu-sub {
@@ -167,6 +202,10 @@ body {
   position: relative;
   padding: 24px;
   background: var(--console-content-surface);
+}
+
+.console-root--qa .console-content {
+  padding-inline: 18px;
 }
 
 .console-main {

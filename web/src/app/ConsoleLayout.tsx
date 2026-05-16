@@ -245,6 +245,7 @@ function resolveMenuSelectedKey(pathname: string, search: string): string {
 export function ConsoleLayout() {
 	const location = useLocation();
 	const { user, visibleMenuKeys, logout } = useAuth();
+	const isQaLayout = location.pathname === "/qa";
 
 	const menuItems = buildMenuItems(visibleMenuKeys);
 	const showSidebar = menuItems.length > 0;
@@ -301,19 +302,26 @@ export function ConsoleLayout() {
 			<a className="console-skip-link" href="#console-main">
 				跳到主内容
 			</a>
-			<Layout className="console-root" data-testid="console-layout">
+			<Layout
+				className={isQaLayout ? "console-root console-root--qa" : "console-root"}
+				data-testid="console-layout"
+			>
 				{showSidebar && (
 					<Sider
-						width={268}
+						width={isQaLayout ? 92 : 268}
 						breakpoint="lg"
-						collapsedWidth="0"
-						className="console-sidebar"
+						collapsed={isQaLayout}
+						collapsedWidth={isQaLayout ? 92 : 0}
+						className={isQaLayout ? "console-sidebar console-sidebar--qa" : "console-sidebar"}
 					>
-						<div className="console-logo">my-AI / Web Console</div>
+						<div className={isQaLayout ? "console-logo console-logo--qa" : "console-logo"}>
+							{isQaLayout ? "AI" : "my-AI / Web Console"}
+						</div>
 						<nav aria-label="控制台主导航">
 							<Menu
 								className="console-sidebar-menu"
 								mode="inline"
+								inlineCollapsed={isQaLayout}
 								selectedKeys={[
 									resolveMenuSelectedKey(location.pathname, location.search),
 								]}
