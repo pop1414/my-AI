@@ -1,21 +1,22 @@
 :root {
-  --console-ink: #172554;
-  --console-muted: #5b6b8c;
-  --console-surface: rgba(255, 255, 255, 0.96);
-  --console-panel: rgba(244, 248, 255, 0.9);
-  --console-sidebar-surface: linear-gradient(180deg, #f8fbff, #eef4ff 48%, #e8f0ff);
-  --console-border: rgba(96, 126, 188, 0.18);
-  --console-accent: #2563eb;
-  --console-accent-strong: #1d4ed8;
-  --console-accent-soft: rgba(37, 99, 235, 0.12);
-  --console-shadow: 0 20px 48px rgba(37, 99, 235, 0.08);
+  --console-ink: #1d1d1f;
+  --console-muted: #6e6e73;
+  --console-subtle: #8e8e93;
+  --console-surface: rgba(255, 255, 255, 0.82);
+  --console-card-surface: rgba(255, 255, 255, 0.96);
+  --console-sidebar-surface: linear-gradient(180deg, rgba(250, 250, 252, 0.9), rgba(245, 245, 247, 0.92));
+  --console-content-surface: linear-gradient(180deg, #f5f5f7, #f2f2f5);
+  --console-border: rgba(60, 60, 67, 0.12);
+  --console-border-strong: rgba(60, 60, 67, 0.18);
+  --console-accent: #0a84ff;
+  --console-accent-strong: #0066cc;
+  --console-accent-soft: rgba(10, 132, 255, 0.12);
+  --console-shadow: 0 16px 40px rgba(15, 23, 42, 0.06);
   font-family: 'Segoe UI Variable', 'PingFang SC', 'Microsoft YaHei UI', sans-serif;
   line-height: 1.5;
   font-weight: 400;
   color: var(--console-ink);
-  background:
-    radial-gradient(circle at top, rgba(96, 165, 250, 0.18), transparent 24%),
-    linear-gradient(180deg, #f7faff, #edf4ff);
+  background: #f5f5f7;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -31,8 +32,8 @@ body {
   min-height: 100vh;
   color: var(--console-ink);
   background:
-    radial-gradient(circle at top, rgba(96, 165, 250, 0.18), transparent 24%),
-    linear-gradient(180deg, #f7faff, #edf4ff);
+    radial-gradient(circle at top left, rgba(255, 255, 255, 0.72), transparent 28%),
+    linear-gradient(180deg, #f7f7f8, #f2f2f5);
 }
 
 .console-root {
@@ -43,11 +44,11 @@ body {
 .console-sidebar {
   background: var(--console-sidebar-surface) !important;
   border-right: 1px solid var(--console-border);
-  box-shadow: inset -1px 0 0 rgba(255, 255, 255, 0.4);
+  box-shadow: inset -1px 0 0 rgba(255, 255, 255, 0.46);
 }
 
 .console-logo {
-  color: #17336d;
+  color: #0f2c68;
   font-weight: 800;
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -55,8 +56,9 @@ body {
   display: flex;
   align-items: center;
   padding: 0 20px;
-  border-bottom: 1px solid rgba(96, 126, 188, 0.16);
-  background: rgba(255, 255, 255, 0.44);
+  border-bottom: 1px solid var(--console-border);
+  background: rgba(255, 255, 255, 0.42);
+  backdrop-filter: blur(16px);
 }
 
 .console-sidebar-menu {
@@ -71,16 +73,17 @@ body {
 
 .console-sidebar-menu .ant-menu-submenu-title,
 .console-sidebar-menu .ant-menu-item {
-  color: #31456f !important;
-  border-radius: 14px;
+  color: #2c2c2e !important;
+  border-radius: 12px;
   margin-inline: 0 !important;
   width: 100% !important;
+  font-weight: 500;
 }
 
 .console-sidebar-menu .ant-menu-submenu-title:hover,
 .console-sidebar-menu .ant-menu-item:hover {
   color: var(--console-accent-strong) !important;
-  background: rgba(37, 99, 235, 0.08) !important;
+  background: rgba(255, 255, 255, 0.62) !important;
 }
 
 .console-sidebar-menu .ant-menu-submenu-selected > .ant-menu-submenu-title,
@@ -91,8 +94,10 @@ body {
 .console-sidebar-menu .ant-menu-item-selected,
 .console-sidebar-menu .ant-menu-item-active {
   color: var(--console-accent-strong) !important;
-  background: linear-gradient(90deg, rgba(191, 219, 254, 0.92), rgba(219, 234, 254, 0.86)) !important;
-  box-shadow: inset 0 0 0 1px rgba(37, 99, 235, 0.14);
+  background: linear-gradient(180deg, rgba(10, 132, 255, 0.18), rgba(10, 132, 255, 0.1)) !important;
+  box-shadow:
+    inset 0 0 0 1px rgba(10, 132, 255, 0.18),
+    0 6px 14px rgba(10, 132, 255, 0.08);
 }
 
 .console-sidebar-menu .ant-menu-item-selected::after,
@@ -108,20 +113,17 @@ body {
 }
 
 .console-sidebar-menu .ant-menu-inline .ant-menu-item-group-list,
-.console-sidebar-menu .ant-menu-sub.ant-menu-inline {
-  background: transparent !important;
-}
-
+.console-sidebar-menu .ant-menu-sub.ant-menu-inline,
 .console-sidebar-menu .ant-menu-sub {
   background: transparent !important;
 }
 
 .console-header {
-  background: rgba(255, 255, 255, 0.8);
-  backdrop-filter: blur(18px);
+  background: rgba(255, 255, 255, 0.74);
+  backdrop-filter: blur(20px);
   padding: 18px 24px;
   border-bottom: 1px solid var(--console-border);
-  box-shadow: 0 10px 30px rgba(148, 163, 184, 0.08);
+  box-shadow: 0 8px 28px rgba(15, 23, 42, 0.04);
   height: auto;
   line-height: normal;
   display: flex;
@@ -137,7 +139,73 @@ body {
 }
 
 .console-content {
+  position: relative;
   padding: 24px;
+  background: var(--console-content-surface);
+}
+
+.console-content > * {
+  position: relative;
+  z-index: 1;
+}
+
+.console-content .ant-breadcrumb {
+  margin-bottom: 18px !important;
+  padding: 12px 14px;
+  border: 1px solid rgba(60, 60, 67, 0.1);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.58);
+  backdrop-filter: blur(10px);
+}
+
+.console-content .ant-card {
+  background: var(--console-card-surface);
+  border-color: rgba(60, 60, 67, 0.08);
+  box-shadow: var(--console-shadow);
+}
+
+.console-content .ant-card .ant-card-head {
+  background: rgba(255, 255, 255, 0.72);
+  border-bottom-color: rgba(60, 60, 67, 0.08);
+}
+
+.console-content .ant-table-wrapper .ant-table {
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: 18px;
+}
+
+.console-content .ant-table-wrapper .ant-table-thead > tr > th {
+  background: #fbfbfd !important;
+  color: #3a3a3c;
+  border-bottom-color: rgba(60, 60, 67, 0.08);
+}
+
+.console-content .ant-table-wrapper .ant-table-tbody > tr > td {
+  background: transparent;
+  border-bottom-color: rgba(60, 60, 67, 0.08);
+}
+
+.console-content .ant-input,
+.console-content .ant-input-affix-wrapper,
+.console-content .ant-select-selector,
+.console-content .ant-input-number,
+.console-content .ant-picker,
+.console-content .ant-btn:not(.ant-btn-primary) {
+  background: rgba(255, 255, 255, 0.84) !important;
+  border-color: rgba(60, 60, 67, 0.14) !important;
+  box-shadow: none !important;
+}
+
+.console-content .ant-btn:not(.ant-btn-primary) {
+  color: #2c2c2e;
+}
+
+.console-content .ant-btn-primary {
+  box-shadow: 0 10px 24px rgba(10, 132, 255, 0.18);
+}
+
+.console-content .ant-tag {
+  border-radius: 999px;
 }
 
 .console-header-actions {

@@ -28,8 +28,13 @@ createRoot(document.getElementById("root")!).render(
 					colorInfo: "#2563eb",
 					colorLink: "#2563eb",
 					colorSuccess: "#3b82f6",
+					colorBgLayout: "#eef4ff",
+					colorBgContainer: "#f8fbff",
+					colorFillAlter: "#edf4ff",
+					colorBorderSecondary: "#d9e6ff",
 					borderRadius: 12,
 					controlOutline: "rgba(37, 99, 235, 0.18)",
+					boxShadowSecondary: "0 18px 40px rgba(37, 99, 235, 0.08)",
 				},
 			}}
 		>
