@@ -18,7 +18,7 @@ export function ProtectedRoute() {
 					height: "100vh",
 				}}
 			>
-				<Spin size="large" tip="正在验证登录状态…" />
+				<Spin size="large" description="正在验证登录状态…" />
 			</div>
 		);
 	}
@@ -59,7 +59,7 @@ export function CapabilityRoute({ requiredCapability }: CapabilityRouteProps) {
 					height: "100vh",
 				}}
 			>
-				<Spin size="large" tip="正在验证登录状态…" />
+				<Spin size="large" description="正在验证登录状态…" />
 			</div>
 		);
 	}
@@ -96,7 +96,7 @@ export function AdminRoute() {
 					height: "100vh",
 				}}
 			>
-				<Spin size="large" tip="正在验证登录状态…" />
+				<Spin size="large" description="正在验证登录状态…" />
 			</div>
 		);
 	}

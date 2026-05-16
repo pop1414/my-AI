@@ -13,5 +13,5 @@ function normalizeMessage(error: unknown): ReactNode {
 }
 
 export function ApiErrorAlert({ error }: { error: unknown }) {
-  return <Alert type="error" showIcon message={normalizeMessage(error)} />;
+  return <Alert type="error" showIcon title={normalizeMessage(error)} />;
 }

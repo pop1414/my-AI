@@ -1,9 +1,17 @@
-﻿:root {
-  font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+:root {
+  --console-ink: #0f172a;
+  --console-muted: #475569;
+  --console-surface: rgba(255, 255, 255, 0.92);
+  --console-border: rgba(15, 23, 42, 0.08);
+  --console-accent: #0f766e;
+  --console-accent-soft: rgba(15, 118, 110, 0.12);
+  font-family: 'Segoe UI Variable', 'PingFang SC', 'Microsoft YaHei UI', sans-serif;
   line-height: 1.5;
   font-weight: 400;
-  color: #0f172a;
-  background-color: #f3f5f7;
+  color: var(--console-ink);
+  background:
+    radial-gradient(circle at top, rgba(15, 118, 110, 0.1), transparent 22%),
+    linear-gradient(180deg, #f3f6f8, #edf2f7);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -16,27 +24,49 @@
 
 body {
   margin: 0;
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at top, rgba(15, 118, 110, 0.1), transparent 22%),
+    linear-gradient(180deg, #f3f6f8, #edf2f7);
 }
 
 .console-root {
   min-height: 100vh;
+  background: transparent;
+}
+
+.console-sidebar {
+  background: linear-gradient(180deg, #0f172a, #111827 48%, #172554);
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .console-logo {
-  color: #e2e8f0;
-  font-weight: 600;
-  letter-spacing: 0.3px;
-  height: 64px;
+  color: #f8fafc;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  height: 72px;
   display: flex;
   align-items: center;
-  padding: 0 16px;
+  padding: 0 20px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.12);
 }
 
+.console-sidebar-menu {
+  background: transparent !important;
+  color: rgba(226, 232, 240, 0.92);
+  padding: 12px 10px 20px;
+}
+
+.console-sidebar-menu.ant-menu-inline {
+  border-inline-end: none !important;
+}
+
 .console-header {
-  background: #ffffff;
-  padding: 12px 24px;
-  border-bottom: 1px solid #e5e7eb;
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(18px);
+  padding: 18px 24px;
+  border-bottom: 1px solid var(--console-border);
   height: auto;
   line-height: normal;
   display: flex;
@@ -45,8 +75,14 @@ body {
   gap: 16px;
 }
 
+.console-header-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
 .console-content {
-  padding: 20px 24px;
+  padding: 24px;
 }
 
 .console-header-actions {
@@ -57,6 +93,10 @@ body {
   .console-header {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .console-content {
+    padding: 20px 16px;
   }
 
   .console-header-actions {
