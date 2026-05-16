@@ -4,7 +4,7 @@
 
 - 生成日期：2026-05-16
 - 来源 PRD：`docs/runbooks/plans/frontend-console/frontend-console-ux-refresh-prd.md`
-- 当前状态：本地草案，**未上传 GitHub Issues**
+- 当前状态：已上传 GitHub Issues
 - 目标标签：后续上传 GitHub 时建议使用 `ready-for-agent`
 
 ## 拆分原则
@@ -19,16 +19,16 @@
 
 | 本地编号 | GitHub Issue | 标题 | 类型 | 标签 | 阻塞 |
 | -------- | ------------ | ---- | ---- | ---- | ---- |
-| FCUX-01 | 待上传 | 控制台外层导航与共享页面骨架基线 | AFK | `ready-for-agent` | 无 |
-| FCUX-02 | 待上传 | 问答控制台核对工作台重构 | AFK | `ready-for-agent` | FCUX-01 |
-| FCUX-03 | 待上传 | 知识库任务入口与治理增强重构 | AFK | `ready-for-agent` | FCUX-01 |
-| FCUX-04 | 待上传 | 文档列表核对优先与治理入口重构 | AFK | `ready-for-agent` | FCUX-01 |
-| FCUX-05 | 待上传 | 文档上传工作流闭环重构 | AFK | `ready-for-agent` | FCUX-01, FCUX-04 |
-| FCUX-06 | 待上传 | 文档详情双视角外层工作台重构 | AFK | `ready-for-agent` | FCUX-01, FCUX-04 |
-| FCUX-07 | 待上传 | 文档工具页收纳与详情联动收口 | AFK | `ready-for-agent` | FCUX-05, FCUX-06 |
-| FCUX-08 | 待上传 | 系统管理导航与治理工作台基线重构 | AFK | `ready-for-agent` | FCUX-01 |
-| FCUX-09 | 待上传 | 授权矩阵与账号治理体验收口 | AFK | `ready-for-agent` | FCUX-08 |
-| FCUX-10 | 待上传 | 共享状态与角色显隐一致性收口 | AFK | `ready-for-agent` | FCUX-02, FCUX-03, FCUX-04, FCUX-05, FCUX-06, FCUX-07, FCUX-08, FCUX-09 |
+| FCUX-01 | [#33](https://github.com/pop1414/my-AI/issues/33) | 控制台外层导航与共享页面骨架基线 | AFK | `ready-for-agent` | 无 |
+| FCUX-02 | [#34](https://github.com/pop1414/my-AI/issues/34) | 问答控制台核对工作台重构 | AFK | `ready-for-agent` | #33 |
+| FCUX-03 | [#35](https://github.com/pop1414/my-AI/issues/35) | 知识库任务入口与治理增强重构 | AFK | `ready-for-agent` | #33 |
+| FCUX-04 | [#36](https://github.com/pop1414/my-AI/issues/36) | 文档列表核对优先与治理入口重构 | AFK | `ready-for-agent` | #33 |
+| FCUX-05 | [#37](https://github.com/pop1414/my-AI/issues/37) | 文档上传工作流闭环重构 | AFK | `ready-for-agent` | #33, #36 |
+| FCUX-06 | [#38](https://github.com/pop1414/my-AI/issues/38) | 文档详情双视角外层工作台重构 | AFK | `ready-for-agent` | #33, #36 |
+| FCUX-07 | [#39](https://github.com/pop1414/my-AI/issues/39) | 文档工具页收纳与详情联动收口 | AFK | `ready-for-agent` | #37, #38 |
+| FCUX-08 | [#40](https://github.com/pop1414/my-AI/issues/40) | 系统管理导航与治理工作台基线重构 | AFK | `ready-for-agent` | #33 |
+| FCUX-09 | [#41](https://github.com/pop1414/my-AI/issues/41) | 授权矩阵与账号治理体验收口 | AFK | `ready-for-agent` | #40 |
+| FCUX-10 | [#42](https://github.com/pop1414/my-AI/issues/42) | 共享状态与角色显隐一致性收口 | AFK | `ready-for-agent` | #34, #35, #36, #37, #38, #39, #40, #41 |
 
 ## 建议执行顺序
 
@@ -43,7 +43,7 @@
 
 ### FCUX-01 控制台外层导航与共享页面骨架基线
 
-GitHub Issue：待上传
+GitHub Issue：[#33](https://github.com/pop1414/my-AI/issues/33)
 
 Type：AFK
 
@@ -71,7 +71,7 @@ None - can start immediately
 
 ### FCUX-02 问答控制台核对工作台重构
 
-GitHub Issue：待上传
+GitHub Issue：[#34](https://github.com/pop1414/my-AI/issues/34)
 
 Type：AFK
 
@@ -95,11 +95,11 @@ User stories covered：2、3、5、6、15、17、26、29、30
 
 #### Blocked by
 
-- FCUX-01
+- #33
 
 ### FCUX-03 知识库任务入口与治理增强重构
 
-GitHub Issue：待上传
+GitHub Issue：[#35](https://github.com/pop1414/my-AI/issues/35)
 
 Type：AFK
 
@@ -123,11 +123,11 @@ User stories covered：1、13、15、17、23、27、29、30
 
 #### Blocked by
 
-- FCUX-01
+- #33
 
 ### FCUX-04 文档列表核对优先与治理入口重构
 
-GitHub Issue：待上传
+GitHub Issue：[#36](https://github.com/pop1414/my-AI/issues/36)
 
 Type：AFK
 
@@ -151,11 +151,11 @@ User stories covered：7、8、14、17、21、22、28、29、30
 
 #### Blocked by
 
-- FCUX-01
+- #33
 
 ### FCUX-05 文档上传工作流闭环重构
 
-GitHub Issue：待上传
+GitHub Issue：[#37](https://github.com/pop1414/my-AI/issues/37)
 
 Type：AFK
 
@@ -179,12 +179,12 @@ User stories covered：8、17、21、28、29
 
 #### Blocked by
 
-- FCUX-01
-- FCUX-04
+- #33
+- #36
 
 ### FCUX-06 文档详情双视角外层工作台重构
 
-GitHub Issue：待上传
+GitHub Issue：[#38](https://github.com/pop1414/my-AI/issues/38)
 
 Type：AFK
 
@@ -208,12 +208,12 @@ User stories covered：4、9、10、11、12、14、17、20、22、24、28、30
 
 #### Blocked by
 
-- FCUX-01
-- FCUX-04
+- #33
+- #36
 
 ### FCUX-07 文档工具页收纳与详情联动收口
 
-GitHub Issue：待上传
+GitHub Issue：[#39](https://github.com/pop1414/my-AI/issues/39)
 
 Type：AFK
 
@@ -237,12 +237,12 @@ User stories covered：6、8、10、12、14、21、22、28
 
 #### Blocked by
 
-- FCUX-05
-- FCUX-06
+- #37
+- #38
 
 ### FCUX-08 系统管理导航与治理工作台基线重构
 
-GitHub Issue：待上传
+GitHub Issue：[#40](https://github.com/pop1414/my-AI/issues/40)
 
 Type：AFK
 
@@ -264,11 +264,11 @@ User stories covered：15、16、17、23、29
 
 #### Blocked by
 
-- FCUX-01
+- #33
 
 ### FCUX-09 授权矩阵与账号治理体验收口
 
-GitHub Issue：待上传
+GitHub Issue：[#41](https://github.com/pop1414/my-AI/issues/41)
 
 Type：AFK
 
@@ -290,11 +290,11 @@ User stories covered：12、15、16、17、23、29
 
 #### Blocked by
 
-- FCUX-08
+- #40
 
 ### FCUX-10 共享状态与角色显隐一致性收口
 
-GitHub Issue：待上传
+GitHub Issue：[#42](https://github.com/pop1414/my-AI/issues/42)
 
 Type：AFK
 
@@ -318,14 +318,14 @@ User stories covered：5、6、17、18、19、20、29、30
 
 #### Blocked by
 
-- FCUX-02
-- FCUX-03
-- FCUX-04
-- FCUX-05
-- FCUX-06
-- FCUX-07
-- FCUX-08
-- FCUX-09
+- #34
+- #35
+- #36
+- #37
+- #38
+- #39
+- #40
+- #41
 
 ## 审阅提示
 
@@ -334,4 +334,4 @@ User stories covered：5、6、17、18、19、20、29、30
 - 重点检查 FCUX-06：文档详情双视角是否足够独立成一条 vertical slice，而不是跟正文读取专项混在一起。
 - 重点检查 FCUX-07：工具页收纳是否需要继续细拆，或者是否已经足够窄且可独立验证。
 - 重点检查 FCUX-10：它应只做一致性收口，不夹带新的业务语义或正文读取专项。
-- 后续若要提交 GitHub，应以本地编号作为顺序辅助，并在上传后用真实 issue 编号回填本文件。
+- GitHub Issues 已按总览表顺序发布；后续执行时以真实 issue 编号为协作入口，本地 `FCUX-*` 编号仅作为专题内排序辅助。
