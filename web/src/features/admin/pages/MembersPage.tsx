@@ -80,14 +80,26 @@ export function MembersPage() {
 			dataIndex: "workspaceRole",
 			width: 180,
 			render: (value: string) => (
-				<Tag color={roleColorMap[value] ?? "default"}>{value}</Tag>
+				<Tag
+					className={`console-pill ${
+						roleColorMap[value] === "blue"
+							? "console-pill--blue"
+							: roleColorMap[value] === "gold"
+								? "console-pill--warning"
+								: "console-pill--neutral"
+					}`}
+				>
+					{value}
+				</Tag>
 			),
 		},
 		{
 			title: "成员状态",
 			dataIndex: "membershipStatus",
 			width: 120,
-			render: (value: string) => <Tag color="success">{value}</Tag>,
+			render: (value: string) => (
+				<Tag className="console-pill console-pill--blue">{value}</Tag>
+			),
 		},
 		{
 			title: "操作",

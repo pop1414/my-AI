@@ -8,9 +8,9 @@
   --console-content-surface: linear-gradient(180deg, #f5f5f7, #f2f2f5);
   --console-border: rgba(60, 60, 67, 0.12);
   --console-border-strong: rgba(60, 60, 67, 0.18);
-  --console-accent: #0a84ff;
-  --console-accent-strong: #0066cc;
-  --console-accent-soft: rgba(10, 132, 255, 0.12);
+  --console-accent: #0a6bff;
+  --console-accent-strong: #0057d9;
+  --console-accent-soft: rgba(0, 102, 204, 0.14);
   --console-shadow: 0 16px 40px rgba(15, 23, 42, 0.06);
   font-family: 'Segoe UI Variable', 'PingFang SC', 'Microsoft YaHei UI', sans-serif;
   line-height: 1.5;
@@ -230,11 +230,82 @@ body {
 }
 
 .console-content .ant-btn-primary {
-  box-shadow: 0 10px 24px rgba(10, 132, 255, 0.18);
+  box-shadow: 0 10px 24px rgba(0, 102, 204, 0.22);
+  background: linear-gradient(180deg, #1f78ff, #0066cc) !important;
+  border-color: #0066cc !important;
 }
 
 .console-content .ant-tag {
   border-radius: 999px;
+}
+
+.console-content .ant-tabs .ant-tabs-tab.ant-tabs-tab-active .ant-tabs-tab-btn {
+  color: var(--console-accent-strong);
+  font-weight: 600;
+}
+
+.console-content .ant-tabs .ant-tabs-ink-bar {
+  background: var(--console-accent-strong);
+  height: 3px;
+  border-radius: 999px;
+}
+
+.console-content .ant-checkbox-checked .ant-checkbox-inner,
+.console-content .ant-checkbox:hover .ant-checkbox-inner,
+.console-content .ant-checkbox-indeterminate .ant-checkbox-inner {
+  border-color: var(--console-accent-strong) !important;
+}
+
+.console-content .ant-checkbox-checked .ant-checkbox-inner,
+.console-content .ant-checkbox-indeterminate .ant-checkbox-inner::after {
+  background-color: var(--console-accent-strong);
+}
+
+.console-content .ant-pagination .ant-pagination-item-active {
+  border-color: var(--console-accent-strong);
+  background: rgba(0, 102, 204, 0.08);
+}
+
+.console-content .ant-pagination .ant-pagination-item-active a {
+  color: var(--console-accent-strong);
+}
+
+.console-content .ant-table-row-selected > td {
+  background: rgba(0, 102, 204, 0.08) !important;
+}
+
+.console-table-ellipsis {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.console-pill {
+  border: none !important;
+  padding: 2px 10px;
+  font-weight: 600;
+  line-height: 20px;
+}
+
+.console-pill--blue {
+  color: #0057d9 !important;
+  background: rgba(0, 102, 204, 0.12) !important;
+}
+
+.console-pill--neutral {
+  color: #3a3a3c !important;
+  background: #ececf1 !important;
+}
+
+.console-pill--warning {
+  color: #9a6700 !important;
+  background: #fff1cf !important;
+}
+
+.console-pill--danger {
+  color: #c81e1e !important;
+  background: #ffe4e8 !important;
 }
 
 .console-link-button {
@@ -281,19 +352,77 @@ body {
 
 .console-link-button--primary {
   color: #ffffff;
-  background: linear-gradient(180deg, #2491ff, #0a84ff);
-  box-shadow: 0 10px 24px rgba(10, 132, 255, 0.18);
+  background: linear-gradient(180deg, #1f78ff, #0066cc);
+  box-shadow: 0 10px 24px rgba(0, 102, 204, 0.22);
 }
 
 .console-link-button--primary:hover {
   color: #ffffff;
-  background: linear-gradient(180deg, #1488ff, #0077ed);
+  background: linear-gradient(180deg, #0f6fff, #0057d9);
 }
 
 .console-link-button--disabled {
   cursor: not-allowed;
   opacity: 0.45;
   pointer-events: none;
+}
+
+.console-action-button {
+  border-radius: 10px !important;
+  font-weight: 500;
+}
+
+.console-action-button--neutral {
+  color: #2c2c2e !important;
+  background: rgba(255, 255, 255, 0.9) !important;
+  border-color: rgba(60, 60, 67, 0.16) !important;
+}
+
+.console-action-button--primary {
+  color: #0057d9 !important;
+  background: rgba(0, 102, 204, 0.1) !important;
+  border-color: rgba(0, 102, 204, 0.18) !important;
+}
+
+.console-action-button--warning {
+  color: #9a6700 !important;
+  background: #fff3d8 !important;
+  border-color: rgba(255, 159, 10, 0.24) !important;
+}
+
+.console-action-button--danger {
+  color: #c81e1e !important;
+  background: #fff0f1 !important;
+  border-color: rgba(255, 59, 48, 0.2) !important;
+}
+
+.console-action-button.ant-btn[disabled],
+.console-action-button.ant-btn[disabled]:hover {
+  color: #9b9ba1 !important;
+  background: #f1f2f4 !important;
+  border-color: rgba(60, 60, 67, 0.1) !important;
+  box-shadow: none !important;
+}
+
+.console-permission-select.ant-select:not(.ant-select-disabled) .ant-select-selector {
+  background: rgba(255, 255, 255, 0.96) !important;
+  border-color: rgba(0, 102, 204, 0.22) !important;
+  box-shadow: inset 0 0 0 1px rgba(0, 102, 204, 0.06) !important;
+}
+
+.console-permission-select.ant-select .ant-select-selection-item {
+  color: #0f2c68 !important;
+  font-weight: 600;
+}
+
+.console-permission-select.ant-select.ant-select-disabled .ant-select-selector {
+  background: #f1f2f4 !important;
+  border-color: rgba(60, 60, 67, 0.1) !important;
+}
+
+.console-permission-select.ant-select.ant-select-disabled .ant-select-selection-item {
+  color: #9b9ba1 !important;
+  font-weight: 500;
 }
 
 .console-header-actions {

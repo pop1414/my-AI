@@ -24,10 +24,10 @@ createRoot(document.getElementById("root")!).render(
 			locale={zhCN}
 			theme={{
 				token: {
-					colorPrimary: "#2563eb",
-					colorInfo: "#2563eb",
-					colorLink: "#2563eb",
-					colorSuccess: "#3b82f6",
+					colorPrimary: "#0066cc",
+					colorInfo: "#0066cc",
+					colorLink: "#0066cc",
+					colorSuccess: "#0066cc",
 					colorBgLayout: "#eef4ff",
 					colorBgContainer: "#f8fbff",
 					colorFillAlter: "#edf4ff",

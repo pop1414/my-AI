@@ -128,7 +128,9 @@ export function DocumentGrantsPage() {
 			title: "工作区角色",
 			dataIndex: "workspaceRole",
 			width: 140,
-			render: (value: WorkspaceMember["workspaceRole"]) => <Tag>{value}</Tag>,
+			render: (value: WorkspaceMember["workspaceRole"]) => (
+				<Tag className="console-pill console-pill--neutral">{value}</Tag>
+			),
 		},
 		{
 			title: "文档权限",
@@ -136,6 +138,7 @@ export function DocumentGrantsPage() {
 			width: 180,
 			render: (userId: string) => (
 				<Select
+					className="console-permission-select"
 					style={{ width: "100%" }}
 					disabled={!selectedUserIds.includes(userId)}
 					value={permissionsByUserId[userId] ?? "DOC_ALLOW_READ"}
@@ -152,11 +155,11 @@ export function DocumentGrantsPage() {
 			width: 140,
 			render: (userId: string) =>
 				selectedUserIds.includes(userId) ? (
-					<Tag color="processing">
+					<Tag className="console-pill console-pill--blue">
 						{permissionsByUserId[userId] ?? "DOC_ALLOW_READ"}
 					</Tag>
 				) : (
-					<Tag>未授权</Tag>
+					<Tag className="console-pill console-pill--neutral">未授权</Tag>
 				),
 		},
 	];

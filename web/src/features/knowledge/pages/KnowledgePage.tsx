@@ -47,38 +47,75 @@ const knowledgeBaseCreateSchema = z.object({
 
 const knowledgeBaseUpdateSchema = knowledgeBaseCreateSchema;
 
-function statusColor(status: KnowledgeBase["status"]): string {
-	return status === "ACTIVE" ? "success" : "default";
-}
-
 const columns = (
 	onEdit: (record: KnowledgeBase) => void,
 	canManageKnowledgeBases: boolean,
 ): ColumnsType<KnowledgeBase> => [
-	{ title: "知识库 ID", dataIndex: "id", width: 320 },
-	{ title: "名称", dataIndex: "name", width: 180 },
+	{
+		title: "知识库 ID",
+		dataIndex: "id",
+		width: 240,
+		ellipsis: true,
+		render: (value: string) => (
+			<Typography.Text className="console-table-ellipsis" title={value}>
+				{value}
+			</Typography.Text>
+		),
+	},
+	{
+		title: "名称",
+		dataIndex: "name",
+		width: 180,
+		ellipsis: true,
+		render: (value: string) => (
+			<Typography.Text className="console-table-ellipsis" title={value}>
+				{value}
+			</Typography.Text>
+		),
+	},
 	{
 		title: "状态",
 		dataIndex: "status",
 		width: 120,
 		render: (value: KnowledgeBase["status"]) => (
-			<Tag color={statusColor(value)}>{value}</Tag>
+			<Tag
+				className={`console-pill ${
+					value === "ACTIVE"
+						? "console-pill--blue"
+						: "console-pill--neutral"
+				}`}
+			>
+				{value}
+			</Tag>
 		),
 	},
-	{ title: "已索引文档数", dataIndex: "indexedDocumentCount", width: 140 },
+	{ title: "已索引文档数", dataIndex: "indexedDocumentCount", width: 132 },
 	{
 		title: "描述",
 		dataIndex: "description",
-		render: (value: string) => value || "-",
+		width: 220,
+		ellipsis: true,
+		render: (value: string) =>
+			value ? (
+				<Typography.Text className="console-table-ellipsis" title={value}>
+					{value}
+				</Typography.Text>
+			) : (
+				"-"
+			),
 	},
 	{
 		title: "操作",
 		key: "action",
-		width: 220,
+		width: 240,
 		render: (_, record) => (
 			<Space>
 				{canManageKnowledgeBases && (
-					<Button size="small" onClick={() => onEdit(record)}>
+					<Button
+						size="small"
+						className="console-action-button console-action-button--neutral"
+						onClick={() => onEdit(record)}
+					>
 						编辑
 					</Button>
 				)}
@@ -463,6 +500,7 @@ export function KnowledgePage() {
 							columns={columns(onEdit, canManageKnowledgeBases)}
 							dataSource={knowledgeBases}
 							loading={knowledgeQuery.isFetching}
+							scroll={{ x: 1132 }}
 							pagination={false}
 						/>
 					)}

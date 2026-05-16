@@ -219,6 +219,7 @@ export function MemberGrantsPage() {
 			width: 180,
 			render: (kbId: string) => (
 				<Select
+					className="console-permission-select"
 					style={{ width: "100%" }}
 					disabled={!selectedKnowledgeBaseIds.includes(kbId)}
 					value={knowledgeBaseRoles[kbId] ?? "KB_READER"}
@@ -234,7 +235,15 @@ export function MemberGrantsPage() {
 			dataIndex: "status",
 			width: 120,
 			render: (value: KnowledgeBase["status"]) => (
-				<Tag color={value === "ACTIVE" ? "success" : "default"}>{value}</Tag>
+				<Tag
+					className={`console-pill ${
+						value === "ACTIVE"
+							? "console-pill--blue"
+							: "console-pill--neutral"
+					}`}
+				>
+					{value}
+				</Tag>
 			),
 		},
 	];
@@ -274,6 +283,7 @@ export function MemberGrantsPage() {
 			width: 180,
 			render: (documentId: string) => (
 				<Select
+					className="console-permission-select"
 					style={{ width: "100%" }}
 					disabled={!selectedDocumentIds.includes(documentId)}
 					value={documentPermissions[documentId] ?? "DOC_ALLOW_READ"}

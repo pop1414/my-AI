@@ -61,6 +61,20 @@ function formatTime(iso?: string | null): string {
 	}
 }
 
+function accountStatusPillClass(status: ManagedAccount["userStatus"]) {
+	return status === "ACTIVE"
+		? "console-pill console-pill--blue"
+		: "console-pill console-pill--neutral";
+}
+
+function membershipStatusPillClass(
+	status: ManagedAccount["membershipStatus"],
+) {
+	return status === "ACTIVE"
+		? "console-pill console-pill--blue"
+		: "console-pill console-pill--warning";
+}
+
 export function AccountAdminPage() {
 	const navigate = useNavigate();
 	const queryClient = useQueryClient();
@@ -188,25 +202,23 @@ export function AccountAdminPage() {
 			dataIndex: "userStatus",
 			width: 120,
 			render: (value: ManagedAccount["userStatus"]) => (
-				<Tag color={value === "ACTIVE" ? "success" : "default"}>
-					{value}
-				</Tag>
+				<Tag className={accountStatusPillClass(value)}>{value}</Tag>
 			),
 		},
 		{
 			title: "工作区角色",
 			dataIndex: "workspaceRole",
 			width: 180,
-			render: (value: ManagedAccount["workspaceRole"]) => <Tag>{value}</Tag>,
+			render: (value: ManagedAccount["workspaceRole"]) => (
+				<Tag className="console-pill console-pill--neutral">{value}</Tag>
+			),
 		},
 		{
 			title: "成员状态",
 			dataIndex: "membershipStatus",
 			width: 120,
 			render: (value: ManagedAccount["membershipStatus"]) => (
-				<Tag color={value === "ACTIVE" ? "success" : "default"}>
-					{value}
-				</Tag>
+				<Tag className={membershipStatusPillClass(value)}>{value}</Tag>
 			),
 		},
 		{
@@ -228,6 +240,11 @@ export function AccountAdminPage() {
 				<Space size="small" wrap>
 					<Button
 						size="small"
+						className={`console-action-button ${
+							record.userStatus === "ACTIVE"
+								? "console-action-button--warning"
+								: "console-action-button--primary"
+						}`}
 						disabled={!canManageAccount(record)}
 						onClick={() =>
 							statusMutation.mutate({
@@ -247,6 +264,7 @@ export function AccountAdminPage() {
 					</Button>
 					<Button
 						size="small"
+						className="console-action-button console-action-button--neutral"
 						disabled={!canManageAccount(record)}
 						onClick={() => {
 							setPasswordModalAccount(record);
@@ -269,6 +287,7 @@ export function AccountAdminPage() {
 						<Button
 							size="small"
 							danger
+							className="console-action-button console-action-button--danger"
 							disabled={
 								record.membershipStatus !== "ACTIVE" ||
 								!canManageAccount(record)
