@@ -23,7 +23,7 @@ import {
 	Typography,
 } from "antd";
 import type { MenuProps } from "antd";
-import { Outlet, useLocation, useNavigate } from "react-router-dom";
+import { Link, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "../shared/auth/AuthContext";
 
 const { Header, Sider, Content } = Layout;
@@ -42,6 +42,14 @@ function createModuleLabel(testId: string, label: string) {
 	return <span data-testid={testId}>{label}</span>;
 }
 
+function createMenuLinkLabel(to: string, label: string) {
+	return (
+		<Link className="console-menu-link" to={to}>
+			{label}
+		</Link>
+	);
+}
+
 function buildMenuItems(visibleMenuKeys: string[]): MenuItem[] {
 	const items: MenuItem[] = [];
 	const canAccessDocuments =
@@ -54,14 +62,14 @@ function buildMenuItems(visibleMenuKeys: string[]): MenuItem[] {
 			documentChildren.push({
 				key: "/ingest/documents",
 				icon: <FileTextOutlined />,
-				label: "文档目录",
+				label: createMenuLinkLabel("/ingest/documents", "文档目录"),
 			});
 		}
 		if (visibleMenuKeys.includes("/ingest/upload")) {
 			documentChildren.push({
 				key: "/ingest/upload",
 				icon: <UploadOutlined />,
-				label: "文档接入",
+				label: createMenuLinkLabel("/ingest/upload", "文档接入"),
 			});
 		}
 		items.push({
@@ -81,7 +89,7 @@ function buildMenuItems(visibleMenuKeys: string[]): MenuItem[] {
 				{
 					key: "/knowledge",
 					icon: <DatabaseOutlined />,
-					label: "知识库总览",
+					label: createMenuLinkLabel("/knowledge", "知识库总览"),
 				},
 			],
 		});
@@ -95,7 +103,7 @@ function buildMenuItems(visibleMenuKeys: string[]): MenuItem[] {
 				{
 					key: "/qa",
 					icon: <SearchOutlined />,
-					label: "问答工作台",
+					label: createMenuLinkLabel("/qa", "问答工作台"),
 				},
 			],
 		});
@@ -109,17 +117,17 @@ function buildMenuItems(visibleMenuKeys: string[]): MenuItem[] {
 				{
 					key: "/admin?tab=members",
 					icon: <TeamOutlined />,
-					label: "成员与权限",
+					label: createMenuLinkLabel("/admin?tab=members", "成员与权限"),
 				},
 				{
 					key: "/admin?tab=accounts",
 					icon: <UserOutlined />,
-					label: "账号管理",
+					label: createMenuLinkLabel("/admin?tab=accounts", "账号管理"),
 				},
 				{
 					key: "/admin?tab=audit",
 					icon: <FileTextOutlined />,
-					label: "审计日志",
+					label: createMenuLinkLabel("/admin?tab=audit", "审计日志"),
 				},
 			],
 		});
@@ -235,7 +243,6 @@ function resolveMenuSelectedKey(pathname: string, search: string): string {
 }
 
 export function ConsoleLayout() {
-	const navigate = useNavigate();
 	const location = useLocation();
 	const { user, visibleMenuKeys, logout } = useAuth();
 
@@ -290,55 +297,70 @@ export function ConsoleLayout() {
 	);
 
 	return (
-		<Layout className="console-root" data-testid="console-layout">
-			{showSidebar && (
-				<Sider width={268} breakpoint="lg" collapsedWidth="0" className="console-sidebar">
-					<div className="console-logo">my-AI / Web Console</div>
-					<Menu
-						className="console-sidebar-menu"
-						mode="inline"
-						selectedKeys={[
-							resolveMenuSelectedKey(location.pathname, location.search),
-						]}
-						defaultOpenKeys={MODULE_OPEN_KEYS}
-						items={menuItems}
-						onClick={({ key }) => navigate(String(key))}
-					/>
-				</Sider>
-			)}
-			<Layout>
-				<Header className="console-header">
-					<div className="console-header-copy">
-						<Space size={[8, 8]} wrap>
-							<Tag color="blue">{routeMeta.moduleLabel}</Tag>
-							<Text type="secondary">外层模块导航 + 统一页面骨架</Text>
-						</Space>
-						<Title level={4} style={{ margin: 0 }} data-testid="console-title">
-							my-AI 控制台
-						</Title>
-						<Text type="secondary">
-							以模块稳定分区承接文档、知识库、问答与治理任务，页面内统一为摘要、工作区和状态区。
-						</Text>
-					</div>
-					<Space className="console-header-actions" size={12}>
-						<Dropdown menu={{ items: userMenuItems }} placement="bottomRight">
-							<Space style={{ cursor: "pointer" }}>
-								<UserOutlined />
-								<span>{user?.displayName ?? ""}</span>
-								{user?.workspaceRole && (
-									<Tag
-										color={roleColorMap[user.workspaceRole] ?? "default"}
-									>
-										{user.workspaceRole}
-									</Tag>
-								)}
-								<DownOutlined />
+		<>
+			<a className="console-skip-link" href="#console-main">
+				跳到主内容
+			</a>
+			<Layout className="console-root" data-testid="console-layout">
+				{showSidebar && (
+					<Sider
+						width={268}
+						breakpoint="lg"
+						collapsedWidth="0"
+						className="console-sidebar"
+					>
+						<div className="console-logo">my-AI / Web Console</div>
+						<nav aria-label="控制台主导航">
+							<Menu
+								className="console-sidebar-menu"
+								mode="inline"
+								selectedKeys={[
+									resolveMenuSelectedKey(location.pathname, location.search),
+								]}
+								defaultOpenKeys={MODULE_OPEN_KEYS}
+								items={menuItems}
+							/>
+						</nav>
+					</Sider>
+				)}
+				<Layout>
+					<Header className="console-header">
+						<div className="console-header-copy">
+							<Space size={[8, 8]} wrap>
+								<Tag color="blue">{routeMeta.moduleLabel}</Tag>
+								<Text type="secondary">外层模块导航 + 统一页面骨架</Text>
 							</Space>
-						</Dropdown>
-					</Space>
-				</Header>
-				<Content className="console-content">{content}</Content>
+							<Title level={4} style={{ margin: 0 }} data-testid="console-title">
+								my-AI 控制台
+							</Title>
+							<Text type="secondary">
+								以模块稳定分区承接文档、知识库、问答与治理任务，页面内统一为摘要、工作区和状态区。
+							</Text>
+						</div>
+						<Space className="console-header-actions" size={12}>
+							<Dropdown menu={{ items: userMenuItems }} placement="bottomRight">
+								<Space style={{ cursor: "pointer" }}>
+									<UserOutlined />
+									<span>{user?.displayName ?? ""}</span>
+									{user?.workspaceRole && (
+										<Tag
+											color={roleColorMap[user.workspaceRole] ?? "default"}
+										>
+											{user.workspaceRole}
+										</Tag>
+									)}
+									<DownOutlined />
+								</Space>
+							</Dropdown>
+						</Space>
+					</Header>
+					<Content className="console-content">
+						<main id="console-main" className="console-main">
+							{content}
+						</main>
+					</Content>
+				</Layout>
 			</Layout>
-		</Layout>
+		</>
 	);
 }

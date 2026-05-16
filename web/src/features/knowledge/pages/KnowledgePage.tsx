@@ -14,7 +14,6 @@ import {
 	message,
 } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import { useNavigate } from "react-router-dom";
 import { z } from "zod";
 import {
 	createKnowledgeBase,
@@ -24,6 +23,7 @@ import {
 } from "../../../shared/api/knowledgeApi";
 import { ApiErrorAlert } from "../../../shared/ui/ApiErrorAlert";
 import { useAuth } from "../../../shared/auth/AuthContext";
+import { ConsoleLinkButton } from "../../../shared/ui/ConsoleLinkButton";
 import {
 	ConsoleBadgeRow,
 	ConsoleMetricCards,
@@ -52,7 +52,6 @@ function statusColor(status: KnowledgeBase["status"]): string {
 }
 
 const columns = (
-	navigate: ReturnType<typeof useNavigate>,
 	onEdit: (record: KnowledgeBase) => void,
 	canManageKnowledgeBases: boolean,
 ): ColumnsType<KnowledgeBase> => [
@@ -83,28 +82,25 @@ const columns = (
 						编辑
 					</Button>
 				)}
-				<Button
-					type="primary"
+				<ConsoleLinkButton
+					to={`/qa?kbId=${encodeURIComponent(record.id)}`}
+					variant="primary"
 					size="small"
 					disabled={record.status !== "ACTIVE"}
 					onClick={() => {
 						localStorage.setItem("myai:lastKbId", record.id);
-						navigate(`/qa?kbId=${encodeURIComponent(record.id)}`);
 					}}
 				>
 					去问答
-				</Button>
+				</ConsoleLinkButton>
 				{canManageKnowledgeBases && (
-					<Button
+					<ConsoleLinkButton
+						variant="default"
 						size="small"
-						onClick={() =>
-							navigate(
-								`/admin/knowledge-bases/${encodeURIComponent(record.id)}/grants`,
-							)
-						}
+						to={`/admin/knowledge-bases/${encodeURIComponent(record.id)}/grants`}
 					>
 						授权管理
-					</Button>
+					</ConsoleLinkButton>
 				)}
 			</Space>
 		),
@@ -129,7 +125,6 @@ function resolveCollectionTone(params: {
 }
 
 export function KnowledgePage() {
-	const navigate = useNavigate();
 	const queryClient = useQueryClient();
 	const { user } = useAuth();
 	const canManageKnowledgeBases = Boolean(user?.capabilities.canAccessAdmin);
@@ -351,21 +346,23 @@ export function KnowledgePage() {
 					/>
 				}
 				actions={
-					<Button
-						type="primary"
+					<ConsoleLinkButton
+						variant="primary"
+						to={
+							firstActiveKnowledgeBaseId
+								? `/qa?kbId=${encodeURIComponent(firstActiveKnowledgeBaseId)}`
+								: "/qa"
+						}
 						disabled={!firstActiveKnowledgeBaseId}
 						onClick={() => {
 							if (!firstActiveKnowledgeBaseId) {
 								return;
 							}
 							localStorage.setItem("myai:lastKbId", firstActiveKnowledgeBaseId);
-							navigate(
-								`/qa?kbId=${encodeURIComponent(firstActiveKnowledgeBaseId)}`,
-							);
 						}}
 					>
 						进入问答验证
-					</Button>
+					</ConsoleLinkButton>
 				}
 				summary={<ConsoleMetricCards items={metricItems} />}
 				status={
@@ -463,7 +460,7 @@ export function KnowledgePage() {
 					) : (
 						<Table
 							rowKey="id"
-							columns={columns(navigate, onEdit, canManageKnowledgeBases)}
+							columns={columns(onEdit, canManageKnowledgeBases)}
 							dataSource={knowledgeBases}
 							loading={knowledgeQuery.isFetching}
 							pagination={false}
