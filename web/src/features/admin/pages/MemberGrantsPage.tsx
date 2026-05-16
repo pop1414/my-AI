@@ -319,7 +319,10 @@ export function MemberGrantsPage() {
 								: userId}
 						</Typography.Paragraph>
 					</div>
-					<Button onClick={() => navigate("/admin?tab=members")}>
+					<Button
+						className="console-return-button"
+						onClick={() => navigate("/admin?tab=members")}
+					>
 						返回成员管理
 					</Button>
 				</Space>

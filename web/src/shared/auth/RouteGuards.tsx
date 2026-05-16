@@ -120,6 +120,7 @@ export function AdminRoute() {
 				extra={
 					<Button
 						type="primary"
+						className="console-return-button"
 						onClick={() => window.history.back()}
 					>
 						返回上一页

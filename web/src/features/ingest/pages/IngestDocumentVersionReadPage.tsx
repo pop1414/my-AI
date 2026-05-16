@@ -195,6 +195,7 @@ export function IngestDocumentVersionReadPage() {
 				<div className="read-page__toolbar-left">
 					<Button
 						icon={<ArrowLeftOutlined />}
+						className="console-return-button"
 						onClick={() => {
 							const detailPath =
 								leftVersion.versionNumber === document.latestVersionNumber

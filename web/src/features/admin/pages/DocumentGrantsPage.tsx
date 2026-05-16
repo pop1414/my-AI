@@ -183,7 +183,10 @@ export function DocumentGrantsPage() {
 						</Typography.Paragraph>
 					</div>
 					<Space>
-						<Button onClick={() => navigate("/ingest/documents")}>
+						<Button
+							className="console-return-button"
+							onClick={() => navigate("/ingest/documents")}
+						>
 							返回文档列表
 						</Button>
 						<Button

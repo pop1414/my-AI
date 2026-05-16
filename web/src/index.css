@@ -367,6 +367,23 @@ body {
   pointer-events: none;
 }
 
+.console-link-button.console-return-button,
+.console-content .ant-btn.console-return-button {
+  color: #0f2c68 !important;
+  background: #ffffff !important;
+  border-color: rgba(0, 102, 204, 0.2) !important;
+  box-shadow:
+    inset 0 0 0 1px rgba(0, 102, 204, 0.04),
+    0 8px 18px rgba(15, 23, 42, 0.06);
+}
+
+.console-link-button.console-return-button:hover,
+.console-content .ant-btn.console-return-button:hover {
+  color: #0057d9 !important;
+  border-color: rgba(0, 102, 204, 0.28) !important;
+  background: #f8fbff !important;
+}
+
 .console-action-button {
   border-radius: 10px !important;
   font-weight: 500;
@@ -402,6 +419,27 @@ body {
   background: #f1f2f4 !important;
   border-color: rgba(60, 60, 67, 0.1) !important;
   box-shadow: none !important;
+}
+
+.console-table-action-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 320px;
+}
+
+.console-table-action-link,
+.console-table-action-button {
+  min-width: 92px;
+  justify-content: flex-start;
+  padding-inline: 10px !important;
+}
+
+.console-table-action-link__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
 }
 
 .console-permission-select.ant-select:not(.ant-select-disabled) .ant-select-selector {

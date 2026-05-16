@@ -94,7 +94,10 @@ export function IngestStatusPage() {
 				title="查询文档状态"
 				extra={
 					<Space>
-						<Button onClick={() => navigate("/ingest/documents")}>
+						<Button
+							className="console-return-button"
+							onClick={() => navigate("/ingest/documents")}
+						>
 							返回文档列表
 						</Button>
 						<Typography.Text type="secondary">
