@@ -12,7 +12,7 @@ GitHub Issues 是本仓库的任务与缺陷跟踪入口。See `docs/agents/issu
 
 Single-context 仓库；领域上下文采用仓库级统一视角，架构决策记录位于 `docs/adr/`。See `docs/agents/domain.md`.
 
-### 代码注释要求
+### Java代码注释要求
 
 - 注释语言：中文
 - 符合阿里巴巴 Java 开发手册的注释规范，尤其是 Javadoc 注释的使用，确保每个类、方法和重要代码块都有清晰的注释说明。
@@ -24,9 +24,10 @@ Single-context 仓库；领域上下文采用仓库级统一视角，架构决�
 
 每次改动之后，无论是编码还是文档的书写，都要给出对应的commit message
 要求：
+
 - 1.标题+body
-    例如：
-    fix(xxx): xxx
+  例如：
+  fix(xxx): xxx
     - xxx
     - xxx
     - xxx
