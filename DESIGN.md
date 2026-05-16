@@ -4,109 +4,116 @@ name: Unified-RAG-Design-System
 description: A unified design system merging the technical precision of Supabase (for admin/console surfaces) with the editorial, AI-first warmth of Cursor (for QA and reading surfaces). The system uses a pure white/grey-ladder canvas with strict 1px hairline borders, no shadows, and an Emerald primary CTA. Code surfaces use JetBrains Mono. The QA flow incorporates pastel AI-state colors to indicate reasoning stages.
 
 colors:
-  # Primary Brand (from Supabase)
   primary: "#3ecf8e"
   primary-deep: "#24b47e"
-  on-primary: "#171717" # Dark text on green button
-
-  # Canvas & Surfaces (Supabase purity)
-  canvas: "#ffffff"
-  canvas-soft: "#fafafa"
-  canvas-night: "#1c1c1c" # For code blocks / dark panes
-  on-dark: "#ffffff"
-
-  # Ink & Text (Hybrid: Supabase contrast, Cursor warmth)
   ink: "#171717"
   ink-secondary: "#212121"
   ink-mute: "#707070"
   ink-faint: "#b2b2b2"
-
-  # Borders / Depth (Hairline only, no shadows)
-  hairline: "#e6e5e0"      # Base border
-  hairline-strong: "#cfcdc4" # Focused / active border
-
-  # AI State Timeline (from Cursor - ONLY for QA/Chat reasoning)
-  ai-thinking: "#dfa88f" # Peach
-  ai-reading: "#9fbbe0"  # Blue
-  ai-searching: "#9fc9a2" # Mint (Grep)
-  ai-generating: "#c0a8dd" # Lavender
-
-  # Semantic
+  hairline: "#e6e5e0"
+  hairline-strong: "#cfcdc4"
+  canvas: "#ffffff"
+  canvas-soft: "#fafafa"
+  canvas-night: "#1c1c1c"
+  surface-card: "#ffffff"
+  on-primary: "#171717"
+  on-dark: "#ffffff"
+  timeline-thinking: "#dfa88f"
+  timeline-grep: "#9fc9a2"
+  timeline-read: "#9fbbe0"
+  timeline-edit: "#c0a8dd"
   semantic-error: "#cf2d56"
   semantic-success: "#1f8a65"
 
 typography:
-  # Base Fonts
-  font-sans: "Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif"
-  font-code: "'JetBrains Mono', 'Fira Code', monospace" # Cursor signature
-
-  # Display (Negative tracking, mid-weight)
   display-lg:
+    fontFamily: "Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif"
     fontSize: 36px
     fontWeight: 500
     lineHeight: 1.2
     letterSpacing: -0.72px
   display-md:
+    fontFamily: "Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif"
     fontSize: 28px
     fontWeight: 500
     lineHeight: 1.2
     letterSpacing: -0.42px
-
-  # Body (Clean, readable)
+  title-md:
+    fontFamily: "Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif"
+    fontSize: 18px
+    fontWeight: 500
+    lineHeight: 1.4
+    letterSpacing: 0
   body-lg:
+    fontFamily: "Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif"
     fontSize: 18px
     fontWeight: 400
     lineHeight: 1.55
+    letterSpacing: 0
   body-md:
+    fontFamily: "Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif"
     fontSize: 16px
     fontWeight: 400
     lineHeight: 1.5
+    letterSpacing: 0
   body-sm:
+    fontFamily: "Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif"
     fontSize: 14px
     fontWeight: 400
     lineHeight: 1.5
-  
-  # UI & Code
-  button:
-    fontSize: 14px
-    fontWeight: 500
-    lineHeight: 1.0
+    letterSpacing: 0
+  caption-uppercase:
+    fontFamily: "Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif"
+    fontSize: 11px
+    fontWeight: 600
+    lineHeight: 1.4
+    letterSpacing: 0.88px
+    textTransform: uppercase
   code:
+    fontFamily: "'JetBrains Mono', 'Fira Code', monospace"
     fontSize: 13px
     fontWeight: 400
     lineHeight: 1.5
-  badge:
-    fontSize: 11px
-    fontWeight: 600
-    letterSpacing: 0.88px
-    textTransform: uppercase
+    letterSpacing: 0
+  button:
+    fontFamily: "Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif"
+    fontSize: 14px
+    fontWeight: 500
+    lineHeight: 1.0
+    letterSpacing: 0
 
 rounded:
+  none: 0px
   xs: 4px
-  sm: 6px   # Signature button radius
+  sm: 6px
   md: 8px
-  lg: 12px  # Standard card radius
-  full: 9999px # Pills/Badges
+  lg: 12px
+  xl: 16px
+  pill: 9999px
+  full: 9999px
 
 spacing:
-  xs: 4px
-  sm: 8px
-  md: 12px
+  xxs: 4px
+  xs: 8px
+  sm: 12px
   base: 16px
+  md: 20px
   lg: 24px
   xl: 32px
-  section-dense: 48px # Admin panels
-  section-loose: 80px # QA/Reading flow
+  xxl: 48px
+  section: 80px
 
 components:
-  # --- Core UI ---
   button-primary:
     backgroundColor: "{colors.primary}"
     textColor: "{colors.on-primary}"
     typography: "{typography.button}"
     rounded: "{rounded.sm}"
     padding: 8px 16px
-  
+  button-primary-active:
+    backgroundColor: "{colors.primary-deep}"
+    textColor: "{colors.on-primary}"
+    rounded: "{rounded.sm}"
   button-secondary:
     backgroundColor: "{colors.canvas}"
     textColor: "{colors.ink}"
@@ -114,83 +121,217 @@ components:
     typography: "{typography.button}"
     rounded: "{rounded.sm}"
     padding: 8px 16px
-
   card-base:
-    backgroundColor: "{colors.canvas}"
-    border: "1px solid {colors.hairline}"
+    backgroundColor: "{colors.surface-card}"
+    textColor: "{colors.ink}"
+    typography: "{typography.body-md}"
     rounded: "{rounded.lg}"
-    shadow: "none" # Explicitly NO drop shadows
-
-  # --- Admin / Console Surfaces (Supabase Vibe) ---
-  admin-panel:
     padding: 32px
-    layout: "Dense grid, strict hairlines"
-  
+    border: "1px solid {colors.hairline}"
   code-pane-dark:
     backgroundColor: "{colors.canvas-night}"
     textColor: "{colors.on-dark}"
     typography: "{typography.code}"
     rounded: "{rounded.md}"
     padding: 16px
-
-  # --- QA / User Surfaces (Cursor Vibe) ---
-  chat-canvas:
-    backgroundColor: "{colors.canvas-soft}"
-    padding: "{spacing.section-loose}"
-    layout: "Centered max-width (1200px), generous whitespace"
-  
-  ai-state-pill:
-    backgroundColor: "{colors.ai-thinking}" # Varies by state
+  timeline-pill-thinking:
+    backgroundColor: "{colors.timeline-thinking}"
     textColor: "{colors.ink}"
-    typography: "{typography.badge}"
-    rounded: "{rounded.full}"
+    typography: "{typography.caption-uppercase}"
+    rounded: "{rounded.pill}"
+    padding: 4px 10px
+  timeline-pill-grep:
+    backgroundColor: "{colors.timeline-grep}"
+    textColor: "{colors.ink}"
+    typography: "{typography.caption-uppercase}"
+    rounded: "{rounded.pill}"
+    padding: 4px 10px
+  timeline-pill-read:
+    backgroundColor: "{colors.timeline-read}"
+    textColor: "{colors.ink}"
+    typography: "{typography.caption-uppercase}"
+    rounded: "{rounded.pill}"
+    padding: 4px 10px
+  timeline-pill-edit:
+    backgroundColor: "{colors.timeline-edit}"
+    textColor: "{colors.ink}"
+    typography: "{typography.caption-uppercase}"
+    rounded: "{rounded.pill}"
     padding: 4px 10px
 ---
 
-# Unified RAG Design System
+## Overview
 
-## 1. Design Philosophy
+This unified design language is engineered for a Knowledge-driven RAG System that serves two distinct modes: the Administrator (Console/Management) and the User (QA/Reading). The base canvas is **pure white** (`{colors.canvas}` — #ffffff) and off-white (`{colors.canvas-soft}` — #fafafa) with near-black ink (`{colors.ink}` — #171717) carrying the typography. The single brand voltage is **Emerald Green** (`{colors.primary}` — #3ecf8e) reserved for primary CTAs. 
 
-This design system unifies the needs of a **Knowledge-driven RAG System**. It must serve two distinct user modes without breaking brand coherence:
-1. **The Administrator (Console/Management):** Needs data density, clear boundaries, and technical control. We draw heavily from **Supabase** here—pure white backgrounds, crisp 1px hairlines, and high-contrast dark panes for logs or raw JSON.
-2. **The User (QA/Reading):** Needs focus, editorial calm, and clear feedback on AI processes. We draw from **Cursor** here—generous whitespace, IDE-like reading panes, JetBrains Mono for code, and distinct pastel colors indicating the AI's reasoning states.
+Typography runs **Inter** (or a similar clean sans) at weight 500 for display with tight negative letter-spacing, and **JetBrains Mono** on every code, log, or data surface. Depth is achieved strictly through **hairline borders** (`{colors.hairline}` — #e6e5e0); there are no drop shadows in this system.
 
-**The Glue:** The entire system shares the same DNA:
-- **No drop shadows.** Depth is created purely through 1px hairlines (`#e6e5e0`) and canvas layer contrast (`#ffffff` vs `#fafafa`).
-- **Emerald Primary CTA.** (`#3ecf8e`). Used sparingly for the most important actions.
-- **Square-ish Radii.** 6px for buttons, 12px for cards. Never heavily rounded.
+A signature element borrowed from Cursor is the **AI-timeline pill palette** (peach, mint, blue, lavender) used exclusively in the QA flow to mark AI reasoning stages (Thinking / Searching / Reading / Generating).
 
-## 2. Color Architecture
+**Key Characteristics:**
+- Pure white canvas with greyscale hierarchy. Ink is near-black (#171717).
+- Single CTA color: `{colors.primary}` (Emerald Green #3ecf8e). Used scarcely, with near-black text on top.
+- Display weight stays at 500 with negative letter-spacing for an engineered look.
+- JetBrains Mono carries all code, logs, and document chunk references.
+- AI timeline pastels: Dedicated tokens for in-product agent action stages (only in QA).
+- Compact 6px CTA radius — developer dialect.
+- Hairline-only depth; absolutely no drop shadows.
 
-- **Canvas & Chrome:** We use a pure white (`#ffffff`) canvas for primary content and off-white (`#fafafa`) for backgrounds or secondary zones. Lines are drawn with fine grey (`#e6e5e0`).
-- **Typography Ink:** Near-black (`#171717`) for high contrast readability.
-- **The Brand Voltage:** Emerald Green (`#3ecf8e`). Note: Text on the primary green button is *dark* (`#171717`), not white. This makes the button look like a "lit indicator" rather than a painted shape.
-- **The AI State Palette:** The only time we break the black/white/green rule is during the RAG pipeline execution in the user chat interface. We use Cursor's pastel timeline pills to explain what the AI is doing:
-  - 🍑 Peach (`#dfa88f`): Thinking / Planning
-  - 🌿 Mint (`#9fc9a2`): Searching Vector DB / Grepping
-  - 💧 Blue (`#9fbbe0`): Reading Documents
-  - 🔮 Lavender (`#c0a8dd`): Generating Answer
+## Colors
 
-## 3. Typography
+### Brand & Accent
+- **Emerald** (`{colors.primary}` — #3ecf8e): Primary CTA pills, dot indicators.
+- **Emerald Deep** (`{colors.primary-deep}` — #24b47e): Press state.
 
-- **UI & Reading:** `Inter` (or similar clean sans-serif). Display fonts use slight negative tracking (`-0.42px` to `-0.72px`) for a tight, engineered look. Weight rarely exceeds 500.
-- **Data & Code:** `JetBrains Mono`. This is mandatory for *all* code blocks, JSON payloads in the admin panel, and reference citations in the QA flow. It instantly signals "developer tool".
+### Surface
+- **Canvas** (`{colors.canvas}` — #ffffff): Pure white page floor.
+- **Canvas Soft** (`{colors.canvas-soft}` — #fafafa): Slightly tinted background for chat streams or secondary zones.
+- **Surface Card** (`{colors.surface-card}` — #ffffff): Pure white card surface.
+- **Canvas Night** (`{colors.canvas-night}` — #1c1c1c): Deep near-black used in code blocks and data panes.
 
-## 4. Module Implementation Guidelines
+### Hairlines
+- **Hairline** (`{colors.hairline}` — #e6e5e0): 1px divider for panels and cards.
+- **Hairline Strong** (`{colors.hairline-strong}` — #cfcdc4): Stronger panel outline for focus states.
 
-### A. The Admin Console (Supabase Mode)
-- **Layout:** Full width or dense sidebar navigation.
-- **Visuals:** Heavy use of `card-base` (white card, hairline border). Data tables should have no alternating row colors, just 1px bottom borders.
-- **Interactions:** Configuration forms, permission toggles, and document upload zones should feel technical and precise.
+### Text
+- **Ink** (`{colors.ink}` — #171717): Display, body emphasis. Near-black.
+- **Ink Secondary** (`{colors.ink-secondary}` — #212121): Cooler near-black for body.
+- **Ink Mute** (`{colors.ink-mute}` — #707070): Secondary text.
+- **On Primary** (`{colors.on-primary}` — #171717): Near-black text on the Emerald primary fill (NOT white).
+- **On Dark** (`{colors.on-dark}` — #ffffff): Text on canvas-night surfaces.
 
-### B. The QA & Reading Interface (Cursor Mode)
-- **Layout:** A constrained center column (max 1000px - 1200px) with massive horizontal margins.
-- **Visuals:** The chat stream should sit on an off-white canvas (`#fafafa`). User queries are simple text. AI responses are preceded by the **AI State Timeline** pills (e.g., [🔍 SEARCHING DOCS] -> [💧 READING] -> Answer).
-- **Code/References:** When the AI cites a document or writes code, it appears in a `code-pane-dark` or a clearly delineated hairline card with `JetBrains Mono` font, mimicking an IDE pane.
+### Timeline (AI-action signature)
+- **Thinking** (`{colors.timeline-thinking}` — #dfa88f): Peach.
+- **Grep** (`{colors.timeline-grep}` — #9fc9a2): Mint. Searching Vector DB.
+- **Read** (`{colors.timeline-read}` — #9fbbe0): Pastel blue. Reading Docs.
+- **Edit** (`{colors.timeline-edit}` — #c0a8dd): Lavender. Generating Answer.
 
-## 5. Strict Rules (Do's and Don'ts)
+### Semantic
+- **Success** (`{colors.semantic-success}` — #1f8a65): System success indicators.
+- **Error** (`{colors.semantic-error}` — #cf2d56): Validation errors.
 
-- **DO** use JetBrains Mono for anything related to raw data, code, or document chunk metadata.
-- **DO** keep the Emerald CTA scarce. If there are multiple buttons, use the `button-secondary` (outline) style.
-- **DON'T** use drop shadows. Ever. The design must look flat and engineered.
-- **DON'T** use the pastel AI colors (Mint, Peach, etc.) for system alerts (like "Upload Success"). They are exclusively for the AI's internal monologue timeline. System success is semantic green (`#1f8a65`).
+## Typography
+
+### Font Family
+**Inter** (or similar geometric humanist sans like Circular) is the primary UI family. Fallback: `'Helvetica Neue', Helvetica, Arial, sans-serif`. Code surfaces strictly use **JetBrains Mono**.
+
+### Hierarchy
+
+| Token | Size | Weight | Line Height | Letter Spacing | Use |
+|---|---|---|---|---|---|
+| `{typography.display-lg}` | 36px | 500 | 1.2 | -0.72px | Section heads / Console titles |
+| `{typography.display-md}` | 28px | 500 | 1.2 | -0.42px | Sub-section heads |
+| `{typography.title-md}` | 18px | 500 | 1.4 | 0 | Component/Card titles |
+| `{typography.body-lg}` | 18px | 400 | 1.55 | 0 | Lead text |
+| `{typography.body-md}` | 16px | 400 | 1.5 | 0 | Default body |
+| `{typography.body-sm}` | 14px | 400 | 1.5 | 0 | Helper text / Small data |
+| `{typography.caption-uppercase}` | 11px | 600 | 1.4 | 0.88px | Section labels, timeline pill labels |
+| `{typography.code}` | 13px | 400 | 1.5 | 0 | Code blocks — JetBrains Mono |
+| `{typography.button}` | 14px | 500 | 1.0 | 0 | CTA pill labels |
+
+### Principles
+- **Weight 500 across display.** Mid-weight reads as engineered.
+- **Negative tracking on display.** Tightens the letterforms into editorial density.
+- **JetBrains Mono on every code/data surface.**
+
+## Layout
+
+### Spacing System
+- **Base unit:** 8px.
+- **Tokens:** `{spacing.xxs}` 4px · `{spacing.xs}` 8px · `{spacing.sm}` 12px · `{spacing.base}` 16px · `{spacing.md}` 20px · `{spacing.lg}` 24px · `{spacing.xl}` 32px · `{spacing.xxl}` 48px · `{spacing.section}` 80px.
+
+### Grid & Container
+- **Admin Console:** Full width or dense sidebar navigation layout. Padding `{spacing.xxl}`.
+- **QA / Chat:** Centered max-width (~1000px-1200px) with generous whitespace (`{spacing.section}`).
+
+### Whitespace Philosophy
+The Admin side uses a tight, dense grid suitable for data tables. The QA side switches to a generous editorial pacing with plenty of breathing room, utilizing `{colors.canvas-soft}` to frame the chat stream.
+
+## Elevation & Depth
+
+The system uses **hairline-only depth**. No drop shadows, no elevation tiers. Cards float above the canvas via 1px hairlines.
+
+| Level | Treatment | Use |
+|---|---|---|
+| Flat | `{colors.canvas}` or `{colors.canvas-soft}` | Base backgrounds |
+| Card | 1px `{colors.hairline}` border | Content cards, Data tables |
+| Dark Pane | `{colors.canvas-night}` (#1c1c1c) | Inside code/log mockups |
+
+## Shapes
+
+### Border Radius Scale
+
+| Token | Value | Use |
+|---|---|---|
+| `{rounded.none}` | 0px | Edge bleeds |
+| `{rounded.xs}` | 4px | Form inputs |
+| `{rounded.sm}` | 6px | Buttons (Signature square-ish radius) |
+| `{rounded.md}` | 8px | Compact nested cards / Alerts |
+| `{rounded.lg}` | 12px | Primary Cards, Data panels |
+| `{rounded.xl}` | 16px | Modals |
+| `{rounded.pill}` | 9999px | Timeline pills, badges |
+
+## Components
+
+### Buttons
+
+**`button-primary`** — Background `{colors.primary}`, text `{colors.on-primary}` (near-black, NOT white), type `{typography.button}`, padding 8px × 16px, rounded `{rounded.sm}` (6px).
+
+**`button-primary-active`** — Press state. Background `{colors.primary-deep}`.
+
+**`button-secondary`** — Background `{colors.canvas}`, text `{colors.ink}`, 1px `{colors.hairline-strong}` border, padding 8px × 16px, rounded `{rounded.sm}`.
+
+### Cards
+
+**`card-base`** — Background `{colors.surface-card}`, text `{colors.ink}`, type `{typography.body-md}`, rounded `{rounded.lg}`, padding 32px, 1px `{colors.hairline}` border.
+
+**`code-pane-dark`** — Background `{colors.canvas-night}`, text `{colors.on-dark}` in `{typography.code}` (JetBrains Mono 13px), rounded `{rounded.md}` (8px), padding 16px.
+
+### AI Timeline (Signature)
+
+**`timeline-pill-thinking`** — Peach pill. Background `{colors.timeline-thinking}`, text `{colors.ink}`, type `{typography.caption-uppercase}`, rounded `{rounded.pill}`, padding 4px × 10px. 
+
+**`timeline-pill-grep`** — Mint pill. Same shape, background `{colors.timeline-grep}`.
+
+**`timeline-pill-read`** — Pastel-blue pill. Background `{colors.timeline-read}`.
+
+**`timeline-pill-edit`** — Lavender pill. Background `{colors.timeline-edit}`.
+
+## Do's and Don'ts
+
+### Do
+- Reserve `{colors.primary}` (Emerald) for primary CTAs.
+- Render display tiers at weight 500 with negative letter-spacing.
+- Use `{rounded.sm}` 6px for buttons — square-ish radii, never pill-shaped.
+- Use near-black `{colors.ink}` on the emerald button (not white) — the green reads as "lit".
+- Render every code/data surface in JetBrains Mono.
+- Use timeline pastels only inside in-product agent visualizations (QA flow) — never as system action colors.
+
+### Don't
+- Don't bump display weight above 500.
+- Don't use pill-shaped buttons for CTAs; the brand's button radius is square-ish 6px.
+- Don't use white text on the emerald button.
+- Don't add drop shadows. Hairlines + canvas contrast carry the depth.
+- Don't use timeline pastels on Admin UI. They're scoped to the AI timeline only.
+
+## Responsive Behavior
+
+### Breakpoints
+
+| Name | Width | Key Changes |
+|---|---|---|
+| Mobile | < 768px | Display tiers scale down; Admin panels switch to stacked rows. |
+| Tablet | 768–1024px | Feature grids 2-up. |
+| Desktop | > 1024px | Full Admin dense grid; QA flow capped at 1200px max-width. |
+
+### Touch Targets
+- Buttons hit ≥ 36×36px on mobile; vertical padding scales up.
+- Form fields stay at 36px minimum height.
+
+## Iteration Guide
+
+1. Focus on a single component at a time.
+2. CTAs default to `{rounded.sm}` (6px). Cards use `{rounded.lg}` (12px).
+3. Use `{token.refs}` everywhere — never inline hex.
+4. Keep emerald scarce; one filled green button per viewport.
+5. The white-canvas / no-shadow commitment is non-negotiable.
