@@ -198,6 +198,16 @@
   display: flex;
   flex-direction: column;
   gap: 12px;
+  max-height: 600px;
+  overflow-y: auto;
+  padding: 4px 8px 4px 4px; /* Add padding for mask visibility */
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    black 20px,
+    black calc(100% - 20px),
+    transparent 100%
+  );
 }
 
 .detail-version-item {

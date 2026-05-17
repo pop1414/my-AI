@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
 	Button,
@@ -18,6 +18,7 @@ import {
 	getDocumentStatus,
 	type DocumentChunksPreviewResponse,
 } from "../../../shared/api/ingestApi";
+import { listKnowledgeBases } from "../../../shared/api/knowledgeApi";
 import { ApiErrorAlert } from "../../../shared/ui/ApiErrorAlert";
 
 const { Title, Text } = Typography;
@@ -71,6 +72,11 @@ export function IngestChunksPreviewPage() {
 		enabled: !!queryInput?.documentId,
 	});
 
+  const kbQuery = useQuery({
+		queryKey: ["knowledge-bases"],
+		queryFn: listKnowledgeBases,
+	});
+
 	// 如果 URL 带了 documentId，自动触发首次查询
 	useEffect(() => {
 		if (urlDocumentId && !queryInput) {
@@ -96,6 +102,11 @@ export function IngestChunksPreviewPage() {
 		setQueryInput(values);
 	};
 
+  const kbName = useMemo(() => {
+    const kbId = docStatusQuery.data?.kbId;
+    return kbId ? kbQuery.data?.find(kb => kb.id === kbId)?.name : undefined;
+  }, [docStatusQuery.data?.kbId, kbQuery.data]);
+
 	return (
 		<Space direction="vertical" size={16} style={{ width: "100%" }}>
 			<Card
@@ -109,6 +120,11 @@ export function IngestChunksPreviewPage() {
 								ID: {queryInput.documentId}
 							</Text>
 						)}
+            {kbName && (
+              <Text type="secondary" style={{ fontSize: 12 }}>
+                知识库: {kbName}
+              </Text>
+            )}
 					</Space>
 				}
 				extra={
@@ -120,7 +136,7 @@ export function IngestChunksPreviewPage() {
 							返回列表
 						</Button>
 						<Text type="secondary" style={{ fontSize: 12 }}>
-							GET /api/v1/documents/{"{id}"}/chunks
+							{`GET /api/v1/documents/${queryInput?.documentId || '{id}'}/chunks`}
 						</Text>
 					</Space>
 				}
@@ -171,6 +187,9 @@ export function IngestChunksPreviewPage() {
 			)}
 			{docStatusQuery.isError && (
 				<ApiErrorAlert error={docStatusQuery.error} />
+			)}
+      {kbQuery.isError && (
+				<ApiErrorAlert error={kbQuery.error} />
 			)}
 
 			{previewQuery.data && (

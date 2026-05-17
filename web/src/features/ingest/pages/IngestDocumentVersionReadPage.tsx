@@ -4,49 +4,45 @@ import {
 	RetweetOutlined,
 	ShrinkOutlined,
   FolderOpenOutlined,
+  LoadingOutlined,
 } from "@ant-design/icons";
-import { Button, Segmented, Select, Space, Tag, Tooltip, Skeleton, Result } from "antd";
+import { Button, Segmented, Select, Space, Tag, Tooltip, Skeleton, Result, Spin } from "antd";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { getDocumentVersionHistory, getDocumentStatus, type DocumentVersionHistoryItem } from "../../../shared/api/ingestApi";
+import { getDocumentVersionHistory, getDocumentStatus, getDocumentContent, type DocumentVersionHistoryItem } from "../../../shared/api/ingestApi";
 import { listKnowledgeBases } from "../../../shared/api/knowledgeApi";
 import { ApiErrorAlert } from "../../../shared/ui/ApiErrorAlert";
 import "./IngestDocumentVersionReadPage.css";
 
 type ReadMode = "single" | "compare";
 
-function buildContentMarkdown(version: DocumentVersionHistoryItem): string {
-  // 由于目前后端没有提供获取文档全文的接口，我们使用真实的版本元数据来组装占位文本
-	return `
-# ${version.filename}
-## 第一章：总则
-当前正在阅读 **v${version.versionNumber}**。本系统通过 RAG 技术实现了对该文档的深度解析。这个阅读界面旨在提供沉浸式的长内容查阅体验，移除了所有非必要的管理干扰。
-
-## 第二章：关键条款
-> 注意：此版本更新于 ${version.updatedAt}，当前状态为 \`${version.status}\`。
-
-1. **版本溯源**：本版本属于 \`${version.versionOriginType}\` 类型。
-2. **处理逻辑**：系统已对正文完成了分块处理，目前可支持语义检索与引用溯源。
-3. **内容完整性**：对于 MD格式的渲染，我们保持了原汁原样的层级结构，确保阅读时的空间感与逻辑感。
-
-## 第三章：结语
-如果您在阅读过程中发现任何解析错误，请使用详情页的“重处理”功能。
-  `;
-}
-
 function ReaderPane({
 	version,
 	isLatest,
 	isAskable,
   onVersionChange,
-  versionOptions
+  versionOptions,
+  documentId,
+  source = "EXPLICIT_VERSION"
 }: {
 	version: DocumentVersionHistoryItem;
 	isLatest: boolean;
 	isAskable: boolean;
   onVersionChange: (v: number) => void;
   versionOptions: any[];
+  documentId: string;
+  source?: "LATEST" | "ASKABLE_BASELINE" | "EXPLICIT_VERSION";
 }) {
+  const contentQuery = useQuery({
+    queryKey: ["document-content", documentId, version.versionNumber],
+    queryFn: () => getDocumentContent({
+      documentId,
+      source,
+      versionNumber: version.versionNumber
+    }),
+    enabled: documentId.length > 0 && version.versionNumber > 0,
+  });
+
 	return (
 		<div className="read-pane">
 			<div className="read-pane__header">
@@ -67,9 +63,15 @@ function ReaderPane({
         />
 			</div>
 			<div className="read-pane__scroller">
-				<article className="read-content">
-          <section dangerouslySetInnerHTML={{ __html: buildContentMarkdown(version).replace(/\n/g, '<br/>').replace(/# (.*?)<br\/>/, '<h1>$1</h1>').replace(/## (.*?)<br\/>/g, '<h2>$1</h2>').replace(/> (.*?)<br\/>/g, '<blockquote>$1</blockquote>').replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>').replace(/`([^`]+)`/g, '<code>$1</code>') }} />
-				</article>
+        {contentQuery.isLoading ? (
+          <div style={{ padding: 48, textAlign: 'center' }}><Spin indicator={<LoadingOutlined style={{ fontSize: 24 }} spin />} /></div>
+        ) : contentQuery.isError ? (
+          <div style={{ padding: 48 }}><ApiErrorAlert error={contentQuery.error} /></div>
+        ) : (
+				  <article className="read-content">
+            <section dangerouslySetInnerHTML={{ __html: contentQuery.data?.contentMarkdown.replace(/\n/g, '<br/>').replace(/# (.*?)<br\/>/, '<h1>$1</h1>').replace(/## (.*?)<br\/>/g, '<h2>$1</h2>').replace(/> (.*?)<br\/>/g, '<blockquote>$1</blockquote>').replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>').replace(/`([^`]+)`/g, '<code>$1</code>') ?? "" }} />
+				  </article>
+        )}
 			</div>
 		</div>
 	);
@@ -104,6 +106,11 @@ export function IngestDocumentVersionReadPage() {
 
   const kbId = statusQuery.data?.kbId;
   const knowledgeBase = kbId ? kbQuery.data?.find(kb => kb.id === kbId) : undefined;
+  const knowledgeBaseName = knowledgeBase?.name ?? kbId;
+  const knowledgeBaseIdLabel =
+    knowledgeBase && knowledgeBase.name !== knowledgeBase.id
+      ? knowledgeBase.id
+      : undefined;
 
   const versions = historyQuery.data?.versions ?? [];
   const latestVersion = versions.find((v) => v.isLatestVersion);
@@ -181,9 +188,10 @@ export function IngestDocumentVersionReadPage() {
 						<span className="read-toolbar__kicker">Document Reader</span>
             <Space align="center" size="middle">
 						  <span className="read-toolbar__filename">{leftVersion.filename}</span>
-              {knowledgeBase && (
+              {knowledgeBaseName && (
                 <Tag icon={<FolderOpenOutlined />} bordered={false} style={{ margin: 0, opacity: 0.8 }}>
-                  {knowledgeBase.name} ({knowledgeBase.id})
+                  {knowledgeBaseName}
+                  {knowledgeBaseIdLabel ? ` (${knowledgeBaseIdLabel})` : ""}
                 </Tag>
               )}
             </Space>
@@ -217,6 +225,8 @@ export function IngestDocumentVersionReadPage() {
 					isAskable={leftVersion.isAskableVersion}
           versionOptions={versionOptions}
           onVersionChange={(v) => updateParams({ left: v })}
+          documentId={documentId}
+          source="EXPLICIT_VERSION"
 				/>
 				{mode === "compare" && rightVersion && (
 					<ReaderPane
@@ -225,6 +235,8 @@ export function IngestDocumentVersionReadPage() {
 						isAskable={rightVersion.isAskableVersion}
             versionOptions={versionOptions}
             onVersionChange={(v) => updateParams({ right: v })}
+            documentId={documentId}
+            source="EXPLICIT_VERSION"
 					/>
 				)}
 			</main>

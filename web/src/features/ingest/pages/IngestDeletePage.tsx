@@ -1,12 +1,15 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { Alert, Button, Card, Form, Input, Space, Typography } from "antd";
 import { useNavigate, useParams } from "react-router-dom";
+import { Card, Space, Typography, Form, Input, Button, Alert } from "antd";
 import { z } from "zod";
 import { deleteDocument, getDocumentStatus } from "../../../shared/api/ingestApi";
+import { listKnowledgeBases } from "../../../shared/api/knowledgeApi";
 import { ApiErrorAlert } from "../../../shared/ui/ApiErrorAlert";
 import { ApiError } from "../../../shared/api/request";
 import { DeleteDocumentConfirmModal } from "./DeleteDocumentConfirmModal";
+
+const { Title, Text } = Typography;
 
 const deleteFormSchema = z.object({
 	documentId: z.string().trim().min(1, "documentId 不能为空"),
@@ -24,6 +27,11 @@ export function IngestDeletePage() {
 		queryKey: ["document-status", urlDocumentId || initialDocumentId],
 		queryFn: () => getDocumentStatus(urlDocumentId || initialDocumentId),
 		enabled: !!(urlDocumentId || initialDocumentId),
+	});
+
+  const kbQuery = useQuery({
+		queryKey: ["knowledge-bases"],
+		queryFn: listKnowledgeBases,
 	});
 
 	const deleteMutation = useMutation({
@@ -52,10 +60,29 @@ export function IngestDeletePage() {
 			/>
 		) : null;
 
+  const kbName = useMemo(() => {
+    const kbId = docStatusQuery.data?.kbId;
+    return kbId ? kbQuery.data?.find(kb => kb.id === kbId)?.name : undefined;
+  }, [docStatusQuery.data?.kbId, kbQuery.data]);
+
 	return (
 		<Space direction="vertical" size={16} style={{ width: "100%" }}>
 			<Card
-				title={`删除文档 · ${docStatusQuery.data?.latestFilename || urlDocumentId || initialDocumentId}`}
+				title={
+					<Space direction="vertical" size={2}>
+						<Title level={4} style={{ margin: 0 }}>
+							删除文档 · {docStatusQuery.data?.latestFilename || urlDocumentId || initialDocumentId}
+						</Title>
+						<Text type="secondary" style={{ fontSize: 12, fontFamily: 'var(--console-font-mono)' }}>
+							ID: {urlDocumentId || initialDocumentId}
+						</Text>
+            {kbName && (
+              <Text type="secondary" style={{ fontSize: 12 }}>
+                知识库: {kbName}
+              </Text>
+            )}
+					</Space>
+				}
 				extra={
 					<Space>
 						<Button
@@ -104,6 +131,7 @@ export function IngestDeletePage() {
 
 			{deleteMutation.isError && <ApiErrorAlert error={deleteMutation.error} />}
 			{docStatusQuery.isError && <ApiErrorAlert error={docStatusQuery.error} />}
+			{kbQuery.isError && <ApiErrorAlert error={kbQuery.error} />}
 			{conflictWarning}
 
 			<DeleteDocumentConfirmModal

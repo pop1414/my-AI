@@ -192,6 +192,11 @@ export function IngestDocumentDetailPage() {
   const knowledgeBase = useMemo(() => {
     return kbId ? kbQuery.data?.find(kb => kb.id === kbId) : undefined;
   }, [kbId, kbQuery.data]);
+  const knowledgeBaseName = knowledgeBase?.name ?? kbId;
+  const knowledgeBaseIdLabel =
+    knowledgeBase && knowledgeBase.name !== knowledgeBase.id
+      ? knowledgeBase.id
+      : undefined;
 
 	const uploadVersionMutation = useMutation({
 		mutationFn: (file: File) =>
@@ -332,10 +337,15 @@ export function IngestDocumentDetailPage() {
                 }} 
               />
 					  </div>
-            {knowledgeBase && (
+            {knowledgeBaseName && (
               <div className="detail-page__document-id-box" style={{ background: 'transparent' }}>
                 <FolderOpenOutlined style={{ color: 'var(--detail-ink-secondary)' }} />
-                <span>{knowledgeBase.name} <span style={{ opacity: 0.5 }}>({knowledgeBase.id})</span></span>
+                <span>
+                  {knowledgeBaseName}
+                  {knowledgeBaseIdLabel && (
+                    <span style={{ opacity: 0.5 }}> ({knowledgeBaseIdLabel})</span>
+                  )}
+                </span>
               </div>
             )}
           </Space>
