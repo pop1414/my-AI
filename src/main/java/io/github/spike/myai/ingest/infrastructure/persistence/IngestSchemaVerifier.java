@@ -23,9 +23,10 @@ import org.springframework.stereotype.Component;
  *     <li>检查 document 主表上的身份列、latest projection 列、旧兼容镜像列与
  *         document version 事实表是否存在。</li>
  *     <li>检查迁移期兼容索引与 version 事实查询索引是否符合预期。</li>
+ *     <li>检查 latest projection maintenance 所依赖的数据库 function 是否存在。</li>
  * </ul>
  * latest projection maintenance 未来会下沉到数据库侧独立 module；这里的自检职责
- * 是把那条 seam 当前依赖的物理列与索引固定下来，避免应用层在 schema 漂移后继续启动。
+ * 是把那条 seam 当前依赖的物理列、索引与 function 固定下来，避免应用层在 schema 漂移后继续启动。
  * 校验失败时会打印详细的修复指导 SQL 并直接抛出异常阻止应用启动，从而避免在运行时出现难以排查的数据一致性问题。
  */
 @Component
@@ -37,6 +38,8 @@ public class IngestSchemaVerifier implements ApplicationRunner {
     private static final String VERSION_TABLE_NAME = "ingest_document_versions";
     private static final String LEGACY_UNIQUE_INDEX_NAME = "uk_ingest_documents_kb_file_hash";
     private static final String VERSION_FILE_HASH_INDEX_NAME = "idx_ingest_document_versions_file_hash";
+    private static final String APPEND_LATEST_VERSION_FUNCTION_NAME = "ingest_append_document_latest_version";
+    private static final String UPDATE_LATEST_PROCESSING_FUNCTION_NAME = "ingest_update_latest_document_version_processing";
 
     // 预期的索引定义 SQL，用于在日志中给出修复建议。
     private static final String EXPECTED_LEGACY_INDEX_SQL = """
@@ -131,6 +134,12 @@ public class IngestSchemaVerifier implements ApplicationRunner {
         verifyRequiredColumns(VERSION_TABLE_NAME, REQUIRED_VERSION_COLUMNS, "document version facts");
         verifyLegacyUniqueIndex();
         verifyVersionFileHashIndex();
+        verifyRequiredFunction(
+                APPEND_LATEST_VERSION_FUNCTION_NAME,
+                "append latest version through unified latest projection seam");
+        verifyRequiredFunction(
+                UPDATE_LATEST_PROCESSING_FUNCTION_NAME,
+                "advance latest processing state through unified latest projection seam");
         log.info("Ingest schema verification passed. tables={},{}", DOCUMENT_TABLE_NAME, VERSION_TABLE_NAME);
     }
 
@@ -217,6 +226,31 @@ public class IngestSchemaVerifier implements ApplicationRunner {
             fail(
                     "ingest schema check failed: version file_hash index mismatch: " + indexDef,
                     buildVersionFileHashIndexRepairSuggestion());
+        }
+    }
+
+    /**
+     * 校验 latest projection maintenance function 是否存在。
+     */
+    private void verifyRequiredFunction(String functionName, String purpose) {
+        String actualFunction = jdbcTemplate.query(
+                """
+                        SELECT routine_name
+                        FROM information_schema.routines
+                        WHERE specific_schema = 'public'
+                          AND routine_name = ?
+                          AND routine_type = 'FUNCTION'
+                        """,
+                rs -> rs.next() ? rs.getString(1) : null,
+                functionName);
+        if (actualFunction == null || actualFunction.isBlank()) {
+            fail(
+                    "ingest schema check failed: required latest projection function is missing for "
+                            + purpose + ": " + functionName,
+                    """
+                            -- 参考修复：确认 Flyway V7 已执行
+                            -- 缺失 function：%s
+                            """.formatted(functionName));
         }
     }
 

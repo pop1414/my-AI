@@ -38,12 +38,12 @@ export function QaTurn({ turn, activeReferenceKey, onReferenceSelect }: QaTurnPr
 					icon={<RobotOutlined />}
 				/>
 				<div className="qa-bubble qa-bubble--assistant">
-					{/* AI Actions Timeline */}
+					{/* AI Actions Timeline Indicators (Dots only) */}
 					<div className="qa-timeline-pills">
-						<AiTimelinePill stage="thinking" label="Thinking" />
-						<AiTimelinePill stage="grep" label="Searching Vector DB" />
-						<AiTimelinePill stage="read" label="Reading Docs" />
-						<AiTimelinePill stage="edit" label="Generating" />
+						<AiTimelinePill stage="thinking" label="" />
+						<AiTimelinePill stage="grep" label="" />
+						<AiTimelinePill stage="read" label="" />
+						<AiTimelinePill stage="edit" label="" />
 					</div>
 
 					<div className="qa-bubble__content qa-bubble__content--answer">

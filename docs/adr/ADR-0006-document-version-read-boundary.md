@@ -48,6 +48,9 @@ Accepted
 - `ingest_documents.latest_version_number/latest_status/latest_filename/latest_version_origin_type` 是稳定业务语义，不是允许调用方随意拼接维护的偶然字段组合。
 - 应用层 caller 只表达“推进一个 document version”或“把某个 version 提升为 latest”；latest projection maintenance 应收敛为独立 module，而不是继续散落在多个 repository 分支里的双写 SQL。
 - 该 module 的 seam 优先放在数据库侧，由单一适配器维护 latest projection 与迁移期旧兼容镜像；可接受的实现形态包括统一 SQL function/procedure，或仅负责从 `ingest_document_versions` 回写 `ingest_documents` latest projection 的 trigger。
+- 当前首批实现选择统一 SQL function seam：
+  `ingest_append_document_latest_version(...)` 负责追加新 latest version，
+  `ingest_update_latest_document_version_processing(...)` 负责推进 latest version 的处理状态。
 - 在该 module 落地前，`ingest_documents.latest_*` 仍视为从版本事实导出的 latest projection；新增状态推进、回退、重处理、删除逻辑时，必须同步审查主表 latest projection、版本表当前 latest 行和旧兼容镜像是否仍满足同一组 invariant。
 - 列表读取、详情读取、版本历史读取等读路径继续把 latest projection 当作稳定读 seam，不因 maintenance module 的落地而改变读契约。
 

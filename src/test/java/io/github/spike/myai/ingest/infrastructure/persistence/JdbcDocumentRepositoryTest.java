@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -41,7 +42,7 @@ class JdbcDocumentRepositoryTest {
     }
 
     @Test
-    @DisplayName("save 与 markIndexed 应同时维护 latest projection 与 version processing_metadata")
+    @DisplayName("save 与 markIndexed 应通过 latest projection function 维护 processing_metadata")
     void processingMetadataMethods_shouldIncludeJsonbColumn() {
         JdbcTemplate jdbcTemplate = Mockito.mock(JdbcTemplate.class);
         JdbcDocumentRepository repository = new JdbcDocumentRepository(jdbcTemplate);
@@ -69,8 +70,22 @@ class JdbcDocumentRepositoryTest {
                 now);
 
         repository.save(document);
-        when(jdbcTemplate.update(contains("SET status = 'INDEXED'"), any(), any(), eq(WorkspaceConstants.DEFAULT_WORKSPACE_ID), eq("doc-meta-1"), eq("INGESTING")))
-                .thenReturn(1);
+        when(jdbcTemplate.queryForObject(
+                        contains("SELECT ingest_update_latest_document_version_processing"),
+                        eq(Boolean.class),
+                        eq(WorkspaceConstants.DEFAULT_WORKSPACE_ID),
+                        eq("doc-meta-1"),
+                        eq("INGESTING"),
+                        eq("INDEXED"),
+                        isNull(),
+                        eq(0),
+                        isNull(),
+                        eq("{\"schema_version\":\"v1\"}"),
+                        isNull(),
+                        isNull(),
+                        isNull(),
+                        any()))
+                .thenReturn(Boolean.TRUE);
         repository.markIndexed(
                 WorkspaceConstants.DEFAULT_WORKSPACE_ID,
                 new DocumentId("doc-meta-1"),
@@ -78,15 +93,17 @@ class JdbcDocumentRepositoryTest {
                 "{\"schema_version\":\"v1\"}",
                 now);
 
-        ArgumentCaptor<String> sqlCaptor = ArgumentCaptor.forClass(String.class);
-        verify(jdbcTemplate, times(4)).update(sqlCaptor.capture(), any(Object[].class));
-        assertTrue(sqlCaptor.getAllValues().get(0).contains("processing_metadata"));
-        assertTrue(sqlCaptor.getAllValues().get(0).contains("CAST(? AS JSONB)"));
-        assertTrue(sqlCaptor.getAllValues().get(0).contains("latest_version_number"));
-        assertTrue(sqlCaptor.getAllValues().get(1).contains("ingest_document_versions"));
-        assertTrue(sqlCaptor.getAllValues().get(1).contains("created_by_user_id"));
-        assertTrue(sqlCaptor.getAllValues().get(2).contains("processing_metadata = CAST(? AS JSONB)"));
-        assertTrue(sqlCaptor.getAllValues().get(3).contains("ingest_document_versions"));
+        ArgumentCaptor<String> upsertSqlCaptor = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<String> functionSqlCaptor = ArgumentCaptor.forClass(String.class);
+        verify(jdbcTemplate, times(2)).update(upsertSqlCaptor.capture(), any(Object[].class));
+        verify(jdbcTemplate).queryForObject(functionSqlCaptor.capture(), eq(Boolean.class), any(Object[].class));
+        assertTrue(upsertSqlCaptor.getAllValues().get(0).contains("processing_metadata"));
+        assertTrue(upsertSqlCaptor.getAllValues().get(0).contains("CAST(? AS JSONB)"));
+        assertTrue(upsertSqlCaptor.getAllValues().get(0).contains("latest_version_number"));
+        assertTrue(upsertSqlCaptor.getAllValues().get(1).contains("ingest_document_versions"));
+        assertTrue(upsertSqlCaptor.getAllValues().get(1).contains("created_by_user_id"));
+        assertTrue(functionSqlCaptor.getValue().contains("ingest_update_latest_document_version_processing"));
+        assertTrue(functionSqlCaptor.getValue().contains("CAST(? AS JSONB)"));
     }
 
     @Test
@@ -133,7 +150,7 @@ class JdbcDocumentRepositoryTest {
     }
 
     @Test
-    @DisplayName("appendRollbackVersion 后失败推进不应改写 latest 版本号与来源")
+    @DisplayName("appendRollbackVersion 与 markFailed 应收口到 latest projection function")
     void appendRollbackVersionAndMarkFailed_shouldKeepLatestVersionProjection() {
         JdbcTemplate jdbcTemplate = Mockito.mock(JdbcTemplate.class);
         JdbcDocumentRepository repository = new JdbcDocumentRepository(jdbcTemplate);
@@ -162,33 +179,50 @@ class JdbcDocumentRepositoryTest {
                 now,
                 now);
 
-        when(jdbcTemplate.update(
-                        contains("latest_version_origin_type = ?"),
+        when(jdbcTemplate.queryForObject(
+                        contains("SELECT ingest_append_document_latest_version"),
+                        eq(Boolean.class),
+                        eq(WorkspaceConstants.DEFAULT_WORKSPACE_ID),
+                        eq("doc-rollback"),
+                        eq(3),
+                        eq(4),
+                        eq("ROLLBACK"),
+                        eq(1),
                         eq("hash-v1"),
                         eq("v1.pdf"),
                         eq(128L),
-                        eq(4),
-                        eq("v1.pdf"),
-                        eq("ROLLBACK"),
+                        eq("UPLOADED"),
+                        isNull(),
+                        eq(0),
                         eq(3),
+                        isNull(),
+                        isNull(),
+                        isNull(),
+                        isNull(),
+                        eq(0),
+                        isNull(),
                         eq("version-4-v1"),
+                        isNull(),
+                        isNull(),
                         any(),
+                        any()))
+                .thenReturn(Boolean.TRUE);
+        when(jdbcTemplate.queryForObject(
+                        contains("SELECT ingest_update_latest_document_version_processing"),
+                        eq(Boolean.class),
                         eq(WorkspaceConstants.DEFAULT_WORKSPACE_ID),
                         eq("doc-rollback"),
-                        eq(3)))
-                .thenReturn(1);
-        when(jdbcTemplate.update(
-                        contains("SET status = 'FAILED'"),
+                        eq("UPLOADED"),
+                        eq("FAILED"),
                         eq("parse failed"),
+                        eq(0),
+                        isNull(),
                         eq("{}"),
                         eq("PARSE_FAILED"),
                         eq("parse failed"),
                         any(),
-                        any(),
-                        eq(WorkspaceConstants.DEFAULT_WORKSPACE_ID),
-                        eq("doc-rollback"),
-                        eq("UPLOADED")))
-                .thenReturn(1);
+                        any()))
+                .thenReturn(Boolean.TRUE);
 
         assertTrue(repository.appendRollbackVersion(
                 WorkspaceConstants.DEFAULT_WORKSPACE_ID,
@@ -208,11 +242,10 @@ class JdbcDocumentRepositoryTest {
                 now));
 
         ArgumentCaptor<String> sqlCaptor = ArgumentCaptor.forClass(String.class);
-        verify(jdbcTemplate, times(4)).update(sqlCaptor.capture(), any(Object[].class));
-        assertTrue(sqlCaptor.getAllValues().get(0).contains("latest_version_number = ?"));
-        assertTrue(sqlCaptor.getAllValues().get(0).contains("latest_version_origin_type = ?"));
-        assertFalse(sqlCaptor.getAllValues().get(2).contains("latest_version_number = ?"));
-        assertFalse(sqlCaptor.getAllValues().get(2).contains("latest_version_origin_type = ?"));
+        verify(jdbcTemplate, times(2)).queryForObject(sqlCaptor.capture(), eq(Boolean.class), any(Object[].class));
+        assertTrue(sqlCaptor.getAllValues().get(0).contains("ingest_append_document_latest_version"));
+        assertTrue(sqlCaptor.getAllValues().get(1).contains("ingest_update_latest_document_version_processing"));
+        assertFalse(sqlCaptor.getAllValues().get(1).contains("ingest_append_document_latest_version"));
     }
 
     @Test

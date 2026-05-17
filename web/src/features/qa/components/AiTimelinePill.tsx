@@ -15,6 +15,7 @@ const stageColorMap: Record<AiStage, string> = {
 };
 
 export function AiTimelinePill({ stage, label }: AiTimelinePillProps) {
+	const isDot = !label;
 	return (
 		<Tag
 			bordered={false}
@@ -26,8 +27,13 @@ export function AiTimelinePill({ stage, label }: AiTimelinePillProps) {
 				fontWeight: 600,
 				textTransform: "uppercase",
 				letterSpacing: "0.08em",
-				padding: "2px 10px",
+				padding: isDot ? 0 : "2px 10px",
 				margin: 0,
+				width: isDot ? 8 : "auto",
+				height: isDot ? 8 : "auto",
+				minWidth: isDot ? 8 : "auto",
+				display: "inline-block",
+				verticalAlign: "middle"
 			}}
 		>
 			{label}
