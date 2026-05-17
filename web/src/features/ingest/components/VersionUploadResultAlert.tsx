@@ -1,6 +1,7 @@
 import { Alert, Button, Space, Typography } from "antd";
 import { Link, type To } from "react-router-dom";
 import type { ReactNode } from "react";
+import { HistoryOutlined, MessageOutlined, CheckCircleFilled, InfoCircleFilled } from "@ant-design/icons";
 import type { DocumentVersionUploadResponse } from "../../../shared/api/ingestApi";
 
 interface VersionUploadResultAlertProps {
@@ -16,28 +17,23 @@ function RouterButtonLink({
 	to,
 	tone = "default",
 	size,
-	block,
-	testId,
 }: {
 	children: ReactNode;
 	icon?: ReactNode;
 	to: To;
 	tone?: "default" | "primary" | "text" | "return";
 	size?: "small";
-	block?: boolean;
-	testId?: string;
 }) {
 	const className = [
 		"detail-page__button-link",
 		`detail-page__button-link--${tone}`,
 		size ? `detail-page__button-link--${size}` : "",
-		block ? "detail-page__button-link--block" : "",
 	]
 		.filter(Boolean)
 		.join(" ");
 
 	return (
-		<Link className={className} data-testid={testId} to={to}>
+		<Link className={className} to={to}>
 			{icon}
 			<span>{children}</span>
 		</Link>
@@ -54,58 +50,73 @@ export function VersionUploadResultAlert({
 		result.versionNumber ??
 		result.reusedLatestVersionNumber ??
 		result.latestVersionNumber;
-	const title = result.versionCreated
-		? `已创建新版本 v${visibleVersionNumber}`
-		: "未创建新版本";
-	const description = result.versionCreated
-		? `上一版本为 v${result.previousVersionNumber}，当前详情页已切换到最新版本。`
-		: `上传文件与当前最新版本内容一致，当前仍停留在 v${visibleVersionNumber}。`;
+	
+  const title = result.versionCreated
+		? "新版本上传成功"
+		: "内容未变更";
+	
+  const description = result.versionCreated
+		? `系统已接收新文件并成功创建 v${visibleVersionNumber}。详情页已同步切换。`
+		: "检测到上传内容与当前最新版本完全一致，系统未创建冗余版本。";
 
 	return (
 		<Alert
-			className="detail-page__result-alert"
-			data-result-kind={result.versionCreated ? "success" : "info"}
-			data-testid="version-upload-result"
-			aria-live="polite"
-			aria-atomic="true"
+			className={`detail-alert ${result.versionCreated ? 'detail-alert--success' : 'detail-alert--info'}`}
 			type={result.versionCreated ? "success" : "info"}
 			showIcon
-			message={title}
+      icon={result.versionCreated ? <CheckCircleFilled style={{ color: 'var(--detail-accent)' }} /> : <InfoCircleFilled style={{ color: '#1890ff' }} />}
+			message={<span style={{ fontWeight: 700, fontSize: '15px' }}>{title}</span>}
 			description={
-				<div className="detail-page__result-body">
-					<Typography.Paragraph>{description}</Typography.Paragraph>
-					<div className="detail-page__result-facts">
+				<div className="detail-page__result-body" style={{ marginTop: 12 }}>
+					<Typography.Paragraph style={{ marginBottom: 16, color: 'var(--detail-ink-secondary)' }}>
+						{description}
+					</Typography.Paragraph>
+					
+          <div className="detail-stats-grid" style={{ marginBottom: 0, gap: '16px' }}>
 						{filename && (
-							<div style={{ marginBottom: 4 }}>
-								<Typography.Text strong>文件名：</Typography.Text>
-								<span className="ingest-filename">{filename}</span>
+							<div className="detail-stat-item">
+								<span className="detail-stat-label">关联文件</span>
+								<span className="detail-stat-value" style={{ fontSize: '13px' }}>{filename}</span>
 							</div>
 						)}
-						<div><Typography.Text type="secondary">documentId：</Typography.Text>{result.documentId}</div>
-						<div><Typography.Text type="secondary">latestVersionNumber：</Typography.Text>v{result.latestVersionNumber}</div>
-						<div><Typography.Text type="secondary">previousVersionNumber：</Typography.Text>{result.previousVersionNumber ? `v${result.previousVersionNumber}` : "-"}</div>
-						<div><Typography.Text type="secondary">status：</Typography.Text>{result.status}</div>
-						<div><Typography.Text type="secondary">askableVersionNumber：</Typography.Text>{result.askableVersionNumber ? `v${result.askableVersionNumber}` : "暂无"}</div>
+						<div className="detail-stat-item">
+							<span className="detail-stat-label">版本状态</span>
+							<span className="detail-stat-value" style={{ fontSize: '13px' }}>v{visibleVersionNumber} ({result.status})</span>
+						</div>
+						<div className="detail-stat-item">
+							<span className="detail-stat-label">问答基线</span>
+							<span className="detail-stat-value" style={{ fontSize: '13px' }}>
+                {result.askableVersionNumber ? `v${result.askableVersionNumber}` : "处理中..."}
+              </span>
+						</div>
 					</div>
-					{!result.canAskNow && (
-						<Typography.Text type="secondary">
-							当前暂无可问答版本，请等待处理完成。
-						</Typography.Text>
+
+					{!result.canAskNow && result.versionCreated && (
+						<div style={{ marginTop: 16, padding: '12px', background: '#e6f7ff', border: '1px solid #91d5ff', borderRadius: '6px' }}>
+							<Typography.Text type="secondary" style={{ fontSize: '13px' }}>
+								正在处理新版本，请耐心等待解析完成后进行问答。
+							</Typography.Text>
+						</div>
 					)}
 				</div>
 			}
 			action={
-				<Space wrap>
-					<Button size="small" onClick={onShowHistory}>
-						查看版本历史
+				<Space wrap style={{ marginTop: 8 }}>
+					<Button 
+            size="small" 
+            icon={<HistoryOutlined />} 
+            onClick={onShowHistory}
+            style={{ borderRadius: '4px' }}
+          >
+						查看历史
 					</Button>
 					{result.canAskNow && (
-						<RouterButtonLink size="small" tone="primary" to="/qa">
-							去问答
+						<RouterButtonLink size="small" tone="primary" to="/qa" icon={<MessageOutlined />}>
+							立即问答
 						</RouterButtonLink>
 					)}
-					<Button size="small" type="text" onClick={onClose}>
-						关闭提示
+					<Button size="small" type="text" onClick={onClose} style={{ color: 'var(--detail-ink-faint)' }}>
+						关闭
 					</Button>
 				</Space>
 			}

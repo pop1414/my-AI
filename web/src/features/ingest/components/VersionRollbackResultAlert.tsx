@@ -1,6 +1,7 @@
 import { Alert, Button, Space, Typography } from "antd";
 import { Link, type To } from "react-router-dom";
 import type { ReactNode } from "react";
+import { HistoryOutlined, MessageOutlined, CheckCircleOutlined } from "@ant-design/icons";
 import type { DocumentVersionRollbackResponse } from "../../../shared/api/ingestApi";
 
 interface VersionRollbackResultAlertProps {
@@ -16,28 +17,23 @@ function RouterButtonLink({
 	to,
 	tone = "default",
 	size,
-	block,
-	testId,
 }: {
 	children: ReactNode;
 	icon?: ReactNode;
 	to: To;
 	tone?: "default" | "primary" | "text" | "return";
 	size?: "small";
-	block?: boolean;
-	testId?: string;
 }) {
 	const className = [
 		"detail-page__button-link",
 		`detail-page__button-link--${tone}`,
 		size ? `detail-page__button-link--${size}` : "",
-		block ? "detail-page__button-link--block" : "",
 	]
 		.filter(Boolean)
 		.join(" ");
 
 	return (
-		<Link className={className} data-testid={testId} to={to}>
+		<Link className={className} to={to}>
 			{icon}
 			<span>{children}</span>
 		</Link>
@@ -56,55 +52,61 @@ export function VersionRollbackResultAlert({
 
 	return (
 		<Alert
-			className="detail-page__result-alert"
-			data-result-kind="success"
-			data-testid="version-rollback-result"
-			aria-live="polite"
-			aria-atomic="true"
+			className="detail-alert detail-alert--success"
 			type="success"
 			showIcon
-			message={`已回退为新的最新版本 v${result.latestVersionNumber}`}
+      icon={<CheckCircleOutlined style={{ color: 'var(--detail-accent)' }} />}
+			message={<span style={{ fontWeight: 700, fontSize: '15px' }}>版本回退成功</span>}
 			description={
-				<div className="detail-page__result-body">
-					<Typography.Paragraph>
+				<div className="detail-page__result-body" style={{ marginTop: 12 }}>
+					<Typography.Paragraph style={{ marginBottom: 16, color: 'var(--detail-ink-secondary)' }}>
 						已基于历史版本 v{result.rollbackFromVersionNumber} 创建回退版本
-						v{result.versionNumber}，页面已切换到新的最新版本。
+						<Typography.Text strong> v{result.versionNumber} </Typography.Text>，页面已自动切换至该版本。
 					</Typography.Paragraph>
-					<div className="detail-page__result-facts">
+					
+          <div className="detail-stats-grid" style={{ marginBottom: 0, gap: '16px' }}>
 						{filename && (
-							<div style={{ marginBottom: 4 }}>
-								<Typography.Text strong>文件名：</Typography.Text>
-								<span className="ingest-filename">{filename}</span>
+							<div className="detail-stat-item">
+								<span className="detail-stat-label">关联文件</span>
+								<span className="detail-stat-value" style={{ fontSize: '13px' }}>{filename}</span>
 							</div>
 						)}
-						<div><Typography.Text type="secondary">documentId：</Typography.Text>{result.documentId}</div>
-						<div><Typography.Text type="secondary">latestVersionNumber：</Typography.Text>v{result.latestVersionNumber}</div>
-						<div><Typography.Text type="secondary">rollbackFromVersionNumber：</Typography.Text>v{result.rollbackFromVersionNumber}</div>
-						<div><Typography.Text type="secondary">status：</Typography.Text>{result.status}</div>
-						<div><Typography.Text type="secondary">askableVersionNumber：</Typography.Text>{askableText}</div>
+						<div className="detail-stat-item">
+							<span className="detail-stat-label">新版本号</span>
+							<span className="detail-stat-value" style={{ fontSize: '13px' }}>v{result.versionNumber}</span>
+						</div>
+						<div className="detail-stat-item">
+							<span className="detail-stat-label">问答基线</span>
+							<span className="detail-stat-value" style={{ fontSize: '13px' }}>{askableText}</span>
+						</div>
 					</div>
+
 					{result.status !== "INDEXED" && (
-						<Alert
-							type="warning"
-							showIcon
-							message={`新最新版本 v${result.latestVersionNumber} 尚未 INDEXED`}
-							description={`当前问答暂时仍使用最近一个已 INDEXED 的版本：${askableText}。`}
-						/>
+						<div style={{ marginTop: 16, padding: '12px', background: '#fffbe6', border: '1px solid #ffe58f', borderRadius: '6px' }}>
+							<Typography.Text type="warning" style={{ fontSize: '13px' }}>
+								注意：新生成的 v{result.versionNumber} 尚未完成索引，问答系统暂时仍锁定在 {askableText}。
+							</Typography.Text>
+						</div>
 					)}
 				</div>
 			}
 			action={
-				<Space wrap>
-					<Button size="small" onClick={onShowHistory}>
-						查看版本历史
+				<Space wrap style={{ marginTop: 8 }}>
+					<Button 
+            size="small" 
+            icon={<HistoryOutlined />} 
+            onClick={onShowHistory}
+            style={{ borderRadius: '4px' }}
+          >
+						查看历史
 					</Button>
 					{result.canAskNow && (
-						<RouterButtonLink size="small" tone="primary" to="/qa">
-							去问答
+						<RouterButtonLink size="small" tone="primary" to="/qa" icon={<MessageOutlined />}>
+							立即问答
 						</RouterButtonLink>
 					)}
-					<Button size="small" type="text" onClick={onClose}>
-						关闭提示
+					<Button size="small" type="text" onClick={onClose} style={{ color: 'var(--detail-ink-faint)' }}>
+						关闭
 					</Button>
 				</Space>
 			}

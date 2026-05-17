@@ -7,6 +7,7 @@ import {
 	UploadOutlined,
   CopyOutlined,
   HistoryOutlined,
+  BookOutlined,
 } from "@ant-design/icons";
 import {
 	Alert,
@@ -15,7 +16,6 @@ import {
 	Result,
 	Skeleton,
 	Space,
-	Typography,
 	Upload,
   message,
 } from "antd";
@@ -390,29 +390,37 @@ export function IngestDocumentDetailPage() {
 						</div>
 
 						<div className="detail-action-bar">
-							{canUploadNewVersion ? (
+              <Button
+                type="primary"
+                size="large"
+                className="detail-btn-emerald"
+                icon={<BookOutlined />}
+                onClick={() => navigate(`/ingest/documents/${encodeURIComponent(documentId)}/versions/${viewingVersion.versionNumber}/read`)}
+              >
+                阅读正文
+              </Button>
+
+							{canUploadNewVersion && (
 								<Button
-									type="primary"
                   size="large"
-                  className="detail-btn-emerald"
 									icon={<UploadOutlined />}
 									onClick={() => setUploadModalOpen(true)}
 								>
-									发布新版本
+									上传新版本
 								</Button>
-							) : !isViewingLatest && (
-                <Button
-                  type="primary"
-                  size="large"
-                  className="detail-btn-emerald"
-                  icon={<ArrowLeftOutlined />}
-                  onClick={() => setSearchParams({})}
-                >
-                  切回最新版本
-                </Button>
-              )}
+							)}
 							
-							{!isViewingLatest && canRollbackVersion(viewingVersion, latestVersion) && (
+							{!isViewingLatest && (
+								<Button
+                  size="large"
+									icon={<ArrowLeftOutlined />}
+									onClick={() => setSearchParams({})}
+								>
+									切回最新版本
+								</Button>
+							)}
+
+              {!isViewingLatest && canRollbackVersion(viewingVersion, latestVersion) && (
 								<Button
                   size="large"
 									icon={<RollbackOutlined />}
@@ -427,7 +435,7 @@ export function IngestDocumentDetailPage() {
                 size="large"
                 icon={<DeleteOutlined />} 
                 onClick={() => setDeleteModalOpen(true)}
-                style={{ marginLeft: 'auto', borderRadius: '6px' }}
+                style={{ borderRadius: '6px' }}
               >
                 删除资产
               </Button>
