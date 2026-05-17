@@ -4,16 +4,33 @@ import {
 	RetweetOutlined,
 	ShrinkOutlined,
 } from "@ant-design/icons";
-import { Button, Segmented, Select, Space, Tag, Tooltip } from "antd";
-import { useMemo } from "react";
+import { Button, Segmented, Select, Space, Tag, Tooltip, Skeleton, Result } from "antd";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
-import {
-	buildDocumentDetailMockData,
-	type PrototypeVersion,
-} from "./documentDetailMockData";
+import { useQuery } from "@tanstack/react-query";
+import { getDocumentVersionHistory, type DocumentVersionHistoryItem } from "../../../shared/api/ingestApi";
+import { ApiErrorAlert } from "../../../shared/ui/ApiErrorAlert";
 import "./IngestDocumentVersionReadPage.css";
 
 type ReadMode = "single" | "compare";
+
+function buildContentMarkdown(version: DocumentVersionHistoryItem): string {
+  // 由于目前后端没有提供获取文档全文的接口，我们使用真实的版本元数据来组装占位文本
+	return `
+# ${version.filename}
+## 第一章：总则
+当前正在阅读 **v${version.versionNumber}**。本系统通过 RAG 技术实现了对该文档的深度解析。这个阅读界面旨在提供沉浸式的长内容查阅体验，移除了所有非必要的管理干扰。
+
+## 第二章：关键条款
+> 注意：此版本更新于 ${version.updatedAt}，当前状态为 \`${version.status}\`。
+
+1. **版本溯源**：本版本属于 \`${version.versionOriginType}\` 类型。
+2. **处理逻辑**：系统已对正文完成了分块处理，目前可支持语义检索与引用溯源。
+3. **内容完整性**：对于 MD格式的渲染，我们保持了原汁原样的层级结构，确保阅读时的空间感与逻辑感。
+
+## 第三章：结语
+如果您在阅读过程中发现任何解析错误，请使用详情页的“重处理”功能。
+  `;
+}
 
 function ReaderPane({
 	version,
@@ -22,7 +39,7 @@ function ReaderPane({
   onVersionChange,
   versionOptions
 }: {
-	version: PrototypeVersion;
+	version: DocumentVersionHistoryItem;
 	isLatest: boolean;
 	isAskable: boolean;
   onVersionChange: (v: number) => void;
@@ -49,20 +66,7 @@ function ReaderPane({
 			</div>
 			<div className="read-pane__scroller">
 				<article className="read-content">
-          <h1>{version.filename}</h1>
-          <section dangerouslySetInnerHTML={{ __html: `
-            <h2>第一章：总则</h2>
-            <p>当前正在阅读 <strong>v${version.versionNumber}</strong>。本系统通过 RAG 技术实现了对该文档的深度解析。这个阅读界面旨在提供沉浸式的长内容查阅体验，移除了所有非必要的管理干扰。</p>
-            <h2>第二章：关键条款</h2>
-            <blockquote>注意：此版本创建于 ${version.createdAt}，当前状态为 ${version.status}。</blockquote>
-            <ul>
-              <li><strong>版本溯源</strong>：本版本属于 ${version.versionOriginType} 类型。</li>
-              <li><strong>处理逻辑</strong>：系统已对正文完成了分块处理，目前可支持语义检索与引用溯源。</li>
-              <li><strong>内容完整性</strong>：对于 MD格式的渲染，我们保持了原汁原样的层级结构，确保阅读时的空间感与逻辑感。</li>
-            </ul>
-            <h2>第三章：结语</h2>
-            <p>如果您在阅读过程中发现任何解析错误，请使用详情页的“重处理”功能。</p>
-          ` }} />
+          <section dangerouslySetInnerHTML={{ __html: buildContentMarkdown(version).replace(/\n/g, '<br/>').replace(/# (.*?)<br\/>/, '<h1>$1</h1>').replace(/## (.*?)<br\/>/g, '<h2>$1</h2>').replace(/> (.*?)<br\/>/g, '<blockquote>$1</blockquote>').replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>').replace(/`([^`]+)`/g, '<code>$1</code>') }} />
 				</article>
 			</div>
 		</div>
@@ -71,26 +75,35 @@ function ReaderPane({
 
 export function IngestDocumentVersionReadPage() {
 	const navigate = useNavigate();
-	const { documentId = "doc-prototype-001", versionNumber = "4" } = useParams<{
+	const { documentId = "", versionNumber = "" } = useParams<{
 		documentId?: string;
 		versionNumber?: string;
 	}>();
 	const [searchParams] = useSearchParams();
 
 	const mode = (searchParams.get("mode") as ReadMode | null) ?? "single";
-	const document = useMemo(() => buildDocumentDetailMockData(documentId), [documentId]);
+	
+  const historyQuery = useQuery({
+		queryKey: ["document-version-history", documentId],
+		queryFn: () => getDocumentVersionHistory(documentId),
+		enabled: documentId.length > 0,
+	});
+
+  const versions = historyQuery.data?.versions ?? [];
+  const latestVersion = versions.find((v) => v.isLatestVersion);
+
 	const leftVersionNumber = Number(versionNumber);
 	const rightVersionNumber = Number(
 		searchParams.get("right") ??
-			(leftVersionNumber === document.latestVersionNumber
-				? (document.versions[1]?.versionNumber ?? leftVersionNumber)
-				: document.latestVersionNumber)
+			(leftVersionNumber === latestVersion?.versionNumber
+				? (versions[1]?.versionNumber ?? leftVersionNumber)
+				: latestVersion?.versionNumber)
 	);
 
-	const leftVersion = document.versions.find((item) => item.versionNumber === leftVersionNumber) ?? document.versions[0]!;
-	const rightVersion = document.versions.find((item) => item.versionNumber === rightVersionNumber) ?? document.versions[0]!;
+	const leftVersion = versions.find((item) => item.versionNumber === leftVersionNumber) ?? versions[0];
+	const rightVersion = versions.find((item) => item.versionNumber === rightVersionNumber) ?? versions[0];
 
-	const versionOptions = document.versions.map((v) => ({
+	const versionOptions = versions.map((v) => ({
 		label: `v${v.versionNumber} (${v.status})`,
 		value: v.versionNumber,
 	}));
@@ -106,6 +119,36 @@ export function IngestDocumentVersionReadPage() {
 
     navigate(`/ingest/documents/${encodeURIComponent(documentId)}/versions/${newLeft}/read?${params.toString()}`);
 	};
+
+  if (historyQuery.isLoading) {
+		return (
+			<div className="read-page" style={{ padding: 48 }}>
+				<Skeleton active paragraph={{ rows: 10 }} />
+			</div>
+		);
+	}
+
+  if (historyQuery.isError) {
+		return (
+			<div className="read-page" style={{ padding: 48 }}>
+				<ApiErrorAlert error={historyQuery.error} />
+			</div>
+		);
+	}
+
+  if (!leftVersion) {
+		return (
+			<div className="read-page" style={{ padding: 48 }}>
+				<Result
+					status="info"
+					title="未找到可阅读的版本内容"
+					extra={
+						<Button onClick={() => navigate(`/ingest/documents/${encodeURIComponent(documentId)}`)}>返回详情页</Button>
+					}
+				/>
+			</div>
+		);
+	}
 
 	return (
 		<div className="read-page">
@@ -147,16 +190,16 @@ export function IngestDocumentVersionReadPage() {
 			<main className={`read-viewport ${mode === "compare" ? "is-compare" : ""}`}>
 				<ReaderPane
 					version={leftVersion}
-					isLatest={leftVersion.versionNumber === document.latestVersionNumber}
-					isAskable={leftVersion.versionNumber === document.askableVersionNumber}
+					isLatest={leftVersion.isLatestVersion}
+					isAskable={leftVersion.isAskableVersion}
           versionOptions={versionOptions}
           onVersionChange={(v) => updateParams({ left: v })}
 				/>
-				{mode === "compare" && (
+				{mode === "compare" && rightVersion && (
 					<ReaderPane
 						version={rightVersion}
-						isLatest={rightVersion.versionNumber === document.latestVersionNumber}
-						isAskable={rightVersion.versionNumber === document.askableVersionNumber}
+						isLatest={rightVersion.isLatestVersion}
+						isAskable={rightVersion.isAskableVersion}
             versionOptions={versionOptions}
             onVersionChange={(v) => updateParams({ right: v })}
 					/>
