@@ -1,7 +1,6 @@
 import {
 	ArrowLeftOutlined,
 	DeleteOutlined,
-	HistoryOutlined,
 	InboxOutlined,
 	ReloadOutlined,
 	RollbackOutlined,

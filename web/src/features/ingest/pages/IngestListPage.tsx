@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
 	Alert,
@@ -11,15 +11,10 @@ import {
 	Space,
 	Table,
 	Tag,
-	Tooltip,
 	Typography,
 } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import {
-	DeleteOutlined,
-	FileSearchOutlined,
-	FileSyncOutlined,
-	InfoCircleOutlined,
 	SearchOutlined,
 	ReloadOutlined,
 } from "@ant-design/icons";
@@ -33,9 +28,11 @@ import {
 import { listKnowledgeBases } from "../../../shared/api/knowledgeApi";
 import { ApiErrorAlert } from "../../../shared/ui/ApiErrorAlert";
 import { useAuth } from "../../../shared/auth/AuthContext";
-import { SafetyOutlined } from "@ant-design/icons";
-import { ConsoleLinkButton } from "../../../shared/ui/ConsoleLinkButton";
 import { DeleteDocumentConfirmModal } from "./DeleteDocumentConfirmModal";
+
+import { DocumentStatusTag } from "../components/DocumentStatusTag";
+import { DocumentTableActions } from "../components/DocumentTableActions";
+import { formatTime } from "../utils/formatters";
 
 const filterSchema = z.object({
 	kbId: z.string().optional(),
@@ -50,46 +47,6 @@ const DOCUMENT_STATUSES = [
 	"DELETING",
 	"DELETED",
 ];
-
-function statusColor(status: string): string {
-	switch (status) {
-		case "UPLOADED":
-		case "ACCEPTED":
-			return "blue";
-		case "INGESTING":
-			return "processing";
-		case "INDEXED":
-			return "success";
-		case "FAILED":
-			return "error";
-		case "DELETING":
-			return "warning";
-		case "DELETED":
-			return "default";
-		default:
-			return "default";
-	}
-}
-
-function formatFileSize(bytes: number): string {
-	if (bytes < 1024) return `${bytes} B`;
-	if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-	return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
-
-function formatTime(iso: string): string {
-	try {
-		return new Date(iso).toLocaleString("zh-CN", {
-			year: "numeric",
-			month: "2-digit",
-			day: "2-digit",
-			hour: "2-digit",
-			minute: "2-digit",
-		});
-	} catch {
-		return iso;
-	}
-}
 
 function parsePositiveInteger(value: string | null, fallback: number): number {
 	const parsed = Number(value);
@@ -131,53 +88,6 @@ function buildReturnTo(locationSearch: string): string {
 	params.delete("deletedDocumentId");
 	const qs = params.toString();
 	return `/ingest/documents${qs ? `?${qs}` : ""}`;
-}
-
-function ActionTextLink({
-	to,
-	label,
-	icon,
-	variant = "default",
-}: {
-	to: string;
-	label: string;
-	icon: ReactNode;
-	variant?: "default" | "primary";
-}) {
-	return (
-		<ConsoleLinkButton
-			to={to}
-			variant={variant}
-			size="small"
-			className="console-table-action-link"
-			testId={`ingest-action-${label}`}
-		>
-			<span className="console-table-action-link__icon">{icon}</span>
-			<span>{label}</span>
-		</ConsoleLinkButton>
-	);
-}
-
-function ActionDangerButton({
-	label,
-	icon,
-	onClick,
-}: {
-	label: string;
-	icon: ReactNode;
-	onClick: () => void;
-}) {
-	return (
-		<Button
-			size="small"
-			className="console-action-button console-action-button--danger console-table-action-button"
-			onClick={onClick}
-			title={label}
-		>
-			<span className="console-table-action-link__icon">{icon}</span>
-			<span>{label}</span>
-		</Button>
-	);
 }
 
 export function IngestListPage() {
@@ -245,6 +155,7 @@ export function IngestListPage() {
 				})),
 		[knowledgeQuery.data],
 	);
+	
 	const onSubmit = () => {
 		const values = filterSchema.parse(form.getFieldsValue());
 		setSearchParams(
@@ -275,143 +186,67 @@ export function IngestListPage() {
 		{
 			title: "文档ID",
 			dataIndex: "documentId",
-			width: 200,
+			width: 180,
 			ellipsis: true,
 			render: (value: string) => (
-				<Tooltip title={value}>
-					<Typography.Text
-						copyable={{ text: value }}
-						style={{ fontSize: 12 }}
-					>
-						{value.length > 24 ? `${value.slice(0, 24)}…` : value}
-					</Typography.Text>
-				</Tooltip>
+				<Typography.Text
+					copyable={{ text: value }}
+					style={{ fontSize: 12, fontFamily: 'var(--console-font-mono)' }}
+				>
+					{value.length > 20 ? `${value.slice(0, 20)}…` : value}
+				</Typography.Text>
 			),
 		},
-		{ title: "知识库", dataIndex: "kbId", width: 160, ellipsis: true },
+		{ title: "知识库", dataIndex: "kbId", width: 140, ellipsis: true },
 		{
-			title: "最新文件名",
+			title: "文件名",
 			dataIndex: "filename",
-			width: 220,
+			width: 200,
 			ellipsis: true,
+			render: (val) => <span style={{ fontWeight: 500 }}>{val}</span>
 		},
 		{
-			title: "最新版本",
+			title: "版本",
 			dataIndex: "latestVersionNumber",
-			width: 120,
+			width: 100,
 			render: (_: number, record) => (
-				<Space size={4} wrap>
-					<Tag color="gold">v{record.latestVersionNumber}</Tag>
-					<Tag>{record.latestVersionOriginType}</Tag>
-				</Space>
+				<Tag bordered={false} color="orange" style={{ borderRadius: 4, fontSize: 12 }}>
+					v{record.latestVersionNumber}
+				</Tag>
 			),
-		},
-		{
-			title: "大小",
-			dataIndex: "fileSize",
-			width: 90,
-			render: (value: number) => formatFileSize(value),
 		},
 		{
 			title: "状态",
 			dataIndex: "status",
-			width: 120,
-			render: (value: string) => (
-				<Tag color={statusColor(value)}>{value}</Tag>
-			),
-		},
-		{
-			title: "失败原因",
-			dataIndex: "failureReason",
-			width: 160,
-			ellipsis: true,
-			render: (value?: string | null) =>
-				value ? (
-					<Tooltip title={value}>
-						<Typography.Text type="danger" style={{ fontSize: 12 }}>
-							{value.length > 20
-								? `${value.slice(0, 20)}…`
-								: value}
-						</Typography.Text>
-					</Tooltip>
-				) : (
-					"-"
-				),
-		},
-		{
-			title: "创建时间",
-			dataIndex: "createdAt",
-			width: 150,
-			render: (value: string) => formatTime(value),
+			width: 110,
+			render: (value: string) => <DocumentStatusTag status={value} />,
 		},
 		{
 			title: "更新时间",
 			dataIndex: "updatedAt",
 			width: 150,
-			render: (value: string) => formatTime(value),
+			render: (value: string) => (
+				<span style={{ fontSize: 12, color: 'var(--console-muted)' }}>
+					{formatTime(value)}
+				</span>
+			),
 		},
 		{
 			title: "操作",
 			key: "action",
-			width: 360,
-			render: (_, record) => {
-				const showChunksPreview = record.status === "INDEXED";
-				const showReprocess =
-					record.status === "FAILED" || record.status === "INDEXED";
-				const showDelete =
-					record.status !== "DELETED" && record.status !== "DELETING";
-
-				return (
-					<div className="console-table-action-group">
-						<Tooltip title="查看文档详情、版本与处理上下文">
-							<ActionTextLink
-								label="查看详情"
-								icon={<InfoCircleOutlined />}
-								to={`/ingest/documents/${encodeURIComponent(record.documentId)}?returnTo=${encodeURIComponent(returnTo)}`}
-								variant="primary"
-							/>
-						</Tooltip>
-						{showChunksPreview && (
-							<Tooltip title="查看文档切块结果与预览内容">
-								<ActionTextLink
-									label="分块预览"
-									icon={<FileSearchOutlined />}
-									to={`/ingest/documents/${encodeURIComponent(record.documentId)}/chunks-preview`}
-								/>
-							</Tooltip>
-						)}
-						{showReprocess && (
-							<Tooltip title="将当前文档重新送入处理流水线">
-								<ActionTextLink
-									label="重处理"
-									icon={<FileSyncOutlined />}
-									to={`/ingest/documents/${encodeURIComponent(record.documentId)}/reprocess`}
-								/>
-							</Tooltip>
-						)}
-						{showDelete && (
-							<Tooltip title="删除整个 document 资产及其版本">
-								<ActionDangerButton
-									label="删除"
-									icon={<DeleteOutlined />}
-									onClick={() => setDeleteTarget(record)}
-								/>
-							</Tooltip>
-						)}
-						{canAccessAdmin && (
-							<Tooltip title="配置该文档的成员访问权限">
-								<ActionTextLink
-									label="授权管理"
-									icon={<SafetyOutlined />}
-									to={`/admin/documents/${encodeURIComponent(record.documentId)}/grants`}
-								/>
-							</Tooltip>
-						)}
-					</div>
-				);
-			},
+			width: 320,
+			fixed: 'right',
+			render: (_, record) => (
+				<DocumentTableActions
+					record={record}
+					canAccessAdmin={canAccessAdmin}
+					returnTo={returnTo}
+					onDelete={setDeleteTarget}
+				/>
+			),
 		},
 	];
+
 
 	const dataSource = docListQuery.data?.items ?? [];
 	const total = docListQuery.data?.total ?? 0;

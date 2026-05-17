@@ -27,7 +27,7 @@ import { Link, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "../shared/auth/AuthContext";
 
 const { Header, Sider, Content } = Layout;
-const { Title, Text } = Typography;
+const { Title } = Typography;
 
 type MenuItem = Required<MenuProps>["items"][number];
 
@@ -251,12 +251,6 @@ export function ConsoleLayout() {
 	const showSidebar = menuItems.length > 0;
 	const routeMeta = resolveRouteMeta(location.pathname, location.search);
 
-	const roleColorMap: Record<string, string> = {
-		WORKSPACE_OWNER: "gold",
-		WORKSPACE_ADMIN: "blue",
-		WORKSPACE_MEMBER: "default",
-	};
-
 	const userMenuItems: MenuProps["items"] = [
 		{
 			key: "info",
@@ -271,31 +265,6 @@ export function ConsoleLayout() {
 			onClick: () => logout(),
 		},
 	];
-
-	const content = (
-		<>
-			<Breadcrumb
-				items={[{ title: "控制台" }, { title: routeMeta.moduleLabel }, { title: routeMeta.pageTitle }]}
-				style={{ marginBottom: 16 }}
-			/>
-			<Suspense
-				fallback={
-					<div
-						style={{
-							display: "flex",
-							justifyContent: "center",
-							alignItems: "center",
-							minHeight: 300,
-						}}
-					>
-						<Spin size="large" />
-					</div>
-				}
-			>
-				<Outlet />
-			</Suspense>
-		</>
-	);
 
 	return (
 		<>
