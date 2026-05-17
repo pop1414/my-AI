@@ -4,12 +4,8 @@ import {
 	Button,
 	Card,
 	Form,
-	Input,
 	Modal,
-	Select,
-	Space,
 	Table,
-	Tag,
 	Typography,
 	message,
 } from "antd";
@@ -33,6 +29,10 @@ import {
 	type ConsoleStateTone,
 } from "../../../shared/ui/console/ConsolePageFrame";
 
+import { KnowledgeBaseTableActions } from "../components/KnowledgeBaseTableActions";
+import { KnowledgeBaseForm } from "../components/KnowledgeBaseForm";
+import { KnowledgeBaseStatusTag } from "../components/KnowledgeBaseStatusTag";
+
 const { Text } = Typography;
 
 const knowledgeBaseCreateSchema = z.object({
@@ -46,103 +46,6 @@ const knowledgeBaseCreateSchema = z.object({
 });
 
 const knowledgeBaseUpdateSchema = knowledgeBaseCreateSchema;
-
-const columns = (
-	onEdit: (record: KnowledgeBase) => void,
-	canManageKnowledgeBases: boolean,
-): ColumnsType<KnowledgeBase> => [
-	{
-		title: "知识库 ID",
-		dataIndex: "id",
-		width: 240,
-		ellipsis: true,
-		render: (value: string) => (
-			<Typography.Text className="console-table-ellipsis" title={value}>
-				{value}
-			</Typography.Text>
-		),
-	},
-	{
-		title: "名称",
-		dataIndex: "name",
-		width: 180,
-		ellipsis: true,
-		render: (value: string) => (
-			<Typography.Text className="console-table-ellipsis" title={value}>
-				{value}
-			</Typography.Text>
-		),
-	},
-	{
-		title: "状态",
-		dataIndex: "status",
-		width: 120,
-		render: (value: KnowledgeBase["status"]) => (
-			<Tag
-				className={`console-pill ${
-					value === "ACTIVE"
-						? "console-pill--blue"
-						: "console-pill--neutral"
-				}`}
-			>
-				{value}
-			</Tag>
-		),
-	},
-	{ title: "已索引文档数", dataIndex: "indexedDocumentCount", width: 132 },
-	{
-		title: "描述",
-		dataIndex: "description",
-		width: 220,
-		ellipsis: true,
-		render: (value: string) =>
-			value ? (
-				<Typography.Text className="console-table-ellipsis" title={value}>
-					{value}
-				</Typography.Text>
-			) : (
-				"-"
-			),
-	},
-	{
-		title: "操作",
-		key: "action",
-		width: 240,
-		render: (_, record) => (
-			<Space>
-				{canManageKnowledgeBases && (
-					<Button
-						size="small"
-						className="console-action-button console-action-button--neutral"
-						onClick={() => onEdit(record)}
-					>
-						编辑
-					</Button>
-				)}
-				<ConsoleLinkButton
-					to={`/qa?kbId=${encodeURIComponent(record.id)}`}
-					variant="primary"
-					size="small"
-					disabled={record.status !== "ACTIVE"}
-					onClick={() => {
-						localStorage.setItem("myai:lastKbId", record.id);
-					}}
-				>
-					去问答
-				</ConsoleLinkButton>
-				{canManageKnowledgeBases && (
-					<ConsoleLinkButton
-						variant="default"
-						size="small"
-						to={`/admin/knowledge-bases/${encodeURIComponent(record.id)}/grants`}
-					>
-						授权管理
-					</ConsoleLinkButton>
-				)}
-			</Space>
-		),
-	},
-];
 
 function resolveCollectionTone(params: {
 	isLoading: boolean;
@@ -165,16 +68,8 @@ export function KnowledgePage() {
 	const queryClient = useQueryClient();
 	const { user } = useAuth();
 	const canManageKnowledgeBases = Boolean(user?.capabilities.canAccessAdmin);
-	const [createForm] = Form.useForm<{
-		name: string;
-		description?: string;
-		status: "ACTIVE" | "INACTIVE";
-	}>();
-	const [editForm] = Form.useForm<{
-		name: string;
-		description?: string;
-		status: "ACTIVE" | "INACTIVE";
-	}>();
+	const [createForm] = Form.useForm();
+	const [editForm] = Form.useForm();
 	const [editingKnowledgeBase, setEditingKnowledgeBase] =
 		useState<KnowledgeBase | null>(null);
 
@@ -182,6 +77,7 @@ export function KnowledgePage() {
 		queryKey: ["knowledge-bases"],
 		queryFn: listKnowledgeBases,
 	});
+
 	const createMutation = useMutation({
 		mutationFn: createKnowledgeBase,
 		onSuccess: () => {
@@ -190,6 +86,7 @@ export function KnowledgePage() {
 			message.success("知识库已创建");
 		},
 	});
+
 	const updateMutation = useMutation({
 		mutationFn: ({
 			kbId,
@@ -209,11 +106,9 @@ export function KnowledgePage() {
 		},
 	});
 
-	const onCreate = async () => {
-		const values = knowledgeBaseCreateSchema.parse(
-			createForm.getFieldsValue(),
-		);
-		await createMutation.mutateAsync(values);
+	const onCreate = async (values: any) => {
+		const parsed = knowledgeBaseCreateSchema.parse(values);
+		await createMutation.mutateAsync(parsed);
 	};
 
 	const onEdit = (record: KnowledgeBase) => {
@@ -225,14 +120,12 @@ export function KnowledgePage() {
 		});
 	};
 
-	const onUpdate = async () => {
-		if (!editingKnowledgeBase) {
-			return;
-		}
-		const values = knowledgeBaseUpdateSchema.parse(editForm.getFieldsValue());
+	const onUpdate = async (values: any) => {
+		if (!editingKnowledgeBase) return;
+		const parsed = knowledgeBaseUpdateSchema.parse(values);
 		await updateMutation.mutateAsync({
 			kbId: editingKnowledgeBase.id,
-			values,
+			values: parsed,
 		});
 	};
 
@@ -253,6 +146,64 @@ export function KnowledgePage() {
 		isError: knowledgeQuery.isError,
 		isEmpty: !knowledgeQuery.isLoading && !knowledgeQuery.isError && knowledgeBases.length === 0,
 	});
+
+	const columns: ColumnsType<KnowledgeBase> = [
+		{
+			title: "知识库 ID",
+			dataIndex: "id",
+			width: 200,
+			ellipsis: true,
+			render: (value: string) => (
+				<Typography.Text
+					copyable={{ text: value }}
+					style={{ fontSize: 12, fontFamily: 'var(--console-font-mono)' }}
+				>
+					{value}
+				</Typography.Text>
+			),
+		},
+		{
+			title: "名称",
+			dataIndex: "name",
+			width: 180,
+			ellipsis: true,
+			render: (val) => <span style={{ fontWeight: 500 }}>{val}</span>
+		},
+		{
+			title: "状态",
+			dataIndex: "status",
+			width: 100,
+			render: (value: KnowledgeBase["status"]) => (
+				<KnowledgeBaseStatusTag status={value} />
+			),
+		},
+		{ 
+			title: "文档数", 
+			dataIndex: "indexedDocumentCount", 
+			width: 100,
+			render: (val) => <Typography.Text type="secondary">{val}</Typography.Text>
+		},
+		{
+			title: "描述",
+			dataIndex: "description",
+			width: 220,
+			ellipsis: true,
+			render: (val) => val || <Typography.Text type="disabled">-</Typography.Text>
+		},
+		{
+			title: "操作",
+			key: "action",
+			width: 240,
+			fixed: 'right',
+			render: (_, record) => (
+				<KnowledgeBaseTableActions
+					record={record}
+					canManageKnowledgeBases={canManageKnowledgeBases}
+					onEdit={onEdit}
+				/>
+			),
+		},
+	];
 
 	const metricItems: ConsoleMetricItem[] = useMemo(
 		() => [
@@ -423,42 +374,11 @@ export function KnowledgePage() {
 			>
 				{canManageKnowledgeBases && (
 					<Card title="新建知识库" data-testid="knowledge-create-card">
-						<Form
+						<KnowledgeBaseForm
 							form={createForm}
-							layout="vertical"
-							initialValues={{
-								name: "",
-								description: "",
-								status: "ACTIVE",
-							}}
 							onFinish={onCreate}
-						>
-							<Form.Item label="名称" name="name">
-								<Input
-									placeholder="例如：产品文档库"
-									maxLength={100}
-									showCount
-								/>
-							</Form.Item>
-							<Form.Item label="描述" name="description">
-								<Input.TextArea rows={3} maxLength={500} showCount />
-							</Form.Item>
-							<Form.Item label="状态" name="status">
-								<Select
-									options={[
-										{ label: "ACTIVE", value: "ACTIVE" },
-										{ label: "INACTIVE", value: "INACTIVE" },
-									]}
-								/>
-							</Form.Item>
-							<Button
-								type="primary"
-								htmlType="submit"
-								loading={createMutation.isPending}
-							>
-								创建知识库
-							</Button>
-						</Form>
+							loading={createMutation.isPending}
+						/>
 					</Card>
 				)}
 
@@ -497,7 +417,7 @@ export function KnowledgePage() {
 					) : (
 						<Table
 							rowKey="id"
-							columns={columns(onEdit, canManageKnowledgeBases)}
+							columns={columns}
 							dataSource={knowledgeBases}
 							loading={knowledgeQuery.isFetching}
 							scroll={{ x: 1132 }}
@@ -515,22 +435,12 @@ export function KnowledgePage() {
 				confirmLoading={updateMutation.isPending}
 				destroyOnHidden
 			>
-				<Form form={editForm} layout="vertical" onFinish={onUpdate}>
-					<Form.Item label="名称" name="name">
-						<Input maxLength={100} showCount />
-					</Form.Item>
-					<Form.Item label="描述" name="description">
-						<Input.TextArea rows={3} maxLength={500} showCount />
-					</Form.Item>
-					<Form.Item label="状态" name="status">
-						<Select
-							options={[
-								{ label: "ACTIVE", value: "ACTIVE" },
-								{ label: "INACTIVE", value: "INACTIVE" },
-							]}
-						/>
-					</Form.Item>
-				</Form>
+				<KnowledgeBaseForm
+					form={editForm}
+					onFinish={onUpdate}
+					loading={updateMutation.isPending}
+					isEdit
+				/>
 			</Modal>
 		</>
 	);
