@@ -8,10 +8,10 @@ interface AiTimelinePillProps {
 }
 
 const stageColorMap: Record<AiStage, string> = {
-	thinking: "#dfa88f", // Peach
-	grep: "#9fc9a2",     // Mint
-	read: "#9fbbe0",     // Pastel blue
-	edit: "#c0a8dd",     // Lavender
+	thinking: "var(--console-timeline-thinking)",
+	grep: "var(--console-timeline-grep)",
+	read: "var(--console-timeline-read)",
+	edit: "var(--console-timeline-edit)",
 };
 
 export function AiTimelinePill({ stage, label }: AiTimelinePillProps) {
@@ -21,7 +21,7 @@ export function AiTimelinePill({ stage, label }: AiTimelinePillProps) {
 			bordered={false}
 			style={{
 				backgroundColor: stageColorMap[stage],
-				color: "#171717",
+				color: "var(--console-ink)",
 				borderRadius: 9999,
 				fontSize: 11,
 				fontWeight: 600,
@@ -29,11 +29,12 @@ export function AiTimelinePill({ stage, label }: AiTimelinePillProps) {
 				letterSpacing: "0.08em",
 				padding: isDot ? 0 : "2px 10px",
 				margin: 0,
-				width: isDot ? 8 : "auto",
-				height: isDot ? 8 : "auto",
-				minWidth: isDot ? 8 : "auto",
+				width: isDot ? 10 : "auto",
+				height: isDot ? 10 : "auto",
+				minWidth: isDot ? 10 : "auto",
 				display: "inline-block",
-				verticalAlign: "middle"
+				verticalAlign: "middle",
+				border: isDot ? "1px solid rgba(0,0,0,0.05)" : "none"
 			}}
 		>
 			{label}

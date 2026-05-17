@@ -8,7 +8,7 @@
 .qa-rag-page {
 	display: flex;
 	height: calc(100vh - 64px);
-	background: #ffffff;
+	background: var(--console-canvas);
 	overflow: hidden;
 }
 
@@ -17,7 +17,7 @@
 	width: 100%;
 	height: 100%;
 	position: relative;
-	background: #ffffff;
+	background: var(--console-canvas);
 }
 
 /* Chat Styling */
@@ -25,17 +25,17 @@
 	flex: 1;
 	display: flex;
 	flex-direction: column;
-	background: #f7f7f7; /* Slightly darker than canvas-soft for better 'well' feel */
+	background: var(--console-canvas-soft);
 	min-width: 0;
 	position: relative;
-	border-right: 1px solid var(--console-border-strong, #cfcdc4); /* Stronger boundary */
+	border-right: 1px solid var(--console-hairline-strong);
 }
 
 .qa-chat-header {
 	height: 64px;
 	padding: 0 24px;
-	border-bottom: 1px solid var(--console-border-strong, #cfcdc4);
-	background: #ffffff;
+	border-bottom: 1px solid var(--console-hairline-strong);
+	background: var(--console-canvas);
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
@@ -65,6 +65,7 @@
 	display: flex;
 	flex-direction: column;
 	gap: 40px;
+	animation: content-slide-in 0.4s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .qa-bubble-row {
@@ -84,18 +85,19 @@
 }
 
 .qa-bubble--user .qa-bubble__content {
-	background: rgba(62, 207, 142, 0.08); /* 8% primary emerald */
+	background: var(--console-accent-soft);
 	border: 1px solid rgba(62, 207, 142, 0.2);
 	border-radius: 12px 2px 12px 12px;
 	padding: 12px 18px;
-	font-size: 15px;
+	font-size: 16px;
 	line-height: 1.55;
 	color: var(--console-ink);
 }
 
 .qa-avatar--user {
-	border-color: rgba(62, 207, 142, 0.3) !important;
-	color: var(--console-primary, #3ecf8e) !important;
+	border: 1px solid rgba(62, 207, 142, 0.3) !important;
+	color: var(--console-accent) !important;
+	background: var(--console-canvas) !important;
 }
 
 /* Assistant Bubble - Left Aligned, Pure White */
@@ -105,34 +107,38 @@
 
 .qa-bubble--assistant {
 	max-width: 85%;
-	background: #ffffff;
-	border: 1px solid var(--console-border);
+	background: var(--console-canvas);
+	border: 1px solid var(--console-hairline);
 	border-radius: 2px 12px 12px 12px;
-	padding: 20px 24px;
-	box-shadow: 0 2px 12px rgba(0, 0, 0, 0.02);
+	padding: 24px 28px;
+}
+
+.qa-avatar--assistant {
+	border: 1px solid var(--console-hairline) !important;
+	color: var(--console-ink-mute) !important;
+	background: var(--console-canvas) !important;
 }
 
 .qa-timeline-pills {
 	display: flex;
 	align-items: center;
-	gap: 6px;
-	margin-bottom: 16px;
-	height: 12px;
+	gap: 8px;
+	margin-bottom: 20px;
 }
 
 .qa-bubble__content--answer {
-	font-size: 16px;
+	font-size: 17px;
 	line-height: 1.65;
 	font-weight: 400;
-	color: var(--console-ink-secondary, #212121);
-	font-family: Inter, sans-serif;
+	color: var(--console-ink-secondary);
+	font-family: 'Inter', sans-serif;
 }
 
 /* Citations Strip */
 .qa-citation-strip {
 	margin-top: 32px;
-	padding-top: 20px;
-	border-top: 1px dashed var(--console-border);
+	padding-top: 24px;
+	border-top: 1px solid var(--console-hairline);
 }
 
 .qa-citation-strip__title {
@@ -140,7 +146,7 @@
 	font-weight: 600;
 	text-transform: uppercase;
 	letter-spacing: 0.08em;
-	color: var(--console-muted);
+	color: var(--console-ink-mute);
 	margin-bottom: 12px;
 }
 
@@ -155,35 +161,35 @@
 	align-items: center;
 	gap: 6px;
 	padding: 4px 10px;
-	border: 1px solid var(--console-border);
+	border: 1px solid var(--console-hairline);
 	border-radius: 6px;
-	background: #ffffff;
+	background: var(--console-canvas);
 	font-size: 12px;
 	cursor: pointer;
 	transition: all 150ms ease;
 	font-family: 'Inter', sans-serif;
+	color: var(--console-ink);
 }
 
 .qa-citation-tag:hover {
-	border-color: var(--console-accent);
+	border-color: var(--console-hairline-strong);
 	background: var(--console-canvas-soft);
 }
 
 .qa-citation-tag.is-active {
 	background: var(--console-accent-soft);
 	border-color: var(--console-accent);
-	box-shadow: 0 0 0 1px var(--console-accent);
 }
 
 .qa-citation-tag__index {
-	font-family: var(--console-font-mono, 'JetBrains Mono', monospace);
+	font-family: 'JetBrains Mono', monospace;
 	font-weight: 600;
-	color: var(--console-accent);
+	color: var(--console-accent-strong);
 	font-size: 11px;
 }
 
 .qa-citation-tag__label {
-	color: var(--console-muted);
+	color: var(--console-ink-mute);
 	font-size: 11px;
 	max-width: 160px;
 	overflow: hidden;
@@ -193,11 +199,11 @@
 
 /* Evidence Panel Styling */
 .qa-rag-shell__panel {
-	background: #ffffff;
+	background: var(--console-canvas);
 	display: flex;
 	flex-direction: column;
 	position: relative;
-	overflow: visible; /* To allow toggle button to peek out */
+	overflow: visible;
 }
 
 .qa-panel-resizer {
@@ -224,8 +230,8 @@
 	transform: translateY(-50%);
 	width: 24px;
 	height: 48px;
-	background: #ffffff;
-	border: 1px solid var(--console-border-strong, #cfcdc4); /* Match the divider strength */
+	background: var(--console-canvas);
+	border: 1px solid var(--console-hairline-strong);
 	border-right: none;
 	border-radius: 6px 0 0 6px;
 	display: flex;
@@ -233,36 +239,36 @@
 	justify-content: center;
 	cursor: pointer;
 	z-index: 30;
-	color: var(--console-muted);
+	color: var(--console-ink-mute);
 	transition: all 200ms;
-	box-shadow: -2px 0 8px rgba(0, 0, 0, 0.04);
 }
 
 .qa-panel-toggle:hover {
-	color: var(--console-accent);
-	background: #fafafa;
+	color: var(--console-ink);
+	background: var(--console-canvas-soft);
 }
 
 .qa-panel-header {
-	height: 64px;
+	height: 80px;
 	padding: 0;
-	border-bottom: 1px solid var(--console-border-strong, #cfcdc4);
+	border-bottom: 1px solid var(--console-hairline-strong);
 	display: flex;
 	flex-direction: column;
 	justify-content: flex-end;
+	background: var(--console-canvas-soft);
 }
 
 .qa-rag-shell__section-head {
 	padding: 0 24px;
-	margin-bottom: 4px;
+	margin-bottom: 8px;
 }
 
 .qa-rag-shell__eyebrow {
-	font-size: 10px;
-	font-weight: 700;
+	font-size: 11px;
+	font-weight: 600;
 	text-transform: uppercase;
-	letter-spacing: 0.1em;
-	color: var(--console-muted);
+	letter-spacing: 0.08em;
+	color: var(--console-ink-mute);
 	margin-bottom: 2px;
 }
 
@@ -279,7 +285,7 @@
 	border-bottom: 2px solid transparent;
 	font-size: 13px;
 	font-weight: 500;
-	color: var(--console-muted);
+	color: var(--console-ink-mute);
 	cursor: pointer;
 	display: flex;
 	align-items: center;
@@ -292,8 +298,8 @@
 }
 
 .qa-panel-tab.is-active {
-	color: var(--console-accent);
-	border-bottom-color: var(--console-accent);
+	color: var(--console-accent-strong);
+	border-bottom-color: var(--console-accent-strong);
 }
 
 .qa-panel-tab:disabled {
@@ -304,37 +310,37 @@
 .qa-panel-body {
 	flex: 1;
 	overflow-y: auto;
-	padding: 20px;
+	padding: 24px;
 }
 
 .qa-panel-stack {
 	display: flex;
 	flex-direction: column;
-	gap: 16px;
+	gap: 20px;
 }
 
 /* Mini Source List */
 .qa-source-list-mini {
 	display: flex;
 	flex-direction: column;
-	gap: 6px;
+	gap: 8px;
 }
 
 .qa-source-item-mini {
 	display: flex;
 	align-items: center;
 	gap: 12px;
-	padding: 10px;
-	border: 1px solid var(--console-border);
+	padding: 12px;
+	border: 1px solid var(--console-hairline);
 	border-radius: 8px;
-	background: #ffffff;
+	background: var(--console-canvas);
 	text-align: left;
 	cursor: pointer;
 	transition: all 150ms;
 }
 
 .qa-source-item-mini:hover {
-	border-color: var(--console-border-strong);
+	border-color: var(--console-hairline-strong);
 	background: var(--console-canvas-soft);
 }
 
@@ -344,29 +350,70 @@
 }
 
 .qa-source-item-mini__icon {
-	color: var(--console-muted);
+	color: var(--console-ink-mute);
 }
 
 .qa-source-item-mini.is-active .qa-source-item-mini__icon {
-	color: var(--console-accent);
+	color: var(--console-accent-strong);
 }
 
 .qa-source-item-mini__name {
-	font-size: 13px;
+	font-size: 14px;
 	font-weight: 500;
 	color: var(--console-ink);
 }
 
 .qa-source-item-mini__meta {
 	font-size: 11px;
-	color: var(--console-muted);
+	color: var(--console-ink-mute);
 	margin-top: 1px;
+}
+
+/* Evidence Card */
+.qa-evidence-card {
+	padding: 16px;
+	border: 1px solid var(--console-hairline);
+	border-radius: 12px;
+	background: var(--console-canvas);
+}
+
+.qa-document-preview {
+	border: 1px solid var(--console-hairline);
+	border-radius: 8px;
+	overflow: hidden;
+}
+
+.qa-document-preview__toolbar {
+	background: var(--console-canvas-soft);
+	border-bottom: 1px solid var(--console-hairline);
+	padding: 6px 12px;
+	font-size: 11px;
+	color: var(--console-ink-mute);
+	display: flex;
+	justify-content: space-between;
+	font-family: 'JetBrains Mono', monospace;
+}
+
+.qa-document-preview__page {
+	padding: 16px;
+	font-size: 14px;
+	line-height: 1.6;
+	color: var(--console-ink-secondary);
+	background: var(--console-canvas);
+	max-height: 400px;
+	overflow-y: auto;
+}
+
+.qa-document-preview__page mark {
+	background: var(--console-accent-soft);
+	color: var(--console-ink);
+	padding: 0 2px;
 }
 
 /* Chat Composer - Floating Box */
 .qa-chat-composer {
-	padding: 24px 40px 32px;
-	background: linear-gradient(to top, #f7f7f7 80%, transparent);
+	padding: 24px 40px 40px;
+	background: var(--console-canvas-soft);
 }
 
 .qa-chat-composer__container {
@@ -376,37 +423,69 @@
 }
 
 .qa-chat-composer__box {
-	border: 1px solid var(--console-border-strong, #cfcdc4);
+	border: 1px solid var(--console-hairline-strong);
 	border-radius: 12px;
-	padding: 12px;
-	background: #ffffff;
-	box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
+	padding: 16px;
+	background: var(--console-canvas);
 	transition: all 200ms ease;
 }
 
 .qa-chat-composer__box:focus-within {
 	border-color: var(--console-accent);
-	box-shadow: 0 4px 20px rgba(62, 207, 142, 0.1);
 }
 
 .qa-chat-composer__input {
 	border: none !important;
 	box-shadow: none !important;
-	font-size: 15px;
-	padding: 4px 8px;
+	font-size: 16px;
+	padding: 0;
 	background: transparent;
 	width: 100%;
+	color: var(--console-ink);
+}
+
+.qa-chat-composer__input::placeholder {
+	color: var(--console-ink-faint);
 }
 
 .qa-chat-composer__footer {
 	display: flex;
 	justify-content: space-between;
 	align-items: center;
-	margin-top: 8px;
-	padding: 0 8px;
+	margin-top: 12px;
 }
 
 .qa-composer-hints {
 	font-size: 11px;
-	color: var(--console-muted);
+	color: var(--console-ink-mute);
+}
+
+/* Empty State */
+.qa-empty-state {
+	text-align: center;
+	margin-top: 100px;
+	animation: content-slide-in 0.5s ease-out;
+}
+
+.qa-empty-state__icon {
+	font-size: 48px;
+	color: var(--console-hairline-strong);
+	margin-bottom: 24px;
+	display: block;
+}
+
+.qa-empty-state__title {
+	font-size: 24px;
+	font-weight: 500;
+	letter-spacing: -0.42px;
+	color: var(--console-ink);
+	margin-bottom: 12px;
+}
+
+.qa-empty-state__desc {
+	max-width: 420px;
+	margin: 0 auto;
+	font-size: 16px;
+	color: var(--console-ink-mute);
+	line-height: 1.5;
 }

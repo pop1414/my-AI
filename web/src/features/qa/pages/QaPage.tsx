@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import {
-	BookOutlined,
 	CaretLeftOutlined,
 	CaretRightOutlined,
 	DatabaseOutlined,
@@ -94,10 +93,6 @@ export function QaPage() {
 	const activeKnowledgeBases = useMemo(
 		() => (knowledgeQuery.data ?? []).filter((item) => item.status === "ACTIVE"),
 		[knowledgeQuery.data],
-	);
-	const selectedKnowledgeBase = useMemo(
-		() => activeKnowledgeBases.find((item) => item.id === selectedKnowledgeBaseId) ?? null,
-		[activeKnowledgeBases, selectedKnowledgeBaseId],
 	);
 
 	useEffect(() => {
@@ -193,12 +188,12 @@ export function QaPage() {
 					<div className="qa-chat-timeline" ref={timelineRef}>
 						<div className="qa-chat-timeline__container">
 							{conversation.length === 0 ? (
-								<div style={{ textAlign: 'center', marginTop: 100 }}>
-									<MessageOutlined style={{ fontSize: 40, color: 'var(--console-border-strong)', marginBottom: 20 }} />
-									<Typography.Title level={4} style={{ fontWeight: 500 }}>开始新对话</Typography.Title>
-									<Typography.Paragraph type="secondary" style={{ maxWidth: 400, margin: '0 auto' }}>
+								<div className="qa-empty-state">
+									<MessageOutlined className="qa-empty-state__icon" />
+									<h2 className="qa-empty-state__title">开始新对话</h2>
+									<p className="qa-empty-state__desc">
 										在右侧选择知识库并输入您的问题，系统将实时展示 AI 的检索依据。
-									</Typography.Paragraph>
+									</p>
 								</div>
 							) : (
 								conversation.map((turn) => (
