@@ -5,20 +5,19 @@ import {
 	ReloadOutlined,
 	RollbackOutlined,
 	UploadOutlined,
+  CopyOutlined,
+  HistoryOutlined,
 } from "@ant-design/icons";
 import {
 	Alert,
 	Button,
-	Card,
-	Descriptions,
-	Empty,
 	Modal,
 	Result,
 	Skeleton,
 	Space,
-	Tag,
 	Typography,
 	Upload,
+  message,
 } from "antd";
 import type { UploadFile } from "antd/es/upload/interface";
 import { useMemo, useState } from "react";
@@ -39,8 +38,7 @@ import { DetailDiffSummary } from "../components/DetailDiffSummary";
 import { VersionTags } from "../components/VersionTags";
 import { VersionUploadResultAlert } from "../components/VersionUploadResultAlert";
 import { VersionRollbackResultAlert } from "../components/VersionRollbackResultAlert";
-import { formatFileSize, formatTime, originLabel, statusColor } from "../utils/formatters";
-import { RouterButtonLink } from "../components/RouterButtonLink";
+import { formatFileSize, formatTime } from "../utils/formatters";
 import { VersionHistoryList } from "../components/VersionHistoryList";
 import "./IngestDocumentDetailPage.css";
 
@@ -260,9 +258,7 @@ export function IngestDocumentDetailPage() {
 	if (historyQuery.isLoading) {
 		return (
 			<div className="detail-page">
-				<Card className="detail-page__panel">
-					<Skeleton active paragraph={{ rows: 6 }} />
-				</Card>
+				<Skeleton active paragraph={{ rows: 10 }} />
 			</div>
 		);
 	}
@@ -271,89 +267,70 @@ export function IngestDocumentDetailPage() {
 		return (
 			<Result
 				status="403"
-				title="旧版本视图不可见"
-				subTitle="版本历史仅对具备目标 document 管理权限的用户开放。当前用户可以继续从文档列表进入自己有权限的文档。"
+				title="权限不足"
+				subTitle="该文档的版本账本仅对管理员或具备特定权限的用户可见。"
 				extra={
-					<RouterButtonLink tone="return" to="/ingest/documents">
-						返回文档列表
-					</RouterButtonLink>
+					<Button type="primary" onClick={() => navigate(listReturnTo)}>
+						返回文档目录
+					</Button>
 				}
 			/>
 		);
 	}
 
-	if (historyQuery.isError) {
-		return (
-			<div className="detail-page">
-				<ApiErrorAlert error={historyQuery.error} />
-			</div>
-		);
-	}
-
 	if (!viewingVersion || !latestVersion) {
 		return (
-			<Card className="detail-page__panel">
-				<Empty description="暂无版本历史" />
-			</Card>
+			<div className="detail-page">
+				<Result
+					status="info"
+					title="未找到版本历史"
+					extra={
+						<Button onClick={() => navigate(listReturnTo)}>返回目录</Button>
+					}
+				/>
+			</div>
 		);
 	}
 
 	return (
 		<div className="detail-page">
-			<div className="detail-page__header">
+			{/* --- Header Section --- */}
+			<header className="detail-page__header">
 				<div className="detail-page__header-copy">
-					<Typography.Text className="detail-page__kicker">
-						document version ledger
-					</Typography.Text>
-					<Typography.Title level={2}>文档详情</Typography.Title>
-					<Typography.Paragraph
-						className="detail-page__document-id"
-						type="secondary"
-						copyable={
-							historyData?.documentId ? { text: historyData.documentId } : false
-						}
-						ellipsis={{ rows: 2, expandable: true, symbol: "展开" }}
-					>
-						{historyData?.documentId}
-					</Typography.Paragraph>
+					<span className="detail-page__kicker">document version ledger</span>
+					<h1 className="detail-page__title">文档详情</h1>
+					<div className="detail-page__document-id-box">
+						<HistoryOutlined style={{ color: 'var(--detail-accent)' }} />
+						<span>{documentId}</span>
+						<CopyOutlined 
+              style={{ cursor: 'pointer', marginLeft: 4 }} 
+              onClick={() => {
+                navigator.clipboard.writeText(documentId);
+                message.success("ID 已复制");
+              }} 
+            />
+					</div>
 				</div>
-				<Space className="detail-page__header-actions" wrap>
-					<RouterButtonLink
-						icon={<ArrowLeftOutlined />}
-						tone="return"
-						to={listReturnTo}
-					>
-						返回文档列表
-					</RouterButtonLink>
-					<Button
-						icon={<ReloadOutlined />}
-						loading={historyQuery.isFetching}
-						onClick={() => historyQuery.refetch()}
-					>
-						刷新
+				<div className="detail-page__header-actions">
+					<Button 
+            icon={<ArrowLeftOutlined />} 
+            onClick={() => navigate(listReturnTo)}
+            style={{ borderRadius: '6px' }}
+          >
+						返回目录
 					</Button>
-					{canUploadNewVersion && (
-						<Button
-							type="primary"
-							icon={<UploadOutlined />}
-							onClick={() => setUploadModalOpen(true)}
-						>
-							上传新版本
-						</Button>
-					)}
-					{latestVersion.status !== "DELETED" &&
-						latestVersion.status !== "DELETING" && (
-							<Button
-								danger
-								icon={<DeleteOutlined />}
-								onClick={() => setDeleteModalOpen(true)}
-							>
-								删除 document
-							</Button>
-						)}
-				</Space>
-			</div>
+					<Button 
+            icon={<ReloadOutlined />} 
+            loading={historyQuery.isFetching}
+            onClick={() => historyQuery.refetch()}
+            style={{ borderRadius: '6px' }}
+          >
+						同步
+					</Button>
+				</div>
+			</header>
 
+			{/* --- Result Alerts --- */}
 			{uploadResult && (
 				<VersionUploadResultAlert
 					result={uploadResult}
@@ -371,168 +348,111 @@ export function IngestDocumentDetailPage() {
 				/>
 			)}
 
-			{!isViewingLatest && (
-				<Alert
-					data-testid="history-alert"
-					type="warning"
-					showIcon
-					message={`正在查看历史版本 v${viewingVersion.versionNumber}`}
-					description="此视图仅用于审计与治理查看，不会改变当前最新版本与问答基线。"
-					action={
-						<RouterButtonLink
-							size="small"
-							tone="primary"
-							testId="return-latest"
-							to={buildDetailPath(
-								historyData!.documentId,
-								undefined,
-								preservedReturnTo,
-							)}
-						>
-							返回最新版本
-						</RouterButtonLink>
-					}
-				/>
-			)}
-
-			<DetailDiffSummary
-				viewingVersion={viewingVersion}
-				compareVersion={compareVersion}
-				askableVersion={askableVersion}
-			/>
-
+			{/* --- Main Grid --- */}
 			<div className="detail-page__grid">
-				<div className="detail-page__main">
-					<Card className="detail-page__panel detail-page__panel--accent">
-						<div className="detail-page__section-title">
-							<div>
-								<Typography.Text type="secondary">
-									{isViewingLatest ? "最新版本概览" : "历史版本概览"}
-								</Typography.Text>
-								<Typography.Title level={3}>
-									v{viewingVersion.versionNumber}
-								</Typography.Title>
+				<main className="detail-page__main">
+					
+					{/* --- Hero Status Card --- */}
+					<div className="detail-hero-card">
+						<div className="detail-hero-card__header">
+							<div className="detail-hero-card__version">
+								<span className="detail-stat-label">
+                  {isViewingLatest ? "SYSTEM LATEST" : "HISTORICAL RECORD"}
+                </span>
+								<div className="detail-hero-card__version-num">v{viewingVersion.versionNumber}</div>
 							</div>
 							<VersionTags
 								version={viewingVersion}
-								isActive
-								hasBeenRolledBackAsLatest={resolveHasBeenRolledBackAsLatest(
-									viewingVersion,
-									versions,
-								)}
+								isActive={true}
+								hasBeenRolledBackAsLatest={resolveHasBeenRolledBackAsLatest(viewingVersion, versions)}
 							/>
 						</div>
 
-						<Descriptions column={{ xs: 1, sm: 2 }} size="small">
-							<Descriptions.Item label="documentId">
-								{viewingVersion.documentId}
-							</Descriptions.Item>
-							<Descriptions.Item label="系统最新版本">
-								v{latestVersion.versionNumber}
-							</Descriptions.Item>
-							<Descriptions.Item label="当前问答基线">
-								{askableVersion
-									? `v${askableVersion.versionNumber}`
-									: "暂无可问答版本"}
-							</Descriptions.Item>
-							<Descriptions.Item label="版本来源">
-								{originLabel(viewingVersion.versionOriginType)}
-							</Descriptions.Item>
-							{viewingVersion.rollbackFromVersionNumber && (
-								<Descriptions.Item label="回退来源">
-									v{viewingVersion.rollbackFromVersionNumber}
-								</Descriptions.Item>
-							)}
-							<Descriptions.Item label="文件名">
-								{viewingVersion.filename}
-							</Descriptions.Item>
-							<Descriptions.Item label="文件大小">
-								{formatFileSize(viewingVersion.fileSize)}
-							</Descriptions.Item>
-							<Descriptions.Item label="上传人">
-								{getUploader(viewingVersion)}
-							</Descriptions.Item>
-							<Descriptions.Item label="上传时间">
-								{formatTime(viewingVersion.createdAt)}
-							</Descriptions.Item>
-							<Descriptions.Item label="更新时间">
-								{formatTime(viewingVersion.updatedAt)}
-							</Descriptions.Item>
-						</Descriptions>
+						<div className="detail-stats-grid">
+							<div className="detail-stat-item">
+								<span className="detail-stat-label">文件名</span>
+								<span className="detail-stat-value" style={{ fontSize: '18px', fontWeight: 700 }}>
+                  {viewingVersion.filename}
+                </span>
+							</div>
+							<div className="detail-stat-item">
+								<span className="detail-stat-label">文件大小</span>
+								<span className="detail-stat-value">{formatFileSize(viewingVersion.fileSize)}</span>
+							</div>
+              <div className="detail-stat-item">
+								<span className="detail-stat-label">上传人</span>
+								<span className="detail-stat-value">{getUploader(viewingVersion)}</span>
+							</div>
+							<div className="detail-stat-item">
+								<span className="detail-stat-label">创建时间</span>
+								<span className="detail-stat-value">{formatTime(viewingVersion.createdAt)}</span>
+							</div>
+						</div>
 
-						<div className="detail-page__actions">
-							{canUploadNewVersion && (
+						<div className="detail-action-bar">
+							{canUploadNewVersion ? (
 								<Button
+									type="primary"
+                  size="large"
+                  className="detail-btn-emerald"
 									icon={<UploadOutlined />}
 									onClick={() => setUploadModalOpen(true)}
 								>
-									上传新版本
+									发布新版本
+								</Button>
+							) : !isViewingLatest && (
+                <Button
+                  type="primary"
+                  size="large"
+                  className="detail-btn-emerald"
+                  icon={<ArrowLeftOutlined />}
+                  onClick={() => setSearchParams({})}
+                >
+                  切回最新版本
+                </Button>
+              )}
+							
+							{!isViewingLatest && canRollbackVersion(viewingVersion, latestVersion) && (
+								<Button
+                  size="large"
+									icon={<RollbackOutlined />}
+									onClick={() => setRollbackTarget(viewingVersion)}
+								>
+									回退为最新
 								</Button>
 							)}
-							{!isViewingLatest && (
-								<RouterButtonLink
-									tone="primary"
-									to={buildDetailPath(
-										historyData!.documentId,
-										undefined,
-										preservedReturnTo,
-									)}
-								>
-									返回最新版本
-								</RouterButtonLink>
-							)}
-							{!isViewingLatest &&
-								canRollbackVersion(viewingVersion, latestVersion) && (
-									<Button
-										icon={<RollbackOutlined />}
-										onClick={() => setRollbackTarget(viewingVersion)}
-									>
-										回退为最新版本
-									</Button>
-								)}
+
+              <Button 
+                danger 
+                size="large"
+                icon={<DeleteOutlined />} 
+                onClick={() => setDeleteModalOpen(true)}
+                style={{ marginLeft: 'auto', borderRadius: '6px' }}
+              >
+                删除资产
+              </Button>
 						</div>
-					</Card>
+					</div>
 
-					<Card className="detail-page__panel">
-						<Typography.Title level={3}>处理与问答上下文</Typography.Title>
-						<Space direction="vertical" size={10}>
-							<Typography.Text>
-								当前查看版本状态：
-								<Tag color={statusColor(viewingVersion.status)}>
-									{viewingVersion.status}
-								</Tag>
-							</Typography.Text>
-							<Typography.Text>
-								问答基线：
-								{askableVersion ? (
-									<Tag color="green">v{askableVersion.versionNumber}</Tag>
-								) : (
-									<Tag>暂无可问答版本</Tag>
-								)}
-							</Typography.Text>
-							{latestVersion.versionNumber !== askableVersion?.versionNumber && (
-								<Alert
-									type="warning"
-									showIcon
-									message={`当前问答仍使用 ${
-										askableVersion
-											? `v${askableVersion.versionNumber}`
-											: "上一可用版本"
-									}，等待最新版本可用后才会切换`}
-								/>
-							)}
-							{viewingVersion.failureReason && (
-								<Alert
-									type="error"
-									showIcon
-									message="处理失败原因"
-									description={viewingVersion.failureReason}
-								/>
-							)}
-						</Space>
-					</Card>
-				</div>
+					{/* --- Status & Context --- */}
+          {!isViewingLatest && (
+            <Alert
+              className="detail-alert"
+              type="warning"
+              showIcon
+              message="审计模式：正在查看非活动的历史版本"
+              description="该版本仅供元数据核查。当前的问答系统和最新基线不受此视图影响。"
+            />
+          )}
 
+					<DetailDiffSummary
+						viewingVersion={viewingVersion}
+						compareVersion={compareVersion}
+						askableVersion={askableVersion}
+					/>
+				</main>
+
+				{/* --- Side Rail --- */}
 				<VersionHistoryList
 					historyData={historyData}
 					versions={versions}
@@ -541,34 +461,27 @@ export function IngestDocumentDetailPage() {
 					expandedHistory={expandedHistory}
 					preservedReturnTo={preservedReturnTo}
 					onExpandHistory={expandHistory}
-					onRollbackTargetSet={setRollbackTarget}
-					canRollbackVersion={canRollbackVersion}
 					buildDetailPath={buildDetailPath}
 					getUploader={getUploader}
-					resolveHasBeenRolledBackAsLatest={resolveHasBeenRolledBackAsLatest}
 				/>
 			</div>
 
+			{/* --- Modals --- */}
 			<Modal
-				title={`上传新版本 · 当前最新 v${latestVersion.versionNumber}`}
+				title={`发布新版本 · 当前最新 v${latestVersion.versionNumber}`}
 				open={uploadModalOpen}
-				okText="提交新版本"
+				okText="提交"
 				cancelText="取消"
+        className="detail-modal"
 				confirmLoading={uploadVersionMutation.isPending}
-				okButtonProps={{ disabled: uploadFileList.length === 0 }}
+				okButtonProps={{ disabled: uploadFileList.length === 0, className: 'detail-btn-emerald' }}
 				onOk={submitNewVersion}
 				onCancel={() => {
 					setUploadModalOpen(false);
 					setUploadFileList([]);
 				}}
 			>
-				<Space direction="vertical" size={12} style={{ width: "100%" }}>
-					<Alert
-						type="info"
-						showIcon
-						message="流程已锁定当前 document 所属 knowledge base"
-						description="上传新版本只绑定当前 document，不提供 knowledge base 切换项。"
-					/>
+				<Space direction="vertical" size={16} style={{ width: "100%", padding: '8px 0' }}>
 					<Dragger
 						multiple={false}
 						maxCount={1}
@@ -577,66 +490,35 @@ export function IngestDocumentDetailPage() {
 						onChange={(info) => setUploadFileList(info.fileList.slice(-1))}
 						onRemove={() => setUploadFileList([])}
 					>
-						<p className="ant-upload-drag-icon">
-							<InboxOutlined />
-						</p>
-						<p className="ant-upload-text">选择要作为新版本的文件</p>
-						<p className="ant-upload-hint">
-							提交时会携带 expectedLatestVersionNumber =
-							{latestVersion.versionNumber}。
-						</p>
+						<p className="ant-upload-drag-icon"><InboxOutlined style={{ color: 'var(--detail-accent)' }} /></p>
+						<p className="ant-upload-text">点击或拖拽文件至此区域</p>
+						<p className="ant-upload-hint">新版本将覆盖 v{latestVersion.versionNumber} 成为最新的活动版本。</p>
 					</Dragger>
-					{uploadVersionMutation.isError && (
-						<ApiErrorAlert error={uploadVersionMutation.error} />
-					)}
+					{uploadVersionMutation.isError && <ApiErrorAlert error={uploadVersionMutation.error} />}
 				</Space>
 			</Modal>
+
 			<Modal
-				title={
-					rollbackTarget
-						? `确认回退 v${rollbackTarget.versionNumber}`
-						: "确认回退"
-				}
+				title={rollbackTarget ? `确认回退至 v${rollbackTarget.versionNumber}` : "确认回退"}
 				open={Boolean(rollbackTarget)}
-				okText="确认回退为最新版本"
+				okText="执行回退"
 				cancelText="取消"
 				confirmLoading={rollbackVersionMutation.isPending}
+        okButtonProps={{ danger: true }}
 				onOk={submitRollbackVersion}
-				onCancel={() => {
-					setRollbackTarget(null);
-				}}
+				onCancel={() => setRollbackTarget(null)}
 			>
-				<Space direction="vertical" size={12} style={{ width: "100%" }}>
+				<Space direction="vertical" size={16} style={{ width: "100%", padding: '8px 0' }}>
 					<Alert
 						type="warning"
 						showIcon
-						message="该操作会创建新的最新版本，并可能改变问答基线"
-						description={
-							rollbackTarget
-								? `系统会基于 v${rollbackTarget.versionNumber} 创建 ROLLBACK 来源的新版本，不会覆盖原历史记录。当前最新版本为 v${latestVersion.versionNumber}，提交时会携带 expectedLatestVersionNumber=${latestVersion.versionNumber}。`
-								: undefined
-						}
+						message="此操作具有破坏性"
+						description={`系统将基于 v${rollbackTarget?.versionNumber} 创建一个全新的 ROLLBACK 版本，该操作不可逆，请核对文件名：${rollbackTarget?.filename}`}
 					/>
-					{rollbackTarget && (
-						<Descriptions column={1} size="small">
-							<Descriptions.Item label="回退目标">
-								v{rollbackTarget.versionNumber}
-							</Descriptions.Item>
-							<Descriptions.Item label="目标文件">
-								{rollbackTarget.filename}
-							</Descriptions.Item>
-							<Descriptions.Item label="目标状态">
-								<Tag color={statusColor(rollbackTarget.status)}>
-									{rollbackTarget.status}
-								</Tag>
-							</Descriptions.Item>
-						</Descriptions>
-					)}
-					{rollbackVersionMutation.isError && (
-						<ApiErrorAlert error={rollbackVersionMutation.error} />
-					)}
+					{rollbackVersionMutation.isError && <ApiErrorAlert error={rollbackVersionMutation.error} />}
 				</Space>
 			</Modal>
+
 			<DeleteDocumentConfirmModal
 				open={deleteModalOpen}
 				document={{

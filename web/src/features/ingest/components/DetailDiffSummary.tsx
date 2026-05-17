@@ -1,4 +1,4 @@
-import { Alert, Typography } from "antd";
+import { Typography } from "antd";
 import { formatFileSize, formatTime, originLabel } from "../utils/formatters";
 import type { DocumentVersionHistoryItem } from "../../../shared/api/ingestApi";
 
@@ -14,13 +14,7 @@ export function DetailDiffSummary({
 	askableVersion,
 }: DetailDiffSummaryProps) {
 	if (!compareVersion) {
-		return (
-			<Alert
-				type="info"
-				showIcon
-				message="当前为首个版本，暂无历史差异可比"
-			/>
-		);
+		return null;
 	}
 
 	const fileChanged =
@@ -28,63 +22,35 @@ export function DetailDiffSummary({
 		viewingVersion.fileSize !== compareVersion.fileSize;
 
 	return (
-		<section className="detail-page__diff" data-testid="diff-summary">
-			<div className="detail-page__section-title">
-				<Typography.Title level={3}>差异摘要</Typography.Title>
-				<Typography.Text type="secondary">
-					只比较版本元数据，不做正文 diff。
+		<section className="detail-diff-summary" data-testid="diff-summary">
+			<div className="detail-diff-card">
+				<div className="detail-stat-label">文件事实变化</div>
+				<div className="detail-stat-value" style={{ fontSize: '18px', fontWeight: 700 }}>
+					{fileChanged ? "内容有差异" : "元数据一致"}
+				</div>
+				<Typography.Text type="secondary" style={{ fontSize: '12px' }}>
+					{viewingVersion.filename} ({formatFileSize(viewingVersion.fileSize)})
 				</Typography.Text>
 			</div>
-			<div className="detail-page__diff-grid">
-				<div className="detail-page__diff-card ant-card ant-card-bordered ant-card-small">
-					<div className="ant-card-body">
-						<Typography.Text type="secondary">版本关系</Typography.Text>
-						<Typography.Title level={4}>
-							v{viewingVersion.versionNumber} vs v
-							{compareVersion.versionNumber}
-						</Typography.Title>
-						<Typography.Paragraph type="secondary">
-							{viewingVersion.isLatestVersion
-								? "当前最新版本与上一版本对比。"
-								: "当前历史版本与系统最新版本对比。"}
-						</Typography.Paragraph>
-					</div>
+			
+			<div className="detail-diff-card">
+				<div className="detail-stat-label">问答基线状态</div>
+				<div className="detail-stat-value" style={{ fontSize: '18px', fontWeight: 700 }}>
+					{askableVersion ? `v${askableVersion.versionNumber}` : "未设置"}
 				</div>
-				<div className="detail-page__diff-card ant-card ant-card-bordered ant-card-small">
-					<div className="ant-card-body">
-						<Typography.Text type="secondary">文件变化</Typography.Text>
-						<Typography.Title level={4}>
-							{fileChanged ? "文件事实有变化" : "文件事实一致"}
-						</Typography.Title>
-						<Typography.Paragraph type="secondary">
-							{viewingVersion.filename} · {formatFileSize(viewingVersion.fileSize)}
-						</Typography.Paragraph>
-					</div>
+				<Typography.Text type="secondary" style={{ fontSize: '12px' }}>
+					当前版本状态：{viewingVersion.status}
+				</Typography.Text>
+			</div>
+
+			<div className="detail-diff-card">
+				<div className="detail-stat-label">更新溯源</div>
+				<div className="detail-stat-value" style={{ fontSize: '18px', fontWeight: 700 }}>
+					{originLabel(viewingVersion.versionOriginType)}
 				</div>
-				<div className="detail-page__diff-card ant-card ant-card-bordered ant-card-small">
-					<div className="ant-card-body">
-						<Typography.Text type="secondary">处理与问答</Typography.Text>
-						<Typography.Title level={4}>
-							问答基线{" "}
-							{askableVersion ? `v${askableVersion.versionNumber}` : "暂无"}
-						</Typography.Title>
-						<Typography.Paragraph type="secondary">
-							当前查看版本状态为 {viewingVersion.status}，对比版本状态为{" "}
-							{compareVersion.status}。
-						</Typography.Paragraph>
-					</div>
-				</div>
-				<div className="detail-page__diff-card ant-card ant-card-bordered ant-card-small">
-					<div className="ant-card-body">
-						<Typography.Text type="secondary">时间与来源</Typography.Text>
-						<Typography.Title level={4}>
-							{originLabel(viewingVersion.versionOriginType)}
-						</Typography.Title>
-						<Typography.Paragraph type="secondary">
-							更新于 {formatTime(viewingVersion.updatedAt)}
-						</Typography.Paragraph>
-					</div>
-				</div>
+				<Typography.Text type="secondary" style={{ fontSize: '12px' }}>
+					最后同步：{formatTime(viewingVersion.updatedAt)}
+				</Typography.Text>
 			</div>
 		</section>
 	);
