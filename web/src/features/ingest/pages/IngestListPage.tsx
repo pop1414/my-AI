@@ -20,7 +20,7 @@ import {
 	ReloadOutlined,
 	PlusOutlined,
 } from "@ant-design/icons";
-import { Link, useLocation, useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { z } from "zod";
 import {
 	deleteDocument,
@@ -91,20 +91,13 @@ function buildListSearch(params: {
 	return next;
 }
 
-function buildReturnTo(locationSearch: string): string {
-	const params = new URLSearchParams(locationSearch);
-	params.delete("deletedDocumentId");
-	params.delete("deletedFilename");
-	const qs = params.toString();
-	return `/ingest/documents${qs ? `?${qs}` : ""}`;
-}
-
 export function IngestListPage() {
-	const location = useLocation();
 	const [searchParams, setSearchParams] = useSearchParams();
 	const queryClient = useQueryClient();
 	const { user } = useAuth();
 	const canAccessAdmin = Boolean(user?.capabilities.canAccessAdmin);
+	const canUploadDocument = Boolean(user?.capabilities.canUploadDocument);
+	const canAuditDocumentProcessing = canAccessAdmin;
 	const [form] = Form.useForm<{
 		kbId?: string;
 		status?: string;
@@ -112,15 +105,32 @@ export function IngestListPage() {
 	}>();
 	const [deleteTarget, setDeleteTarget] = useState<DocumentListItem | null>(null);
 	const filters = useMemo(() => parseFilters(searchParams), [searchParams]);
+	const effectiveFilters = useMemo(
+		() =>
+			canAuditDocumentProcessing
+				? filters
+				: {
+						kbId: filters.kbId,
+						filename: filters.filename,
+					},
+		[canAuditDocumentProcessing, filters],
+	);
 	const page = parsePositiveInteger(searchParams.get("page"), 1);
 	const pageSize = parsePositiveInteger(searchParams.get("pageSize"), 20);
 	const deletedDocumentId = searchParams.get("deletedDocumentId");
 	const deletedFilename = searchParams.get("deletedFilename");
-	const returnTo = buildReturnTo(location.search);
+	const returnTo = useMemo(() => {
+		const qs = buildListSearch({
+			filters: effectiveFilters,
+			page,
+			pageSize,
+		}).toString();
+		return `/ingest/documents${qs ? `?${qs}` : ""}`;
+	}, [effectiveFilters, page, pageSize]);
 
 	useEffect(() => {
-		form.setFieldsValue(filters);
-	}, [filters, form]);
+		form.setFieldsValue(effectiveFilters);
+	}, [effectiveFilters, form]);
 
 	const knowledgeQuery = useQuery({
 		queryKey: ["knowledge-bases"],
@@ -128,12 +138,12 @@ export function IngestListPage() {
 	});
 
 	const docListQuery = useQuery({
-		queryKey: ["documents", filters, page, pageSize],
+		queryKey: ["documents", effectiveFilters, page, pageSize],
 		queryFn: () =>
 			listDocuments({
-				kbId: filters.kbId || undefined,
-				status: filters.status || undefined,
-				filename: filters.filename || undefined,
+				kbId: effectiveFilters.kbId || undefined,
+				status: effectiveFilters.status || undefined,
+				filename: effectiveFilters.filename || undefined,
 				limit: pageSize,
 				offset: (page - 1) * pageSize,
 			}),
@@ -147,7 +157,7 @@ export function IngestListPage() {
 			await queryClient.invalidateQueries({ queryKey: ["documents"] });
 			setSearchParams(
 				buildListSearch({
-					filters,
+					filters: effectiveFilters,
 					page,
 					pageSize,
 					deletedDocumentId: documentId,
@@ -170,9 +180,15 @@ export function IngestListPage() {
 	
 	const onSubmit = () => {
 		const values = filterSchema.parse(form.getFieldsValue());
+		const nextFilters = canAuditDocumentProcessing
+			? values
+			: {
+					kbId: values.kbId,
+					filename: values.filename,
+				};
 		setSearchParams(
 			buildListSearch({
-				filters: values,
+				filters: nextFilters,
 				page: 1,
 				pageSize,
 			}),
@@ -187,7 +203,7 @@ export function IngestListPage() {
 	const closeDeleteResult = () => {
 		setSearchParams(
 			buildListSearch({
-				filters,
+				filters: effectiveFilters,
 				page,
 				pageSize,
 			}),
@@ -201,6 +217,11 @@ export function IngestListPage() {
 		});
 		return map;
 	}, [knowledgeQuery.data]);
+	const hasActiveFilters = Boolean(
+		effectiveFilters.kbId ||
+			effectiveFilters.status ||
+			effectiveFilters.filename,
+	);
 
 	const columns: ColumnsType<DocumentListItem> = [
 		{
@@ -248,12 +269,16 @@ export function IngestListPage() {
 				</Tag>
 			),
 		},
-		{
-			title: "处理状态",
-			dataIndex: "status",
-			width: 120,
-			render: (value: string) => <DocumentStatusTag status={value} />,
-		},
+		...(canAuditDocumentProcessing
+			? [
+					{
+						title: "处理状态",
+						dataIndex: "status",
+						width: 120,
+						render: (value: string) => <DocumentStatusTag status={value} />,
+					},
+				]
+			: []),
 		{
 			title: "最后更新",
 			dataIndex: "updatedAt",
@@ -293,14 +318,18 @@ export function IngestListPage() {
 						文档目录
 					</Typography.Title>
 					<Typography.Text type="secondary">
-						按知识库、当前最新版本状态或文件名筛选，浏览所有已上传文档的处理进度。
+						{canAuditDocumentProcessing
+							? "按知识库、当前最新版本状态或文件名筛选，浏览所有已上传文档的处理进度。"
+							: "按可访问知识库或文件名筛选，进入当前文档的问答基线阅读界面。"}
 					</Typography.Text>
 				</div>
-				<Link to="/ingest/upload">
-					<Button type="primary" icon={<PlusOutlined />} size="large">
-						上传文档
-					</Button>
-				</Link>
+				{canUploadDocument && (
+					<Link to="/ingest/upload">
+						<Button type="primary" icon={<PlusOutlined />} size="large">
+							上传文档
+						</Button>
+					</Link>
+				)}
 			</div>
 
 			{/* 筛选区域 */}
@@ -320,17 +349,19 @@ export function IngestListPage() {
 							options={knowledgeBaseOptions}
 						/>
 					</Form.Item>
-					<Form.Item name="status" label="处理状态" className="ingest-filter-item" style={{ minWidth: 180 }}>
-						<Select
-							aria-label="按处理状态筛选文档"
-							allowClear
-							placeholder="全部状态"
-							options={DOCUMENT_STATUSES.map((s) => ({
-								label: s,
-								value: s,
-							}))}
-						/>
-					</Form.Item>
+					{canAuditDocumentProcessing && (
+						<Form.Item name="status" label="处理状态" className="ingest-filter-item" style={{ minWidth: 180 }}>
+							<Select
+								aria-label="按处理状态筛选文档"
+								allowClear
+								placeholder="全部状态"
+								options={DOCUMENT_STATUSES.map((s) => ({
+									label: s,
+									value: s,
+								}))}
+							/>
+						</Form.Item>
+					)}
 					<Form.Item name="filename" label="搜索" className="ingest-filter-item" style={{ minWidth: 260 }}>
 						<Input
 							aria-label="按文件名搜索文档"
@@ -411,12 +442,12 @@ export function IngestListPage() {
 					<div className="ingest-empty-state">
 						<Empty
 							description={
-								Object.keys(filters).length > 0
+								hasActiveFilters
 									? "未找到符合当前筛选条件的文档，请尝试调整筛选条件。"
 									: "暂无文档，请先上传文档开始使用。"
 							}
 						>
-							{Object.keys(filters).length === 0 && (
+							{!hasActiveFilters && canUploadDocument && (
 								<Link to="/ingest/upload">
 									<Button type="primary" icon={<PlusOutlined />}>
 										立即上传
@@ -431,7 +462,7 @@ export function IngestListPage() {
 						columns={columns}
 						dataSource={dataSource}
 						loading={docListQuery.isFetching}
-						scroll={{ x: 1400 }}
+						scroll={{ x: canAuditDocumentProcessing ? 1400 : 1280 }}
 						className="ingest-table"
 						pagination={{
 							current: page,
@@ -445,7 +476,7 @@ export function IngestListPage() {
 							onChange: (p, ps) => {
 								setSearchParams(
 									buildListSearch({
-										filters,
+										filters: effectiveFilters,
 										page: p,
 										pageSize: ps,
 									}),
