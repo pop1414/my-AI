@@ -63,6 +63,22 @@ function createMenuLinkLabel(to: string, label: string) {
 
 function buildMenuItems(visibleMenuKeys: string[]): MenuItem[] {
 	const items: MenuItem[] = [];
+
+	if (visibleMenuKeys.includes("/knowledge") && visibleMenuKeys.includes("/admin")) {
+		items.push({
+			key: "module:knowledge",
+			icon: <DatabaseOutlined />,
+			label: createModuleLabel("console-module-knowledge", "知识库"),
+			children: [
+				{
+					key: "/knowledge",
+					icon: <DatabaseOutlined />,
+					label: createMenuLinkLabel("/knowledge", "知识库治理"),
+				},
+			],
+		});
+	}
+
 	const canAccessDocuments =
 		visibleMenuKeys.includes("/ingest/documents") ||
 		visibleMenuKeys.includes("/ingest/upload");
@@ -88,21 +104,6 @@ function buildMenuItems(visibleMenuKeys: string[]): MenuItem[] {
 			icon: <AppstoreOutlined />,
 			label: createModuleLabel("console-module-documents", "文档"),
 			children: documentChildren,
-		});
-	}
-
-	if (visibleMenuKeys.includes("/knowledge")) {
-		items.push({
-			key: "module:knowledge",
-			icon: <DatabaseOutlined />,
-			label: createModuleLabel("console-module-knowledge", "知识库"),
-			children: [
-				{
-					key: "/knowledge",
-					icon: <DatabaseOutlined />,
-					label: createMenuLinkLabel("/knowledge", "知识库总览"),
-				},
-			],
 		});
 	}
 	if (visibleMenuKeys.includes("/qa")) {

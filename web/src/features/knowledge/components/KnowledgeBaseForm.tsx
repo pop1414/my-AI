@@ -1,17 +1,13 @@
-import { Button, Form, Input, Select, type FormInstance } from "antd";
+import { Form, Input, Select, type FormInstance } from "antd";
 
 interface KnowledgeBaseFormProps {
 	form: FormInstance;
 	onFinish: (values: any) => void;
-	loading: boolean;
-	isEdit?: boolean;
 }
 
 export function KnowledgeBaseForm({
 	form,
 	onFinish,
-	loading,
-	isEdit = false,
 }: KnowledgeBaseFormProps) {
 	return (
 		<Form
@@ -51,16 +47,6 @@ export function KnowledgeBaseForm({
 					]}
 				/>
 			</Form.Item>
-			{!isEdit && (
-				<Button
-					type="primary"
-					htmlType="submit"
-					loading={loading}
-					block
-				>
-					创建知识库
-				</Button>
-			)}
 		</Form>
 	);
 }

@@ -141,9 +141,7 @@ export function AppRoutes() {
 						<Route path="ingest/upload" element={<IngestUploadPage />} />
 					</Route>
 
-					<Route
-						element={<CapabilityRoute requiredCapability="canAccessKnowledge" />}
-					>
+					<Route element={<AdminRoute />}>
 						<Route path="knowledge" element={<KnowledgePage />} />
 					</Route>
 
