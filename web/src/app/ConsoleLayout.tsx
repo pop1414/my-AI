@@ -1,4 +1,4 @@
-import { Suspense } from "react";
+import { Suspense, useEffect, useState, useCallback, useRef } from "react";
 import {
 	AppstoreOutlined,
 	DatabaseOutlined,
@@ -15,7 +15,6 @@ import {
 import {
 	Breadcrumb,
 	Dropdown,
-	Layout,
 	Menu,
 	Space,
 	Spin,
@@ -26,7 +25,6 @@ import type { MenuProps } from "antd";
 import { Link, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "../shared/auth/AuthContext";
 
-const { Header, Sider, Content } = Layout;
 const { Title } = Typography;
 
 type MenuItem = Required<MenuProps>["items"][number];
@@ -37,6 +35,10 @@ const MODULE_OPEN_KEYS = [
 	"module:qa",
 	"module:admin",
 ];
+
+const MIN_SIDEBAR_WIDTH = 200;
+const MAX_SIDEBAR_WIDTH = 480;
+const DEFAULT_SIDEBAR_WIDTH = 260;
 
 function createModuleLabel(testId: string, label: string) {
 	return <span data-testid={testId}>{label}</span>;
@@ -245,7 +247,48 @@ function resolveMenuSelectedKey(pathname: string, search: string): string {
 export function ConsoleLayout() {
 	const location = useLocation();
 	const { user, visibleMenuKeys, logout } = useAuth();
-	const isQaLayout = location.pathname === "/qa";
+	
+	// Resizable Sidebar State
+	const [sidebarWidth, setSidebarWidth] = useState(() => {
+		const saved = localStorage.getItem("console-sidebar-width");
+		return saved ? parseInt(saved, 10) : DEFAULT_SIDEBAR_WIDTH;
+	});
+	const [isDragging, setIsDragging] = useState(false);
+	const dragRef = useRef<boolean>(false);
+
+	const handleMouseDown = useCallback(() => {
+		setIsDragging(true);
+		dragRef.current = true;
+		document.body.style.cursor = "col-resize";
+		document.body.style.userSelect = "none";
+	}, []);
+
+	useEffect(() => {
+		const handleMouseMove = (e: MouseEvent) => {
+			if (!dragRef.current) return;
+			const newWidth = Math.min(Math.max(e.clientX, MIN_SIDEBAR_WIDTH), MAX_SIDEBAR_WIDTH);
+			setSidebarWidth(newWidth);
+		};
+
+		const handleMouseUp = () => {
+			if (!dragRef.current) return;
+			setIsDragging(false);
+			dragRef.current = false;
+			document.body.style.cursor = "";
+			document.body.style.userSelect = "";
+			localStorage.setItem("console-sidebar-width", sidebarWidth.toString());
+		};
+
+		if (isDragging) {
+			window.addEventListener("mousemove", handleMouseMove);
+			window.addEventListener("mouseup", handleMouseUp);
+		}
+
+		return () => {
+			window.removeEventListener("mousemove", handleMouseMove);
+			window.removeEventListener("mouseup", handleMouseUp);
+		};
+	}, [isDragging, sidebarWidth]);
 
 	const menuItems = buildMenuItems(visibleMenuKeys);
 	const showSidebar = menuItems.length > 0;
@@ -267,92 +310,89 @@ export function ConsoleLayout() {
 	];
 
 	return (
-		<>
+		<div className="console-shell" data-testid="console-layout">
 			<a className="console-skip-link" href="#console-main">
 				跳到主内容
 			</a>
-			<Layout
-				className={isQaLayout ? "console-root console-root--qa" : "console-root"}
-				data-testid="console-layout"
-			>
-				{showSidebar && (
-					<Sider
-						width={isQaLayout ? 92 : 268}
-						breakpoint="lg"
-						collapsed={isQaLayout}
-						collapsedWidth={isQaLayout ? 92 : 0}
-						className={isQaLayout ? "console-sidebar console-sidebar--qa" : "console-sidebar"}
-					>
-						<div className={isQaLayout ? "console-logo console-logo--qa" : "console-logo"}>
-							{isQaLayout ? "AI" : "my-AI / Web Console"}
-						</div>
-						<nav aria-label="控制台主导航">
-							<Menu
-								className="console-sidebar-menu"
-								mode="inline"
-								inlineCollapsed={isQaLayout}
-								selectedKeys={[
-									resolveMenuSelectedKey(location.pathname, location.search),
-								]}
-								defaultOpenKeys={MODULE_OPEN_KEYS}
-								items={menuItems}
-							/>
-						</nav>
-					</Sider>
-				)}
-				<Layout>
-					<Header className="console-header">
-						<div className="console-header-copy">
-							<Title level={4} style={{ margin: 0, fontWeight: 500, letterSpacing: '-0.02em' }} data-testid="console-title">
-								{routeMeta.pageTitle}
-							</Title>
-							<Breadcrumb
-								items={[{ title: "控制台" }, { title: routeMeta.moduleLabel }, { title: routeMeta.pageTitle }]}
-								style={{ fontSize: 12 }}
-							/>
-						</div>
-						<Space className="console-header-actions" size={16}>
-							<Dropdown menu={{ items: userMenuItems }} placement="bottomRight">
-								<Space style={{ cursor: "pointer" }}>
-									<UserOutlined />
-									<span style={{ fontWeight: 500 }}>{user?.displayName ?? ""}</span>
-									{user?.workspaceRole && (
-										<Tag
-											bordered={false}
-											color="default"
-											style={{ fontSize: 11, textTransform: 'uppercase' }}
-										>
-											{user.workspaceRole}
-										</Tag>
-									)}
-									<DownOutlined style={{ fontSize: 10 }} />
-								</Space>
-							</Dropdown>
-						</Space>
-					</Header>
-					<Content className="console-content">
-						<main id="console-main" className="console-main">
-							<Suspense
-								fallback={
-									<div
-										style={{
-											display: "flex",
-											justifyContent: "center",
-											alignItems: "center",
-											minHeight: 300,
-										}}
-									>
-										<Spin size="large" />
-									</div>
-								}
-							>
-								<Outlet />
-							</Suspense>
-						</main>
-					</Content>
+			
+			{showSidebar && (
+				<aside 
+					className="console-aside" 
+					style={{ width: sidebarWidth }}
+				>
+					<div className="console-logo">
+						my-AI / Web Console
+					</div>
+					<nav className="console-sidebar-menu-wrapper" aria-label="控制台主导航">
+						<Menu
+							mode="inline"
+							selectedKeys={[
+								resolveMenuSelectedKey(location.pathname, location.search),
+							]}
+							defaultOpenKeys={MODULE_OPEN_KEYS}
+							items={menuItems}
+						/>
+					</nav>
+					<div 
+						className={`console-aside-resizer ${isDragging ? "is-dragging" : ""}`}
+						onMouseDown={handleMouseDown}
+					/>
+				</aside>
+			)}
 
-				</Layout>
-			</Layout>
-		</>
+			<div className="console-main-container">
+				<header className="console-header">
+					<div className="console-header-copy">
+						<Title level={4} className="console-page-title" data-testid="console-title">
+							{routeMeta.pageTitle}
+						</Title>
+						<Breadcrumb
+							items={[
+								{ title: "控制台" }, 
+								{ title: routeMeta.moduleLabel }, 
+								{ title: routeMeta.pageTitle }
+							]}
+						/>
+					</div>
+					<div className="console-header-actions">
+						<Dropdown menu={{ items: userMenuItems }} placement="bottomRight">
+							<Space style={{ cursor: "pointer" }}>
+								<UserOutlined />
+								<span style={{ fontWeight: 500 }}>{user?.displayName ?? ""}</span>
+								{user?.workspaceRole && (
+									<Tag
+										bordered={false}
+										color="default"
+										style={{ fontSize: 11, textTransform: 'uppercase' }}
+									>
+										{user.workspaceRole}
+									</Tag>
+								)}
+								<DownOutlined style={{ fontSize: 10 }} />
+							</Space>
+						</Dropdown>
+					</div>
+				</header>
+				
+				<main id="console-main" className="console-content">
+					<Suspense
+						fallback={
+							<div
+								style={{
+									display: "flex",
+									justifyContent: "center",
+									alignItems: "center",
+									minHeight: 300,
+								}}
+							>
+								<Spin size="large" />
+							</div>
+						}
+					>
+						<Outlet />
+					</Suspense>
+				</main>
+			</div>
+		</div>
 	);
 }

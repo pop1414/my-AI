@@ -1,22 +1,39 @@
 :root {
+  /* Colors from DESIGN.md */
   --console-ink: #171717;
-  --console-muted: #707070;
-  --console-subtle: #b2b2b2;
-  --console-surface: #ffffff;
-  --console-card-surface: #ffffff;
-  --console-sidebar-surface: #fafafa;
-  --console-content-surface: #ffffff;
-  --console-border: #e6e5e0;
-  --console-border-strong: #cfcdc4;
+  --console-ink-secondary: #212121;
+  --console-ink-mute: #707070;
+  --console-ink-faint: #b2b2b2;
+  
+  --console-canvas: #ffffff;
+  --console-canvas-soft: #fafafa;
+  --console-canvas-night: #1c1c1c;
+  
+  --console-hairline: #e6e5e0;
+  --console-hairline-strong: #cfcdc4;
+  
   --console-accent: #3ecf8e;
   --console-accent-strong: #24b47e;
   --console-accent-soft: rgba(62, 207, 142, 0.1);
-  --console-shadow: none;
+  
+  --console-success: #1f8a65;
+  --console-error: #cf2d56;
+
+  /* Timeline Colors */
+  --console-timeline-thinking: #dfa88f;
+  --console-timeline-grep: #9fc9a2;
+  --console-timeline-read: #9fbbe0;
+  --console-timeline-edit: #c0a8dd;
+
+  /* Layout */
+  --console-sidebar-width: 260px;
+  --console-header-height: 64px;
+  
   font-family: 'Inter', 'Segoe UI Variable', 'PingFang SC', 'Microsoft YaHei UI', sans-serif;
   line-height: 1.5;
   font-weight: 400;
   color: var(--console-ink);
-  background: #ffffff;
+  background: var(--console-canvas);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -31,7 +48,7 @@ body {
   margin: 0;
   min-height: 100vh;
   color: var(--console-ink);
-  background: #ffffff;
+  background: var(--console-canvas);
 }
 
 .console-skip-link {
@@ -41,9 +58,9 @@ body {
   z-index: 1000;
   padding: 10px 14px;
   border-radius: 6px;
-  background: #ffffff;
+  background: var(--console-canvas);
   color: var(--console-ink);
-  border: 1px solid var(--console-border);
+  border: 1px solid var(--console-hairline);
   text-decoration: none;
 }
 
@@ -51,241 +68,159 @@ body {
   top: 16px;
 }
 
-.console-root {
-  min-height: 100vh;
-  background: transparent;
-}
-
-.console-sidebar {
-  background: var(--console-sidebar-surface) !important;
-  border-right: 1px solid var(--console-border);
-}
-
-.console-sidebar--qa {
-  border-right-color: var(--console-border);
-}
-
-.console-logo {
-  color: var(--console-ink);
-  font-weight: 500;
-  letter-spacing: -0.42px;
-  height: 64px;
+/* Custom Shell Layout */
+.console-shell {
   display: flex;
-  align-items: center;
-  padding: 0 24px;
-  border-bottom: 1px solid var(--console-border);
-  background: var(--console-surface);
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden;
+  background: var(--console-canvas);
 }
 
-.console-logo--qa {
-  justify-content: center;
-  padding: 0;
-  font-size: 18px;
+.console-aside {
+  display: flex;
+  flex-direction: column;
+  background: var(--console-canvas-soft);
+  border-right: 1px solid var(--console-hairline);
+  position: relative;
+  flex-shrink: 0;
+  z-index: 10;
 }
 
-.console-sidebar-menu {
-  background: transparent !important;
-  color: var(--console-ink);
-  padding: 12px 10px 20px;
+.console-aside-resizer {
+  position: absolute;
+  top: 0;
+  right: -2px;
+  width: 4px;
+  height: 100%;
+  cursor: col-resize;
+  z-index: 20;
+  transition: background 0.2s;
 }
 
-.console-sidebar-menu.ant-menu-inline {
-  border-inline-end: none !important;
+.console-aside-resizer:hover,
+.console-aside-resizer.is-dragging {
+  background: var(--console-accent);
 }
 
-.console-menu-link {
-  display: inline-flex;
-  align-items: center;
-  width: 100%;
-  color: inherit;
-  text-decoration: none;
-}
-
-.console-sidebar-menu .ant-menu-submenu-title,
-.console-sidebar-menu .ant-menu-item {
-  color: var(--console-muted) !important;
-  border-radius: 6px;
-  margin-inline: 0 !important;
-  width: 100% !important;
-  font-weight: 400;
-}
-
-.console-sidebar-menu .ant-menu-submenu-title:hover,
-.console-sidebar-menu .ant-menu-item:hover {
-  color: var(--console-ink) !important;
-  background: rgba(0, 0, 0, 0.04) !important;
-}
-
-.console-sidebar-menu .ant-menu-submenu-selected > .ant-menu-submenu-title,
-.console-sidebar-menu .ant-menu-submenu-open > .ant-menu-submenu-title {
-  color: var(--console-ink) !important;
-}
-
-.console-sidebar-menu .ant-menu-item-selected,
-.console-sidebar-menu .ant-menu-item-active {
-  color: var(--console-ink) !important;
-  background: var(--console-accent) !important;
-  font-weight: 500;
-}
-
-.console-sidebar-menu .ant-menu-item-selected::after,
-.console-sidebar-menu .ant-menu-item::after,
-.console-sidebar-menu .ant-menu-submenu-title::after {
-  border-inline-end: none !important;
-}
-
-.console-sidebar-menu .ant-menu-inline .ant-menu-item,
-.console-sidebar-menu .ant-menu-inline .ant-menu-submenu-title {
-  height: 40px;
-  line-height: 40px;
+.console-main-container {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  background: var(--console-canvas);
 }
 
 .console-header {
-  background: var(--console-surface);
-  padding: 16px 24px;
-  border-bottom: 1px solid var(--console-border);
-  height: auto;
-  line-height: normal;
+  height: var(--console-header-height);
+  padding: 0 24px;
+  background: var(--console-canvas);
+  border-bottom: 1px solid var(--console-hairline);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
+  flex-shrink: 0;
 }
 
-.console-header-copy {
+.console-logo {
+  height: var(--console-header-height);
   display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.console-content {
-  position: relative;
-  padding: 32px;
-  background: var(--console-content-surface);
-}
-
-.console-main {
-  min-height: 100%;
-}
-
-.console-content .ant-breadcrumb {
-  margin-bottom: 18px !important;
-  padding: 8px 0;
-  border: none;
-  border-radius: 0;
-  background: transparent;
-}
-
-.console-content .ant-card {
-  background: var(--console-card-surface);
-  border: 1px solid var(--console-border);
-  box-shadow: none;
-}
-
-.console-content .ant-card .ant-card-head {
-  background: #fafafa;
-  border-bottom: 1px solid var(--console-border);
-}
-
-.console-content .ant-table-wrapper .ant-table {
-  background: var(--console-surface);
-  border: 1px solid var(--console-border);
-  border-radius: 0;
-}
-
-.console-content .ant-table-wrapper .ant-table-thead > tr > th {
-  background: #fafafa !important;
-  color: var(--console-muted);
-  border-bottom: 1px solid var(--console-border);
-}
-
-.console-content .ant-table-wrapper .ant-table-tbody > tr > td {
-  border-bottom: 1px solid var(--console-border);
-}
-
-.console-content .ant-input,
-.console-content .ant-input-affix-wrapper,
-.console-content .ant-select-selector,
-.console-content .ant-input-number,
-.console-content .ant-picker {
-  background: #ffffff !important;
-  border: 1px solid var(--console-border) !important;
-  box-shadow: none !important;
-  border-radius: 4px;
-}
-
-.console-content .ant-btn:not(.ant-btn-primary) {
-  background: #ffffff !important;
-  border: 1px solid var(--console-border-strong) !important;
-  border-radius: 6px;
+  align-items: center;
+  padding: 0 24px;
+  font-weight: 500;
+  letter-spacing: -0.42px;
+  border-bottom: 1px solid var(--console-hairline);
   color: var(--console-ink);
-  box-shadow: none !important;
+  font-size: 16px;
+  white-space: nowrap;
+  overflow: hidden;
 }
 
-.console-content .ant-btn-primary {
-  box-shadow: none;
+.console-sidebar-menu-wrapper {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px 8px;
+}
+
+/* Ant Design Overrides to match DESIGN.md */
+.ant-menu {
+  background: transparent !important;
+  border-inline-end: none !important;
+}
+
+.ant-menu-item, .ant-menu-submenu-title {
+  border-radius: 6px !important;
+  margin-inline: 0 !important;
+  width: 100% !important;
+  color: var(--console-ink-mute) !important;
+}
+
+.ant-menu-item:hover, .ant-menu-submenu-title:hover {
+  background: rgba(0, 0, 0, 0.04) !important;
+  color: var(--console-ink) !important;
+}
+
+.ant-menu-item-selected {
+  background: var(--console-accent) !important;
+  color: var(--console-ink) !important;
+  font-weight: 500 !important;
+}
+
+/* Global Content Layout */
+.console-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 32px;
+}
+
+.console-page-title {
+  margin: 0;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  color: var(--console-ink);
+}
+
+/* Design System Basics */
+.ant-card {
+  border: 1px solid var(--console-hairline) !important;
+  box-shadow: none !important;
+  border-radius: 12px !important;
+}
+
+.ant-card-head {
+  border-bottom: 1px solid var(--console-hairline) !important;
+  background: var(--console-canvas-soft) !important;
+}
+
+.ant-table {
+  border: 1px solid var(--console-hairline) !important;
+  border-radius: 0 !important;
+}
+
+.ant-table-thead > tr > th {
+  background: var(--console-canvas-soft) !important;
+  border-bottom: 1px solid var(--console-hairline) !important;
+}
+
+.ant-btn-primary {
   background: var(--console-accent) !important;
   border-color: var(--console-accent) !important;
   color: var(--console-ink) !important;
+  box-shadow: none !important;
   font-weight: 500;
-  border-radius: 6px;
 }
 
-.console-content .ant-btn-primary:hover {
+.ant-btn-primary:hover {
   background: var(--console-accent-strong) !important;
   border-color: var(--console-accent-strong) !important;
 }
 
-.console-content .ant-tag {
-  border-radius: 4px;
-  border: 1px solid var(--console-border);
-  background: #fafafa;
-  color: var(--console-muted);
-}
-
-.console-link-button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  border-radius: 6px;
-  border: 1px solid var(--console-border-strong);
-  font-weight: 500;
-  text-decoration: none;
-}
-
-.console-link-button--primary {
-  color: var(--console-ink);
-  background: var(--console-accent);
-  border-color: var(--console-accent);
-}
-
-.console-link-button--primary:hover {
-  color: var(--console-ink);
-  background: var(--console-accent-strong);
-}
-
-.console-action-button--danger {
-  color: var(--console-ink) !important;
-  background: #ffffff !important;
-  border: 1px solid #cf2d56 !important;
-}
-
-.console-action-button--danger:hover {
-  background: #cf2d56 !important;
-  color: #ffffff !important;
-}
-
-.console-table-action-group {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
+.ant-btn:not(.ant-btn-primary) {
+  border-color: var(--console-hairline-strong) !important;
+  box-shadow: none !important;
 }
 
 @media (max-width: 640px) {
-  .console-header {
-    padding: 12px 16px;
-  }
   .console-content {
     padding: 24px 16px;
   }

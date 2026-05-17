@@ -24,7 +24,7 @@ createRoot(document.getElementById("root")!).render(
 			locale={zhCN}
 			theme={{
 				token: {
-					// Brand & Accent
+					// Brand & Accent (DESIGN.md)
 					colorPrimary: "#3ecf8e", // Emerald
 					colorInfo: "#3ecf8e",
 					colorSuccess: "#1f8a65",
@@ -32,16 +32,17 @@ createRoot(document.getElementById("root")!).render(
 					
 					// Text
 					colorText: "#171717", // Ink
-					colorTextSecondary: "#707070", // Ink Mute
+					colorTextSecondary: "#212121", // Ink Secondary
+					colorTextTertiary: "#707070", // Ink Mute
 					
 					// Surface & Borders
-					colorBgLayout: "#fafafa", // Canvas Soft
+					colorBgLayout: "#ffffff", // Canvas
 					colorBgContainer: "#ffffff", // Canvas
 					colorBorder: "#e6e5e0", // Hairline
 					colorBorderSecondary: "#e6e5e0",
 					
-					// Shapes & Elevation
-					borderRadius: 6, // rounded.sm (Signature square-ish)
+					// Shapes & Elevation (DESIGN.md: No shadows, 6px radius)
+					borderRadius: 6, // rounded.sm
 					boxShadow: "none",
 					boxShadowSecondary: "none",
 					boxShadowTertiary: "none",
@@ -58,25 +59,36 @@ createRoot(document.getElementById("root")!).render(
 						colorPrimaryText: "#171717",
 						colorTextLightSolid: "#171717",
 						primaryShadow: "none",
+						borderRadius: 6,
 					},
 					Card: {
 						borderRadiusLG: 12, // rounded.lg
-						paddingLG: 24,
+						paddingLG: 32,
+						boxShadowTertiary: "none",
 					},
 					Table: {
 						borderRadius: 0,
 						headerBg: "#fafafa",
 						headerColor: "#707070",
 						headerSplitColor: "transparent",
+						borderColor: "#e6e5e0",
 					},
 					Menu: {
 						itemBorderRadius: 6,
 						subMenuItemBorderRadius: 6,
 						itemSelectedColor: "#171717",
 						itemSelectedBg: "#3ecf8e",
+						activeBarHeight: 0,
+						activeBarWidth: 0,
 					},
 					Typography: {
 						fontWeightStrong: 500,
+					},
+					Breadcrumb: {
+						itemColor: "#707070",
+						lastItemColor: "#171717",
+						separatorColor: "#e6e5e0",
+						fontSize: 12,
 					}
 				},
 			}}
