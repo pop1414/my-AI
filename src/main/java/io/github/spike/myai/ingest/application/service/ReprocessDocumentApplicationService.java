@@ -201,6 +201,7 @@ public class ReprocessDocumentApplicationService implements ReprocessDocumentUse
         // 重处理仅将文档回退到 UPLOADED 等待重新调度，此时所有旧元数据已清除，故 processingMetadata 传 null。
         return new DocumentStatusResult(
                 documentId,
+                document.kbId(),
                 document.latestVersionNumber(),
                 document.filename(),
                 document.latestVersionOriginType(),

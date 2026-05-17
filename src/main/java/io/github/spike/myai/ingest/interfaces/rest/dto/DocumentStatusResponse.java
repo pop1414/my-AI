@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.JsonNode;
  * 文档状态查询响应 DTO（REST Output Model）。
  *
  * @param documentId 文档资产 ID
+ * @param kbId 文档所属知识库 ID
  * @param latestVersionNumber 当前最新版本号
  * @param latestFilename 当前最新版本来源文件名
  * @param latestVersionOriginType 当前最新版本来源类型
@@ -14,6 +15,7 @@ import com.fasterxml.jackson.databind.JsonNode;
  */
 public record DocumentStatusResponse(
         String documentId,
+        String kbId,
         int latestVersionNumber,
         String latestFilename,
         String latestVersionOriginType,

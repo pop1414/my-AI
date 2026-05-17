@@ -261,6 +261,7 @@ class DocumentIngestControllerTest {
         when(getDocumentStatusUseCase.handle(any(GetDocumentStatusQuery.class)))
                 .thenReturn(new DocumentStatusResult(
                         new DocumentId("doc-200"),
+                        "kb-status-1",
                         4,
                         "latest.pdf",
                         DocumentVersionOriginType.UPLOAD,
@@ -270,6 +271,7 @@ class DocumentIngestControllerTest {
         mockMvc.perform(get("/api/v1/documents/{documentId}/status", "doc-200"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.documentId").value("doc-200"))
+                .andExpect(jsonPath("$.kbId").value("kb-status-1"))
                 .andExpect(jsonPath("$.latestVersionNumber").value(4))
                 .andExpect(jsonPath("$.latestFilename").value("latest.pdf"))
                 .andExpect(jsonPath("$.latestVersionOriginType").value("UPLOAD"))
@@ -287,6 +289,7 @@ class DocumentIngestControllerTest {
         when(getDocumentStatusUseCase.handle(any(GetDocumentStatusQuery.class)))
                 .thenReturn(new DocumentStatusResult(
                         new DocumentId("doc-201"),
+                        "kb-status-2",
                         5,
                         "indexed.pdf",
                         DocumentVersionOriginType.ROLLBACK,
@@ -296,6 +299,7 @@ class DocumentIngestControllerTest {
         mockMvc.perform(get("/api/v1/documents/{documentId}/status", "doc-201"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.documentId").value("doc-201"))
+                .andExpect(jsonPath("$.kbId").value("kb-status-2"))
                 .andExpect(jsonPath("$.latestVersionNumber").value(5))
                 .andExpect(jsonPath("$.latestFilename").value("indexed.pdf"))
                 .andExpect(jsonPath("$.latestVersionOriginType").value("ROLLBACK"))
@@ -919,6 +923,7 @@ class DocumentIngestControllerTest {
         when(reprocessDocumentUseCase.handle(any()))
                 .thenReturn(new DocumentStatusResult(
                         new DocumentId("doc-900"),
+                        "kb-reprocess-1",
                         6,
                         "rollback-source.txt",
                         DocumentVersionOriginType.ROLLBACK,
@@ -928,6 +933,7 @@ class DocumentIngestControllerTest {
         mockMvc.perform(post("/api/v1/documents/{documentId}/reprocess", "doc-900"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.documentId").value("doc-900"))
+                .andExpect(jsonPath("$.kbId").value("kb-reprocess-1"))
                 .andExpect(jsonPath("$.latestVersionNumber").value(6))
                 .andExpect(jsonPath("$.latestFilename").value("rollback-source.txt"))
                 .andExpect(jsonPath("$.latestVersionOriginType").value("ROLLBACK"))

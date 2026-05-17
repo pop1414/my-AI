@@ -67,6 +67,7 @@ class GetDocumentStatusApplicationServiceTest {
         DocumentStatusResult result = service.handle(new GetDocumentStatusQuery("doc-100"));
 
         assertEquals("doc-100", result.documentId().value());
+        assertEquals("kb-1", result.kbId());
         assertEquals(1, result.latestVersionNumber());
         assertEquals("a.txt", result.latestFilename());
         assertEquals(DocumentVersionOriginType.UPLOAD, result.latestVersionOriginType());

@@ -8,6 +8,7 @@ import io.github.spike.myai.ingest.domain.model.UploadStatus;
  * 查询文档状态用例的返回结果（Application Result）。
  *
  * @param documentId 文档资产 ID
+ * @param kbId 文档所属知识库 ID
  * @param latestVersionNumber 当前最新版本号
  * @param latestFilename 当前最新版本来源文件名
  * @param latestVersionOriginType 当前最新版本来源类型
@@ -16,6 +17,7 @@ import io.github.spike.myai.ingest.domain.model.UploadStatus;
  */
 public record DocumentStatusResult(
         DocumentId documentId,
+        String kbId,
         int latestVersionNumber,
         String latestFilename,
         DocumentVersionOriginType latestVersionOriginType,
