@@ -20,9 +20,12 @@ import org.springframework.stereotype.Component;
  *
  * <p>该组件在应用启动时（ApplicationRunner）自动运行。它的核心目标是“强约束”数据库 Schema 的一致性：
  * <ul>
- *     <li>检查 document 主表、旧兼容镜像列与 document version 事实表是否存在。</li>
+ *     <li>检查 document 主表上的身份列、latest projection 列、旧兼容镜像列与
+ *         document version 事实表是否存在。</li>
  *     <li>检查迁移期兼容索引与 version 事实查询索引是否符合预期。</li>
  * </ul>
+ * latest projection maintenance 未来会下沉到数据库侧独立 module；这里的自检职责
+ * 是把那条 seam 当前依赖的物理列与索引固定下来，避免应用层在 schema 漂移后继续启动。
  * 校验失败时会打印详细的修复指导 SQL 并直接抛出异常阻止应用启动，从而避免在运行时出现难以排查的数据一致性问题。
  */
 @Component
@@ -51,7 +54,8 @@ public class IngestSchemaVerifier implements ApplicationRunner {
     private static final Pattern STATUS_NOT_DELETED_PATTERN =
             Pattern.compile("status.*<>.*'deleted'");
 
-    // document 主表身份与 latest projection 列，缺失任何一列都将导致启动失败。
+    // document 主表身份与 latest projection 列。
+    // 这些列构成 latest projection seam 当前稳定的物理接口，缺失任何一列都将导致启动失败。
     private static final Set<String> REQUIRED_DOCUMENT_COLUMNS = Set.of(
             "document_id",
             "kb_id",
@@ -67,6 +71,7 @@ public class IngestSchemaVerifier implements ApplicationRunner {
             "updated_at");
 
     // 迁移期旧版本事实镜像列：只允许兼容写入，不允许作为新读路径事实源。
+    // ADR-0006 physical drop plan 完成后，这组列与对应校验将一起删除。
     private static final Set<String> LEGACY_COMPATIBILITY_COLUMNS = Set.of(
             "file_hash",
             "filename",

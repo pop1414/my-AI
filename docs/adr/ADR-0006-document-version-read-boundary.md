@@ -43,18 +43,29 @@ Accepted
 - 知识库已索引文档计数读取 `ingest_documents.latest_status`。
 - schema 自检同时校验主表 latest projection、旧兼容镜像列、version 事实列与 version 文件哈希索引。
 
+## Latest Projection Maintenance Module
+
+- `ingest_documents.latest_version_number/latest_status/latest_filename/latest_version_origin_type` 是稳定业务语义，不是允许调用方随意拼接维护的偶然字段组合。
+- 应用层 caller 只表达“推进一个 document version”或“把某个 version 提升为 latest”；latest projection maintenance 应收敛为独立 module，而不是继续散落在多个 repository 分支里的双写 SQL。
+- 该 module 的 seam 优先放在数据库侧，由单一适配器维护 latest projection 与迁移期旧兼容镜像；可接受的实现形态包括统一 SQL function/procedure，或仅负责从 `ingest_document_versions` 回写 `ingest_documents` latest projection 的 trigger。
+- 在该 module 落地前，`ingest_documents.latest_*` 仍视为从版本事实导出的 latest projection；新增状态推进、回退、重处理、删除逻辑时，必须同步审查主表 latest projection、版本表当前 latest 行和旧兼容镜像是否仍满足同一组 invariant。
+- 列表读取、详情读取、版本历史读取等读路径继续把 latest projection 当作稳定读 seam，不因 maintenance module 的落地而改变读契约。
+
 ## Consequences
 
 主表旧版本事实字段仍会被写入，但它们只是迁移兼容镜像。
 后续代码审阅时，若发现生产读路径使用 `ingest_documents.file_hash/filename/file_size/status/processing_metadata`
 推导版本语义，应视为边界回退。
 若发现文档版本正文读取从源文件实时解析，或从 `vector_store` chunk 拼接完整正文，也应视为边界回退。
+若发现新的状态推进分支继续直接复制 `UPDATE ingest_documents` + `UPDATE ingest_document_versions`
+双写模式，而不是收口到统一 latest projection seam，也应视为 module depth 退化。
 
 ## Physical Drop Plan
 
-1. 确认生产读路径与报表均不再依赖主表旧版本事实列。
-2. 将上传幂等唯一约束迁移到以 version 事实为来源的约束或应用级冲突检查。
-3. 删除 `uk_ingest_documents_kb_file_hash` 旧兼容索引。
-4. 移除 `JdbcDocumentRepository` 中对主表旧版本事实列的兼容镜像写入。
-5. 通过 Flyway 删除 `ingest_documents.file_hash`、`filename`、`file_size`、`status`、`processing_metadata`。
-6. 更新 schema 自检，移除旧兼容镜像列检查。
+1. 先把 latest projection maintenance 收口为单一数据库 seam，停止在多个 repository 分支中复制主表/版本表双写逻辑。
+2. 确认生产读路径与报表均不再依赖主表旧版本事实列。
+3. 将上传幂等唯一约束迁移到以 version 事实为来源的约束或应用级冲突检查。
+4. 删除 `uk_ingest_documents_kb_file_hash` 旧兼容索引。
+5. 移除 `JdbcDocumentRepository` 中对主表旧版本事实列的兼容镜像写入。
+6. 通过 Flyway 删除 `ingest_documents.file_hash`、`filename`、`file_size`、`status`、`processing_metadata`。
+7. 更新 schema 自检，移除旧兼容镜像列检查。

@@ -20,6 +20,14 @@ import org.springframework.transaction.annotation.Transactional;
  * <p>当前实现将稳定的 `document` 身份与 latest `document version`
  * 事实拆开存储，但对上层仍保持 `DocumentRepository` 端口不变。
  * 现阶段 `Document` 仍表示“文档资产 + latest version projection”。
+ *
+ * <p>这也是当前持久化适配器最明显的 shallow module：调用方通常只想“推进一个
+ * document version”，但该适配器内部还要手工维护
+ * {@code ingest_documents.latest_version_number/latest_status/latest_filename/latest_version_origin_type}
+ * 以及版本表当前 latest 行之间的镜像不变量。ADR-0006 已将这套 latest projection
+ * 定义为稳定语义；后续应继续下沉为独立的 latest projection maintenance module，
+ * 由数据库侧 seam（例如统一 SQL function/procedure，或仅负责 latest projection
+ * 回写的 trigger）集中维护。当前类中的双写 SQL 仅是迁移期实现，不应继续扩散。
  */
 @Repository
 @Transactional
@@ -184,8 +192,12 @@ public class JdbcDocumentRepository implements DocumentRepository {
             """;
 
     /**
-     * 以下主表状态/错误字段更新仅维护 latest projection 与旧兼容镜像。
-     * 版本级处理事实必须同步写入 {@code ingest_document_versions}。
+     * 以下状态推进 SQL 共同承担 latest projection maintenance。
+     *
+     * <p>这正是当前实现 locality 最差的部分：每个状态分支都要分别更新
+     * {@code ingest_documents} 与 {@code ingest_document_versions}，
+     * 调用方接口只表达“推进 latest version”，实现却暴露为多组手工双写。
+     * 在独立 module 落地前，任何新增状态流转都必须同时审查两张表上的镜像事实是否仍然一致。
      */
     private static final String COMPARE_AND_SET_DOCUMENT_STATUS_SQL = """
             UPDATE ingest_documents
@@ -958,6 +970,10 @@ public class JdbcDocumentRepository implements DocumentRepository {
 
     /**
      * 追加版本并同步 latest projection。
+     *
+     * <p>当前实现先更新主表 latest projection，再写入版本表新版本事实。
+     * 这说明“追加版本”对调用方是单一动作，但对适配器实现却仍需手工编排双写顺序；
+     * 后续 latest projection maintenance module 落地后，这里应退化为单一 seam 调用。
      *
      * @param workspaceId                 工作区标识
      * @param documentId                  文档资产 ID

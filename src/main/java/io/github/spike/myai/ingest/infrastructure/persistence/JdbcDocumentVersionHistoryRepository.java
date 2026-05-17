@@ -18,6 +18,9 @@ import org.springframework.stereotype.Repository;
  *
  * <p>基于 Spring {@link JdbcTemplate} 实现，
  * 负责将 SQL 查询结果映射为领域模型 {@link DocumentVersionHistoryItem}。
+ * 该读模型以版本表事实为中心，只借用主表的 {@code latest_version_number}
+ * 来标记哪一条历史记录是 current latest；它不消费主表旧兼容镜像列，
+ * 也不参与 latest projection maintenance。
  *
  * <p>设计要点：
  * <ul>
@@ -42,7 +45,8 @@ public class JdbcDocumentVersionHistoryRepository implements DocumentVersionHist
      *   <li>以 ingest_documents 为主表，通过 document_id 关联版本表；</li>
      *   <li>workspace_id 作为租户隔离条件，避免跨工作区数据泄露；</li>
      *   <li>latest_version_number 取自主表，每条版本记录携带同一值
-     *       （用于应用层判定 isLatestVersion）；</li>
+     *       （用于应用层判定 isLatestVersion）；这也是该查询唯一依赖的
+     *       latest projection 字段；</li>
      *   <li>failure_reason 使用 CASE WHEN 在数据库层过滤，
      *       减少应用层条件判断；</li>
      *   <li>上传人展示名优先使用 display_name，缺失时回退 username。</li>
