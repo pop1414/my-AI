@@ -23,7 +23,7 @@ import {
 import type { UploadFile } from "antd/es/upload/interface";
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { Navigate, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
 	deleteDocument,
 	getDocumentVersionHistory,
@@ -43,6 +43,7 @@ import { VersionUploadResultAlert } from "../components/VersionUploadResultAlert
 import { VersionRollbackResultAlert } from "../components/VersionRollbackResultAlert";
 import { formatFileSize, formatTime } from "../utils/formatters";
 import { VersionHistoryList } from "../components/VersionHistoryList";
+import { useAuth } from "../../../shared/auth/AuthContext";
 import "./IngestDocumentDetailPage.css";
 
 const uploadAllowedStatuses = new Set(["INDEXED", "FAILED"]);
@@ -111,9 +112,20 @@ function buildDeletedListPath(returnTo: string, documentId: string): string {
 }
 
 export function IngestDocumentDetailPage() {
-	const { documentId = "" } = useParams<{ documentId?: string }>();
-	const [searchParams, setSearchParams] = useSearchParams();
+	const { isAdmin, status } = useAuth();
 	const navigate = useNavigate();
+	const { documentId = "" } = useParams<{ documentId?: string }>();
+
+	// 等待认证状态加载完成
+	if (status === 'loading') {
+		return <div className="detail-page"><Skeleton active paragraph={{ rows: 10 }} /></div>;
+	}
+
+	if (!isAdmin) {
+		return <Navigate to={`/member/read/${encodeURIComponent(documentId)}`} replace />;
+	}
+
+	const [searchParams, setSearchParams] = useSearchParams();
 	const queryClient = useQueryClient();
 	const [uploadModalOpen, setUploadModalOpen] = useState(false);
 	const [deleteModalOpen, setDeleteModalOpen] = useState(false);

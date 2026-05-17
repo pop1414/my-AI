@@ -104,6 +104,12 @@ const PlaceholderPage = lazy(() =>
 		default: m.PlaceholderPage,
 	})),
 );
+const MemberAskableBaselinePage = lazy(() =>
+	import("../features/member/pages/MemberAskableBaselinePage").then((m) => ({
+		default: m.MemberAskableBaselinePage,
+	}))
+);
+
 
 function HomeRedirect() {
 	const { defaultLandingPath } = useAuth();
@@ -143,6 +149,10 @@ export function AppRoutes() {
 
 					<Route element={<CapabilityRoute requiredCapability="canAskQuestion" />}>
 						<Route path="qa" element={<QaPage />} />
+					</Route>
+
+					<Route element={<CapabilityRoute requiredCapability="canAccessDocumentList" />}>
+						<Route path="member/read/:documentId" element={<MemberAskableBaselinePage />} />
 					</Route>
 
 					<Route
