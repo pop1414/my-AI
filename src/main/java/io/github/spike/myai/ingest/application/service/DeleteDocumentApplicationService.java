@@ -12,6 +12,7 @@ import io.github.spike.myai.ingest.application.usecase.DeleteDocumentUseCase;
 import io.github.spike.myai.ingest.domain.model.Document;
 import io.github.spike.myai.ingest.domain.model.DocumentId;
 import io.github.spike.myai.ingest.domain.model.UploadStatus;
+import io.github.spike.myai.ingest.domain.port.DocumentProcessingArtifactStorage;
 import io.github.spike.myai.ingest.domain.port.DocumentRepository;
 import io.github.spike.myai.ingest.domain.port.DocumentSourceStorage;
 import io.github.spike.myai.ingest.domain.port.DocumentVectorIndexer;
@@ -27,7 +28,7 @@ import org.springframework.stereotype.Service;
  * 文档资产删除应用服务（Application Service）。
  *
  * <p>该服务实现 {@link DeleteDocumentUseCase} 用例接口，
- * 负责协调文档在数据库、源文件存储以及矢量索引库中的彻底删除。
+ * 负责协调文档在数据库、源文件存储、处理产物存储以及矢量索引库中的彻底删除。
  * 采用<b>状态机 + CAS 乐观锁</b>确保并发场景下删除操作的安全性和幂等性。
  *
  * <h3>处理流程</h3>
@@ -36,7 +37,7 @@ import org.springframework.stereotype.Service;
  *   <li>幂等检查：已删除则直接返回成功；</li>
  *   <li>冲突检查：UPLOADED/INGESTING/DELETING 状态拒绝删除；</li>
  *   <li>CAS 锁定为 DELETING 状态；</li>
- *   <li>清理物理资产（源文件 + 向量索引）；</li>
+ *   <li>清理物理资产（源文件 + 处理产物 + 向量索引）；</li>
  *   <li>标记为最终 DELETED 状态；</li>
  *   <li>异常回滚：物理清理失败时恢复到删除前状态。</li>
  * </ol>
@@ -57,6 +58,9 @@ public class DeleteDocumentApplicationService implements DeleteDocumentUseCase {
 
     /** 源文件存储端口：用于物理删除上传的原始文件（如 MinIO / 本地文件系统） */
     private final DocumentSourceStorage documentSourceStorage;
+
+    /** 处理产物存储端口：用于删除 cleaned.md 等版本级 artifact */
+    private final DocumentProcessingArtifactStorage documentProcessingArtifactStorage;
 
     /** 矢量索引端口：用于删除文档对应的向量数据（如 pgvector / Elasticsearch） */
     private final DocumentVectorIndexer documentVectorIndexer;
@@ -81,6 +85,7 @@ public class DeleteDocumentApplicationService implements DeleteDocumentUseCase {
      *
      * @param documentRepository     文档元数据仓储（领域端口）
      * @param documentSourceStorage  源文件存储（领域端口）
+     * @param documentProcessingArtifactStorage 处理产物存储（领域端口）
      * @param documentVectorIndexer  矢量索引器（领域端口）
      * @param ingestMetrics          业务指标监控（应用层）
      * @param currentUserProvider    当前用户上下文提供器（应用层端口）
@@ -90,6 +95,7 @@ public class DeleteDocumentApplicationService implements DeleteDocumentUseCase {
     public DeleteDocumentApplicationService(
             DocumentRepository documentRepository,
             DocumentSourceStorage documentSourceStorage,
+            DocumentProcessingArtifactStorage documentProcessingArtifactStorage,
             DocumentVectorIndexer documentVectorIndexer,
             IngestMetrics ingestMetrics,
             CurrentUserProvider currentUserProvider,
@@ -97,6 +103,7 @@ public class DeleteDocumentApplicationService implements DeleteDocumentUseCase {
             AuditEventRepository auditEventRepository) {
         this.documentRepository = documentRepository;
         this.documentSourceStorage = documentSourceStorage;
+        this.documentProcessingArtifactStorage = documentProcessingArtifactStorage;
         this.documentVectorIndexer = documentVectorIndexer;
         this.ingestMetrics = ingestMetrics;
         this.currentUserProvider = currentUserProvider;
@@ -182,8 +189,9 @@ public class DeleteDocumentApplicationService implements DeleteDocumentUseCase {
         }
 
         try {
-            // 5. 执行物理资产清理：删除源文件和矢量索引
+            // 5. 执行物理资产清理：删除源文件、版本处理产物和矢量索引
             documentSourceStorage.deleteByDocumentId(documentId);
+            documentProcessingArtifactStorage.deleteByDocumentId(workspaceId, documentId);
             documentVectorIndexer.deleteByDocumentId(documentId);
 
             // 6. 最终确认：将状态更新为最终态 DELETED

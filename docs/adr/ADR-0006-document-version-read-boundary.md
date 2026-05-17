@@ -23,10 +23,12 @@ Accepted
 - `cleaned.md` 是版本级 artifact，不是 document 级共享文件；artifact key 必须包含 `workspaceId`、`documentId`、`versionNumber` 和 artifact 名称。
 - 源文件和处理产物在对象存储中逻辑隔离；首期可使用同一 MinIO bucket 的不同 prefix，例如 `source/...` 与 `artifacts/...`。
 - 应用层通过版本处理产物存储端口读取正文，不直接依赖本地文件路径或 MinIO SDK。
-- 文档详情默认正文接口为 `GET /api/v1/documents/{documentId}/content`；指定版本正文接口为 `GET /api/v1/documents/{documentId}/versions/{versionNumber}/content`。
-- 问答引用侧栏正文接口为 `GET /api/v1/documents/{documentId}/askable-content`，明确表达读取问答基线版本，而不是通过 query 参数复用详情正文语义。
-- 文档详情正文未显式指定版本时默认读取当前最新版本；显式指定版本时读取该历史版本，但只有具备目标 `document` 管理权限的用户可读取任意历史版本正文。
-- 问答引用侧栏的正文读取使用当前问答基线版本。普通 `KB_READER` 只能读取问答基线版本正文；管理人员读取正文与版本历史查看走显式版本读取语义。
+- 文档版本正文读取使用统一接口 `GET /api/v1/documents/{documentId}/content`，通过必填查询参数 `source` 表达读取意图。
+- `source=LATEST` 表示服务端选择当前 latest version 并忠实表达 latest 状态；该分支不能自动回退到旧版本，也不能通过前端传入 `versionNumber` 来模拟 latest。
+- `source=ASKABLE_BASELINE` 表示服务端选择当前 QA 可问答基线版本，用于问答引用侧栏和普通读者正文核对。
+- `source=EXPLICIT_VERSION&versionNumber={versionNumber}` 表示读取指定历史版本正文；只有具备目标 `document` 管理权限的用户可读取任意历史版本正文。
+- 普通 `KB_READER` 只能读取问答基线版本正文，不能通过 `source=EXPLICIT_VERSION` 或伪造 `versionNumber` 浏览任意历史版本正文。
+- `source` 是稳定业务语义，不是前端展示标签。服务端必须按 `source` 分支分别选择版本、校验权限并映射错误码。
 - 正文读取不改变问答基线，也不影响后续问答版本选择。
 - `INDEXED` 与 `FAILED` 版本只要存在 `cleaned.md` 即可读取正文；处理中版本正文未生成时返回 `CONTENT_NOT_READY`。
 - 版本状态已完成但 `cleaned.md` 缺失时返回 `CONTENT_ARTIFACT_MISSING`，不得伪装成空正文。

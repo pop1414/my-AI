@@ -97,7 +97,7 @@ class ProcessDocumentApplicationServiceTest {
         service.handle(documentId);
 
         verify(vectorIndexer, times(1)).index(eq(ingesting), eq(List.of(new DocumentChunk("hello world", SourceHint.none()))));
-        verify(artifactStorage, times(1)).save(eq(documentId), eq(parseResult));
+        verify(artifactStorage, times(1)).saveVersion(eq("default"), eq(documentId), eq(1), eq(parseResult));
         verify(repository, times(1))
                 .markIndexed(
                         anyString(),

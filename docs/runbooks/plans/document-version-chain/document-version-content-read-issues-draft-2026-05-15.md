@@ -17,24 +17,32 @@
 
 ## 总览
 
-| 本地编号 | GitHub Issue | 标题 | 类型 | 标签 | 阻塞 |
-| --- | --- | --- | --- | --- | --- |
-| DVCR-01 | [#22](https://github.com/pop1414/my-AI/issues/22) | 版本正文 artifact storage port 与 key resolver 后端基线 | AFK | `ready-for-agent` | 无 |
-| DVCR-02 | [#23](https://github.com/pop1414/my-AI/issues/23) | latest 正文读取后端端到端契约 | AFK | `ready-for-agent` | #22 |
-| DVCR-03 | [#24](https://github.com/pop1414/my-AI/issues/24) | askable baseline 正文读取后端端到端契约 | AFK | `ready-for-agent` | #22, #23 |
-| DVCR-04 | [#25](https://github.com/pop1414/my-AI/issues/25) | 显式版本正文读取后端权限与错误映射 | AFK | `ready-for-agent` | #22, #23 |
-| DVCR-05 | [#26](https://github.com/pop1414/my-AI/issues/26) | 文档详情 latest 正文前端视图 | AFK | `ready-for-agent` | #23 |
-| DVCR-06 | [#27](https://github.com/pop1414/my-AI/issues/27) | QA 引用侧栏 askable baseline 正文前端视图 | AFK | `ready-for-agent` | #24 |
-| DVCR-07 | [#28](https://github.com/pop1414/my-AI/issues/28) | 管理者历史版本正文前端视图 | AFK | `ready-for-agent` | #25, #26 |
-| DVCR-08 | [#29](https://github.com/pop1414/my-AI/issues/29) | 正文读取后端契约与错误映射收口 | AFK | `ready-for-agent` | #23, #24, #25 |
-| DVCR-09 | [#30](https://github.com/pop1414/my-AI/issues/30) | 正文读取前端错误态与权限隐藏收口 | AFK | `ready-for-agent` | #26, #27, #28, #29 |
-| DVCR-10 | [#31](https://github.com/pop1414/my-AI/issues/31) | 文档版本正文读取 E2E 专项验收 | AFK | `ready-for-agent` | #30 |
+| 本地编号 | GitHub Issue                                      | 标题                                                    | 类型 | 标签              | 阻塞               |
+| -------- | ------------------------------------------------- | ------------------------------------------------------- | ---- | ----------------- | ------------------ |
+| DVCR-01  | [#22](https://github.com/pop1414/my-AI/issues/22) | 版本正文 artifact storage port 与 key resolver 后端基线 | AFK  | `ready-for-agent` | 无                 |
+| DVCR-02  | [#23](https://github.com/pop1414/my-AI/issues/23) | 统一正文接口 source=LATEST 后端契约                     | AFK  | `ready-for-agent` | #22                |
+| DVCR-03  | [#24](https://github.com/pop1414/my-AI/issues/24) | 统一正文接口 source=ASKABLE_BASELINE 后端契约           | AFK  | `ready-for-agent` | #22, #23           |
+| DVCR-04  | [#25](https://github.com/pop1414/my-AI/issues/25) | 统一正文接口 source=EXPLICIT_VERSION 权限与错误映射     | AFK  | `ready-for-agent` | #22, #23           |
+| DVCR-05  | [#26](https://github.com/pop1414/my-AI/issues/26) | 文档详情 latest 正文前端视图                            | AFK  | `ready-for-agent` | #23                |
+| DVCR-06  | [#27](https://github.com/pop1414/my-AI/issues/27) | QA 引用侧栏 askable baseline 正文前端视图               | AFK  | `ready-for-agent` | #24                |
+| DVCR-07  | [#28](https://github.com/pop1414/my-AI/issues/28) | 管理者历史版本正文前端视图                              | AFK  | `ready-for-agent` | #25, #26           |
+| DVCR-08  | [#29](https://github.com/pop1414/my-AI/issues/29) | 正文读取后端契约与错误映射收口                          | AFK  | `ready-for-agent` | #23, #24, #25      |
+| DVCR-09  | [#30](https://github.com/pop1414/my-AI/issues/30) | 正文读取前端错误态与权限隐藏收口                        | AFK  | `ready-for-agent` | #26, #27, #28, #29 |
+| DVCR-10  | [#31](https://github.com/pop1414/my-AI/issues/31) | 文档版本正文读取 E2E 专项验收                           | AFK  | `ready-for-agent` | #30                |
+
+## 执行状态
+
+- DVCR-01 / GitHub #22 已完成并形成收口说明：`docs/runbooks/plans/document-version-chain/github-issues-closure/#22-version-content-artifact-storage-port-closure.md`。
+- DVCR-02 / GitHub #23 已完成并形成收口说明：`docs/runbooks/plans/document-version-chain/github-issues-closure/#23-unified-content-latest-backend-closure.md`。
+- DVCR-03 / GitHub #24 已完成并形成收口说明：`docs/runbooks/plans/document-version-chain/github-issues-closure/#24-unified-content-askable-baseline-backend-closure.md`。
+- DVCR-04 / GitHub #25 已完成并形成收口说明：`docs/runbooks/plans/document-version-chain/github-issues-closure/#25-unified-content-explicit-version-backend-closure.md`。
+- #22、#23、#24、#25 已完成统一正文读取的三种后端 `source` 语义；后续应由 #29 做后端契约与错误映射收口，并由 #26、#27、#28 接入前端视图。
 
 ## 建议执行顺序
 
 1. 先完成 DVCR-01，建立 version-level artifact 读取边界，避免后续 endpoint 直接依赖本地路径、MinIO SDK、源文件或 chunk。
-2. 再完成 DVCR-02，打通 latest 正文读取的最小后端闭环，并完成 `CONTENT_NOT_READY`、`CONTENT_ARTIFACT_MISSING`、`CONTENT_TOO_LARGE` 的基础映射。
-3. 然后完成 DVCR-03 与 DVCR-04，分别补齐 QA askable baseline 语义和显式历史版本权限语义。
+2. 再完成 DVCR-02，在统一 endpoint 上打通 `source=LATEST` 的最小后端闭环，并完成 `CONTENT_NOT_READY`、`CONTENT_ARTIFACT_MISSING`、`CONTENT_TOO_LARGE` 的基础映射。
+3. 然后完成 DVCR-03 与 DVCR-04，在同一 endpoint 上分别补齐 `source=ASKABLE_BASELINE` 语义和 `source=EXPLICIT_VERSION` 历史版本权限语义。
 4. 后端契约稳定后，按 DVCR-05、DVCR-06、DVCR-07 接前端三类视图。
 5. DVCR-08 做后端契约、错误码和 OpenAPI 一致性收口。
 6. DVCR-09 做前端错误态、权限隐藏和文案一致性收口。
@@ -60,7 +68,7 @@ PRD #21：文档版本正文读取专项
 
 建立版本正文读取的后端存储边界，让应用层可以通过稳定端口读取某个 `document version` 的 `cleaned.md`。该路径必须以 `workspaceId + documentId + versionNumber + artifactName` 定位版本级处理产物，并明确区分 `source/...` 与 `artifacts/...`。
 
-该 issue 不需要暴露新的用户界面，也不需要完成三个 REST endpoint；它交付的是后续正文读取 endpoint 共享的深层模块和测试护栏。
+该 issue 不需要暴露新的用户界面，也不需要完成统一 REST endpoint；它交付的是后续正文读取 `source` 分支共享的深层模块和测试护栏。
 
 #### Acceptance criteria
 
@@ -75,13 +83,13 @@ PRD #21：文档版本正文读取专项
 
 None - can start immediately
 
-### DVCR-02 latest 正文读取后端端到端契约
+### DVCR-02 统一正文接口 source=LATEST 后端契约
 
 GitHub Issue：[#23](https://github.com/pop1414/my-AI/issues/23)
 
 Type：AFK
 
-Blocked by：DVCR-01
+Blocked by：#22
 
 User stories covered：8、13、14、15、16、17、23、24、25、26
 
@@ -91,16 +99,17 @@ PRD #21：文档版本正文读取专项
 
 #### What to build
 
-实现 `GET /api/v1/documents/{documentId}/content` 的后端端到端能力。该接口读取目标 `document` 当前 latest version 的 `cleaned.md`，用于文档详情默认正文视图。
+实现 `GET /api/v1/documents/{documentId}/content?source=LATEST` 的后端端到端能力。该分支读取目标 `document` 当前 latest version 的 `cleaned.md`，用于文档详情维护视图表达当前最新处理结果。
 
-latest 正文读取必须忠实表达 latest 状态：latest `INGESTING` 且正文尚未生成时返回 `CONTENT_NOT_READY`，不能自动回退旧版本；latest `FAILED` 且已有 `cleaned.md` 时允许返回 failed latest 正文；`DELETED` document 不开放正文读取。
+latest 正文读取必须忠实表达 latest 状态：latest `INGESTING` 且正文尚未生成时返回 `CONTENT_NOT_READY`，不能自动回退旧版本；latest `FAILED` 且已有 `cleaned.md` 时允许返回 failed latest 正文；`DELETED` document 不开放正文读取。`source=LATEST` 不等同于 `KB_READER` 的正文核对入口，普通读者应通过 `source=ASKABLE_BASELINE` 查看问答依据正文。
 
 #### Acceptance criteria
 
-- [ ] endpoint 返回 `DocumentContentResponse` 所需字段，包括 `documentId`、`versionNumber`、`latestVersionNumber`、`isLatestVersion`、`isAskableVersion`、`source`、`status`、`filename`、`createdAt`、`updatedAt`、`contentMarkdown`、`contentLength`、`truncated`。
+- [ ] endpoint 在 `source=LATEST` 时返回 `DocumentContentResponse` 所需字段，包括 `documentId`、`versionNumber`、`latestVersionNumber`、`isLatestVersion`、`isAskableVersion`、`source`、`status`、`filename`、`createdAt`、`updatedAt`、`contentMarkdown`、`contentLength`、`truncated`。
 - [ ] latest `INDEXED` 时返回 latest 正文，`source = LATEST`。
 - [ ] latest `INGESTING` 且无 `cleaned.md` 时返回 `409` + `CONTENT_NOT_READY`，不回退旧版本。
 - [ ] latest `FAILED` 且已有 `cleaned.md` 时返回 failed latest 正文，并保留失败状态。
+- [ ] `source=LATEST` 由服务端读取当前 latest projection 选择版本，不接受调用方通过 `versionNumber` 模拟 latest。
 - [ ] `DELETED` document 拒绝正文读取。
 - [ ] 正文超出服务端读取上限时返回 `413` + `CONTENT_TOO_LARGE`，不静默截断。
 - [ ] artifact 缺失时返回 `500` + `CONTENT_ARTIFACT_MISSING`。
@@ -108,15 +117,15 @@ latest 正文读取必须忠实表达 latest 状态：latest `INGESTING` 且正�
 
 #### Blocked by
 
-- DVCR-01
+- #22
 
-### DVCR-03 askable baseline 正文读取后端端到端契约
+### DVCR-03 统一正文接口 source=ASKABLE_BASELINE 后端契约
 
 GitHub Issue：[#24](https://github.com/pop1414/my-AI/issues/24)
 
 Type：AFK
 
-Blocked by：DVCR-01、DVCR-02
+Blocked by：#22、#23
 
 User stories covered：1、2、3、6、13、22、23、24、25、26、27
 
@@ -126,16 +135,16 @@ PRD #21：文档版本正文读取专项
 
 #### What to build
 
-实现 `GET /api/v1/documents/{documentId}/askable-content` 的后端端到端能力。该接口读取目标 `document` 当前 QA baseline version 的 `cleaned.md`，用于 QA 引用侧栏和回答依据核对。
+实现 `GET /api/v1/documents/{documentId}/content?source=ASKABLE_BASELINE` 的后端端到端能力。该分支读取目标 `document` 当前 QA baseline version 的 `cleaned.md`，用于 QA 引用侧栏和回答依据核对。
 
 该路径必须复用当前 QA 可问答版本选择语义：latest 已 `INDEXED` 时返回 latest；latest 尚未可问答但存在旧 `INDEXED` 时返回最近一个已 `INDEXED` 的 askable baseline；当前没有可问答版本时返回 `CONTENT_NOT_READY`。
 
 #### Acceptance criteria
 
-- [ ] endpoint 返回 `DocumentContentResponse`，其中 `source = ASKABLE_BASELINE`。
-- [ ] latest `INDEXED` 时 `/content` 与 `/askable-content` 返回同一 latest version。
-- [ ] latest `INGESTING` 且旧版本 `INDEXED` 时，`/askable-content` 返回旧 indexed askable baseline。
-- [ ] latest `FAILED with cleaned.md` 时，`/askable-content` 返回最近一个 indexed askable baseline，而不是 failed latest。
+- [ ] endpoint 在 `source=ASKABLE_BASELINE` 时返回 `DocumentContentResponse`，其中 `source = ASKABLE_BASELINE`。
+- [ ] latest `INDEXED` 时 `source=LATEST` 与 `source=ASKABLE_BASELINE` 可返回同一 latest version，但读取意图仍不同。
+- [ ] latest `INGESTING` 且旧版本 `INDEXED` 时，`source=ASKABLE_BASELINE` 返回旧 indexed askable baseline。
+- [ ] latest `FAILED with cleaned.md` 时，`source=ASKABLE_BASELINE` 返回最近一个 indexed askable baseline，而不是 failed latest。
 - [ ] 当前没有可问答版本或 askable baseline 正文尚未生成时返回 `409` + `CONTENT_NOT_READY`。
 - [ ] 普通 `KB_READER` 可读取 askable baseline 正文，但不能因此获得历史版本浏览能力。
 - [ ] 后端测试覆盖 `WORKSPACE_ADMIN`、`KB_MANAGER`、`KB_CONTRIBUTOR`、`KB_READER` 和必要的 `KB_ASKER` 兼容分支。
@@ -143,16 +152,16 @@ PRD #21：文档版本正文读取专项
 
 #### Blocked by
 
-- DVCR-01
-- DVCR-02
+- #22
+- #23
 
-### DVCR-04 显式版本正文读取后端权限与错误映射
+### DVCR-04 统一正文接口 source=EXPLICIT_VERSION 权限与错误映射
 
 GitHub Issue：[#25](https://github.com/pop1414/my-AI/issues/25)
 
 Type：AFK
 
-Blocked by：DVCR-01、DVCR-02
+Blocked by：#22、#23
 
 User stories covered：4、9、10、11、12、13、17、22、23、24、25、26
 
@@ -162,13 +171,14 @@ PRD #21：文档版本正文读取专项
 
 #### What to build
 
-实现 `GET /api/v1/documents/{documentId}/versions/{versionNumber}/content` 的后端端到端能力。该接口用于管理人员查看指定 `document version` 的 `cleaned.md`，服务版本核对、历史版本查看和治理排查。
+实现 `GET /api/v1/documents/{documentId}/content?source=EXPLICIT_VERSION&versionNumber={versionNumber}` 的后端端到端能力。该分支用于管理人员查看指定 `document version` 的 `cleaned.md`，服务版本核对、历史版本查看和治理排查。
 
 普通 `KB_READER` 不能通过显式 version URL 读取任意历史版本正文。具备目标 `document` 管理权限的用户可以读取指定版本正文，但读取历史版本不得改变 QA baseline。
 
 #### Acceptance criteria
 
-- [ ] endpoint 返回 `DocumentContentResponse`，其中 `source = EXPLICIT_VERSION`。
+- [ ] endpoint 在 `source=EXPLICIT_VERSION` 且传入 `versionNumber` 时返回 `DocumentContentResponse`，其中 `source = EXPLICIT_VERSION`。
+- [ ] `source=EXPLICIT_VERSION` 缺少 `versionNumber` 时返回 `400`。
 - [ ] 目标 document 不存在时返回 `404` + `DOCUMENT_NOT_FOUND`。
 - [ ] 目标 version 不存在时返回 `404` + `VERSION_NOT_FOUND`。
 - [ ] 普通 `KB_READER` 访问任意显式历史版本正文时返回 `403` + `VERSION_CONTENT_FORBIDDEN`。
@@ -179,8 +189,8 @@ PRD #21：文档版本正文读取专项
 
 #### Blocked by
 
-- DVCR-01
-- DVCR-02
+- #22
+- #23
 
 ### DVCR-05 文档详情 latest 正文前端视图
 
@@ -188,7 +198,7 @@ GitHub Issue：[#26](https://github.com/pop1414/my-AI/issues/26)
 
 Type：AFK
 
-Blocked by：DVCR-02
+Blocked by：#23
 
 User stories covered：5、7、8、15、16、24、25、26
 
@@ -198,13 +208,13 @@ PRD #21：文档版本正文读取专项
 
 #### What to build
 
-在文档详情页接入 latest 正文读取。默认正文区调用 `GET /api/v1/documents/{documentId}/content`，展示当前 latest version 的 Markdown 正文和版本上下文。
+在文档详情页接入 latest 正文读取。维护视图正文区调用 `GET /api/v1/documents/{documentId}/content?source=LATEST`，展示当前 latest version 的 Markdown 正文和版本上下文。
 
 前端必须保持 latest 语义：latest 正文未生成时展示“正文处理中”空态，不自动切到旧版本；latest `FAILED` 且有正文时展示正文并提示失败状态；`403` 时不渲染正文内容。
 
 #### Acceptance criteria
 
-- [ ] 文档详情默认正文区读取 latest 正文 endpoint。
+- [ ] 文档详情维护视图正文区读取统一 endpoint 的 `source=LATEST` 分支。
 - [ ] 正文区展示版本号、最新版本号、状态、文件名和 Markdown 正文。
 - [ ] latest `INGESTING` 或正文未生成时展示处理中空态，并提示稍后刷新。
 - [ ] latest `FAILED` 且返回正文时展示失败状态提示和正文内容。
@@ -216,7 +226,7 @@ PRD #21：文档版本正文读取专项
 
 #### Blocked by
 
-- DVCR-02
+- #23
 
 ### DVCR-06 QA 引用侧栏 askable baseline 正文前端视图
 
@@ -224,7 +234,7 @@ GitHub Issue：[#27](https://github.com/pop1414/my-AI/issues/27)
 
 Type：AFK
 
-Blocked by：DVCR-03
+Blocked by：#24
 
 User stories covered：1、2、3、5、6、25、26、27
 
@@ -234,13 +244,13 @@ PRD #21：文档版本正文读取专项
 
 #### What to build
 
-在 QA 引用侧栏接入 askable baseline 正文读取。用户从回答引用打开正文时，前端调用 `GET /api/v1/documents/{documentId}/askable-content`，展示本次问答依据的可问答版本正文。
+在 QA 引用侧栏接入 askable baseline 正文读取。用户从回答引用打开正文时，前端调用 `GET /api/v1/documents/{documentId}/content?source=ASKABLE_BASELINE`，展示本次问答依据的可问答版本正文。
 
 当返回版本不是 latest 时，侧栏顶部必须明确提示“当前问答基于 vN，最新版本为 vM”。该入口不能让普通 `KB_READER` 浏览任意历史版本。
 
 #### Acceptance criteria
 
-- [ ] QA 引用侧栏打开正文时调用 askable baseline endpoint。
+- [ ] QA 引用侧栏打开正文时调用统一 endpoint 的 `source=ASKABLE_BASELINE` 分支。
 - [ ] 侧栏顶部展示返回的 `versionNumber`、`latestVersionNumber` 和文件名。
 - [ ] `isLatestVersion = false` 时展示“当前问答基于 vN，最新版本为 vM”提示。
 - [ ] 侧栏只展示问答基线正文，不提供任意历史版本切换入口。
@@ -250,7 +260,7 @@ PRD #21：文档版本正文读取专项
 
 #### Blocked by
 
-- DVCR-03
+- #24
 
 ### DVCR-07 管理者历史版本正文前端视图
 
@@ -258,7 +268,7 @@ GitHub Issue：[#28](https://github.com/pop1414/my-AI/issues/28)
 
 Type：AFK
 
-Blocked by：DVCR-04、DVCR-05
+Blocked by：#25、#26
 
 User stories covered：4、9、10、11、12、25、26
 
@@ -268,13 +278,13 @@ PRD #21：文档版本正文读取专项
 
 #### What to build
 
-在管理者历史版本查看态接入显式版本正文读取。用户在版本历史中选择某个历史版本时，前端调用 `GET /api/v1/documents/{documentId}/versions/{versionNumber}/content`，展示该版本的 Markdown 正文。
+在管理者历史版本查看态接入显式版本正文读取。用户在版本历史中选择某个历史版本时，前端调用 `GET /api/v1/documents/{documentId}/content?source=EXPLICIT_VERSION&versionNumber={versionNumber}`，展示该版本的 Markdown 正文。
 
 页面必须稳定提示“当前正在查看历史版本 vN，最新版本为 vM；查看历史版本不会改变问答基线”，并提供“返回最新版本”入口。
 
 #### Acceptance criteria
 
-- [ ] 管理人员在历史版本查看态读取 explicit version endpoint。
+- [ ] 管理人员在历史版本查看态读取统一 endpoint 的 `source=EXPLICIT_VERSION` 分支。
 - [ ] 历史版本正文上方展示历史版本提示，并说明不会改变 QA baseline。
 - [ ] 提供“返回最新版本”入口，并能切回 latest 正文视图。
 - [ ] 普通 `KB_READER` 不能通过 URL 直达历史版本正文。
@@ -284,8 +294,8 @@ PRD #21：文档版本正文读取专项
 
 #### Blocked by
 
-- DVCR-04
-- DVCR-05
+- #25
+- #26
 
 ### DVCR-08 正文读取后端契约与错误映射收口
 
@@ -293,7 +303,7 @@ GitHub Issue：[#29](https://github.com/pop1414/my-AI/issues/29)
 
 Type：AFK
 
-Blocked by：DVCR-02、DVCR-03、DVCR-04
+Blocked by：#23、#24、#25
 
 User stories covered：17、22、23、24、25、26
 
@@ -303,15 +313,15 @@ PRD #21：文档版本正文读取专项
 
 #### What to build
 
-对三个正文读取后端 endpoint 做统一收口，确保 OpenAPI 契约、响应字段、`source` 语义、业务错误码和 HTTP 状态码一致。该 issue 不包含前端页面实现，只处理后端契约与服务端行为一致性。
+对统一正文读取后端 endpoint 做统一收口，确保 OpenAPI 契约、响应字段、`source` 语义、业务错误码和 HTTP 状态码一致。该 issue 不包含前端页面实现，只处理后端契约与服务端行为一致性。
 
-收口后，`GET /api/v1/documents/{documentId}/content`、`GET /api/v1/documents/{documentId}/askable-content`、`GET /api/v1/documents/{documentId}/versions/{versionNumber}/content` 的成功响应和错误响应应与 `docs/04-api-contract.yaml` 保持一致。
+收口后，`GET /api/v1/documents/{documentId}/content?source=LATEST|ASKABLE_BASELINE|EXPLICIT_VERSION` 的成功响应和错误响应应与 `docs/04-api-contract.yaml` 保持一致；`EXPLICIT_VERSION` 必须额外传入 `versionNumber`。
 
 #### Acceptance criteria
 
-- [ ] 三个正文读取 endpoint 的 OpenAPI 契约与实际实现一致。
-- [ ] `DocumentContentResponse` 字段、`source` 枚举和业务错误码在后端 DTO、REST controller 与 OpenAPI 中一致。
-- [ ] `CONTENT_NOT_READY`、`CONTENT_ARTIFACT_MISSING`、`CONTENT_TOO_LARGE`、`DOCUMENT_CONTENT_FORBIDDEN`、`VERSION_CONTENT_FORBIDDEN` 在三个 endpoint 中映射稳定。
+- [ ] 统一正文读取 endpoint 的 OpenAPI 契约与实际实现一致。
+- [ ] `DocumentContentResponse` 字段、`source` 查询参数枚举和业务错误码在后端 DTO、REST controller 与 OpenAPI 中一致。
+- [ ] `CONTENT_NOT_READY`、`CONTENT_ARTIFACT_MISSING`、`CONTENT_TOO_LARGE`、`DOCUMENT_CONTENT_FORBIDDEN`、`VERSION_CONTENT_FORBIDDEN` 在三个 `source` 分支中映射稳定。
 - [ ] `DOCUMENT_NOT_FOUND` 与 `VERSION_NOT_FOUND` 的 `404` 分支清晰区分。
 - [ ] 文档或版本为 `DELETED` 时不暴露正文。
 - [ ] 后端测试覆盖关键错误码、权限拒绝、契约字段和 `source` 语义。
@@ -319,9 +329,9 @@ PRD #21：文档版本正文读取专项
 
 #### Blocked by
 
-- DVCR-02
-- DVCR-03
-- DVCR-04
+- #23
+- #24
+- #25
 
 ### DVCR-09 正文读取前端错误态与权限隐藏收口
 
@@ -329,7 +339,7 @@ GitHub Issue：[#30](https://github.com/pop1414/my-AI/issues/30)
 
 Type：AFK
 
-Blocked by：DVCR-05、DVCR-06、DVCR-07、DVCR-08
+Blocked by：#26、#27、#28、#29
 
 User stories covered：5、6、7、12、28
 
@@ -339,7 +349,7 @@ PRD #21：文档版本正文读取专项
 
 #### What to build
 
-对三个正文读取前端入口做统一收口，确保错误态、权限隐藏和产品边界一致。该 issue 不包含后端 endpoint 实现，只处理前端 API client、页面状态、文案和入口隐藏。
+对三个正文读取前端入口做统一收口，确保它们都通过统一 endpoint 和不同 `source` 参数表达读取意图，并保持错误态、权限隐藏和产品边界一致。该 issue 不包含后端 endpoint 实现，只处理前端 API client、页面状态、文案和入口隐藏。
 
 收口后，前端不展示源文件下载入口，不把正文查看扩展成源文件预览或编辑，也不在任何 `403` 场景渲染正文内容。
 
@@ -355,10 +365,10 @@ PRD #21：文档版本正文读取专项
 
 #### Blocked by
 
-- DVCR-05
-- DVCR-06
-- DVCR-07
-- DVCR-08
+- #26
+- #27
+- #28
+- #29
 
 ### DVCR-10 文档版本正文读取 E2E 专项验收
 
@@ -366,7 +376,7 @@ GitHub Issue：[#31](https://github.com/pop1414/my-AI/issues/31)
 
 Type：AFK
 
-Blocked by：DVCR-09
+Blocked by：#30
 
 User stories covered：1、3、4、8、9、10、16、29、30
 
@@ -393,14 +403,14 @@ PRD #21：文档版本正文读取专项
 
 #### Blocked by
 
-- DVCR-09
+- #30
 
 ## 审阅提示
 
 - 先审阅 DVCR-01 到 DVCR-04，确认后端边界没有重新引入源文件下载、源文件实时解析或 chunk 拼接正文。
-- 再审阅 DVCR-05 到 DVCR-07，确认三类前端入口分别对应 latest、askable baseline、explicit version，不互相复用成模糊入口。
+- 再审阅 DVCR-05 到 DVCR-07，确认三类前端入口分别对应 `source=LATEST`、`source=ASKABLE_BASELINE`、`source=EXPLICIT_VERSION`，不互相复用成模糊入口。
 - 重点检查 `KB_READER`：可以读 askable baseline 正文，但不能浏览任意历史版本正文。
 - 检查 DVCR-08 是否只处理后端契约与错误映射，不夹带前端页面实现。
-- 检查 DVCR-09 是否只处理前端错误态、权限隐藏和文案，不夹带后端 endpoint 实现。
+- 检查 DVCR-09 是否只处理前端错误态、权限隐藏和文案，不夹带后端 endpoint 语义实现。
 - 检查 DVCR-10 的 E2E 是否只做端到端验收，不替代后端和前端低层测试。
 - GitHub Issues 已按总览表顺序发布；后续执行时以真实 issue 编号为协作入口，本地 `DVCR-*` 编号仅作为专题内排序辅助。

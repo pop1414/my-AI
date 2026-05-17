@@ -10,12 +10,15 @@ import io.github.spike.myai.ingest.application.command.UploadNewDocumentVersionC
 import io.github.spike.myai.ingest.application.exception.DocumentDeleteConflictException;
 import io.github.spike.myai.ingest.application.exception.DocumentDeleteFailedException;
 import io.github.spike.myai.ingest.application.exception.DocumentNotFoundException;
+import io.github.spike.myai.ingest.application.query.DocumentContentSource;
 import io.github.spike.myai.ingest.application.query.GetDocumentChunksPreviewQuery;
+import io.github.spike.myai.ingest.application.query.GetDocumentContentQuery;
 import io.github.spike.myai.ingest.application.query.GetDocumentStatusQuery;
 import io.github.spike.myai.ingest.application.query.ListDocumentVersionsQuery;
 import io.github.spike.myai.ingest.application.query.ListDocumentsQuery;
 import io.github.spike.myai.ingest.application.result.DocumentChunkPreviewItemResult;
 import io.github.spike.myai.ingest.application.result.DocumentChunksPreviewResult;
+import io.github.spike.myai.ingest.application.result.DocumentContentResult;
 import io.github.spike.myai.ingest.application.result.DocumentListItemResult;
 import io.github.spike.myai.ingest.application.result.DocumentListPageResult;
 import io.github.spike.myai.ingest.application.result.DocumentVersionRollbackResult;
@@ -23,6 +26,7 @@ import io.github.spike.myai.ingest.application.result.DocumentVersionUploadResul
 import io.github.spike.myai.ingest.application.usecase.AcceptUploadUseCase;
 import io.github.spike.myai.ingest.application.usecase.DeleteDocumentUseCase;
 import io.github.spike.myai.ingest.application.usecase.GetDocumentChunksPreviewUseCase;
+import io.github.spike.myai.ingest.application.usecase.GetDocumentContentUseCase;
 import io.github.spike.myai.ingest.application.usecase.GetDocumentStatusUseCase;
 import io.github.spike.myai.ingest.application.usecase.ListDocumentVersionsUseCase;
 import io.github.spike.myai.ingest.application.usecase.ListDocumentsUseCase;
@@ -36,6 +40,7 @@ import io.github.spike.myai.ingest.domain.model.UploadTicket;
 import io.github.spike.myai.ingest.domain.port.DocumentSourceStorage;
 import io.github.spike.myai.ingest.interfaces.rest.dto.DocumentChunkPreviewItemResponse;
 import io.github.spike.myai.ingest.interfaces.rest.dto.DocumentChunksPreviewResponse;
+import io.github.spike.myai.ingest.interfaces.rest.dto.DocumentContentResponse;
 import io.github.spike.myai.ingest.interfaces.rest.dto.DocumentListItemResponse;
 import io.github.spike.myai.ingest.interfaces.rest.dto.DocumentListPageResponse;
 import io.github.spike.myai.ingest.interfaces.rest.dto.DocumentStatusResponse;
@@ -104,6 +109,10 @@ public class DocumentIngestController {
      */
     private final GetDocumentChunksPreviewUseCase getDocumentChunksPreviewUseCase;
     /**
+     * 文档 latest 正文读取用例。
+     */
+    private final GetDocumentContentUseCase getDocumentContentUseCase;
+    /**
      * 文档重处理用例。
      */
     private final ReprocessDocumentUseCase reprocessDocumentUseCase;
@@ -139,6 +148,7 @@ public class DocumentIngestController {
      * @param getDocumentStatusUseCase       文档状态查询用例
      * @param listDocumentVersionsUseCase    文档版本历史查询用例
      * @param getDocumentChunksPreviewUseCase 文档分块预览用例
+     * @param getDocumentContentUseCase      文档 latest 正文读取用例
      * @param reprocessDocumentUseCase       文档重处理用例
      * @param deleteDocumentUseCase          文档删除用例
      * @param uploadNewDocumentVersionUseCase 上传新版本用例
@@ -152,6 +162,7 @@ public class DocumentIngestController {
             GetDocumentStatusUseCase getDocumentStatusUseCase,
             ListDocumentVersionsUseCase listDocumentVersionsUseCase,
             GetDocumentChunksPreviewUseCase getDocumentChunksPreviewUseCase,
+            GetDocumentContentUseCase getDocumentContentUseCase,
             ReprocessDocumentUseCase reprocessDocumentUseCase,
             DeleteDocumentUseCase deleteDocumentUseCase,
             UploadNewDocumentVersionUseCase uploadNewDocumentVersionUseCase,
@@ -163,6 +174,7 @@ public class DocumentIngestController {
         this.getDocumentStatusUseCase = getDocumentStatusUseCase;
         this.listDocumentVersionsUseCase = listDocumentVersionsUseCase;
         this.getDocumentChunksPreviewUseCase = getDocumentChunksPreviewUseCase;
+        this.getDocumentContentUseCase = getDocumentContentUseCase;
         this.reprocessDocumentUseCase = reprocessDocumentUseCase;
         this.deleteDocumentUseCase = deleteDocumentUseCase;
         this.uploadNewDocumentVersionUseCase = uploadNewDocumentVersionUseCase;
@@ -331,6 +343,66 @@ public class DocumentIngestController {
     }
 
     /**
+     * 查询文档正文。
+     *
+     * <p>接口契约：
+     * <ul>
+     *     <li>路径：GET /api/v1/documents/{documentId}/content?source=LATEST|ASKABLE_BASELINE|EXPLICIT_VERSION</li>
+     *     <li>{@code LATEST}：固定读取当前 latest version 的 {@code cleaned.md}</li>
+     *     <li>{@code ASKABLE_BASELINE}：读取当前 QA 可问答基线版本的 {@code cleaned.md}</li>
+     *     <li>{@code EXPLICIT_VERSION}：读取 versionNumber 指定历史版本的 {@code cleaned.md}</li>
+     * </ul>
+     *
+     * @param documentId    文档资产 ID
+     * @param source        正文来源
+     * @param versionNumber 显式版本读取时的目标版本号
+     * @return 正文响应
+     */
+    @GetMapping(value = "/{documentId}/content", produces = MediaType.APPLICATION_JSON_VALUE)
+    public DocumentContentResponse getContent(
+            @PathVariable("documentId") String documentId,
+            @RequestParam("source") String source,
+            @RequestParam(value = "versionNumber", required = false) Integer versionNumber) {
+        DocumentContentSource contentSource = parseDocumentContentSource(source);
+        if (contentSource == DocumentContentSource.EXPLICIT_VERSION && versionNumber == null) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "versionNumber is required when source is EXPLICIT_VERSION");
+        }
+        if (contentSource == DocumentContentSource.EXPLICIT_VERSION && versionNumber <= 0) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "versionNumber must be positive");
+        }
+        if (contentSource != DocumentContentSource.EXPLICIT_VERSION && versionNumber != null) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "versionNumber is only allowed when source is EXPLICIT_VERSION");
+        }
+        DocumentContentResult result = getDocumentContentUseCase.handle(
+                new GetDocumentContentQuery(documentId, contentSource, versionNumber));
+        return toDocumentContentResponse(result);
+    }
+
+    /**
+     * 解析正文来源参数。
+     *
+     * @param source HTTP 查询参数
+     * @return 应用层正文来源枚举
+     * @throws ResponseStatusException 当 source 非法时返回 400
+     */
+    private static DocumentContentSource parseDocumentContentSource(String source) {
+        try {
+            return DocumentContentSource.valueOf(source);
+        } catch (IllegalArgumentException | NullPointerException ex) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "source must be LATEST, ASKABLE_BASELINE or EXPLICIT_VERSION",
+                    ex);
+        }
+    }
+
+    /**
      * 针对既有 document 上传新版本。
      *
      * <p>接口契约：
@@ -487,6 +559,29 @@ public class DocumentIngestController {
                 item.failureReason(),
                 item.createdAt(),
                 item.updatedAt());
+    }
+
+    /**
+     * 将应用层正文读取结果映射为 REST 响应 DTO。
+     *
+     * @param result 应用层正文读取结果
+     * @return REST 正文响应
+     */
+    private static DocumentContentResponse toDocumentContentResponse(DocumentContentResult result) {
+        return new DocumentContentResponse(
+                result.documentId(),
+                result.versionNumber(),
+                result.latestVersionNumber(),
+                result.isLatestVersion(),
+                result.isAskableVersion(),
+                result.source(),
+                result.status(),
+                result.filename(),
+                result.createdAt(),
+                result.updatedAt(),
+                result.contentMarkdown(),
+                result.contentLength(),
+                result.truncated());
     }
 
     /**

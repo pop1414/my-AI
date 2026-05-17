@@ -2,20 +2,26 @@ package io.github.spike.myai.ingest.infrastructure.storage;
 
 import io.github.spike.myai.ingest.domain.model.DocumentId;
 import io.github.spike.myai.ingest.domain.model.DocumentParseResult;
+import io.github.spike.myai.ingest.domain.model.DocumentVersionArtifactContent;
 import io.github.spike.myai.ingest.domain.port.DocumentProcessingArtifactStorage;
+import io.github.spike.myai.ingest.domain.exception.DocumentVersionArtifactTooLargeException;
 import io.github.spike.myai.ingest.infrastructure.config.IngestProperties;
+import io.github.spike.myai.shared.workspace.WorkspaceConstants;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
+import java.util.Optional;
+import java.util.stream.Stream;
 import org.springframework.stereotype.Component;
 
 /**
  * 本地文件系统文档处理中间产物存储实现。
  *
  * <p>基于 {@link DocumentProcessingArtifactStorage} 端口规范，将文档解析链路的中间产物
- * 持久化到本地文件系统。存储路径结构为：{@code {rootDir}/{documentId}/}。
+ * 持久化到本地文件系统。版本级存储路径结构由 {@link DocumentStorageKeyResolver} 统一生成，
+ * 当前格式为：{@code {rootDir}/artifacts/{workspaceId}/documents/{documentId}/versions/{versionNumber}/}。
  *
  * <p>写入策略：
  * <ul>
@@ -42,6 +48,8 @@ public class LocalDocumentProcessingArtifactStorage implements DocumentProcessin
 
     /** 文件存储根目录路径 */
     private final Path rootDirectory;
+    /** 源文件与处理产物逻辑 key 解析器 */
+    private final DocumentStorageKeyResolver keyResolver = new DocumentStorageKeyResolver();
     /** 是否保留 Tika 原始 XHTML（调试用） */
     private final boolean keepRawXhtml;
     /** 是否保留 Jsoup 清洗后的 HTML（调试用） */
@@ -79,29 +87,139 @@ public class LocalDocumentProcessingArtifactStorage implements DocumentProcessin
      */
     @Override
     public void save(DocumentId documentId, DocumentParseResult parseResult) {
-        // 构建文档专属目录：{root}/{documentId}/
-        Path documentDirectory = rootDirectory.resolve(documentId.value());
+        saveVersion(WorkspaceConstants.DEFAULT_WORKSPACE_ID, documentId, 1, parseResult);
+    }
+
+    /**
+     * 保存指定版本的文档解析产物到本地文件系统。
+     *
+     * <p>所有产物均写入 artifacts prefix 下的版本目录，避免与 source prefix 下的源文件混放。
+     *
+     * @param workspaceId 工作区 ID
+     * @param documentId 文档资产 ID
+     * @param versionNumber 版本号
+     * @param parseResult 文档解析结果
+     */
+    @Override
+    public void saveVersion(String workspaceId, DocumentId documentId, int versionNumber, DocumentParseResult parseResult) {
+        Path artifactDirectory = resolveArtifactDirectory(workspaceId, documentId, versionNumber);
         try {
-            // 确保目录结构存在（已存在时静默跳过）
-            Files.createDirectories(documentDirectory);
+            // 确保版本级 artifacts 目录存在（已存在时静默跳过）
+            Files.createDirectories(artifactDirectory);
             // 强制写入主链产物 cleaned.md，不受任何配置开关控制
-            writeText(documentDirectory.resolve(CLEANED_MARKDOWN_FILENAME), parseResult.cleanedMarkdown());
+            writeText(artifactDirectory.resolve(CLEANED_MARKDOWN_FILENAME), parseResult.cleanedMarkdown());
             // 可选写入：Tika 原始 XHTML
             if (keepRawXhtml && parseResult.rawXhtml() != null && !parseResult.rawXhtml().isBlank()) {
-                writeText(documentDirectory.resolve(RAW_XHTML_FILENAME), parseResult.rawXhtml());
+                writeText(artifactDirectory.resolve(RAW_XHTML_FILENAME), parseResult.rawXhtml());
             }
             // 可选写入：Jsoup 清洗后的 HTML
             if (keepCleanedHtml && parseResult.cleanedHtml() != null && !parseResult.cleanedHtml().isBlank()) {
-                writeText(documentDirectory.resolve(CLEANED_HTML_FILENAME), parseResult.cleanedHtml());
+                writeText(artifactDirectory.resolve(CLEANED_HTML_FILENAME), parseResult.cleanedHtml());
             }
             // 可选写入：processingMetadata JSON
             if (keepParseResultJson
                     && parseResult.processingMetadata() != null
                     && !parseResult.processingMetadata().isBlank()) {
-                writeText(documentDirectory.resolve(PARSE_RESULT_FILENAME), parseResult.processingMetadata());
+                writeText(artifactDirectory.resolve(PARSE_RESULT_FILENAME), parseResult.processingMetadata());
             }
         } catch (IOException ex) {
             throw new IllegalStateException("failed to save processing artifacts", ex);
+        }
+    }
+
+    /**
+     * 读取指定版本的处理产物。
+     *
+     * <p>缺失产物返回空，不尝试读取源文件、不触发重新解析，也不从向量分块拼接正文。
+     *
+     * @param workspaceId 工作区 ID
+     * @param documentId 文档资产 ID
+     * @param versionNumber 版本号
+     * @param artifactName 产物名称
+     * @param maxBytes 最大读取字节数
+     * @return 产物正文，未命中时为空
+     */
+    @Override
+    public Optional<DocumentVersionArtifactContent> loadVersionArtifact(
+            String workspaceId,
+            DocumentId documentId,
+            int versionNumber,
+            String artifactName,
+            long maxBytes) {
+        if (maxBytes < 1) {
+            throw new IllegalArgumentException("maxBytes must be positive");
+        }
+        String artifactKey = keyResolver.resolveArtifactKey(workspaceId, documentId, versionNumber, artifactName);
+        Path artifactPath = resolveKeyPath(artifactKey);
+        try {
+            if (Files.notExists(artifactPath) || !Files.isRegularFile(artifactPath)) {
+                return Optional.empty();
+            }
+            long contentLength = Files.size(artifactPath);
+            if (contentLength > maxBytes) {
+                throw new DocumentVersionArtifactTooLargeException(contentLength, maxBytes);
+            }
+            return Optional.of(new DocumentVersionArtifactContent(
+                    artifactKey,
+                    Files.readString(artifactPath, StandardCharsets.UTF_8),
+                    contentLength));
+        } catch (IOException ex) {
+            throw new IllegalStateException("failed to load processing artifact", ex);
+        }
+    }
+
+    /**
+     * 删除指定文档在 artifacts prefix 下的全部处理产物。
+     *
+     * <p>该方法只清理处理产物目录，不触碰 source prefix 下的源文件。
+     *
+     * @param workspaceId 工作区 ID
+     * @param documentId 文档资产 ID
+     */
+    @Override
+    public void deleteByDocumentId(String workspaceId, DocumentId documentId) {
+        Path artifactDirectory = rootDirectory
+                .resolve(DocumentStorageKeyResolver.ARTIFACTS_PREFIX)
+                .resolve(workspaceId)
+                .resolve("documents")
+                .resolve(documentId.value())
+                .normalize();
+        Path normalizedRoot = rootDirectory.toAbsolutePath().normalize();
+        Path normalizedTarget = artifactDirectory.toAbsolutePath().normalize();
+        if (!normalizedTarget.startsWith(normalizedRoot)) {
+            throw new IllegalStateException("invalid artifact directory path");
+        }
+        deleteDirectoryIfExists(normalizedTarget);
+    }
+
+    private Path resolveArtifactDirectory(String workspaceId, DocumentId documentId, int versionNumber) {
+        String artifactKey = keyResolver.resolveArtifactKey(
+                workspaceId,
+                documentId,
+                versionNumber,
+                CLEANED_MARKDOWN_FILENAME);
+        return resolveKeyPath(artifactKey).getParent();
+    }
+
+    private Path resolveKeyPath(String key) {
+        return rootDirectory.resolve(Path.of(key)).normalize();
+    }
+
+    private static void deleteDirectoryIfExists(Path directory) {
+        if (Files.notExists(directory)) {
+            return;
+        }
+        try (Stream<Path> stream = Files.walk(directory)) {
+            // 按路径深度倒序删除，先删文件再删目录。
+            stream.sorted((a, b) -> b.getNameCount() - a.getNameCount()).forEach(path -> {
+                try {
+                    Files.deleteIfExists(path);
+                } catch (IOException ex) {
+                    throw new IllegalStateException("failed to delete processing artifact", ex);
+                }
+            });
+        } catch (IOException ex) {
+            throw new IllegalStateException("failed to delete processing artifact directory", ex);
         }
     }
 

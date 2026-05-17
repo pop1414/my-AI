@@ -71,6 +71,8 @@ public class IngestProperties {
     @Setter
     @Getter
     public static class Artifacts {
+        /** 正文读取允许的最大 artifact 字节数，超过时拒绝返回完整正文 */
+        private long maxReadBytes = 2_000_000L;
         private boolean keepRawXhtml = false;
         private boolean keepCleanedHtml = false;
         private boolean keepParseResultJson = true;
