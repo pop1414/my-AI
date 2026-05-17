@@ -1,9 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import {
 	BookOutlined,
 	DatabaseOutlined,
 	FileSearchOutlined,
+	FolderOpenOutlined,
+	LayoutOutlined,
 	LinkOutlined,
 	MessageOutlined,
 	SendOutlined,
@@ -11,12 +13,13 @@ import {
 } from "@ant-design/icons";
 import {
 	Button,
-	Card,
+	Empty,
 	Form,
 	Input,
 	InputNumber,
 	Space,
 	Tag,
+	Tooltip,
 	Typography,
 } from "antd";
 import { useNavigate, useSearchParams } from "react-router-dom";
@@ -28,7 +31,6 @@ import {
 	type AskResponse,
 } from "../../../shared/api/qaApi";
 import { ApiErrorAlert } from "../../../shared/ui/ApiErrorAlert";
-import { QaSidebar } from "../components/QaSidebar";
 import { QaTurn } from "../components/QaTurn";
 import "./QaPage.css";
 
@@ -48,7 +50,7 @@ type QaConversationTurn = {
 	staleReferences: AskResponse["staleReferences"];
 };
 
-type PanelMode = "overview" | "reference" | "settings";
+type PanelMode = "sources" | "reference" | "settings";
 
 function formatVersionLabel(versionNumber?: number | null): string {
 	return typeof versionNumber === "number" ? `v${versionNumber}` : "未知版本";
@@ -63,11 +65,16 @@ export function QaPage() {
 	const [searchParams] = useSearchParams();
 	const [form] = Form.useForm();
 	const [conversation, setConversation] = useState<QaConversationTurn[]>([]);
-	const [panelMode, setPanelMode] = useState<PanelMode>("overview");
+	const [panelMode, setPanelMode] = useState<PanelMode>("sources");
 	const [activeReference, setActiveReference] = useState<AskReference | null>(null);
 	const timelineRef = useRef<HTMLDivElement | null>(null);
 	const selectedKnowledgeBaseId = Form.useWatch("kbId", form);
 	const topKValue = Form.useWatch("topK", form) ?? 5;
+
+	// Sidebar states
+	const [isPanelVisible, setIsPanelVisible] = useState(true);
+	const [panelWidth, setPanelWidth] = useState(380);
+	const [isResizing, setIsResizing] = useState(false);
 
 	const knowledgeQuery = useQuery({
 		queryKey: ["knowledge-bases"],
@@ -122,30 +129,58 @@ export function QaPage() {
 		}
 	}, [conversation, askMutation.isPending]);
 
+	// Resizing logic
+	const startResizing = useCallback(() => {
+		setIsResizing(true);
+	}, []);
+
+	const stopResizing = useCallback(() => {
+		setIsResizing(false);
+	}, []);
+
+	const resize = useCallback((e: MouseEvent) => {
+		if (isResizing) {
+			const newWidth = window.innerWidth - e.clientX;
+			if (newWidth >= 300 && newWidth <= 600) {
+				setPanelWidth(newWidth);
+			}
+		}
+	}, [isResizing]);
+
+	useEffect(() => {
+		window.addEventListener("mousemove", resize);
+		window.addEventListener("mouseup", stopResizing);
+		return () => {
+			window.removeEventListener("mousemove", resize);
+			window.removeEventListener("mouseup", stopResizing);
+		};
+	}, [resize, stopResizing]);
+
 	return (
 		<div className="qa-rag-page">
 			<div className="qa-rag-shell">
-				<QaSidebar
-					loading={knowledgeQuery.isLoading}
-					knowledgeBases={activeKnowledgeBases}
-					selectedId={selectedKnowledgeBaseId}
-					onSelect={(id) => {
-						form.setFieldValue("kbId", id);
-						setPanelMode("overview");
-					}}
-				/>
-
 				<section className="qa-rag-shell__chat">
 					<header className="qa-chat-header">
-						<div className="qa-rag-shell__section-head" style={{ padding: 0 }}>
-							<div className="qa-rag-shell__eyebrow">Dialogue</div>
-							<Typography.Title level={4} style={{ margin: 0 }}>对话</Typography.Title>
-						</div>
 						<div className="qa-chat-header__context">
+							<div className="qa-rag-shell__section-head" style={{ padding: 0 }}>
+								<div className="qa-rag-shell__eyebrow">Dialogue</div>
+								<Typography.Title level={4} style={{ margin: 0 }}>对话</Typography.Title>
+							</div>
+							<div style={{ width: 1, height: 24, background: 'var(--console-border)', margin: '0 8px' }} />
 							<BookOutlined />
 							<span>
 								当前知识库：<strong>{selectedKnowledgeBase?.name ?? "未选择"}</strong>
 							</span>
+						</div>
+						<div className="qa-chat-header__actions">
+							<Tooltip title={isPanelVisible ? "隐藏面板" : "显示面板"}>
+								<Button 
+									type="text" 
+									icon={<LayoutOutlined />} 
+									onClick={() => setIsPanelVisible(!isPanelVisible)}
+									style={{ color: isPanelVisible ? 'var(--console-accent)' : 'inherit' }}
+								/>
+							</Tooltip>
 						</div>
 					</header>
 
@@ -156,7 +191,7 @@ export function QaPage() {
 									<MessageOutlined style={{ fontSize: 40, color: 'var(--console-border-strong)', marginBottom: 20 }} />
 									<Typography.Title level={4}>开始新对话</Typography.Title>
 									<Typography.Paragraph type="secondary">
-										选择左侧知识库并输入您的问题，右侧将实时展示 AI 的检索依据。
+										在右侧选择知识库并输入您的问题，系统将实时展示 AI 的检索依据。
 									</Typography.Paragraph>
 								</div>
 							) : (
@@ -168,6 +203,7 @@ export function QaPage() {
 										onReferenceSelect={(ref) => {
 											setActiveReference(ref);
 											setPanelMode("reference");
+											if (!isPanelVisible) setIsPanelVisible(true);
 										}}
 									/>
 								))
@@ -217,45 +253,62 @@ export function QaPage() {
 					</div>
 				</section>
 
-				<aside className="qa-rag-shell__panel">
+				<aside 
+					className={`qa-rag-shell__panel ${!isPanelVisible ? 'is-hidden' : ''}`}
+					style={{ width: isPanelVisible ? panelWidth : 0 }}
+				>
+					<div 
+						className={`qa-panel-resizer ${isResizing ? 'is-dragging' : ''}`} 
+						onMouseDown={startResizing}
+					/>
+					
 					<div className="qa-panel-header">
 						<div className="qa-rag-shell__section-head">
-							<div className="qa-rag-shell__eyebrow">Evidence</div>
-							<Typography.Title level={4} style={{ margin: 0 }}>证据查验</Typography.Title>
+							<div className="qa-rag-shell__eyebrow">Inspector</div>
+							<Typography.Title level={4} style={{ margin: 0 }}>
+								{panelMode === 'sources' ? '知识库选择' : panelMode === 'reference' ? '证据查验' : '问答设置'}
+							</Typography.Title>
 						</div>
 						<div className="qa-panel-header__tabs">
-							<button className={`qa-panel-tab ${panelMode === 'overview' ? 'is-active' : ''}`} onClick={() => setPanelMode('overview')}>
-								<DatabaseOutlined /> 概览
+							<button className={`qa-panel-tab ${panelMode === 'sources' ? 'is-active' : ''}`} onClick={() => setPanelMode('sources')}>
+								<DatabaseOutlined /> 库
 							</button>
 							<button className={`qa-panel-tab ${panelMode === 'reference' ? 'is-active' : ''}`} onClick={() => setPanelMode('reference')} disabled={!activeReference}>
 								<FileSearchOutlined /> 证据
 							</button>
 							<button className={`qa-panel-tab ${panelMode === 'settings' ? 'is-active' : ''}`} onClick={() => setPanelMode('settings')}>
-								<SettingOutlined /> 参数
+								<SettingOutlined /> 设置
 							</button>
 						</div>
 					</div>
 
 					<div className="qa-panel-body">
-						{panelMode === "overview" && (
+						{panelMode === "sources" && (
 							<div className="qa-panel-stack">
-								<div className="qa-stat-grid">
-									<div className="qa-stat-card">
-										<div className="qa-stat-card__label">索引文档</div>
-										<div className="qa-stat-card__value">{selectedKnowledgeBase?.indexedDocumentCount ?? 0}</div>
+								{activeKnowledgeBases.length === 0 && !knowledgeQuery.isLoading ? (
+									<Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无激活知识库" />
+								) : (
+									<div className="qa-source-list-mini">
+										{activeKnowledgeBases.map((kb) => (
+											<button
+												key={kb.id}
+												type="button"
+												className={`qa-source-item-mini ${kb.id === selectedKnowledgeBaseId ? 'is-active' : ''}`}
+												onClick={() => form.setFieldValue("kbId", kb.id)}
+											>
+												<div className="qa-source-item-mini__icon">
+													<FolderOpenOutlined />
+												</div>
+												<div className="qa-source-item-mini__copy">
+													<div className="qa-source-item-mini__name">{kb.name}</div>
+													<div className="qa-source-item-mini__meta">
+														{kb.indexedDocumentCount} 篇文档
+													</div>
+												</div>
+											</button>
+										))}
 									</div>
-									<div className="qa-stat-card">
-										<div className="qa-stat-card__label">命中片段</div>
-										<div className="qa-stat-card__value">{activeReference ? '5' : '0'}</div>
-									</div>
-									<div className="qa-stat-card">
-										<div className="qa-stat-card__label">模型</div>
-										<div className="qa-stat-card__value">GPT-4o</div>
-									</div>
-								</div>
-								<Card size="small" title="知识库说明" bordered={false} style={{ background: '#fafafa' }}>
-									<Typography.Text type="secondary">{selectedKnowledgeBase?.description || "暂无描述"}</Typography.Text>
-								</Card>
+								)}
 							</div>
 						)}
 
@@ -293,8 +346,8 @@ export function QaPage() {
 						{panelMode === "settings" && (
 							<div className="qa-panel-stack">
 								<Typography.Text strong>RAG 配置</Typography.Text>
-								<div style={{ padding: '12px', border: '1px solid var(--console-border)', borderRadius: 8 }}>
-									<div style={{ marginBottom: 12 }}>
+								<div style={{ padding: '16px', border: '1px solid var(--console-border)', borderRadius: 8 }}>
+									<div style={{ marginBottom: 16 }}>
 										<div style={{ fontSize: 12, color: 'var(--console-muted)', marginBottom: 4 }}>Top-K (检索条数)</div>
 										<InputNumber min={1} max={20} value={topKValue} onChange={(v) => form.setFieldValue('topK', v)} style={{ width: '100%' }} />
 									</div>
