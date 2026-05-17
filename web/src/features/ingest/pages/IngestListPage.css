@@ -1,0 +1,161 @@
+.ingest-list-container {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.ingest-filter-card .ant-card-body {
+  padding: 24px;
+}
+
+.ingest-filter-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: flex-end;
+}
+
+.ingest-filter-item {
+  margin-bottom: 0 !important;
+  margin-inline-end: 0 !important;
+}
+
+.ingest-table-card .ant-card-body {
+  padding: 0;
+}
+
+.ingest-document-id {
+  font-size: 12px;
+  font-family: var(--console-font-mono, 'JetBrains Mono', monospace);
+  color: var(--console-ink-mute);
+}
+
+.ingest-filename {
+  font-weight: 500;
+  color: var(--console-ink);
+}
+
+.ingest-kb-badge {
+  font-size: 12px;
+  padding: 2px 8px;
+  background: var(--console-canvas-soft);
+  border: 1px solid var(--console-hairline);
+  border-radius: 4px;
+  color: var(--console-ink-secondary);
+}
+
+.ingest-update-time {
+  font-size: 12px;
+  color: var(--console-ink-faint);
+}
+
+.ingest-version-tag {
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 0 6px;
+  background: #fffbe6 !important;
+  border: 1px solid #ffe58f !important;
+  color: #d48806 !important;
+}
+
+/* Table overrides */
+.ingest-table .ant-table {
+  border: none !important;
+}
+
+.ingest-table .ant-table-thead > tr > th {
+  padding: 12px 16px !important;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--console-ink-mute);
+}
+
+.ingest-table .ant-table-tbody > tr > td {
+  padding: 16px !important;
+}
+
+.ingest-table .ant-table-pagination {
+  padding: 16px 24px !important;
+  margin: 0 !important;
+  border-top: 1px solid var(--console-hairline);
+}
+
+.ingest-action-group {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* Action Button Refinements */
+.console-table-action-group {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.console-table-action-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* Base button styles to match DESIGN.md */
+.console-link-button {
+  padding: 6px 12px;
+  font-size: 13px;
+  font-weight: 500;
+  border-radius: var(--console-radius-sm, 6px);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  text-decoration: none;
+  cursor: pointer;
+  border: 1px solid var(--console-hairline-strong);
+  background: var(--console-canvas);
+  color: var(--console-ink);
+  line-height: 1;
+}
+
+.console-link-button--primary {
+  background: var(--console-accent) !important;
+  border-color: var(--console-accent) !important;
+  color: var(--console-ink) !important;
+}
+
+.console-link-button--primary:hover:not(.console-link-button--disabled) {
+  background: var(--console-accent-strong) !important;
+  border-color: var(--console-accent-strong) !important;
+}
+
+.console-link-button--default:hover:not(.console-link-button--disabled) {
+  background: var(--console-canvas-soft) !important;
+  border-color: var(--console-ink-mute) !important;
+}
+
+.console-link-button--disabled {
+  opacity: 0.4;
+  cursor: not-allowed !important;
+  background: var(--console-canvas-soft) !important;
+  border-color: var(--console-hairline) !important;
+  color: var(--console-ink-mute) !important;
+}
+
+.console-action-button--danger {
+  color: var(--console-error) !important;
+  border-color: var(--console-error) !important;
+  background: #fff !important;
+}
+
+.console-action-button--danger:hover:not(.console-link-button--disabled) {
+  background: var(--console-error) !important;
+  color: #fff !important;
+}
+
+.ingest-delete-result {
+  border: 1px solid var(--console-hairline);
+  border-radius: 8px;
+  background: var(--console-canvas-soft);
+}
+
+.ingest-empty-state {
+  padding: 64px 0;
+}

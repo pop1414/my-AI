@@ -11,12 +11,14 @@ import {
 	Space,
 	Table,
 	Tag,
+	Tooltip,
 	Typography,
 } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import {
 	SearchOutlined,
 	ReloadOutlined,
+	PlusOutlined,
 } from "@ant-design/icons";
 import { Link, useLocation, useSearchParams } from "react-router-dom";
 import { z } from "zod";
@@ -33,6 +35,8 @@ import { DeleteDocumentConfirmModal } from "./DeleteDocumentConfirmModal";
 import { DocumentStatusTag } from "../components/DocumentStatusTag";
 import { DocumentTableActions } from "../components/DocumentTableActions";
 import { formatTime } from "../utils/formatters";
+
+import "./IngestListPage.css";
 
 const filterSchema = z.object({
 	kbId: z.string().optional(),
@@ -182,51 +186,72 @@ export function IngestListPage() {
 		);
 	};
 
+	const kbNameMap = useMemo(() => {
+		const map: Record<string, string> = {};
+		(knowledgeQuery.data ?? []).forEach((kb) => {
+			map[kb.id] = kb.name;
+		});
+		return map;
+	}, [knowledgeQuery.data]);
+
 	const columns: ColumnsType<DocumentListItem> = [
 		{
-			title: "文档ID",
+			title: "文档 ID",
 			dataIndex: "documentId",
 			width: 180,
 			ellipsis: true,
 			render: (value: string) => (
 				<Typography.Text
 					copyable={{ text: value }}
-					style={{ fontSize: 12, fontFamily: 'var(--console-font-mono)' }}
+					className="ingest-document-id"
 				>
 					{value.length > 20 ? `${value.slice(0, 20)}…` : value}
 				</Typography.Text>
 			),
 		},
-		{ title: "知识库", dataIndex: "kbId", width: 140, ellipsis: true },
+		{
+			title: "知识库",
+			dataIndex: "kbId",
+			width: 160,
+			ellipsis: true,
+			render: (val: string) => (
+				<Tooltip title={`ID: ${val}`} placement="topLeft">
+					<span className="ingest-kb-badge">
+						{kbNameMap[val] || val}
+					</span>
+				</Tooltip>
+			),
+		},
 		{
 			title: "文件名",
 			dataIndex: "filename",
 			width: 200,
 			ellipsis: true,
-			render: (val) => <span style={{ fontWeight: 500 }}>{val}</span>
+			render: (val) => <span className="ingest-filename">{val}</span>
 		},
 		{
 			title: "版本",
 			dataIndex: "latestVersionNumber",
-			width: 100,
-			render: (_: number, record) => (
-				<Tag bordered={false} color="orange" style={{ borderRadius: 4, fontSize: 12 }}>
-					v{record.latestVersionNumber}
+			width: 80,
+			align: 'center',
+			render: (v: number) => (
+				<Tag bordered={false} className="ingest-version-tag">
+					v{v}
 				</Tag>
 			),
 		},
 		{
-			title: "状态",
+			title: "处理状态",
 			dataIndex: "status",
-			width: 110,
+			width: 120,
 			render: (value: string) => <DocumentStatusTag status={value} />,
 		},
 		{
-			title: "更新时间",
+			title: "最后更新",
 			dataIndex: "updatedAt",
-			width: 150,
+			width: 160,
 			render: (value: string) => (
-				<span style={{ fontSize: 12, color: 'var(--console-muted)' }}>
+				<span className="ingest-update-time">
 					{formatTime(value)}
 				</span>
 			),
@@ -252,60 +277,66 @@ export function IngestListPage() {
 	const total = docListQuery.data?.total ?? 0;
 
 	return (
-		<Space direction="vertical" size={16} style={{ width: "100%" }}>
-			{/* 筛选区域 */}
-			<Card
-				title="文档列表"
-				extra={
+		<div className="ingest-list-container">
+			{/* 头部标题与操作 */}
+			<div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
+				<div>
+					<Typography.Title level={3} className="console-page-title">
+						文档目录
+					</Typography.Title>
 					<Typography.Text type="secondary">
-						GET /api/v1/documents
+						按知识库、当前最新版本状态或文件名筛选，浏览所有已上传文档的处理进度。
 					</Typography.Text>
-				}
-			>
-				<Typography.Paragraph type="secondary" style={{ marginTop: 0 }}>
-					按知识库、当前最新版本状态或文件名筛选，浏览所有已上传文档的处理进度。
-				</Typography.Paragraph>
+				</div>
+				<Link to="/ingest/upload">
+					<Button type="primary" icon={<PlusOutlined />} size="large">
+						上传文档
+					</Button>
+				</Link>
+			</div>
 
+			{/* 筛选区域 */}
+			<Card className="ingest-filter-card">
 				<Form
 					form={form}
 					layout="inline"
-					style={{ flexWrap: "wrap", gap: 8 }}
+					className="ingest-filter-form"
 					onFinish={onSubmit}
 				>
-					<Form.Item name="kbId" style={{ minWidth: 200 }}>
+					<Form.Item name="kbId" label="所属知识库" className="ingest-filter-item" style={{ minWidth: 240 }}>
 						<Select
 							aria-label="按知识库筛选文档"
 							allowClear
-							placeholder="选择知识库"
+							placeholder="全部知识库"
 							loading={knowledgeQuery.isLoading}
 							options={knowledgeBaseOptions}
 						/>
 					</Form.Item>
-					<Form.Item name="status" style={{ minWidth: 150 }}>
+					<Form.Item name="status" label="处理状态" className="ingest-filter-item" style={{ minWidth: 180 }}>
 						<Select
 							aria-label="按处理状态筛选文档"
 							allowClear
-							placeholder="处理状态"
+							placeholder="全部状态"
 							options={DOCUMENT_STATUSES.map((s) => ({
 								label: s,
 								value: s,
 							}))}
 						/>
 					</Form.Item>
-					<Form.Item name="filename" style={{ minWidth: 200 }}>
+					<Form.Item name="filename" label="搜索" className="ingest-filter-item" style={{ minWidth: 260 }}>
 						<Input
 							aria-label="按文件名搜索文档"
 							autoComplete="off"
 							allowClear
-							placeholder="搜索文件名（模糊匹配）"
+							placeholder="文件名模糊匹配"
+							prefix={<SearchOutlined style={{ color: 'var(--console-ink-faint)' }} />}
 						/>
 					</Form.Item>
-					<Form.Item>
-						<Space>
+					<Form.Item className="ingest-filter-item">
+						<Space size={8}>
 							<Button
 								type="primary"
 								htmlType="submit"
-								icon={<SearchOutlined />}
 								loading={docListQuery.isFetching}
 							>
 								查询
@@ -327,6 +358,7 @@ export function IngestListPage() {
 			)}
 			{deletedDocumentId && (
 				<Alert
+					className="ingest-delete-result"
 					data-testid="document-delete-result"
 					aria-live="polite"
 					aria-atomic="true"
@@ -346,7 +378,7 @@ export function IngestListPage() {
 			)}
 
 			{/* 数据表格 */}
-			<Card>
+			<Card className="ingest-table-card">
 				{docListQuery.isLoading ? (
 					<Table<DocumentListItem>
 						loading
@@ -354,29 +386,41 @@ export function IngestListPage() {
 						dataSource={[]}
 						rowKey="documentId"
 						pagination={false}
+						className="ingest-table"
 					/>
 				) : dataSource.length === 0 ? (
-					<Empty
-						description={
-							Object.keys(filters).length > 0
-								? "未找到符合当前筛选条件的文档，请尝试调整筛选条件。"
-								: "暂无文档，请先上传文档开始使用。"
-						}
-					/>
+					<div className="ingest-empty-state">
+						<Empty
+							description={
+								Object.keys(filters).length > 0
+									? "未找到符合当前筛选条件的文档，请尝试调整筛选条件。"
+									: "暂无文档，请先上传文档开始使用。"
+							}
+						>
+							{Object.keys(filters).length === 0 && (
+								<Link to="/ingest/upload">
+									<Button type="primary" icon={<PlusOutlined />}>
+										立即上传
+									</Button>
+								</Link>
+							)}
+						</Empty>
+					</div>
 				) : (
 					<Table<DocumentListItem>
 						rowKey="documentId"
 						columns={columns}
 						dataSource={dataSource}
 						loading={docListQuery.isFetching}
-						scroll={{ x: 1680 }}
+						scroll={{ x: 1400 }}
+						className="ingest-table"
 						pagination={{
 							current: page,
 							pageSize: pageSize,
 							total: total,
 							showSizeChanger: true,
 							showQuickJumper: true,
-							pageSizeOptions: [10, 20, 50, 100],
+							pageSizeOptions: ["10", "20", "50", "100"],
 							showTotal: (t, range) =>
 								`共 ${t} 条文档，当前 ${range[0]}-${range[1]}`,
 							onChange: (p, ps) => {
@@ -404,6 +448,6 @@ export function IngestListPage() {
 					}
 				}}
 			/>
-		</Space>
+		</div>
 	);
 }
