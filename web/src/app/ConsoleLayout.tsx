@@ -334,39 +334,54 @@ export function ConsoleLayout() {
 				<Layout>
 					<Header className="console-header">
 						<div className="console-header-copy">
-							<Space size={[8, 8]} wrap>
-								<Tag color="blue">{routeMeta.moduleLabel}</Tag>
-								<Text type="secondary">外层模块导航 + 统一页面骨架</Text>
-							</Space>
-							<Title level={4} style={{ margin: 0 }} data-testid="console-title">
-								my-AI 控制台
+							<Title level={4} style={{ margin: 0, fontWeight: 500, letterSpacing: '-0.02em' }} data-testid="console-title">
+								{routeMeta.pageTitle}
 							</Title>
-							<Text type="secondary">
-								以模块稳定分区承接文档、知识库、问答与治理任务，页面内统一为摘要、工作区和状态区。
-							</Text>
+							<Breadcrumb
+								items={[{ title: "控制台" }, { title: routeMeta.moduleLabel }, { title: routeMeta.pageTitle }]}
+								style={{ fontSize: 12 }}
+							/>
 						</div>
-						<Space className="console-header-actions" size={12}>
+						<Space className="console-header-actions" size={16}>
 							<Dropdown menu={{ items: userMenuItems }} placement="bottomRight">
 								<Space style={{ cursor: "pointer" }}>
 									<UserOutlined />
-									<span>{user?.displayName ?? ""}</span>
+									<span style={{ fontWeight: 500 }}>{user?.displayName ?? ""}</span>
 									{user?.workspaceRole && (
 										<Tag
-											color={roleColorMap[user.workspaceRole] ?? "default"}
+											bordered={false}
+											color="default"
+											style={{ fontSize: 11, textTransform: 'uppercase' }}
 										>
 											{user.workspaceRole}
 										</Tag>
 									)}
-									<DownOutlined />
+									<DownOutlined style={{ fontSize: 10 }} />
 								</Space>
 							</Dropdown>
 						</Space>
 					</Header>
 					<Content className="console-content">
 						<main id="console-main" className="console-main">
-							{content}
+							<Suspense
+								fallback={
+									<div
+										style={{
+											display: "flex",
+											justifyContent: "center",
+											alignItems: "center",
+											minHeight: 300,
+										}}
+									>
+										<Spin size="large" />
+									</div>
+								}
+							>
+								<Outlet />
+							</Suspense>
 						</main>
 					</Content>
+
 				</Layout>
 			</Layout>
 		</>

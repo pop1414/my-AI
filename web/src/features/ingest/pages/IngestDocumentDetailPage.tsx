@@ -1,10 +1,8 @@
 import {
 	ArrowLeftOutlined,
 	DeleteOutlined,
-	EyeOutlined,
 	HistoryOutlined,
 	InboxOutlined,
-	ReadOutlined,
 	ReloadOutlined,
 	RollbackOutlined,
 	UploadOutlined,
@@ -24,15 +22,9 @@ import {
 	Upload,
 } from "antd";
 import type { UploadFile } from "antd/es/upload/interface";
-import { type ReactNode, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import {
-	Link,
-	type To,
-	useNavigate,
-	useParams,
-	useSearchParams,
-} from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
 	deleteDocument,
 	getDocumentVersionHistory,
@@ -44,66 +36,18 @@ import {
 } from "../../../shared/api/ingestApi";
 import { ApiErrorAlert } from "../../../shared/ui/ApiErrorAlert";
 import { DeleteDocumentConfirmModal } from "./DeleteDocumentConfirmModal";
+import { DetailDiffSummary } from "../components/DetailDiffSummary";
+import { VersionTags } from "../components/VersionTags";
+import { VersionUploadResultAlert } from "../components/VersionUploadResultAlert";
+import { VersionRollbackResultAlert } from "../components/VersionRollbackResultAlert";
+import { formatFileSize, formatTime, originLabel, statusColor } from "../utils/formatters";
+import { RouterButtonLink } from "../components/RouterButtonLink";
+import { VersionHistoryList } from "../components/VersionHistoryList";
 import "./IngestDocumentDetailPage.css";
 
-const defaultVisibleVersionCount = 5;
 const uploadAllowedStatuses = new Set(["INDEXED", "FAILED"]);
 const rollbackAllowedLatestStatuses = new Set(["INDEXED", "FAILED"]);
 const { Dragger } = Upload;
-const fileSizeFormatter = new Intl.NumberFormat("zh-CN", {
-	maximumFractionDigits: 1,
-});
-
-function formatTime(iso: string): string {
-	return new Date(iso).toLocaleString("zh-CN", {
-		year: "numeric",
-		month: "2-digit",
-		day: "2-digit",
-		hour: "2-digit",
-		minute: "2-digit",
-	});
-}
-
-function formatFileSize(fileSize: number): string {
-	if (fileSize >= 1024 * 1024) {
-		return `${fileSizeFormatter.format(fileSize / (1024 * 1024))}\u00a0MB`;
-	}
-	if (fileSize >= 1024) {
-		return `${fileSizeFormatter.format(fileSize / 1024)}\u00a0KB`;
-	}
-	return `${fileSizeFormatter.format(fileSize)}\u00a0B`;
-}
-
-function statusColor(status: string): string {
-	switch (status) {
-		case "UPLOADED":
-			return "blue";
-		case "INGESTING":
-		case "PROCESSING":
-			return "processing";
-		case "INDEXED":
-			return "success";
-		case "FAILED":
-			return "error";
-		case "DELETING":
-			return "warning";
-		case "DELETED":
-			return "default";
-		default:
-			return "default";
-	}
-}
-
-function originLabel(originType: string): string {
-	switch (originType) {
-		case "UPLOAD":
-			return "上传产生";
-		case "ROLLBACK":
-			return "回退产生";
-		default:
-			return originType;
-	}
-}
 
 function getUploader(version: DocumentVersionHistoryItem): string {
 	return (
@@ -166,326 +110,6 @@ function buildDeletedListPath(returnTo: string, documentId: string): string {
 	return `${url.pathname}${url.search}`;
 }
 
-function resolveVisibleVersions(
-	versions: DocumentVersionHistoryItem[],
-	viewingVersion: DocumentVersionHistoryItem,
-	expanded: boolean,
-): DocumentVersionHistoryItem[] {
-	if (expanded || versions.length <= defaultVisibleVersionCount) {
-		return versions;
-	}
-
-	const mustShow = new Set<number>([
-		viewingVersion.versionNumber,
-		...versions
-			.filter((version) => version.isLatestVersion || version.isAskableVersion)
-			.map((version) => version.versionNumber),
-	]);
-	const defaultVisible = versions
-		.slice(0, defaultVisibleVersionCount)
-		.map((version) => version.versionNumber);
-	const visibleNumbers = new Set([...defaultVisible, ...mustShow]);
-	return versions.filter((version) => visibleNumbers.has(version.versionNumber));
-}
-
-function DetailDiffSummary({
-	viewingVersion,
-	compareVersion,
-	askableVersion,
-}: {
-	viewingVersion: DocumentVersionHistoryItem;
-	compareVersion?: DocumentVersionHistoryItem;
-	askableVersion?: DocumentVersionHistoryItem;
-}) {
-	if (!compareVersion) {
-		return (
-			<Alert
-				type="info"
-				showIcon
-				message="当前为首个版本，暂无历史差异可比"
-			/>
-		);
-	}
-
-	const fileChanged =
-		viewingVersion.filename !== compareVersion.filename ||
-		viewingVersion.fileSize !== compareVersion.fileSize;
-
-	return (
-		<section className="detail-page__diff" data-testid="diff-summary">
-			<div className="detail-page__section-title">
-				<Typography.Title level={3}>差异摘要</Typography.Title>
-				<Typography.Text type="secondary">
-					只比较版本元数据，不做正文 diff。
-				</Typography.Text>
-			</div>
-			<div className="detail-page__diff-grid">
-				<Card size="small" className="detail-page__diff-card">
-					<Typography.Text type="secondary">版本关系</Typography.Text>
-					<Typography.Title level={4}>
-						v{viewingVersion.versionNumber} vs v
-						{compareVersion.versionNumber}
-					</Typography.Title>
-					<Typography.Paragraph type="secondary">
-						{viewingVersion.isLatestVersion
-							? "当前最新版本与上一版本对比。"
-							: "当前历史版本与系统最新版本对比。"}
-					</Typography.Paragraph>
-				</Card>
-				<Card size="small" className="detail-page__diff-card">
-					<Typography.Text type="secondary">文件变化</Typography.Text>
-					<Typography.Title level={4}>
-						{fileChanged ? "文件事实有变化" : "文件事实一致"}
-					</Typography.Title>
-					<Typography.Paragraph type="secondary">
-						{viewingVersion.filename} · {formatFileSize(viewingVersion.fileSize)}
-					</Typography.Paragraph>
-				</Card>
-				<Card size="small" className="detail-page__diff-card">
-					<Typography.Text type="secondary">处理与问答</Typography.Text>
-					<Typography.Title level={4}>
-						问答基线{" "}
-						{askableVersion ? `v${askableVersion.versionNumber}` : "暂无"}
-					</Typography.Title>
-					<Typography.Paragraph type="secondary">
-						当前查看版本状态为 {viewingVersion.status}，对比版本状态为{" "}
-						{compareVersion.status}。
-					</Typography.Paragraph>
-				</Card>
-				<Card size="small" className="detail-page__diff-card">
-					<Typography.Text type="secondary">时间与来源</Typography.Text>
-					<Typography.Title level={4}>
-						{originLabel(viewingVersion.versionOriginType)}
-					</Typography.Title>
-					<Typography.Paragraph type="secondary">
-						更新于 {formatTime(viewingVersion.updatedAt)}
-					</Typography.Paragraph>
-				</Card>
-			</div>
-		</section>
-	);
-}
-
-function VersionTags({
-	version,
-	isActive,
-	hasBeenRolledBackAsLatest,
-}: {
-	version: DocumentVersionHistoryItem;
-	isActive: boolean;
-	hasBeenRolledBackAsLatest: boolean;
-}) {
-	return (
-		<Space size={[6, 6]} wrap>
-			{version.isLatestVersion && <Tag color="gold">最新版本</Tag>}
-			{isActive && <Tag color="blue">当前查看</Tag>}
-			{version.isAskableVersion && <Tag color="green">当前问答基线</Tag>}
-			{version.versionOriginType === "ROLLBACK" && (
-				<Tag color="orange">回退产生</Tag>
-			)}
-			{hasBeenRolledBackAsLatest && <Tag>曾回退为最新版本</Tag>}
-			<Tag color={statusColor(version.status)}>{version.status}</Tag>
-		</Space>
-	);
-}
-
-function VersionUploadResultAlert({
-	result,
-	onClose,
-	onShowHistory,
-}: {
-	result: DocumentVersionUploadResponse;
-	onClose: () => void;
-	onShowHistory: () => void;
-}) {
-	const visibleVersionNumber =
-		result.versionNumber ??
-		result.reusedLatestVersionNumber ??
-		result.latestVersionNumber;
-	const title = result.versionCreated
-		? `已创建新版本 v${visibleVersionNumber}`
-		: "未创建新版本";
-	const description = result.versionCreated
-		? `上一版本为 v${result.previousVersionNumber}，当前详情页已切换到最新版本。`
-		: `上传文件与当前最新版本内容一致，当前仍停留在 v${visibleVersionNumber}。`;
-
-	return (
-		<Alert
-			className="detail-page__result-alert"
-			data-result-kind={result.versionCreated ? "success" : "info"}
-			data-testid="version-upload-result"
-			aria-live="polite"
-			aria-atomic="true"
-			type={result.versionCreated ? "success" : "info"}
-			showIcon
-			message={title}
-			description={
-				<div className="detail-page__result-body">
-					<Typography.Paragraph>{description}</Typography.Paragraph>
-					<div className="detail-page__result-facts">
-						<span>documentId：{result.documentId}</span>
-						<span>latestVersionNumber：v{result.latestVersionNumber}</span>
-						<span>
-							previousVersionNumber：
-							{result.previousVersionNumber
-								? `v${result.previousVersionNumber}`
-								: "-"}
-						</span>
-						<span>status：{result.status}</span>
-						<span>
-							askableVersionNumber：
-							{result.askableVersionNumber
-								? `v${result.askableVersionNumber}`
-								: "暂无"}
-						</span>
-					</div>
-					{!result.canAskNow && (
-						<Typography.Text type="secondary">
-							当前暂无可问答版本，请等待处理完成。
-						</Typography.Text>
-					)}
-				</div>
-			}
-			action={
-				<Space wrap>
-					<Button size="small" onClick={onShowHistory}>
-						查看版本历史
-					</Button>
-					{result.canAskNow && (
-						<RouterButtonLink size="small" tone="primary" to="/qa">
-							去问答
-						</RouterButtonLink>
-					)}
-					<Button size="small" type="text" onClick={onClose}>
-						关闭提示
-					</Button>
-				</Space>
-			}
-		/>
-	);
-}
-
-function VersionRollbackResultAlert({
-	result,
-	onClose,
-	onShowHistory,
-}: {
-	result: DocumentVersionRollbackResponse;
-	onClose: () => void;
-	onShowHistory: () => void;
-}) {
-	const latestIndexed = result.status === "INDEXED";
-	const askableText = result.askableVersionNumber
-		? `v${result.askableVersionNumber}`
-		: "暂无可问答版本";
-
-	return (
-		<Alert
-			className="detail-page__result-alert"
-			data-result-kind="success"
-			data-testid="version-rollback-result"
-			aria-live="polite"
-			aria-atomic="true"
-			type="success"
-			showIcon
-			message={`已回退为新的最新版本 v${result.latestVersionNumber}`}
-			description={
-				<div className="detail-page__result-body">
-					<Typography.Paragraph>
-						已基于历史版本 v{result.rollbackFromVersionNumber} 创建回退版本
-						v{result.versionNumber}，页面已切换到新的最新版本。
-					</Typography.Paragraph>
-					<div className="detail-page__result-facts">
-						<span>documentId：{result.documentId}</span>
-						<span>latestVersionNumber：v{result.latestVersionNumber}</span>
-						<span>
-							rollbackFromVersionNumber：v{result.rollbackFromVersionNumber}
-						</span>
-						<span>status：{result.status}</span>
-						<span>askableVersionNumber：{askableText}</span>
-					</div>
-					{!latestIndexed && (
-						<Alert
-							type="warning"
-							showIcon
-							message={`新最新版本 v${result.latestVersionNumber} 尚未 INDEXED`}
-							description={`当前问答暂时仍使用最近一个已 INDEXED 的版本：${askableText}。`}
-						/>
-					)}
-				</div>
-			}
-			action={
-				<Space wrap>
-					<Button size="small" onClick={onShowHistory}>
-						查看版本历史
-					</Button>
-					{result.canAskNow && (
-						<RouterButtonLink size="small" tone="primary" to="/qa">
-							去问答
-						</RouterButtonLink>
-					)}
-					<Button size="small" type="text" onClick={onClose}>
-						关闭提示
-					</Button>
-				</Space>
-			}
-		/>
-	);
-}
-
-function ReadUnavailableNotice({ size }: { size?: "small" }) {
-	const className = [
-		"detail-page__read-unavailable",
-		size ? "detail-page__read-unavailable--small" : "",
-	]
-		.filter(Boolean)
-		.join(" ");
-
-	return (
-		<span
-			aria-label="正文阅读接口尚未接入，暂不支持阅读跳转"
-			className={className}
-		>
-			<ReadOutlined />
-			正文阅读待接入
-		</span>
-	);
-}
-
-function RouterButtonLink({
-	children,
-	icon,
-	to,
-	tone = "default",
-	size,
-	block,
-	testId,
-}: {
-	children: ReactNode;
-	icon?: ReactNode;
-	to: To;
-	tone?: "default" | "primary" | "text" | "return";
-	size?: "small";
-	block?: boolean;
-	testId?: string;
-}) {
-	const className = [
-		"detail-page__button-link",
-		`detail-page__button-link--${tone}`,
-		size ? `detail-page__button-link--${size}` : "",
-		block ? "detail-page__button-link--block" : "",
-	]
-		.filter(Boolean)
-		.join(" ");
-
-	return (
-		<Link className={className} data-testid={testId} to={to}>
-			{icon}
-			<span>{children}</span>
-		</Link>
-	);
-}
-
 export function IngestDocumentDetailPage() {
 	const { documentId = "" } = useParams<{ documentId?: string }>();
 	const [searchParams, setSearchParams] = useSearchParams();
@@ -545,20 +169,14 @@ export function IngestDocumentDetailPage() {
 			(version) => version.versionNumber < viewingVersion.versionNumber,
 		);
 	}, [isViewingLatest, latestVersion, versions, viewingVersion]);
-	const visibleVersions = useMemo(
-		() =>
-			viewingVersion
-				? resolveVisibleVersions(versions, viewingVersion, expandedHistory)
-				: [],
-		[expandedHistory, versions, viewingVersion],
-	);
-	const hiddenVersionCount = versions.length - visibleVersions.length;
+
 	const errorStatus = (historyQuery.error as { status?: number } | null)?.status;
 	const canUploadNewVersion = Boolean(
 		isViewingLatest &&
 			latestVersion &&
 			uploadAllowedStatuses.has(latestVersion.status),
 	);
+
 	const uploadVersionMutation = useMutation({
 		mutationFn: (file: File) =>
 			uploadNewDocumentVersion({
@@ -580,6 +198,7 @@ export function IngestDocumentDetailPage() {
 			});
 		},
 	});
+
 	const rollbackVersionMutation = useMutation({
 		mutationFn: (targetVersionNumber: number) =>
 			rollbackDocumentVersion({
@@ -600,6 +219,7 @@ export function IngestDocumentDetailPage() {
 			});
 		},
 	});
+
 	const deleteDocumentMutation = useMutation({
 		mutationFn: () => deleteDocument(documentId),
 		onSuccess: async () => {
@@ -614,6 +234,7 @@ export function IngestDocumentDetailPage() {
 			});
 		},
 	});
+
 	const expandHistory = () => {
 		setSearchParams((current) => {
 			const next = new URLSearchParams(current);
@@ -621,19 +242,19 @@ export function IngestDocumentDetailPage() {
 			return next;
 		});
 	};
+
 	const submitNewVersion = async () => {
 		const selectedFile = uploadFileList[0]?.originFileObj;
 		if (!selectedFile || !latestVersion) {
 			return;
 		}
-
 		await uploadVersionMutation.mutateAsync(selectedFile);
 	};
+
 	const submitRollbackVersion = async () => {
 		if (!rollbackTarget) {
 			return;
 		}
-
 		await rollbackVersionMutation.mutateAsync(rollbackTarget.versionNumber);
 	};
 
@@ -731,7 +352,6 @@ export function IngestDocumentDetailPage() {
 								删除 document
 							</Button>
 						)}
-					<ReadUnavailableNotice />
 				</Space>
 			</div>
 
@@ -869,7 +489,6 @@ export function IngestDocumentDetailPage() {
 										回退为最新版本
 									</Button>
 								)}
-							<ReadUnavailableNotice />
 						</div>
 					</Card>
 
@@ -913,103 +532,20 @@ export function IngestDocumentDetailPage() {
 					</Card>
 				</div>
 
-				<Card className="detail-page__rail" data-testid="version-history-list">
-					<div className="detail-page__section-title">
-						<div>
-							<Typography.Text type="secondary">版本历史</Typography.Text>
-							<Typography.Title level={3}>
-								<HistoryOutlined /> 版本账本
-							</Typography.Title>
-						</div>
-						<Tag>{historyData?.sort}</Tag>
-					</div>
-					<div className="detail-page__rail-scroll">
-						<Space direction="vertical" size={10} style={{ width: "100%" }}>
-							{visibleVersions.map((version) => {
-								const isActive =
-									version.versionNumber === viewingVersion.versionNumber;
-								return (
-									<div
-										key={version.versionNumber}
-										className={`detail-page__version-card ${
-											isActive ? "is-active" : ""
-										}`}
-										data-testid={`version-card-${version.versionNumber}`}
-									>
-										<Link
-											className="detail-page__version-card-button"
-											to={buildDetailPath(
-												historyData!.documentId,
-												version.isLatestVersion
-													? undefined
-													: version.versionNumber,
-												preservedReturnTo,
-											)}
-										>
-											<span className="detail-page__version-number">
-												v{version.versionNumber}
-											</span>
-											<VersionTags
-												version={version}
-												isActive={isActive}
-												hasBeenRolledBackAsLatest={resolveHasBeenRolledBackAsLatest(
-													version,
-													versions,
-												)}
-											/>
-											<span className="detail-page__filename">
-												{version.filename}
-											</span>
-											<span className="detail-page__version-meta">
-												{getUploader(version)} · {formatTime(version.updatedAt)}
-											</span>
-											{version.rollbackFromVersionNumber && (
-												<span className="detail-page__version-note">
-													回退自 v{version.rollbackFromVersionNumber}
-												</span>
-											)}
-										</Link>
-										<div className="detail-page__version-actions">
-											<RouterButtonLink
-												size="small"
-												tone="text"
-												icon={<EyeOutlined />}
-												to={buildDetailPath(
-													historyData!.documentId,
-													version.isLatestVersion
-														? undefined
-														: version.versionNumber,
-													preservedReturnTo,
-												)}
-											>
-												查看详情
-											</RouterButtonLink>
-											<ReadUnavailableNotice size="small" />
-											{canRollbackVersion(version, latestVersion) && (
-												<Button
-													size="small"
-													type="text"
-													icon={<RollbackOutlined />}
-													onClick={() => setRollbackTarget(version)}
-												>
-													回退为最新版本
-												</Button>
-											)}
-										</div>
-									</div>
-								);
-							})}
-						</Space>
-					</div>
-					{hiddenVersionCount > 0 && (
-						<Button
-							block
-							onClick={expandHistory}
-						>
-							展开更早版本（{hiddenVersionCount}）
-						</Button>
-					)}
-				</Card>
+				<VersionHistoryList
+					historyData={historyData}
+					versions={versions}
+					viewingVersion={viewingVersion}
+					latestVersion={latestVersion}
+					expandedHistory={expandedHistory}
+					preservedReturnTo={preservedReturnTo}
+					onExpandHistory={expandHistory}
+					onRollbackTargetSet={setRollbackTarget}
+					canRollbackVersion={canRollbackVersion}
+					buildDetailPath={buildDetailPath}
+					getUploader={getUploader}
+					resolveHasBeenRolledBackAsLatest={resolveHasBeenRolledBackAsLatest}
+				/>
 			</div>
 
 			<Modal
