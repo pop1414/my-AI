@@ -1,9 +1,9 @@
 import { useState } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { Alert, Button, Card, Form, Input, Space, Typography } from "antd";
 import { useNavigate, useParams } from "react-router-dom";
 import { z } from "zod";
-import { deleteDocument } from "../../../shared/api/ingestApi";
+import { deleteDocument, getDocumentStatus } from "../../../shared/api/ingestApi";
 import { ApiErrorAlert } from "../../../shared/ui/ApiErrorAlert";
 import { ApiError } from "../../../shared/api/request";
 import { DeleteDocumentConfirmModal } from "./DeleteDocumentConfirmModal";
@@ -19,6 +19,12 @@ export function IngestDeletePage() {
 	const [confirmDocumentId, setConfirmDocumentId] = useState<string | null>(null);
 	const initialDocumentId =
 		urlDocumentId ?? localStorage.getItem("myai:lastDocumentId") ?? "";
+
+	const docStatusQuery = useQuery({
+		queryKey: ["document-status", urlDocumentId || initialDocumentId],
+		queryFn: () => getDocumentStatus(urlDocumentId || initialDocumentId),
+		enabled: !!(urlDocumentId || initialDocumentId),
+	});
 
 	const deleteMutation = useMutation({
 		mutationFn: (documentId: string) => deleteDocument(documentId),
@@ -49,7 +55,7 @@ export function IngestDeletePage() {
 	return (
 		<Space direction="vertical" size={16} style={{ width: "100%" }}>
 			<Card
-				title="删除文档资产"
+				title={`删除文档 · ${docStatusQuery.data?.latestFilename || urlDocumentId || initialDocumentId}`}
 				extra={
 					<Space>
 						<Button
@@ -65,7 +71,7 @@ export function IngestDeletePage() {
 				}
 			>
 				<Typography.Paragraph type="secondary" style={{ marginTop: 0 }}>
-					删除操作会清理整个 document 资产。确认前需要输入完整
+					删除操作会清理整个 document 资产及其所有版本。确认前需要输入完整
 					documentId。
 				</Typography.Paragraph>
 
@@ -97,11 +103,17 @@ export function IngestDeletePage() {
 			</Card>
 
 			{deleteMutation.isError && <ApiErrorAlert error={deleteMutation.error} />}
+			{docStatusQuery.isError && <ApiErrorAlert error={docStatusQuery.error} />}
 			{conflictWarning}
 
 			<DeleteDocumentConfirmModal
 				open={Boolean(confirmDocumentId)}
-				document={confirmDocumentId ? { documentId: confirmDocumentId } : null}
+				document={confirmDocumentId ? { 
+					documentId: confirmDocumentId,
+					filename: docStatusQuery.data?.latestFilename,
+					status: docStatusQuery.data?.status,
+					latestVersionNumber: docStatusQuery.data?.latestVersionNumber
+				} : null}
 				confirmLoading={deleteMutation.isPending}
 				error={deleteMutation.error}
 				onCancel={() => setConfirmDocumentId(null)}

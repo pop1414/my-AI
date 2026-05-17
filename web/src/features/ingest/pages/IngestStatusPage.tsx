@@ -157,8 +157,12 @@ export function IngestStatusPage() {
 			{statusQuery.data && (
 				<Card title="当前状态" className="status-page__card">
 					<p>
+						<strong>文件名:</strong>{" "}
+						<span className="ingest-filename">{statusQuery.data.latestFilename}</span>
+					</p>
+					<p>
 						<strong>documentId:</strong>{" "}
-						{statusQuery.data.documentId}
+						<Typography.Text code style={{ fontSize: 12 }}>{statusQuery.data.documentId}</Typography.Text>
 					</p>
 					<p>
 						<strong>status:</strong>{" "}

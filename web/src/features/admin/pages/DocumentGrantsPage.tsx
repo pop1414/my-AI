@@ -11,9 +11,10 @@ import {
 	type DocumentGrant,
 	type WorkspaceMember,
 } from "../../../shared/api/adminApi";
+import { getDocumentStatus } from "../../../shared/api/ingestApi";
 import { ApiErrorAlert } from "../../../shared/ui/ApiErrorAlert";
 
-const { Title } = Typography;
+const { Title, Text } = Typography;
 
 const permissionOptions: Array<{
 	value: DocumentGrant["permission"];
@@ -31,6 +32,12 @@ export function DocumentGrantsPage() {
 	const [permissionsByUserId, setPermissionsByUserId] = useState<
 		Record<string, DocumentGrant["permission"]>
 	>({});
+
+	const docStatusQuery = useQuery({
+		queryKey: ["document-status", documentId],
+		queryFn: () => getDocumentStatus(documentId!),
+		enabled: !!documentId,
+	});
 
 	const grantsQuery = useQuery({
 		queryKey: ["admin", "document-grants", documentId],
@@ -173,14 +180,19 @@ export function DocumentGrantsPage() {
 				>
 					<div>
 						<Title level={4} style={{ margin: 0 }}>
-							文档授权管理 · {documentId}
+							文档授权管理 · {docStatusQuery.data?.latestFilename || documentId}
 						</Title>
-						<Typography.Paragraph
-							type="secondary"
-							style={{ marginBottom: 0 }}
-						>
-							当前已授权 {selectedUserIds.length} 名成员。
-						</Typography.Paragraph>
+						<Space direction="vertical" size={0} style={{ marginTop: 4 }}>
+							<Text type="secondary" style={{ fontSize: 12, fontFamily: 'var(--console-font-mono)' }}>
+								ID: {documentId}
+							</Text>
+							<Typography.Text
+								type="secondary"
+								style={{ marginBottom: 0 }}
+							>
+								当前已授权 {selectedUserIds.length} 名成员。
+							</Typography.Text>
+						</Space>
 					</div>
 					<Space>
 						<Button
@@ -232,6 +244,7 @@ export function DocumentGrantsPage() {
 				</Space>
 			</Card>
 
+			{docStatusQuery.isError && <ApiErrorAlert error={docStatusQuery.error} />}
 			{grantsQuery.isError && <ApiErrorAlert error={grantsQuery.error} />}
 			{membersQuery.isError && <ApiErrorAlert error={membersQuery.error} />}
 			{replaceMutation.isError && (
@@ -242,7 +255,7 @@ export function DocumentGrantsPage() {
 				rowKey="userId"
 				columns={columns}
 				dataSource={members}
-				loading={membersQuery.isLoading || grantsQuery.isLoading}
+				loading={membersQuery.isLoading || grantsQuery.isLoading || docStatusQuery.isLoading}
 				pagination={false}
 				locale={{ emptyText: "暂无可授权成员" }}
 			/>

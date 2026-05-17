@@ -5,6 +5,7 @@ import type { DocumentVersionRollbackResponse } from "../../../shared/api/ingest
 
 interface VersionRollbackResultAlertProps {
 	result: DocumentVersionRollbackResponse;
+	filename?: string;
 	onClose: () => void;
 	onShowHistory: () => void;
 }
@@ -45,6 +46,7 @@ function RouterButtonLink({
 
 export function VersionRollbackResultAlert({
 	result,
+	filename,
 	onClose,
 	onShowHistory,
 }: VersionRollbackResultAlertProps) {
@@ -69,13 +71,17 @@ export function VersionRollbackResultAlert({
 						v{result.versionNumber}，页面已切换到新的最新版本。
 					</Typography.Paragraph>
 					<div className="detail-page__result-facts">
-						<span>documentId：{result.documentId}</span>
-						<span>latestVersionNumber：v{result.latestVersionNumber}</span>
-						<span>
-							rollbackFromVersionNumber：v{result.rollbackFromVersionNumber}
-						</span>
-						<span>status：{result.status}</span>
-						<span>askableVersionNumber：{askableText}</span>
+						{filename && (
+							<div style={{ marginBottom: 4 }}>
+								<Typography.Text strong>文件名：</Typography.Text>
+								<span className="ingest-filename">{filename}</span>
+							</div>
+						)}
+						<div><Typography.Text type="secondary">documentId：</Typography.Text>{result.documentId}</div>
+						<div><Typography.Text type="secondary">latestVersionNumber：</Typography.Text>v{result.latestVersionNumber}</div>
+						<div><Typography.Text type="secondary">rollbackFromVersionNumber：</Typography.Text>v{result.rollbackFromVersionNumber}</div>
+						<div><Typography.Text type="secondary">status：</Typography.Text>{result.status}</div>
+						<div><Typography.Text type="secondary">askableVersionNumber：</Typography.Text>{askableText}</div>
 					</div>
 					{result.status !== "INDEXED" && (
 						<Alert

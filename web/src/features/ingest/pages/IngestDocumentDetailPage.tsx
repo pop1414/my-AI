@@ -357,6 +357,7 @@ export function IngestDocumentDetailPage() {
 			{uploadResult && (
 				<VersionUploadResultAlert
 					result={uploadResult}
+					filename={viewingVersion.filename}
 					onClose={() => setUploadResult(null)}
 					onShowHistory={expandHistory}
 				/>
@@ -364,6 +365,7 @@ export function IngestDocumentDetailPage() {
 			{rollbackResult && (
 				<VersionRollbackResultAlert
 					result={rollbackResult}
+					filename={viewingVersion.filename}
 					onClose={() => setRollbackResult(null)}
 					onShowHistory={expandHistory}
 				/>

@@ -5,6 +5,7 @@ import type { DocumentVersionUploadResponse } from "../../../shared/api/ingestAp
 
 interface VersionUploadResultAlertProps {
 	result: DocumentVersionUploadResponse;
+	filename?: string;
 	onClose: () => void;
 	onShowHistory: () => void;
 }
@@ -45,6 +46,7 @@ function RouterButtonLink({
 
 export function VersionUploadResultAlert({
 	result,
+	filename,
 	onClose,
 	onShowHistory,
 }: VersionUploadResultAlertProps) {
@@ -73,21 +75,17 @@ export function VersionUploadResultAlert({
 				<div className="detail-page__result-body">
 					<Typography.Paragraph>{description}</Typography.Paragraph>
 					<div className="detail-page__result-facts">
-						<span>documentId：{result.documentId}</span>
-						<span>latestVersionNumber：v{result.latestVersionNumber}</span>
-						<span>
-							previousVersionNumber：
-							{result.previousVersionNumber
-								? `v${result.previousVersionNumber}`
-								: "-"}
-						</span>
-						<span>status：{result.status}</span>
-						<span>
-							askableVersionNumber：
-							{result.askableVersionNumber
-								? `v${result.askableVersionNumber}`
-								: "暂无"}
-						</span>
+						{filename && (
+							<div style={{ marginBottom: 4 }}>
+								<Typography.Text strong>文件名：</Typography.Text>
+								<span className="ingest-filename">{filename}</span>
+							</div>
+						)}
+						<div><Typography.Text type="secondary">documentId：</Typography.Text>{result.documentId}</div>
+						<div><Typography.Text type="secondary">latestVersionNumber：</Typography.Text>v{result.latestVersionNumber}</div>
+						<div><Typography.Text type="secondary">previousVersionNumber：</Typography.Text>{result.previousVersionNumber ? `v${result.previousVersionNumber}` : "-"}</div>
+						<div><Typography.Text type="secondary">status：</Typography.Text>{result.status}</div>
+						<div><Typography.Text type="secondary">askableVersionNumber：</Typography.Text>{result.askableVersionNumber ? `v${result.askableVersionNumber}` : "暂无"}</div>
 					</div>
 					{!result.canAskNow && (
 						<Typography.Text type="secondary">

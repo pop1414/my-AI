@@ -101,16 +101,14 @@ function DeleteDocumentConfirmDialog({
 				/>
 				{document && (
 					<Descriptions column={1} size="small" bordered>
+						<Descriptions.Item label="文件名">
+							<Typography.Text strong>{document.filename}</Typography.Text>
+						</Descriptions.Item>
 						<Descriptions.Item label="documentId">
-							<Typography.Text copyable={{ text: document.documentId }}>
+							<Typography.Text copyable={{ text: document.documentId }} className="ingest-document-id">
 								{document.documentId}
 							</Typography.Text>
 						</Descriptions.Item>
-						{document.filename && (
-							<Descriptions.Item label="当前最新文件名">
-								{document.filename}
-							</Descriptions.Item>
-						)}
 						{document.latestVersionNumber && (
 							<Descriptions.Item label="当前最新版本">
 								v{document.latestVersionNumber}

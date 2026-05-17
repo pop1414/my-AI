@@ -74,6 +74,7 @@ function buildListSearch(params: {
 	page: number;
 	pageSize: number;
 	deletedDocumentId?: string | null;
+	deletedFilename?: string | null;
 }): URLSearchParams {
 	const next = new URLSearchParams();
 	if (params.filters.kbId) next.set("kbId", params.filters.kbId);
@@ -84,12 +85,16 @@ function buildListSearch(params: {
 	if (params.deletedDocumentId) {
 		next.set("deletedDocumentId", params.deletedDocumentId);
 	}
+	if (params.deletedFilename) {
+		next.set("deletedFilename", params.deletedFilename);
+	}
 	return next;
 }
 
 function buildReturnTo(locationSearch: string): string {
 	const params = new URLSearchParams(locationSearch);
 	params.delete("deletedDocumentId");
+	params.delete("deletedFilename");
 	const qs = params.toString();
 	return `/ingest/documents${qs ? `?${qs}` : ""}`;
 }
@@ -110,6 +115,7 @@ export function IngestListPage() {
 	const page = parsePositiveInteger(searchParams.get("page"), 1);
 	const pageSize = parsePositiveInteger(searchParams.get("pageSize"), 20);
 	const deletedDocumentId = searchParams.get("deletedDocumentId");
+	const deletedFilename = searchParams.get("deletedFilename");
 	const returnTo = buildReturnTo(location.search);
 
 	useEffect(() => {
@@ -136,6 +142,7 @@ export function IngestListPage() {
 	const deleteMutation = useMutation({
 		mutationFn: (documentId: string) => deleteDocument(documentId),
 		onSuccess: async (_, documentId) => {
+			const filename = deleteTarget?.filename;
 			setDeleteTarget(null);
 			await queryClient.invalidateQueries({ queryKey: ["documents"] });
 			setSearchParams(
@@ -144,6 +151,7 @@ export function IngestListPage() {
 					page,
 					pageSize,
 					deletedDocumentId: documentId,
+					deletedFilename: filename,
 				}),
 			);
 		},
@@ -364,15 +372,26 @@ export function IngestListPage() {
 					aria-atomic="true"
 					type="success"
 					showIcon
-					message="document 资产已删除"
-					description={`旧 documentId：${deletedDocumentId}。同内容重新上传会生成新的 documentId，新文档不会继承旧文档级授权；如需继续使用，请重新上传并重新配置授权。`}
+					message="文档资产已删除"
+					description={
+						<div style={{ marginTop: 8 }}>
+							<div style={{ marginBottom: 4 }}>
+								<strong>文件名：</strong>
+								<span className="ingest-filename">{deletedFilename || "未知"}</span>
+							</div>
+							<div style={{ marginBottom: 12 }}>
+								<strong>文档 ID：</strong>
+								<Typography.Text code style={{ fontSize: 12 }}>{deletedDocumentId}</Typography.Text>
+							</div>
+							<Typography.Text type="secondary" style={{ fontSize: 13 }}>
+								该文档及其所有版本已从系统中移除。如需再次使用，请重新上传。
+							</Typography.Text>
+						</div>
+					}
 					action={
-						<Space wrap>
-							<Link to="/ingest/upload">上传新文档</Link>
-							<Button size="small" type="text" onClick={closeDeleteResult}>
-								关闭提示
-							</Button>
-						</Space>
+						<Button size="small" type="text" onClick={closeDeleteResult}>
+							关闭提示
+						</Button>
 					}
 				/>
 			)}

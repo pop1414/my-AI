@@ -1,4 +1,4 @@
-﻿import { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
 	Button,
@@ -15,9 +15,12 @@ import { useNavigate, useParams } from "react-router-dom";
 import { z } from "zod";
 import {
 	getDocumentChunksPreview,
+	getDocumentStatus,
 	type DocumentChunksPreviewResponse,
 } from "../../../shared/api/ingestApi";
 import { ApiErrorAlert } from "../../../shared/ui/ApiErrorAlert";
+
+const { Title, Text } = Typography;
 
 const previewFormSchema = z.object({
 	documentId: z.string().trim().min(1, "documentId 不能为空"),
@@ -62,6 +65,12 @@ export function IngestChunksPreviewPage() {
 		urlDocumentId ?? localStorage.getItem("myai:lastDocumentId") ?? "";
 	const [queryInput, setQueryInput] = useState<QueryInput | null>(null);
 
+	const docStatusQuery = useQuery({
+		queryKey: ["document-status", queryInput?.documentId],
+		queryFn: () => getDocumentStatus(queryInput!.documentId),
+		enabled: !!queryInput?.documentId,
+	});
+
 	// 如果 URL 带了 documentId，自动触发首次查询
 	useEffect(() => {
 		if (urlDocumentId && !queryInput) {
@@ -90,18 +99,29 @@ export function IngestChunksPreviewPage() {
 	return (
 		<Space direction="vertical" size={16} style={{ width: "100%" }}>
 			<Card
-				title="文档分块预览"
+				title={
+					<Space direction="vertical" size={2}>
+						<Title level={4} style={{ margin: 0 }}>
+							分块预览 · {docStatusQuery.data?.latestFilename || (queryInput?.documentId ? queryInput.documentId.slice(0, 12) + '...' : "文档分块预览")}
+						</Title>
+						{queryInput?.documentId && (
+							<Text type="secondary" style={{ fontSize: 12, fontFamily: 'var(--console-font-mono)' }}>
+								ID: {queryInput.documentId}
+							</Text>
+						)}
+					</Space>
+				}
 				extra={
 					<Space>
 						<Button
 							className="console-return-button"
 							onClick={() => navigate("/ingest/documents")}
 						>
-							返回文档列表
+							返回列表
 						</Button>
-						<Typography.Text type="secondary">
-							GET /api/v1/documents/{"{documentId}"}/chunks/preview
-						</Typography.Text>
+						<Text type="secondary" style={{ fontSize: 12 }}>
+							GET /api/v1/documents/{"{id}"}/chunks
+						</Text>
 					</Space>
 				}
 			>
@@ -148,6 +168,9 @@ export function IngestChunksPreviewPage() {
 
 			{previewQuery.isError && (
 				<ApiErrorAlert error={previewQuery.error} />
+			)}
+			{docStatusQuery.isError && (
+				<ApiErrorAlert error={docStatusQuery.error} />
 			)}
 
 			{previewQuery.data && (

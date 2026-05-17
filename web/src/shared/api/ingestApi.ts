@@ -12,7 +12,7 @@ const documentStatusResponseSchema = z.object({
 	latestFilename: z.string().min(1),
 	latestVersionOriginType: z.string().min(1),
 	status: z.string().min(1),
-	processingMetadata: z.string().nullable().optional(),
+	processingMetadata: z.record(z.string(), z.any()).nullable().optional(),
 });
 
 const documentChunkPreviewItemSchema = z.object({
