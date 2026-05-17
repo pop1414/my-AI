@@ -1,7 +1,7 @@
 import { Alert, Button, Space, Typography } from "antd";
 import { Link, type To } from "react-router-dom";
 import type { ReactNode } from "react";
-import { HistoryOutlined, MessageOutlined, CheckCircleFilled, InfoCircleFilled } from "@ant-design/icons";
+import { HistoryOutlined, MessageOutlined, CheckCircleFilled, InfoCircleFilled, BookOutlined } from "@ant-design/icons";
 import type { DocumentVersionUploadResponse } from "../../../shared/api/ingestApi";
 
 interface VersionUploadResultAlertProps {
@@ -101,20 +101,40 @@ export function VersionUploadResultAlert({
 				</div>
 			}
 			action={
-				<Space wrap style={{ marginTop: 8 }}>
-					<Button 
+				<Space wrap style={{ marginTop: 16 }}>
+          {result.versionCreated && result.previousVersionNumber ? (
+            <RouterButtonLink 
+              size="small" 
+              tone="primary" 
+              to={`/ingest/documents/${encodeURIComponent(result.documentId)}/versions/${visibleVersionNumber}/read?mode=compare&right=${result.previousVersionNumber}`} 
+              icon={<BookOutlined />}
+            >
+							对比变更
+						</RouterButtonLink>
+          ) : (
+            <RouterButtonLink 
+              size="small" 
+              tone="primary" 
+              to={`/ingest/documents/${encodeURIComponent(result.documentId)}/versions/${visibleVersionNumber}/read`} 
+              icon={<BookOutlined />}
+            >
+							查看预览
+						</RouterButtonLink>
+          )}
+					
+					{result.canAskNow && (
+						<RouterButtonLink size="small" tone="default" to="/qa" icon={<MessageOutlined />}>
+							去问答
+						</RouterButtonLink>
+					)}
+          <Button 
             size="small" 
             icon={<HistoryOutlined />} 
             onClick={onShowHistory}
-            style={{ borderRadius: '4px' }}
+            style={{ borderRadius: '6px' }}
           >
-						查看历史
+						历史
 					</Button>
-					{result.canAskNow && (
-						<RouterButtonLink size="small" tone="primary" to="/qa" icon={<MessageOutlined />}>
-							立即问答
-						</RouterButtonLink>
-					)}
 					<Button size="small" type="text" onClick={onClose} style={{ color: 'var(--detail-ink-faint)' }}>
 						关闭
 					</Button>
