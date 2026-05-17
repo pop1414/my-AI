@@ -3,11 +3,13 @@ import {
 	ExpandAltOutlined,
 	RetweetOutlined,
 	ShrinkOutlined,
+  FolderOpenOutlined,
 } from "@ant-design/icons";
 import { Button, Segmented, Select, Space, Tag, Tooltip, Skeleton, Result } from "antd";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { getDocumentVersionHistory, type DocumentVersionHistoryItem } from "../../../shared/api/ingestApi";
+import { getDocumentVersionHistory, getDocumentStatus, type DocumentVersionHistoryItem } from "../../../shared/api/ingestApi";
+import { listKnowledgeBases } from "../../../shared/api/knowledgeApi";
 import { ApiErrorAlert } from "../../../shared/ui/ApiErrorAlert";
 import "./IngestDocumentVersionReadPage.css";
 
@@ -89,6 +91,20 @@ export function IngestDocumentVersionReadPage() {
 		enabled: documentId.length > 0,
 	});
 
+  const statusQuery = useQuery({
+    queryKey: ["document-status", documentId],
+    queryFn: () => getDocumentStatus(documentId),
+    enabled: documentId.length > 0,
+  });
+
+  const kbQuery = useQuery({
+		queryKey: ["knowledge-bases"],
+		queryFn: listKnowledgeBases,
+	});
+
+  const kbId = statusQuery.data?.kbId;
+  const knowledgeBase = kbId ? kbQuery.data?.find(kb => kb.id === kbId) : undefined;
+
   const versions = historyQuery.data?.versions ?? [];
   const latestVersion = versions.find((v) => v.isLatestVersion);
 
@@ -163,7 +179,14 @@ export function IngestDocumentVersionReadPage() {
           </Tooltip>
 					<div className="read-toolbar__title">
 						<span className="read-toolbar__kicker">Document Reader</span>
-						<span className="read-toolbar__filename">{leftVersion.filename}</span>
+            <Space align="center" size="middle">
+						  <span className="read-toolbar__filename">{leftVersion.filename}</span>
+              {knowledgeBase && (
+                <Tag icon={<FolderOpenOutlined />} bordered={false} style={{ margin: 0, opacity: 0.8 }}>
+                  {knowledgeBase.name} ({knowledgeBase.id})
+                </Tag>
+              )}
+            </Space>
 					</div>
 				</div>
 

@@ -1,14 +1,13 @@
 import { Alert, Button, Space, Typography } from "antd";
 import { Link, type To } from "react-router-dom";
 import type { ReactNode } from "react";
-import { HistoryOutlined, MessageOutlined, CheckCircleOutlined } from "@ant-design/icons";
+import { MessageOutlined, CheckCircleOutlined } from "@ant-design/icons";
 import type { DocumentVersionRollbackResponse } from "../../../shared/api/ingestApi";
 
 interface VersionRollbackResultAlertProps {
 	result: DocumentVersionRollbackResponse;
 	filename?: string;
 	onClose: () => void;
-	onShowHistory: () => void;
 }
 
 function RouterButtonLink({
@@ -44,7 +43,6 @@ export function VersionRollbackResultAlert({
 	result,
 	filename,
 	onClose,
-	onShowHistory,
 }: VersionRollbackResultAlertProps) {
 	const askableText = result.askableVersionNumber
 		? `v${result.askableVersionNumber}`
@@ -92,14 +90,6 @@ export function VersionRollbackResultAlert({
 			}
 			action={
 				<Space wrap style={{ marginTop: 8 }}>
-					<Button 
-            size="small" 
-            icon={<HistoryOutlined />} 
-            onClick={onShowHistory}
-            style={{ borderRadius: '4px' }}
-          >
-						查看历史
-					</Button>
 					{result.canAskNow && (
 						<RouterButtonLink size="small" tone="primary" to="/qa" icon={<MessageOutlined />}>
 							立即问答

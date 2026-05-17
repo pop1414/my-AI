@@ -8,6 +8,7 @@ import {
   CopyOutlined,
   HistoryOutlined,
   BookOutlined,
+  FolderOpenOutlined,
 } from "@ant-design/icons";
 import {
 	Alert,
@@ -26,12 +27,14 @@ import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
 	deleteDocument,
 	getDocumentVersionHistory,
+  getDocumentStatus,
 	rollbackDocumentVersion,
 	uploadNewDocumentVersion,
 	type DocumentVersionRollbackResponse,
 	type DocumentVersionUploadResponse,
 	type DocumentVersionHistoryItem,
 } from "../../../shared/api/ingestApi";
+import { listKnowledgeBases } from "../../../shared/api/knowledgeApi";
 import { ApiErrorAlert } from "../../../shared/ui/ApiErrorAlert";
 import { DeleteDocumentConfirmModal } from "./DeleteDocumentConfirmModal";
 import { DetailDiffSummary } from "../components/DetailDiffSummary";
@@ -134,6 +137,17 @@ export function IngestDocumentDetailPage() {
 		enabled: documentId.length > 0,
 	});
 
+  const statusQuery = useQuery({
+    queryKey: ["document-status", documentId],
+    queryFn: () => getDocumentStatus(documentId),
+    enabled: documentId.length > 0,
+  });
+
+  const kbQuery = useQuery({
+		queryKey: ["knowledge-bases"],
+		queryFn: listKnowledgeBases,
+	});
+
 	const historyData = historyQuery.data;
 	const versions = useMemo(
 		() =>
@@ -174,6 +188,11 @@ export function IngestDocumentDetailPage() {
 			uploadAllowedStatuses.has(latestVersion.status),
 	);
 
+  const kbId = statusQuery.data?.kbId;
+  const knowledgeBase = useMemo(() => {
+    return kbId ? kbQuery.data?.find(kb => kb.id === kbId) : undefined;
+  }, [kbId, kbQuery.data]);
+
 	const uploadVersionMutation = useMutation({
 		mutationFn: (file: File) =>
 			uploadNewDocumentVersion({
@@ -183,6 +202,7 @@ export function IngestDocumentDetailPage() {
 			}),
 		onSuccess: async (data) => {
 			setUploadResult(data);
+      setRollbackResult(null); // Clear rollback result
 			setUploadModalOpen(false);
 			setUploadFileList([]);
 			setSearchParams((current) => {
@@ -205,6 +225,7 @@ export function IngestDocumentDetailPage() {
 			}),
 		onSuccess: async (data) => {
 			setRollbackResult(data);
+      setUploadResult(null); // Clear upload result
 			setRollbackTarget(null);
 			setSearchParams((current) => {
 				const next = new URLSearchParams(current);
@@ -299,17 +320,25 @@ export function IngestDocumentDetailPage() {
 				<div className="detail-page__header-copy">
 					<span className="detail-page__kicker">document version ledger</span>
 					<h1 className="detail-page__title">文档详情</h1>
-					<div className="detail-page__document-id-box">
-						<HistoryOutlined style={{ color: 'var(--detail-accent)' }} />
-						<span>{documentId}</span>
-						<CopyOutlined 
-              style={{ cursor: 'pointer', marginLeft: 4 }} 
-              onClick={() => {
-                navigator.clipboard.writeText(documentId);
-                message.success("ID 已复制");
-              }} 
-            />
-					</div>
+					<Space wrap size="middle">
+            <div className="detail-page__document-id-box">
+						  <HistoryOutlined style={{ color: 'var(--detail-accent)' }} />
+						  <span>{documentId}</span>
+						  <CopyOutlined 
+                style={{ cursor: 'pointer', marginLeft: 4 }} 
+                onClick={() => {
+                  navigator.clipboard.writeText(documentId);
+                  message.success("ID 已复制");
+                }} 
+              />
+					  </div>
+            {knowledgeBase && (
+              <div className="detail-page__document-id-box" style={{ background: 'transparent' }}>
+                <FolderOpenOutlined style={{ color: 'var(--detail-ink-secondary)' }} />
+                <span>{knowledgeBase.name} <span style={{ opacity: 0.5 }}>({knowledgeBase.id})</span></span>
+              </div>
+            )}
+          </Space>
 				</div>
 				<div className="detail-page__header-actions">
 					<Button 
@@ -336,7 +365,6 @@ export function IngestDocumentDetailPage() {
 					result={uploadResult}
 					filename={viewingVersion.filename}
 					onClose={() => setUploadResult(null)}
-					onShowHistory={expandHistory}
 				/>
 			)}
 			{rollbackResult && (
@@ -344,7 +372,6 @@ export function IngestDocumentDetailPage() {
 					result={rollbackResult}
 					filename={viewingVersion.filename}
 					onClose={() => setRollbackResult(null)}
-					onShowHistory={expandHistory}
 				/>
 			)}
 
