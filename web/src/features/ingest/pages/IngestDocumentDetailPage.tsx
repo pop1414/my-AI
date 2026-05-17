@@ -464,7 +464,7 @@ function RouterButtonLink({
 	children: ReactNode;
 	icon?: ReactNode;
 	to: To;
-	tone?: "default" | "primary" | "text";
+	tone?: "default" | "primary" | "text" | "return";
 	size?: "small";
 	block?: boolean;
 	testId?: string;
@@ -654,7 +654,7 @@ export function IngestDocumentDetailPage() {
 				title="旧版本视图不可见"
 				subTitle="版本历史仅对具备目标 document 管理权限的用户开放。当前用户可以继续从文档列表进入自己有权限的文档。"
 				extra={
-					<RouterButtonLink to="/ingest/documents">
+					<RouterButtonLink tone="return" to="/ingest/documents">
 						返回文档列表
 					</RouterButtonLink>
 				}
@@ -700,6 +700,7 @@ export function IngestDocumentDetailPage() {
 				<Space className="detail-page__header-actions" wrap>
 					<RouterButtonLink
 						icon={<ArrowLeftOutlined />}
+						tone="return"
 						to={listReturnTo}
 					>
 						返回文档列表

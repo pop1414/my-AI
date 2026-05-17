@@ -19,6 +19,7 @@ import {
 	DeleteOutlined,
 	FileSearchOutlined,
 	FileSyncOutlined,
+	InfoCircleOutlined,
 	SearchOutlined,
 	ReloadOutlined,
 } from "@ant-design/icons";
@@ -33,6 +34,7 @@ import { listKnowledgeBases } from "../../../shared/api/knowledgeApi";
 import { ApiErrorAlert } from "../../../shared/ui/ApiErrorAlert";
 import { useAuth } from "../../../shared/auth/AuthContext";
 import { SafetyOutlined } from "@ant-design/icons";
+import { ConsoleLinkButton } from "../../../shared/ui/ConsoleLinkButton";
 import { DeleteDocumentConfirmModal } from "./DeleteDocumentConfirmModal";
 
 const filterSchema = z.object({
@@ -131,33 +133,50 @@ function buildReturnTo(locationSearch: string): string {
 	return `/ingest/documents${qs ? `?${qs}` : ""}`;
 }
 
-function ActionIconLink({
+function ActionTextLink({
 	to,
 	label,
 	icon,
+	variant = "default",
 }: {
 	to: string;
 	label: string;
 	icon: ReactNode;
+	variant?: "default" | "primary";
 }) {
 	return (
-		<Link
+		<ConsoleLinkButton
 			to={to}
-			aria-label={label}
-			style={{
-				display: "inline-flex",
-				alignItems: "center",
-				justifyContent: "center",
-				width: 24,
-				height: 24,
-				border: "1px solid #d9d9d9",
-				borderRadius: 6,
-				color: "rgba(0, 0, 0, 0.88)",
-				background: "#ffffff",
-			}}
+			variant={variant}
+			size="small"
+			className="console-table-action-link"
+			testId={`ingest-action-${label}`}
 		>
-			{icon}
-		</Link>
+			<span className="console-table-action-link__icon">{icon}</span>
+			<span>{label}</span>
+		</ConsoleLinkButton>
+	);
+}
+
+function ActionDangerButton({
+	label,
+	icon,
+	onClick,
+}: {
+	label: string;
+	icon: ReactNode;
+	onClick: () => void;
+}) {
+	return (
+		<Button
+			size="small"
+			className="console-action-button console-action-button--danger console-table-action-button"
+			onClick={onClick}
+			title={label}
+		>
+			<span className="console-table-action-link__icon">{icon}</span>
+			<span>{label}</span>
+		</Button>
 	);
 }
 
@@ -334,8 +353,7 @@ export function IngestListPage() {
 		{
 			title: "操作",
 			key: "action",
-			width: 280,
-			fixed: "right",
+			width: 360,
 			render: (_, record) => {
 				const showChunksPreview = record.status === "INDEXED";
 				const showReprocess =
@@ -344,17 +362,18 @@ export function IngestListPage() {
 					record.status !== "DELETED" && record.status !== "DELETING";
 
 				return (
-					<Space size="small" wrap>
-						<Tooltip title="查看详情">
-							<ActionIconLink
+					<div className="console-table-action-group">
+						<Tooltip title="查看文档详情、版本与处理上下文">
+							<ActionTextLink
 								label="查看详情"
-								icon={<SearchOutlined />}
+								icon={<InfoCircleOutlined />}
 								to={`/ingest/documents/${encodeURIComponent(record.documentId)}?returnTo=${encodeURIComponent(returnTo)}`}
+								variant="primary"
 							/>
 						</Tooltip>
 						{showChunksPreview && (
-							<Tooltip title="分块预览">
-								<ActionIconLink
+							<Tooltip title="查看文档切块结果与预览内容">
+								<ActionTextLink
 									label="分块预览"
 									icon={<FileSearchOutlined />}
 									to={`/ingest/documents/${encodeURIComponent(record.documentId)}/chunks-preview`}
@@ -362,8 +381,8 @@ export function IngestListPage() {
 							</Tooltip>
 						)}
 						{showReprocess && (
-							<Tooltip title="重处理">
-								<ActionIconLink
+							<Tooltip title="将当前文档重新送入处理流水线">
+								<ActionTextLink
 									label="重处理"
 									icon={<FileSyncOutlined />}
 									to={`/ingest/documents/${encodeURIComponent(record.documentId)}/reprocess`}
@@ -371,26 +390,24 @@ export function IngestListPage() {
 							</Tooltip>
 						)}
 						{showDelete && (
-							<Tooltip title="删除">
-							<Button
-								size="small"
-								danger
-								aria-label="删除"
-								icon={<DeleteOutlined />}
-								onClick={() => setDeleteTarget(record)}
-							/>
-						</Tooltip>
-					)}
+							<Tooltip title="删除整个 document 资产及其版本">
+								<ActionDangerButton
+									label="删除"
+									icon={<DeleteOutlined />}
+									onClick={() => setDeleteTarget(record)}
+								/>
+							</Tooltip>
+						)}
 						{canAccessAdmin && (
-							<Tooltip title="授权管理">
-								<ActionIconLink
+							<Tooltip title="配置该文档的成员访问权限">
+								<ActionTextLink
 									label="授权管理"
 									icon={<SafetyOutlined />}
 									to={`/admin/documents/${encodeURIComponent(record.documentId)}/grants`}
 								/>
 							</Tooltip>
 						)}
-					</Space>
+					</div>
 				);
 			},
 		},
@@ -517,7 +534,7 @@ export function IngestListPage() {
 						columns={columns}
 						dataSource={dataSource}
 						loading={docListQuery.isFetching}
-						scroll={{ x: 1500 }}
+						scroll={{ x: 1680 }}
 						pagination={{
 							current: page,
 							pageSize: pageSize,

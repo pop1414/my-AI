@@ -36,21 +36,37 @@ async function mockQaShell(page: Page) {
 
 async function askQuestion(page: Page, question: string) {
 	await page.goto("/qa");
-	await page.getByPlaceholder("输入你想问的问题…").fill(question);
-	await page.getByRole("button", { name: "提交问题" }).click();
+	await page.getByPlaceholder("提问或继续追问").fill(question);
+	await page.getByRole("button", { name: "发送" }).click();
 }
 
-test.describe("问答页引用版本提示", () => {
-	test("顶部提供问答控制台快捷入口", async ({ page }) => {
+test.describe("问答页证据查验面板", () => {
+	test("知识库页可以进入问答页", async ({ page }) => {
 		await mockQaShell(page);
 
 		await page.goto("/knowledge");
-		await expect(page.getByTestId("header-qa-entry")).toBeVisible();
-		await page.getByTestId("header-qa-entry").click();
-		await expect(page).toHaveURL(/\/qa$/);
+		await expect(
+			page.getByRole("link", { name: "进入问答验证" }).first(),
+		).toBeVisible();
+		await page.getByRole("link", { name: "进入问答验证" }).first().click();
+		await expect(page).toHaveURL(/\/qa(\?kbId=default)?$/);
 	});
 
-	test("展示引用卡片版本字段，并在存在 stale reference 时展示顶部提示", async ({
+	test("默认展示三栏结构和右侧证据概览", async ({ page }) => {
+		await mockQaShell(page);
+
+		await page.goto("/qa");
+
+		await expect(page.getByTestId("qa-kb-sidebar")).toContainText("来源");
+		await expect(page.getByTestId("qa-context-strip")).toContainText("当前知识库");
+		await expect(page.getByTestId("qa-context-strip")).toContainText("默认知识库");
+		await expect(page.getByTestId("qa-chat-list")).toContainText("开始提问");
+		await expect(page.getByTestId("qa-context-panel")).toContainText("证据查验");
+		await expect(page.getByTestId("qa-context-panel")).toContainText("已索引文档");
+		await expect(page.getByTestId("qa-context-panel")).toContainText("知识库摘要");
+	});
+
+	test("点击引用标签后右侧切换到证据面板并可打开问答基线文档", async ({
 		page,
 	}) => {
 		await mockQaShell(page);
@@ -99,78 +115,44 @@ test.describe("问答页引用版本提示", () => {
 
 		await askQuestion(page, "供应商准入怎么做？");
 
+		await expect(page.getByTestId("qa-chat-list")).toContainText(
+			"供应商准入怎么做？",
+		);
 		await expect(page.getByTestId("qa-stale-reference-banner")).toContainText(
-			"本次回答包含 1 条非最新版本引用",
+			"包含 1 条非最新版本引用",
 		);
-		const staleCard = page.getByTestId("reference-card-doc-policy-001-0");
-		await expect(staleCard).toContainText("supplier-policy-v2.pdf");
-		await expect(staleCard).toContainText("doc-policy-001");
-		await expect(staleCard).toContainText("v2");
-		await expect(staleCard).toContainText("来源更新时间：");
-		await expect(staleCard).toContainText("当前最新版本为 v3");
 
-		const latestCard = page.getByTestId("reference-card-doc-policy-002-1");
-		await expect(latestCard).toContainText("payment-template-v4.pdf");
-		await expect(latestCard).toContainText("v4");
-		await expect(
-			page.getByTestId("reference-stale-doc-policy-002-1"),
-		).toHaveCount(0);
-	});
+		await page.getByTestId("reference-card-doc-policy-001-0").click();
+		await expect(page.getByTestId("qa-reference-panel")).toContainText(
+			"supplier-policy-v2.pdf",
+		);
+		await expect(page.getByTestId("qa-reference-panel")).toContainText(
+			"供应商准入流程需要先完成资质审核。",
+		);
+		await expect(page.getByTestId("qa-open-baseline-doc")).toContainText(
+			"查看问答基线文档",
+		);
 
-	test("没有 stale reference 时不展示顶部版本提示", async ({ page }) => {
-		await mockQaShell(page);
-		await page.route("**/api/v1/qa/ask", async (route) => {
-			await route.fulfill({
-				json: {
-					answer: "付款条款以最新合同模板为准。",
-					references: [
-						{
-							documentId: "doc-policy-002",
-							chunkIndex: 1,
-							contentPreview: "付款条款以最新合同模板为准。",
-							sourceVersionNumber: 4,
-							sourceUpdatedAt: "2026-05-10T08:30:00Z",
-							isLatestVersion: true,
-							latestVersionNumber: 4,
-							sourceFilename: "payment-template-v4.pdf",
-						},
-					],
-					staleReferences: {
-						hasStaleReferences: false,
-						staleReferenceCount: 0,
-						staleDocumentCount: 0,
-						documents: [],
-					},
-				},
-			});
-		});
-
-		await askQuestion(page, "付款条款是什么？");
-
-		await expect(page.getByTestId("qa-stale-reference-banner")).toHaveCount(0);
-		await expect(page.getByTestId("reference-card-doc-policy-002-1")).toContainText(
-			"payment-template-v4.pdf",
+		await page.getByTestId("qa-open-baseline-doc").click();
+		await expect(page).toHaveURL(
+			/\/ingest\/documents\/doc-policy-001\/versions\/2\/read\?mode=single$/,
 		);
 	});
 
-	test("无文档引用的兜底回答不展示版本提示", async ({ page }) => {
+	test("可以切到参数面板并调整 Top-K", async ({ page }) => {
 		await mockQaShell(page);
-		await page.route("**/api/v1/qa/ask", async (route) => {
-			await route.fulfill({
-				json: {
-					answer: "当前知识库未检索到相关内容。",
-					references: [],
-					staleReferences: null,
-				},
-			});
-		});
 
-		await askQuestion(page, "没有资料的问题");
+		await page.goto("/qa");
+		await page.getByRole("button", { name: "参数" }).click();
 
-		await expect(page.getByTestId("qa-stale-reference-banner")).toHaveCount(0);
-		await expect(page.getByText("无命中")).toBeVisible();
-		await expect(
-			page.getByText("该问题未检索到匹配的文档分块，回答内容来自模型兜底。"),
-		).toBeVisible();
+		await expect(page.getByTestId("qa-context-panel")).toContainText(
+			"RAG 参数调节",
+		);
+		await expect(page.getByLabel("Top-K")).toHaveValue("5");
+		await page.getByLabel("Top-K").fill("8");
+		await expect(page.getByLabel("Top-K")).toHaveValue("8");
+		await expect(page.getByTestId("qa-context-panel")).toContainText(
+			"当前 ask 接口还没有开放 temperature 参数",
+		);
 	});
 });

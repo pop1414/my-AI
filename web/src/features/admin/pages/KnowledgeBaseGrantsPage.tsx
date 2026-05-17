@@ -187,7 +187,12 @@ export function KnowledgeBaseGrantsPage() {
 						</Typography.Paragraph>
 					</div>
 					<Space>
-						<Button onClick={() => navigate("/knowledge")}>返回知识库</Button>
+						<Button
+							className="console-return-button"
+							onClick={() => navigate("/knowledge")}
+						>
+							返回知识库
+						</Button>
 						<Button
 							type="primary"
 							loading={replaceMutation.isPending}

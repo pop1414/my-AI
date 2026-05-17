@@ -52,7 +52,10 @@ export function IngestDeletePage() {
 				title="删除文档资产"
 				extra={
 					<Space>
-						<Button onClick={() => navigate("/ingest/documents")}>
+						<Button
+							className="console-return-button"
+							onClick={() => navigate("/ingest/documents")}
+						>
 							返回文档列表
 						</Button>
 						<Typography.Text type="secondary">

@@ -30,6 +30,12 @@ export default defineConfig({
 		video: "retain-on-failure",
 		testIdAttribute: "data-testid",
 	},
+	webServer: {
+		command: "node ./node_modules/vite/bin/vite.js --host localhost",
+		url: baseURL,
+		reuseExistingServer: !process.env.CI,
+		timeout: 120_000,
+	},
 	projects: [
 		{
 			name: "chromium",
