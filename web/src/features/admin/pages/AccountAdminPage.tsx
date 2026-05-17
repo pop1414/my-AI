@@ -10,10 +10,10 @@ import {
 	Space,
 	Steps,
 	Table,
-	Tag,
 	Typography,
 	message,
 } from "antd";
+import { WorkspaceRoleTag } from "../../../shared/ui/WorkspaceRoleTag";
 import { PlusOutlined } from "@ant-design/icons";
 import type { ColumnsType } from "antd/es/table";
 import { useNavigate } from "react-router-dom";
@@ -171,9 +171,7 @@ export function AccountAdminPage() {
 			width: 240,
 			render: (_, record) => (
 				<Space size={4} wrap>
-					<Tag bordered={false} color="default" style={{ borderRadius: 4, fontWeight: 500 }}>
-						{record.workspaceRole}
-					</Tag>
+					<WorkspaceRoleTag role={record.workspaceRole} />
 					<AccountStatusTags
 						userStatus={record.userStatus}
 						membershipStatus={record.membershipStatus}

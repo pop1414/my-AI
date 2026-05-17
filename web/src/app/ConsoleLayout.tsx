@@ -30,6 +30,7 @@ import {
 import type { MenuProps } from "antd";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../shared/auth/AuthContext";
+import { WorkspaceRoleTag } from "../shared/ui/WorkspaceRoleTag";
 import { useQuery } from "@tanstack/react-query";
 import { listDocuments } from "../shared/api/ingestApi";
 
@@ -446,13 +447,7 @@ export function ConsoleLayout() {
 									<UserOutlined />
 									<span style={{ fontWeight: 500 }}>{user?.displayName ?? ""}</span>
 									{user?.workspaceRole && (
-										<Tag
-											bordered={false}
-											color="default"
-											style={{ fontSize: 11, textTransform: 'uppercase' }}
-										>
-											{user.workspaceRole}
-										</Tag>
+										<WorkspaceRoleTag role={user.workspaceRole} />
 									)}
 									<DownOutlined style={{ fontSize: 10 }} />
 								</Space>

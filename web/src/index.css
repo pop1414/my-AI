@@ -167,10 +167,22 @@ body {
 }
 
 /* Global Content Layout */
+@keyframes content-slide-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 .console-content {
   flex: 1;
   overflow-y: auto;
   padding: 32px;
+  animation: content-slide-in 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .console-page-title {

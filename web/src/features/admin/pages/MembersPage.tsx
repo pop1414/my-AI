@@ -1,6 +1,17 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Button, Form, Modal, Select, Space, Table, Tag, Typography, message } from "antd";
+import {
+	Button,
+	Form,
+	Modal,
+	Select,
+	Space,
+	Table,
+	Tag,
+	Typography,
+	message,
+} from "antd";
+import { WorkspaceRoleTag } from "../../../shared/ui/WorkspaceRoleTag";
 import type { ColumnsType } from "antd/es/table";
 import { useNavigate } from "react-router-dom";
 import {
@@ -13,12 +24,6 @@ import { ApiErrorAlert } from "../../../shared/ui/ApiErrorAlert";
 import type { ApiError } from "../../../shared/api/request";
 
 const { Title } = Typography;
-
-const roleColorMap: Record<string, string> = {
-	WORKSPACE_OWNER: "gold",
-	WORKSPACE_ADMIN: "blue",
-	WORKSPACE_MEMBER: "default",
-};
 
 const roleOptions: {
 	value: WorkspaceMember["workspaceRole"];
@@ -79,19 +84,7 @@ export function MembersPage() {
 			title: "工作区角色",
 			dataIndex: "workspaceRole",
 			width: 180,
-			render: (value: string) => (
-				<Tag
-					className={`console-pill ${
-						roleColorMap[value] === "blue"
-							? "console-pill--blue"
-							: roleColorMap[value] === "gold"
-								? "console-pill--warning"
-								: "console-pill--neutral"
-					}`}
-				>
-					{value}
-				</Tag>
-			),
+			render: (value: string) => <WorkspaceRoleTag role={value} />,
 		},
 		{
 			title: "成员状态",
