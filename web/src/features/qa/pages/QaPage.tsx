@@ -21,7 +21,7 @@ import {
 } from "antd";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { z } from "zod";
-import { listKnowledgeBases, type KnowledgeBase } from "../../../shared/api/knowledgeApi";
+import { listKnowledgeBases } from "../../../shared/api/knowledgeApi";
 import {
 	askQuestion,
 	type AskReference,

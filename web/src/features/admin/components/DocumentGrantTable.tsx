@@ -79,7 +79,7 @@ export function DocumentGrantTable({
 					style={{ width: "100%" }}
 					disabled={!selectedIds.includes(id)}
 					value={permissions[id] ?? "DOC_ALLOW_READ"}
-					options={documentPermissionOptions}
+					options={documentPermissionOptions as any}
 					onChange={(value: DocumentGrant["permission"]) =>
 						onPermissionChange({ ...permissions, [id]: value })
 					}

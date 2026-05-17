@@ -12,6 +12,6 @@ function normalizeMessage(error: unknown): ReactNode {
   return '未知错误';
 }
 
-export function ApiErrorAlert({ error }: { error: unknown }) {
-  return <Alert type="error" showIcon title={normalizeMessage(error)} />;
+export function ApiErrorAlert({ error, style }: { error: unknown, style?: React.CSSProperties }) {
+  return <Alert type="error" showIcon title={normalizeMessage(error)} style={style} />;
 }

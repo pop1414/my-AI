@@ -220,8 +220,51 @@ body {
   box-shadow: none !important;
 }
 
-@media (max-width: 640px) {
-  .console-content {
-    padding: 24px 16px;
-  }
+.console-collapse-btn {
+  background: var(--console-accent-soft) !important;
+  border: 1px solid var(--console-hairline) !important;
+  color: var(--console-accent-strong) !important;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  width: 32px !important;
+  height: 32px !important;
+  padding: 0 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  border-radius: 6px !important;
+}
+
+.console-collapse-btn:hover {
+  background: var(--console-accent) !important;
+  border-color: var(--console-accent) !important;
+  color: var(--console-ink) !important;
+  transform: scale(1.1);
+}
+
+.console-activity-btn {
+  background: transparent !important;
+  border: 1px solid transparent !important;
+  color: var(--console-ink-mute) !important;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  width: 32px !important;
+  height: 32px !important;
+  padding: 0 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+.console-activity-btn:hover {
+  background: var(--console-canvas-soft) !important;
+  color: var(--console-ink) !important;
+}
+
+@keyframes pulse-emerald {
+  0% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.1); opacity: 0.8; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+.console-activity-btn.is-active .anticon {
+  animation: pulse-emerald 2s infinite ease-in-out;
 }

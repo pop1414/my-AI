@@ -9,7 +9,7 @@ import {
 	Typography,
 	message,
 } from "antd";
-import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { useParams, useSearchParams } from "react-router-dom";
 import {
 	listMemberDocumentGrants,
 	listMemberKnowledgeBaseGrants,

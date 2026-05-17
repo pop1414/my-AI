@@ -188,7 +188,7 @@ export function KnowledgePage() {
 			dataIndex: "description",
 			width: 220,
 			ellipsis: true,
-			render: (val) => val || <Typography.Text type="disabled">-</Typography.Text>
+			render: (val) => val || <Typography.Text type="secondary" style={{ opacity: 0.5 }}>-</Typography.Text>
 		},
 		{
 			title: "操作",

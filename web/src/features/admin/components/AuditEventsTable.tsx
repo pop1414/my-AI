@@ -60,7 +60,7 @@ export function AuditEventsTable({
 			render: (_, record) => (
 				<div style={{ display: 'flex', flexDirection: 'column' }}>
 					<Typography.Text type="secondary" style={{ fontSize: 11, textTransform: 'uppercase' }}>{record.targetType || '-'}</Typography.Text>
-					<Typography.Text style={{ fontSize: 12, fontFamily: 'var(--console-font-mono)' }} ellipsis title={record.targetId}>{record.targetId || '-'}</Typography.Text>
+					<Typography.Text style={{ fontSize: 12, fontFamily: 'var(--console-font-mono)' }} ellipsis title={record.targetId || undefined}>{record.targetId || '-'}</Typography.Text>
 				</div>
 			)
 		},
@@ -79,7 +79,7 @@ export function AuditEventsTable({
 			dataIndex: "reason",
 			width: 200,
 			ellipsis: true,
-			render: (val) => val ? <Tooltip title={val}>{val}</Tooltip> : <Typography.Text type="disabled">-</Typography.Text>
+			render: (val) => val ? <Tooltip title={val}>{val}</Tooltip> : <Typography.Text type="secondary" style={{ opacity: 0.5 }}>-</Typography.Text>
 		},
 		{
 			title: "时间",
