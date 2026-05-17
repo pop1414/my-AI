@@ -1,0 +1,101 @@
+:root {
+  --read-bg: #f8f9fa;
+  --read-canvas: #ffffff;
+  --read-ink: #1a1a1a;
+  --read-ink-light: #4a4a4a;
+  --read-accent: #10b981;
+  --read-hairline: #e0e0e0;
+  --read-max-width: 840px;
+}
+
+.member-read-page {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background: var(--read-bg);
+  overflow: hidden;
+}
+
+/* --- Toolbar (Simplified Admin Style) --- */
+.member-read-toolbar {
+  height: 64px;
+  background: var(--read-canvas);
+  border-bottom: 1px solid var(--read-hairline);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 24px;
+  z-index: 10;
+  flex-shrink: 0;
+}
+
+.member-read-toolbar__left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.member-read-toolbar__title {
+  display: flex;
+  flex-direction: column;
+}
+
+.member-read-toolbar__kicker {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--read-accent);
+}
+
+.member-read-toolbar__filename {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--read-ink);
+  max-width: 400px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* --- Viewport --- */
+.member-read-viewport {
+  flex: 1;
+  background: var(--read-canvas);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  position: relative;
+}
+
+.member-read-scroller {
+  flex: 1;
+  overflow-y: auto;
+  padding: 48px 0;
+  display: flex;
+  justify-content: center;
+}
+
+.member-read-content {
+  width: 100%;
+  max-width: var(--read-max-width);
+  padding: 0 48px;
+  color: var(--read-ink);
+  line-height: 1.7;
+  animation: member-pane-fade-in 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes member-pane-fade-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* --- Markdown Styling (Unified with Admin) --- */
+.member-read-content h1 { font-size: 32px; margin-bottom: 24px; font-weight: 800; border-bottom: none; }
+.member-read-content h2 { font-size: 24px; margin: 32px 0 16px 0; font-weight: 700; border-bottom: 1px solid var(--read-hairline); padding-bottom: 8px; }
+.member-read-content h3 { font-size: 20px; margin: 24px 0 12px 0; font-weight: 600; }
+.member-read-content p { margin-bottom: 20px; }
+.member-read-content blockquote { padding-left: 20px; border-left: 4px solid var(--read-accent); color: var(--read-ink-light); font-style: italic; margin: 24px 0; }
+.member-read-content code { background: #f1f5f9; padding: 0.2em 0.4em; border-radius: 4px; font-size: 0.9em; }
+.member-read-content pre { background: #0f172a; color: #f8fafc; padding: 1.5rem; border-radius: 8px; overflow-x: auto; margin: 1.5rem 0; }
+.member-read-content pre code { background: transparent; padding: 0; color: inherit; }

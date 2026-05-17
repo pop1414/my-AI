@@ -1,23 +1,17 @@
-import { ArrowLeftOutlined } from "@ant-design/icons";
+import { ArrowLeftOutlined, FolderOpenOutlined } from "@ant-design/icons";
 import { useQuery } from "@tanstack/react-query";
-import { Button, Result, Spin, Tag, Typography } from "antd";
+import { Button, Result, Skeleton, Tag, Tooltip } from "antd";
 import { useNavigate, useParams } from "react-router-dom";
-import { getDocumentContent } from "../../../shared/api/ingestApi";
-import "./MemberReaderPage.css";
-
-function renderBaselineHtml(contentMarkdown: string): string {
-	return contentMarkdown
-		.replace(/\n/g, "<br/>")
-		.replace(/# (.*?)<br\/>/g, "<h1>$1</h1>")
-		.replace(/## (.*?)<br\/>/g, "<h2>$1</h2>")
-		.replace(/> (.*?)<br\/>/g, "<blockquote>$1</blockquote>")
-		.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
-		.replace(/`([^`]+)`/g, "<code>$1</code>");
-}
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import { getDocumentContent, getDocumentStatus } from "../../../shared/api/ingestApi";
+import { listKnowledgeBases } from "../../../shared/api/knowledgeApi";
+import "./MemberAskableBaselinePage.css";
 
 export function MemberAskableBaselinePage() {
 	const { documentId = "" } = useParams<{ documentId?: string }>();
 	const navigate = useNavigate();
+	
 	const contentQuery = useQuery({
 		queryKey: ["member-document-content", documentId, "ASKABLE_BASELINE"],
 		queryFn: () =>
@@ -28,58 +22,84 @@ export function MemberAskableBaselinePage() {
 		enabled: documentId.length > 0,
 	});
 
-	if (contentQuery.isLoading) {
+	const statusQuery = useQuery({
+		queryKey: ["document-status", documentId],
+		queryFn: () => getDocumentStatus(documentId),
+		enabled: documentId.length > 0,
+	});
+
+	const kbQuery = useQuery({
+		queryKey: ["knowledge-bases"],
+		queryFn: listKnowledgeBases,
+	});
+
+	const kbId = statusQuery.data?.kbId;
+	const knowledgeBase = kbId ? kbQuery.data?.find((kb) => kb.id === kbId) : undefined;
+	const knowledgeBaseName = knowledgeBase?.name ?? kbId;
+
+	if (contentQuery.isLoading || statusQuery.isLoading) {
 		return (
-			<div style={{ padding: 80, textAlign: "center" }}>
-				<Spin size="large" />
+			<div className="member-read-page">
+				<header className="member-read-toolbar">
+					<Skeleton.Button active size="small" style={{ width: 100 }} />
+				</header>
+				<main className="member-read-viewport">
+					<div className="member-read-scroller">
+						<div className="member-read-content">
+							<Skeleton active paragraph={{ rows: 20 }} />
+						</div>
+					</div>
+				</main>
 			</div>
 		);
 	}
 
 	if (contentQuery.isError || !contentQuery.data) {
 		return (
-			<div style={{ padding: 48 }}>
+			<div className="member-read-page">
 				<Result
 					status="error"
 					title="无法加载问答基线"
 					subTitle="该文档可能尚未设置问答基线，或当前账号无权访问。"
-					extra={<Button onClick={() => navigate("/ingest/documents")}>返回文档目录</Button>}
+					extra={<Button onClick={() => navigate("/ingest/documents")}>返回目录</Button>}
 				/>
 			</div>
 		);
 	}
 
 	return (
-		<div className="member-reader-container">
-			<header className="member-reader-header">
-				<div className="title-area">
-					<Button
-						type="text"
-						icon={<ArrowLeftOutlined />}
-						onClick={() => navigate("/ingest/documents")}
-					>
-						返回目录
-					</Button>
-					<Typography.Title level={2} className="title" style={{ marginTop: 16 }}>
-						{contentQuery.data.filename}
-					</Typography.Title>
-					<Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
-						当前仅展示该文档的问答基线正文，不展示历史版本、处理状态、分块结果及管理操作。
-					</Typography.Paragraph>
+		<div className="member-read-page">
+			<header className="member-read-toolbar">
+				<div className="member-read-toolbar__left">
+					<Tooltip title="返回目录">
+						<Button
+							type="text"
+							icon={<ArrowLeftOutlined />}
+							onClick={() => navigate("/ingest/documents")}
+						/>
+					</Tooltip>
+					<div className="member-read-toolbar__title">
+						<span className="member-read-toolbar__kicker">Baseline Reader</span>
+						<div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+							<span className="member-read-toolbar__filename">{contentQuery.data.filename}</span>
+							{knowledgeBaseName && (
+								<Tag icon={<FolderOpenOutlined />} bordered={false} style={{ margin: 0, opacity: 0.8 }}>
+									{knowledgeBaseName}
+								</Tag>
+							)}
+						</div>
+					</div>
 				</div>
-				<Tag color="green" bordered={false}>
-					问答基线
-				</Tag>
 			</header>
 
-			<main className="member-reader-content">
-				<article className="editorial-canvas body-text">
-					<div
-						dangerouslySetInnerHTML={{
-							__html: renderBaselineHtml(contentQuery.data.contentMarkdown),
-						}}
-					/>
-				</article>
+			<main className="member-read-viewport">
+				<div className="member-read-scroller">
+					<article className="member-read-content">
+						<ReactMarkdown remarkPlugins={[remarkGfm]}>
+							{contentQuery.data.contentMarkdown}
+						</ReactMarkdown>
+					</article>
+				</div>
 			</main>
 		</div>
 	);
