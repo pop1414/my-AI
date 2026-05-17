@@ -46,8 +46,13 @@ export function DocumentGrantTable({
 					onChange={(e) => {
 						const next = toggleChecked(selectedIds, id, e.target.checked);
 						onSelectionChange(next);
-						if (e.target.checked && !permissions[id]) {
-							onPermissionChange({ ...permissions, [id]: "DOC_ALLOW_READ" });
+						if (e.target.checked) {
+							if (!permissions[id]) {
+								onPermissionChange({ ...permissions, [id]: "DOC_ALLOW_READ" });
+							}
+						} else {
+							const { [id]: _, ...rest } = permissions;
+							onPermissionChange(rest);
 						}
 					}}
 				/>
@@ -112,6 +117,11 @@ export function DocumentGrantTable({
 							onPermissionChange(nextPerms);
 						} else {
 							onSelectionChange(selectedIds.filter(id => !currentIds.includes(id)));
+							const nextPerms = { ...permissions };
+							currentIds.forEach(id => {
+								delete nextPerms[id];
+							});
+							onPermissionChange(nextPerms);
 						}
 					}}
 				>
@@ -119,7 +129,14 @@ export function DocumentGrantTable({
 				</Checkbox>
 				<Button 
 					size="small" 
-					onClick={() => onSelectionChange(selectedIds.filter(id => !currentIds.includes(id)))}
+					onClick={() => {
+						onSelectionChange(selectedIds.filter(id => !currentIds.includes(id)));
+						const nextPerms = { ...permissions };
+						currentIds.forEach(id => {
+							delete nextPerms[id];
+						});
+						onPermissionChange(nextPerms);
+					}}
 				>
 					清空本页
 				</Button>

@@ -97,37 +97,34 @@ export function MembersPage() {
 		{
 			title: "操作",
 			key: "action",
-			width: 260,
+			width: 220,
 			render: (_, record) => (
-				<Space size="small" wrap>
-					{canEditRole(record) && (
-						<Button
-							type="link"
-							size="small"
-							onClick={() => {
-								setEditingMember(record);
-								roleForm.setFieldsValue({
-									workspaceRole: record.workspaceRole,
-								});
-							}}
-						>
-							编辑角色
-						</Button>
-					)}
-					{canConfigureGrants(record) && (
-						<Button
-							type="link"
-							size="small"
-							onClick={() =>
-								navigate(
-									`/admin/members/${encodeURIComponent(record.userId)}/grants?tab=knowledge`,
-								)
-							}
-						>
-							授权配置
-						</Button>
-					)}
-					{!canEditRole(record) && !canConfigureGrants(record) && "-"}
+				<Space size={8}>
+					<Button
+						size="small"
+						className="console-action-btn"
+						disabled={!canEditRole(record)}
+						onClick={() => {
+							setEditingMember(record);
+							roleForm.setFieldsValue({
+								workspaceRole: record.workspaceRole,
+							});
+						}}
+					>
+						编辑角色
+					</Button>
+					<Button
+						size="small"
+						className="console-action-btn"
+						disabled={!canConfigureGrants(record)}
+						onClick={() =>
+							navigate(
+								`/admin/members/${encodeURIComponent(record.userId)}/grants?tab=knowledge`,
+							)
+						}
+					>
+						授权配置
+					</Button>
 				</Space>
 			),
 		},

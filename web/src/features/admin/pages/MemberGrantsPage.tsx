@@ -152,7 +152,7 @@ export function MemberGrantsPage() {
 								}
 							>
 								<Typography.Paragraph type="secondary">
-									配置成员在特定知识库中的操作角色。已选择 {selectedKnowledgeBaseIds.length} 项。
+									配置成员在特定知识库中的操作角色。已选择 <Typography.Text strong>{selectedKnowledgeBaseIds.filter(id => !!knowledgeBaseRoles[id]).length}</Typography.Text> 项。
 								</Typography.Paragraph>
 								{replaceKnowledgeMutation.isError && (
 									<ApiErrorAlert error={replaceKnowledgeMutation.error} style={{ marginBottom: 12 }} />
@@ -200,7 +200,7 @@ export function MemberGrantsPage() {
 								}
 							>
 								<Typography.Paragraph type="secondary">
-									显式指定成员对特定文档的访问权限。已选择 {selectedDocumentIds.length} 项。
+									显式指定成员对特定文档的访问权限。已选择 <Typography.Text strong>{Object.keys(documentPermissions).length}</Typography.Text> 项。
 								</Typography.Paragraph>
 								{replaceDocumentMutation.isError && (
 									<ApiErrorAlert error={replaceDocumentMutation.error} style={{ marginBottom: 12 }} />

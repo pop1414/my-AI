@@ -170,12 +170,14 @@ export function AccountAdminPage() {
 			title: "角色与状态",
 			width: 240,
 			render: (_, record) => (
-				<Space size={4} wrap>
+				<Space direction="vertical" size={6} style={{ display: 'flex' }}>
 					<WorkspaceRoleTag role={record.workspaceRole} />
-					<AccountStatusTags
-						userStatus={record.userStatus}
-						membershipStatus={record.membershipStatus}
-					/>
+					<div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+						<AccountStatusTags
+							userStatus={record.userStatus}
+							membershipStatus={record.membershipStatus}
+						/>
+					</div>
 				</Space>
 			),
 		},

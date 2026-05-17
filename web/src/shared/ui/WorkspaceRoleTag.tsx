@@ -36,15 +36,18 @@ export function WorkspaceRoleTag({ role, className }: WorkspaceRoleTagProps) {
 			bordered={false}
 			className={`console-role-tag ${config.className} ${className || ""}`}
 			style={{
-				backgroundColor: `${config.color}15`, // 15% opacity background
+				backgroundColor: `${config.color}20`, // 20% opacity background
 				color: config.color === "var(--console-accent)" ? "var(--console-accent-strong)" : config.color,
 				fontWeight: 600,
 				fontSize: 11,
 				textTransform: "uppercase",
-				letterSpacing: "0.05em",
+				letterSpacing: "0.06em",
 				borderRadius: 4,
 				padding: "0 8px",
-				border: `1px solid ${config.color}30`, // 30% opacity border
+				border: `1px solid ${config.color}40`, // 40% opacity border
+				display: "inline-flex",
+				alignItems: "center",
+				height: 22,
 			}}
 		>
 			{config.label}

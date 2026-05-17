@@ -251,9 +251,64 @@ body {
   border-color: var(--console-accent-strong) !important;
 }
 
+.ant-btn-primary:disabled {
+  background: var(--console-canvas-soft) !important;
+  border-color: var(--console-hairline) !important;
+  color: var(--console-ink-faint) !important;
+  opacity: 0.6;
+}
+
 .ant-btn:not(.ant-btn-primary) {
   border-color: var(--console-hairline-strong) !important;
   box-shadow: none !important;
+}
+
+.ant-btn:not(.ant-btn-primary):disabled {
+  background: var(--console-canvas-soft) !important;
+  border-color: var(--console-hairline) !important;
+  color: var(--console-ink-faint) !important;
+  opacity: 0.6;
+}
+
+.console-action-btn {
+  background: var(--console-canvas) !important;
+  border-color: var(--console-hairline-strong) !important;
+  color: var(--console-ink-secondary) !important;
+  font-size: 13px !important;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+.console-action-btn:hover:not(:disabled) {
+  background: var(--console-canvas-soft) !important;
+  border-color: var(--console-accent) !important;
+  color: var(--console-accent-strong) !important;
+}
+
+.console-action-btn:disabled {
+  background: var(--console-canvas-soft) !important;
+  border-color: var(--console-hairline) !important;
+  color: var(--console-ink-faint) !important;
+  cursor: not-allowed !important;
+  opacity: 0.5;
+}
+
+.console-pill {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 10px;
+  border-radius: 9999px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border: 1px solid transparent;
+}
+
+.console-pill--blue {
+  background-color: rgba(159, 187, 224, 0.2);
+  color: #4a6fa5;
+  border-color: rgba(159, 187, 224, 0.4);
 }
 
 .console-collapse-btn {
