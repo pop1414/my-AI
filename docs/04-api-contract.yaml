@@ -1610,7 +1610,8 @@ paths:
       description: |
         归属 knowledge 子域；
         返回当前用户可见的知识库主数据与已索引文档数量，统计口径固定为 status=INDEXED。
-        已软删除知识库（status=DELETED）默认不返回。
+        已软删除知识库（status=DELETED）默认不返回；管理员治理视角可通过
+        `includeDeleted=true` 显式包含软删除记录，用于删除态筛选与审计查看。
 
         当前可见性规则固定为：
         - `WORKSPACE_OWNER / WORKSPACE_ADMIN`：返回当前工作区全部知识库
@@ -1619,6 +1620,14 @@ paths:
       x-stage: implemented
       security:
         - cookieAuth: []
+      parameters:
+        - in: query
+          name: includeDeleted
+          required: false
+          schema:
+            type: boolean
+            default: false
+          description: 是否包含已软删除知识库；仅 `WORKSPACE_OWNER / WORKSPACE_ADMIN` 视角生效。
       responses:
         '200':
           description: 查询成功
@@ -2384,7 +2393,7 @@ components:
           enum: [ACTIVE, INACTIVE, DELETED]
           description: |
             ACTIVE 表示启用；INACTIVE 表示停用；DELETED 表示软删除。
-            常规列表接口默认不返回 DELETED。
+            常规列表接口默认不返回 DELETED；管理员可通过 includeDeleted=true 查询删除态记录。
         indexedDocumentCount:
           type: integer
           format: int64

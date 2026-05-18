@@ -58,23 +58,24 @@ public class ListKnowledgeBasesApplicationService implements ListKnowledgeBasesU
     }
 
     /**
-     * 处理查询知识库列表用例（无参，返回全量列表）。
+     * 处理查询知识库列表用例。
      *
      * <p>执行流程：
      * <ol>
-     *   <li>从仓库获取知识库全量列表（已包含聚合统计字段）；</li>
+     *   <li>按当前用户角色与 includeDeleted 标记获取知识库列表（已包含聚合统计字段）；</li>
      *   <li>通过 Stream 流式处理，将每个领域视图项映射为应用层结果对象；</li>
      *   <li>映射时将 {@code status} 枚举转为字符串，确保接口稳定性；</li>
      *   <li>收集为不可变列表并返回。</li>
      * </ol>
      *
+     * @param includeDeleted 是否包含已软删除知识库；仅工作区 Owner/Admin 生效
      * @return 知识库结果列表（可能为空列表，不会返回 {@code null}）
      */
     @Override
-    public List<KnowledgeBaseResult> handle() {
+    public List<KnowledgeBaseResult> handle(boolean includeDeleted) {
         // 获取当前登录用户，确保已认证且可获取工作区标识
         CurrentUser currentUser = currentUserProvider.requireCurrentUser();
-        List<KnowledgeBaseSummary> visibleKnowledgeBases = resolveVisibleKnowledgeBases(currentUser);
+        List<KnowledgeBaseSummary> visibleKnowledgeBases = resolveVisibleKnowledgeBases(currentUser, includeDeleted);
 
         // 从仓库获取全量知识库视图列表，通过 Stream 流式转换为应用层 DTO
         // listKnowledgeBases() 返回的视图项已包含 indexedDocumentCount 聚合字段，
@@ -94,15 +95,20 @@ public class ListKnowledgeBasesApplicationService implements ListKnowledgeBasesU
      *
      * <p>规则：
      * <ul>
-     *   <li>{@code WORKSPACE_OWNER / WORKSPACE_ADMIN} —— 可见当前工作区全部知识库；</li>
+     *   <li>{@code WORKSPACE_OWNER / WORKSPACE_ADMIN} —— 可见当前工作区全部知识库，可按需包含软删除记录；</li>
      *   <li>{@code WORKSPACE_MEMBER} —— 仅可见自己具备 ACTIVE 显式知识库授权的知识库。</li>
      * </ul>
      *
-     * @param currentUser 当前登录用户
+     * @param currentUser    当前登录用户
+     * @param includeDeleted 是否包含已软删除知识库；仅管理员视角生效
      * @return 当前用户可见的知识库摘要列表
      */
-    private List<KnowledgeBaseSummary> resolveVisibleKnowledgeBases(CurrentUser currentUser) {
-        List<KnowledgeBaseSummary> allKnowledgeBases = knowledgeBaseRepository.listKnowledgeBases(currentUser.workspaceId());
+    private List<KnowledgeBaseSummary> resolveVisibleKnowledgeBases(CurrentUser currentUser, boolean includeDeleted) {
+        boolean canAccessDeleted = currentUser.workspaceRole() == WorkspaceRole.WORKSPACE_OWNER
+                || currentUser.workspaceRole() == WorkspaceRole.WORKSPACE_ADMIN;
+        List<KnowledgeBaseSummary> allKnowledgeBases = includeDeleted && canAccessDeleted
+                ? knowledgeBaseRepository.listKnowledgeBasesIncludingDeleted(currentUser.workspaceId())
+                : knowledgeBaseRepository.listKnowledgeBases(currentUser.workspaceId());
         if (currentUser.workspaceRole() == WorkspaceRole.WORKSPACE_OWNER
                 || currentUser.workspaceRole() == WorkspaceRole.WORKSPACE_ADMIN) {
             return allKnowledgeBases;

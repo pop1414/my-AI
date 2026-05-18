@@ -1,5 +1,6 @@
 package io.github.spike.myai.knowledge.infrastructure.persistence;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -33,7 +34,7 @@ class JdbcKnowledgeBaseRepositoryTest {
     void listKnowledgeBases_shouldUseLeftJoinAggregation() {
         JdbcTemplate jdbcTemplate = Mockito.mock(JdbcTemplate.class);
         JdbcKnowledgeBaseRepository repository = new JdbcKnowledgeBaseRepository(jdbcTemplate);
-        when(jdbcTemplate.query(any(String.class), any(RowMapper.class))).thenReturn(List.of());
+        when(jdbcTemplate.query(any(String.class), any(RowMapper.class), any(String.class))).thenReturn(List.of());
 
         repository.listKnowledgeBases(WorkspaceConstants.DEFAULT_WORKSPACE_ID);
 
@@ -45,6 +46,24 @@ class JdbcKnowledgeBaseRepositoryTest {
         assertTrue(sqlCaptor.getValue().contains("doc.workspace_id = kb.workspace_id"));
         assertTrue(sqlCaptor.getValue().contains("doc.latest_status = 'INDEXED'"));
         assertTrue(sqlCaptor.getValue().contains("GROUP BY kb.kb_id, kb.workspace_id, kb.name, kb.description, kb.status, kb.created_at"));
+        assertTrue(sqlCaptor.getValue().contains("ORDER BY kb.created_at ASC, kb.kb_id ASC"));
+    }
+
+    @Test
+    @DisplayName("listKnowledgeBasesIncludingDeleted 不应过滤 DELETED 状态")
+    void listKnowledgeBasesIncludingDeleted_shouldNotFilterDeletedStatus() {
+        JdbcTemplate jdbcTemplate = Mockito.mock(JdbcTemplate.class);
+        JdbcKnowledgeBaseRepository repository = new JdbcKnowledgeBaseRepository(jdbcTemplate);
+        when(jdbcTemplate.query(any(String.class), any(RowMapper.class), any(String.class))).thenReturn(List.of());
+
+        repository.listKnowledgeBasesIncludingDeleted(WorkspaceConstants.DEFAULT_WORKSPACE_ID);
+
+        ArgumentCaptor<String> sqlCaptor = ArgumentCaptor.forClass(String.class);
+        verify(jdbcTemplate).query(sqlCaptor.capture(), any(RowMapper.class), eq(WorkspaceConstants.DEFAULT_WORKSPACE_ID));
+        assertTrue(sqlCaptor.getValue().contains("kb.workspace_id = ?"));
+        assertFalse(sqlCaptor.getValue().contains("kb.status <> 'DELETED'"));
+        assertTrue(sqlCaptor.getValue().contains("LEFT JOIN ingest_documents"));
+        assertTrue(sqlCaptor.getValue().contains("doc.latest_status = 'INDEXED'"));
         assertTrue(sqlCaptor.getValue().contains("ORDER BY kb.created_at ASC, kb.kb_id ASC"));
     }
 }

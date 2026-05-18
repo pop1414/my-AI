@@ -18,7 +18,8 @@ public interface ListKnowledgeBasesUseCase {
      * <p>当前版本返回的统计值来自已索引文档聚合结果，
      * 并以应用层结果对象形式输出，便于接口层进行二次映射。
      *
+     * @param includeDeleted 是否包含已软删除知识库；仅管理员视角生效
      * @return 知识库结果列表
      */
-    List<KnowledgeBaseResult> handle();
+    List<KnowledgeBaseResult> handle(boolean includeDeleted);
 }

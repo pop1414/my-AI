@@ -1,6 +1,7 @@
 package io.github.spike.myai.knowledge.interfaces.rest;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
@@ -50,7 +51,7 @@ class KnowledgeBaseControllerTest {
     @Test
     @DisplayName("查询知识库列表应返回主数据字段与统计字段")
     void listKnowledgeBases_shouldReturnKnowledgeBaseSummaries() throws Exception {
-        when(listKnowledgeBasesUseCase.handle()).thenReturn(List.of(
+        when(listKnowledgeBasesUseCase.handle(false)).thenReturn(List.of(
                 new KnowledgeBaseResult("default", "默认知识库", "", "ACTIVE", 3),
                 new KnowledgeBaseResult("kb-a", "知识库A", "desc", "INACTIVE", 1)));
 
@@ -61,6 +62,20 @@ class KnowledgeBaseControllerTest {
                 .andExpect(jsonPath("$[0].status").value("ACTIVE"))
                 .andExpect(jsonPath("$[0].indexedDocumentCount").value(3))
                 .andExpect(jsonPath("$[1].status").value("INACTIVE"));
+        verify(listKnowledgeBasesUseCase).handle(false);
+    }
+
+    @Test
+    @DisplayName("查询知识库列表包含软删除时应传递 includeDeleted 参数")
+    void listKnowledgeBases_shouldPassIncludeDeletedFlag() throws Exception {
+        when(listKnowledgeBasesUseCase.handle(true)).thenReturn(List.of(
+                new KnowledgeBaseResult("kb-deleted", "已删除知识库", "", "DELETED", 0)));
+
+        mockMvc.perform(get("/api/v1/knowledge-bases").param("includeDeleted", "true"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].id").value("kb-deleted"))
+                .andExpect(jsonPath("$[0].status").value("DELETED"));
+        verify(listKnowledgeBasesUseCase).handle(true);
     }
 
     @Test

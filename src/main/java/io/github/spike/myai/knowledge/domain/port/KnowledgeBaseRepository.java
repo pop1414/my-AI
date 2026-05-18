@@ -18,8 +18,9 @@ import java.util.Optional;
  *   <li>{@link #findByKbId} —— 按业务键查询单个聚合根，不存在时返回
  *       {@link Optional#empty()}；</li>
  *   <li>{@link #findByKbIdIncludingDeleted} —— 删除用例专用查询，包含软删除记录；</li>
- *   <li>{@link #listKnowledgeBases} —— 查询全量知识库摘要视图（读模型），
- *       包含聚合统计字段。</li>
+ *   <li>{@link #listKnowledgeBases} —— 查询知识库摘要视图（读模型），默认排除软删除记录；</li>
+ *   <li>{@link #listKnowledgeBasesIncludingDeleted} —— 管理员查询用摘要视图，
+ *       包含软删除记录和聚合统计字段。</li>
  * </ul>
  *
  * <p>遵循阿里巴巴 Java 开发手册中"接口类的方法不加 {@code public} 修饰符"的规范。
@@ -75,4 +76,15 @@ public interface KnowledgeBaseRepository {
      * @return 知识库摘要视图列表（可能为空列表，不会返回 {@code null}）
      */
     List<KnowledgeBaseSummary> listKnowledgeBases(String workspaceId);
+
+    /**
+     * 查询全量知识库列表（含已软删除记录与聚合统计）。
+     *
+     * <p>仅用于管理员治理视角，例如按 {@code DELETED} 状态筛选软删除知识库。
+     * 普通上传、问答和授权链路不应调用该方法，避免已删除知识库重新参与业务操作。
+     *
+     * @param workspaceId 工作区标识
+     * @return 知识库摘要视图列表（可能为空列表，不会返回 {@code null}）
+     */
+    List<KnowledgeBaseSummary> listKnowledgeBasesIncludingDeleted(String workspaceId);
 }

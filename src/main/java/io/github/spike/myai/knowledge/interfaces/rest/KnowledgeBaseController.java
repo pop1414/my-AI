@@ -19,6 +19,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
@@ -72,12 +73,14 @@ public class KnowledgeBaseController {
      * <p>统计口径固定为“已完成索引”的文档数量（status = INDEXED），
      * 返回结果按知识库标识进行聚合。当前版本中，知识库名称由应用层按约定映射。
      *
+     * @param includeDeleted 是否包含已软删除知识库；仅管理员视角生效
      * @return 知识库列表响应，每项包含知识库标识、名称和已索引文档数
      */
     @GetMapping(value = {"", "/"}, produces = MediaType.APPLICATION_JSON_VALUE)
-    public List<KnowledgeBaseResponse> listKnowledgeBases() {
+    public List<KnowledgeBaseResponse> listKnowledgeBases(
+            @RequestParam(name = "includeDeleted", defaultValue = "false") boolean includeDeleted) {
         // 委托应用层用例获取领域结果，再逐项转换为对外 DTO
-        return listKnowledgeBasesUseCase.handle().stream()
+        return listKnowledgeBasesUseCase.handle(includeDeleted).stream()
                 .map(item -> new KnowledgeBaseResponse(
                         item.id(),
                         item.name(),

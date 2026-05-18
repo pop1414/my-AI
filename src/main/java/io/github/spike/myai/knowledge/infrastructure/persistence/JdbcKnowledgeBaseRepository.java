@@ -74,7 +74,7 @@ public class JdbcKnowledgeBaseRepository implements KnowledgeBaseRepository {
             """;
 
     /**
-     * 知识库列表查询 SQL（含聚合统计）。
+     * 知识库列表查询 SQL（含聚合统计，默认排除软删除记录）。
      *
      * <p>核心逻辑：
      * <ol>
@@ -101,6 +101,29 @@ public class JdbcKnowledgeBaseRepository implements KnowledgeBaseRepository {
                   AND doc.latest_status = 'INDEXED'
             WHERE kb.workspace_id = ?
               AND kb.status <> 'DELETED'
+            GROUP BY kb.kb_id, kb.workspace_id, kb.name, kb.description, kb.status, kb.created_at
+            ORDER BY kb.created_at ASC, kb.kb_id ASC
+            """;
+
+    /**
+     * 管理员知识库列表查询 SQL（含软删除记录）。
+     *
+     * <p>该 SQL 仅供治理视角使用，用于支撑前端按 {@code DELETED} 状态筛选。
+     * 业务链路仍使用默认列表 SQL 排除软删除记录。
+     */
+    private static final String LIST_KNOWLEDGE_BASES_INCLUDING_DELETED_SQL = """
+            SELECT kb.kb_id,
+                   kb.workspace_id,
+                   kb.name,
+                   kb.description,
+                   kb.status,
+                   COALESCE(COUNT(doc.document_id), 0) AS indexed_document_count
+            FROM knowledge_bases kb
+            LEFT JOIN ingest_documents doc
+                   ON doc.kb_id = kb.kb_id
+                  AND doc.workspace_id = kb.workspace_id
+                  AND doc.latest_status = 'INDEXED'
+            WHERE kb.workspace_id = ?
             GROUP BY kb.kb_id, kb.workspace_id, kb.name, kb.description, kb.status, kb.created_at
             ORDER BY kb.created_at ASC, kb.kb_id ASC
             """;
@@ -235,5 +258,22 @@ public class JdbcKnowledgeBaseRepository implements KnowledgeBaseRepository {
     public List<KnowledgeBaseSummary> listKnowledgeBases(String workspaceId) {
         // 直接执行聚合查询，RowMapper 负责将结果集映射为读模型
         return jdbcTemplate.query(LIST_KNOWLEDGE_BASES_SQL, KNOWLEDGE_BASE_SUMMARY_ROW_MAPPER, workspaceId);
+    }
+
+    /**
+     * 查询全量知识库摘要视图（包含已软删除记录）。
+     *
+     * <p>与默认列表查询保持相同统计口径，仅移除 {@code status <> 'DELETED'}
+     * 条件，使管理员可以在治理列表中查看软删除知识库。
+     *
+     * @param workspaceId 工作区标识
+     * @return 知识库摘要视图列表（可能为空列表）
+     */
+    @Override
+    public List<KnowledgeBaseSummary> listKnowledgeBasesIncludingDeleted(String workspaceId) {
+        return jdbcTemplate.query(
+                LIST_KNOWLEDGE_BASES_INCLUDING_DELETED_SQL,
+                KNOWLEDGE_BASE_SUMMARY_ROW_MAPPER,
+                workspaceId);
     }
 }

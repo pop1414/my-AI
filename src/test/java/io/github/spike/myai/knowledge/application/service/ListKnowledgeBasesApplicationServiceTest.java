@@ -1,6 +1,8 @@
 package io.github.spike.myai.knowledge.application.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.github.spike.myai.auth.application.context.CurrentUser;
@@ -34,7 +36,7 @@ class ListKnowledgeBasesApplicationServiceTest {
                 currentUserProvider,
                 authorizationGrantRepository);
 
-        var result = service.handle();
+        var result = service.handle(false);
 
         assertEquals(2, result.size());
         assertEquals("kb-a", result.get(0).id());
@@ -43,6 +45,31 @@ class ListKnowledgeBasesApplicationServiceTest {
         assertEquals("ACTIVE", result.get(0).status());
         assertEquals(3, result.get(0).indexedDocumentCount());
         assertEquals("INACTIVE", result.get(1).status());
+    }
+
+    @Test
+    @DisplayName("管理员显式包含软删除时应返回 DELETED 知识库")
+    void handle_shouldIncludeDeletedKnowledgeBases_whenWorkspaceAdminRequestsIt() {
+        KnowledgeBaseRepository repository = Mockito.mock(KnowledgeBaseRepository.class);
+        CurrentUserProvider currentUserProvider = Mockito.mock(CurrentUserProvider.class);
+        AuthorizationGrantRepository authorizationGrantRepository = Mockito.mock(AuthorizationGrantRepository.class);
+        when(currentUserProvider.requireCurrentUser()).thenReturn(
+                new CurrentUser("user-1", "alice", "workspace-a", WorkspaceRole.WORKSPACE_ADMIN));
+        when(repository.listKnowledgeBasesIncludingDeleted("workspace-a")).thenReturn(List.of(
+                new KnowledgeBaseSummary("kb-a", "workspace-a", "知识库A", "", KnowledgeBaseStatus.ACTIVE, 3),
+                new KnowledgeBaseSummary("kb-deleted", "workspace-a", "已删除知识库", "", KnowledgeBaseStatus.DELETED, 0)));
+        ListKnowledgeBasesApplicationService service = new ListKnowledgeBasesApplicationService(
+                repository,
+                currentUserProvider,
+                authorizationGrantRepository);
+
+        var result = service.handle(true);
+
+        assertEquals(2, result.size());
+        assertEquals("ACTIVE", result.get(0).status());
+        assertEquals("DELETED", result.get(1).status());
+        verify(repository).listKnowledgeBasesIncludingDeleted("workspace-a");
+        verify(repository, never()).listKnowledgeBases("workspace-a");
     }
 
     @Test
@@ -64,7 +91,7 @@ class ListKnowledgeBasesApplicationServiceTest {
                 currentUserProvider,
                 authorizationGrantRepository);
 
-        var result = service.handle();
+        var result = service.handle(false);
 
         assertEquals(2, result.size());
         assertEquals("kb-b", result.get(0).id());
@@ -88,8 +115,10 @@ class ListKnowledgeBasesApplicationServiceTest {
                 currentUserProvider,
                 authorizationGrantRepository);
 
-        var result = service.handle();
+        var result = service.handle(true);
 
         assertEquals(0, result.size());
+        verify(repository).listKnowledgeBases("workspace-a");
+        verify(repository, never()).listKnowledgeBasesIncludingDeleted("workspace-a");
     }
 }
