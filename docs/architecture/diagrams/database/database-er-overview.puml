@@ -1,5 +1,5 @@
 @startuml
-title 总览精简 ER 图（论文首页版）
+title 总览精简 ER 图
 
 skinparam shadowing false
 skinparam linetype ortho
@@ -71,7 +71,7 @@ versions ||..o{ vectors : 生成向量
 documents ||..o{ vectors : metadata.documentId
 
 note bottom
-  本图只保留论文首页需要说明的核心数据主链路。
+  本图只保留需要说明的核心数据主链路。
   授权明细、登录锁定、审计流水等见分模块 ER 图和完整关系数据表。
 end note
 
