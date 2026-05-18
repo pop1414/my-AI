@@ -1,0 +1,95 @@
+@startuml
+title 账号与权限模块 ER 图
+
+skinparam shadowing false
+skinparam linetype ortho
+hide circle
+
+entity "users" as users {
+  * user_id : varchar(64) <<PK>>
+  --
+  username : varchar(100) <<UK>>
+  display_name : varchar(100)
+  status : varchar(16)
+}
+
+entity "local_credentials" as credentials {
+  * user_id : varchar(64) <<PK, FK>>
+  --
+  password_hash : varchar(255)
+  password_algo : varchar(32)
+  password_updated_at : timestamptz
+}
+
+entity "login_lock_states" as locks {
+  * user_id : varchar(64) <<PK, FK>>
+  --
+  failed_login_count : int
+  locked_until : timestamptz
+  last_login_at : timestamptz
+}
+
+entity "workspaces" as workspaces {
+  * workspace_id : varchar(64) <<PK>>
+  --
+  name : varchar(100)
+  status : varchar(16)
+}
+
+entity "workspace_memberships" as memberships {
+  * membership_id : bigserial <<PK>>
+  --
+  workspace_id : varchar(64) <<FK>>
+  user_id : varchar(64) <<FK>>
+  role : varchar(32)
+  status : varchar(16)
+  --
+  UK(workspace_id, user_id)
+}
+
+entity "knowledge_base_grants" as kb_grants {
+  * grant_id : bigserial <<PK>>
+  --
+  workspace_id : varchar(64) <<FK>>
+  kb_id : varchar(64) <<FK>>
+  user_id : varchar(64) <<FK>>
+  role : varchar(32)
+  status : varchar(16)
+}
+
+entity "document_grants" as doc_grants {
+  * grant_id : bigserial <<PK>>
+  --
+  workspace_id : varchar(64) <<FK>>
+  document_id : varchar(64) <<FK>>
+  user_id : varchar(64) <<FK>>
+  permission : varchar(32)
+  status : varchar(16)
+}
+
+entity "knowledge_bases" as knowledge_bases {
+  * id : bigserial <<PK>>
+  --
+  workspace_id : varchar(64)
+  kb_id : varchar(64)
+  status : varchar(16)
+  --
+  CK(status IN ACTIVE, INACTIVE, DELETED)
+}
+
+entity "ingest_documents" as documents {
+  * document_id : varchar(64) <<PK>>
+  --
+  workspace_id : varchar(64)
+}
+
+users ||--|| credentials : 登录凭据
+users ||--o| locks : 登录锁定
+users ||--o{ memberships : 工作区成员
+workspaces ||--o{ memberships : 成员关系
+memberships ||--o{ kb_grants : 知识库授权
+memberships ||--o{ doc_grants : 文档授权
+knowledge_bases ||--o{ kb_grants : 被授权
+documents ||--o{ doc_grants : 被授权
+
+@enduml

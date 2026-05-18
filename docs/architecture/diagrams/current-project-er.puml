@@ -1,0 +1,244 @@
+@startuml
+title 当前项目 ER 图（PostgreSQL / Flyway V1-V8）
+
+' Scope:
+' - 以 src/main/resources/db/migration/V1-V8 为准
+' - 实线表示数据库外键约束
+' - 虚线表示业务或 metadata 约定关系，不是数据库外键
+
+skinparam shadowing false
+skinparam linetype ortho
+hide circle
+
+entity "workspaces" as workspaces {
+  * workspace_id : varchar(64) <<PK>>
+  --
+  * name : varchar(100)
+  * description : varchar(500)
+  * status : varchar(16)
+  * created_at : timestamptz
+  * updated_at : timestamptz
+}
+
+entity "users" as users {
+  * user_id : varchar(64) <<PK>>
+  --
+  * username : varchar(100) <<UK>>
+  * display_name : varchar(100)
+  * status : varchar(16)
+  * created_at : timestamptz
+  * updated_at : timestamptz
+}
+
+entity "local_credentials" as local_credentials {
+  * user_id : varchar(64) <<PK, FK>>
+  --
+  * password_hash : varchar(255)
+  * password_algo : varchar(32)
+  * password_updated_at : timestamptz
+  * created_at : timestamptz
+  * updated_at : timestamptz
+}
+
+entity "login_lock_states" as login_lock_states {
+  * user_id : varchar(64) <<PK, FK>>
+  --
+  * failed_login_count : int
+  locked_until : timestamptz
+  last_failed_at : timestamptz
+  last_login_at : timestamptz
+  * updated_at : timestamptz
+}
+
+entity "workspace_memberships" as workspace_memberships {
+  * membership_id : bigserial <<PK>>
+  --
+  * workspace_id : varchar(64) <<FK>>
+  * user_id : varchar(64) <<FK>>
+  * role : varchar(32)
+  * status : varchar(16)
+  * created_at : timestamptz
+  * updated_at : timestamptz
+  --
+  UK(workspace_id, user_id)
+}
+
+entity "knowledge_bases" as knowledge_bases {
+  * id : bigserial <<PK>>
+  --
+  * kb_id : varchar(64) <<UK>>
+  * workspace_id : varchar(64) <<FK>>
+  * name : varchar(100)
+  * description : varchar(500)
+  * status : varchar(16)
+  * created_at : timestamptz
+  * updated_at : timestamptz
+  --
+  UK(workspace_id, kb_id)
+  CK(status IN ACTIVE, INACTIVE, DELETED)
+}
+
+entity "ingest_documents" as ingest_documents {
+  * document_id : varchar(64) <<PK>>
+  --
+  * workspace_id : varchar(64) <<FK>>
+  * kb_id : varchar(128)
+  file_hash : varchar(64)
+  filename : varchar(512)
+  * file_size : bigint
+  * status : varchar(32)
+  failure_reason : text
+  * retry_count : int
+  * retry_max : int
+  next_retry_at : timestamptz
+  last_error_code : varchar(64)
+  last_error_message : text
+  last_error_at : timestamptz
+  * reprocess_count : int
+  reprocess_requested_at : timestamptz
+  * split_version : varchar(32)
+  processing_metadata : jsonb
+  * latest_version_number : int
+  * latest_status : varchar(32)
+  latest_filename : varchar(512)
+  * latest_version_origin_type : varchar(32)
+  * created_at : timestamptz
+  * updated_at : timestamptz
+  --
+  UK(workspace_id, document_id)
+  UK(kb_id, file_hash) WHERE file_hash IS NOT NULL AND status <> 'DELETED'
+}
+
+entity "ingest_document_versions" as ingest_document_versions {
+  * id : bigserial <<PK>>
+  --
+  * document_id : varchar(64) <<FK>>
+  * version_number : int
+  * version_origin_type : varchar(32)
+  rollback_from_version_number : int
+  * file_hash : varchar(64)
+  * filename : varchar(512)
+  * file_size : bigint
+  * status : varchar(32)
+  failure_reason : text
+  * retry_count : int
+  * retry_max : int
+  next_retry_at : timestamptz
+  last_error_code : varchar(64)
+  last_error_message : text
+  last_error_at : timestamptz
+  * reprocess_count : int
+  reprocess_requested_at : timestamptz
+  * split_version : varchar(32)
+  processing_metadata : jsonb
+  created_by_user_id : varchar(64)
+  * created_at : timestamptz
+  * updated_at : timestamptz
+  --
+  UK(document_id, version_number)
+  IDX(document_id, version_number DESC)
+  IDX(file_hash)
+}
+
+entity "knowledge_base_grants" as knowledge_base_grants {
+  * grant_id : bigserial <<PK>>
+  --
+  * workspace_id : varchar(64) <<FK>>
+  * kb_id : varchar(64) <<FK>>
+  * user_id : varchar(64) <<FK>>
+  * role : varchar(32)
+  * status : varchar(16)
+  * created_at : timestamptz
+  * updated_at : timestamptz
+  --
+  UK(workspace_id, kb_id, user_id)
+  CK(role IN KB_MANAGER, KB_CONTRIBUTOR, KB_READER, KB_ASKER)
+}
+
+entity "document_grants" as document_grants {
+  * grant_id : bigserial <<PK>>
+  --
+  * workspace_id : varchar(64) <<FK>>
+  * document_id : varchar(64) <<FK>>
+  * user_id : varchar(64) <<FK>>
+  * permission : varchar(32)
+  * status : varchar(16)
+  * created_at : timestamptz
+  * updated_at : timestamptz
+  --
+  UK(workspace_id, document_id, user_id)
+  CK(permission IN DOC_ALLOW_READ, DOC_ALLOW_MANAGE, DOC_DENY)
+}
+
+entity "audit_events" as audit_events {
+  * audit_event_id : bigserial <<PK>>
+  --
+  workspace_id : varchar(64) <<FK>>
+  actor_user_id : varchar(64) <<FK>>
+  actor_username : varchar(100)
+  * event_type : varchar(64)
+  target_type : varchar(32)
+  target_id : varchar(128)
+  * outcome : varchar(16)
+  * reason : varchar(255)
+  * metadata : jsonb
+  * occurred_at : timestamptz
+  --
+  CK(outcome IN SUCCESS, FAILURE, DENIED)
+}
+
+entity "vector_store" as vector_store {
+  * id : uuid <<PK>>
+  --
+  content : text
+  metadata : json/jsonb
+  embedding : vector(1024)
+  --
+  HNSW(embedding vector_cosine_ops)
+  metadata.documentId
+  metadata.kbId
+  metadata.documentVersionNumber
+  metadata.splitVersion
+}
+
+workspaces ||--o{ workspace_memberships : fk_workspace_memberships_workspace
+users ||--o{ workspace_memberships : fk_workspace_memberships_user
+users ||--|| local_credentials : fk_local_credentials_user
+users ||--o| login_lock_states : fk_login_lock_states_user
+
+workspaces ||--o{ knowledge_bases : fk_knowledge_bases_workspace
+workspaces ||--o{ ingest_documents : fk_ingest_documents_workspace
+ingest_documents ||--o{ ingest_document_versions : fk_ingest_document_versions_document
+
+workspaces ||--o{ knowledge_base_grants : fk_knowledge_base_grants_workspace
+knowledge_bases ||--o{ knowledge_base_grants : fk_knowledge_base_grants_kb
+workspace_memberships ||--o{ knowledge_base_grants : fk_knowledge_base_grants_membership
+
+workspaces ||--o{ document_grants : fk_document_grants_workspace
+ingest_documents ||--o{ document_grants : fk_document_grants_document
+workspace_memberships ||--o{ document_grants : fk_document_grants_membership
+
+workspaces ||--o{ audit_events : fk_audit_events_workspace
+users ||--o{ audit_events : fk_audit_events_actor_user
+
+knowledge_bases ||..o{ ingest_documents : logical(workspace_id, kb_id)
+users ||..o{ ingest_document_versions : logical(created_by_user_id)
+ingest_documents ||..o{ vector_store : metadata.documentId
+ingest_document_versions ||..o{ vector_store : metadata.documentId + documentVersionNumber/splitVersion
+knowledge_bases ||..o{ vector_store : metadata.kbId
+
+note right of ingest_documents
+  这是 document 主表与 latest projection。
+  V5 后版本级事实以 ingest_document_versions 为准，
+  主表仍保留兼容镜像列与列表/状态读模型字段。
+end note
+
+note right of vector_store
+  vector_store 由 Spring AI PGVector 管理。
+  业务关系通过 metadata 字段约定：
+  workspaceId、documentId、kbId、chunkIndex、
+  documentVersionNumber、sourceFile、sourceUpdatedAt、
+  contentHash、splitVersion、sourceHint。
+end note
+
+@enduml

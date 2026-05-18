@@ -3,6 +3,13 @@
 ## 1. 架构图
 - 主架构图：`docs/architecture/diagrams/core-architecture-latest.puml`
 - 渲染图：`docs/architecture/diagrams/core-architecture-latest-_____Latest___Clean_Layout_.png`
+- 数据库设计说明：`docs/architecture/database-design.md`
+- 数据库总览精简 ER 图：`docs/architecture/diagrams/database/database-er-overview.puml`
+- 数据库账号与权限模块 ER 图：`docs/architecture/diagrams/database/database-er-auth-access.puml`
+- 数据库知识库与文档入库模块 ER 图：`docs/architecture/diagrams/database/database-er-knowledge-ingest.puml`
+- 数据库问答向量检索模块 ER 图：`docs/architecture/diagrams/database/database-er-qa-vector.puml`
+- 数据库审计治理模块 ER 图：`docs/architecture/diagrams/database/database-er-audit.puml`
+- 当前项目 ER 图：`docs/architecture/diagrams/current-project-er.puml`
 - Ingest 总览图：`docs/architecture/diagrams/ingest/ingest-overview-map.puml`
 - 受理责任域边界图：`docs/architecture/diagrams/ingest/acceptance/ingest-acceptance-boundary.puml`
 - 受理上传时序图：`docs/architecture/diagrams/ingest/acceptance/ingest-acceptance-upload-sequence.puml`

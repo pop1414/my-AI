@@ -1,0 +1,63 @@
+@startuml
+title 问答向量检索模块 ER 图
+
+skinparam shadowing false
+skinparam linetype ortho
+hide circle
+left to right direction
+
+entity "knowledge_bases" as knowledge_bases {
+  * id : bigserial <<PK>>
+  --
+  workspace_id : varchar(64)
+  kb_id : varchar(64)
+  name : varchar(100)
+}
+
+entity "ingest_documents" as documents {
+  * document_id : varchar(64) <<PK>>
+  --
+  workspace_id : varchar(64)
+  kb_id : varchar(128)
+  latest_version_number : int
+  latest_status : varchar(32)
+}
+
+entity "ingest_document_versions" as versions {
+  * id : bigserial <<PK>>
+  --
+  document_id : varchar(64) <<FK>>
+  version_number : int
+  filename : varchar(512)
+  status : varchar(32)
+  split_version : varchar(32)
+  updated_at : timestamptz
+}
+
+entity "vector_store" as vectors {
+  * id : uuid <<PK>>
+  --
+  content : text
+  metadata : json/jsonb
+  embedding : vector(1024)
+  --
+  metadata.workspaceId
+  metadata.documentId
+  metadata.kbId
+  metadata.chunkIndex
+  metadata.documentVersionNumber
+  metadata.splitVersion
+}
+
+knowledge_bases ||..o{ documents : workspace_id + kb_id
+documents ||--o{ versions : document_id
+documents ||..o{ vectors : metadata.documentId
+versions ||..o{ vectors : metadata.documentId + version
+knowledge_bases ||..o{ vectors : metadata.kbId
+
+note bottom of vectors
+  vector_store 是 Spring AI PGVector 表。
+  当前没有数据库外键，问答检索通过 metadata 过滤可问答文档版本。
+end note
+
+@enduml

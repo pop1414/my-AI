@@ -1,0 +1,44 @@
+@startuml
+title 审计治理模块 ER 图
+
+skinparam shadowing false
+skinparam linetype ortho
+hide circle
+
+entity "workspaces" as workspaces {
+  * workspace_id : varchar(64) <<PK>>
+  --
+  name : varchar(100)
+}
+
+entity "users" as users {
+  * user_id : varchar(64) <<PK>>
+  --
+  username : varchar(100)
+  display_name : varchar(100)
+}
+
+entity "audit_events" as audit_events {
+  * audit_event_id : bigserial <<PK>>
+  --
+  workspace_id : varchar(64) <<FK>>
+  actor_user_id : varchar(64) <<FK>>
+  actor_username : varchar(100)
+  event_type : varchar(64)
+  target_type : varchar(32)
+  target_id : varchar(128)
+  outcome : varchar(16)
+  reason : varchar(255)
+  metadata : jsonb
+  occurred_at : timestamptz
+}
+
+workspaces ||--o{ audit_events : 发生于
+users ||--o{ audit_events : 操作人
+
+note right of audit_events
+  审计表记录权限、账号、文档处理等操作流水。
+  target_type 和 target_id 以业务标识形式指向目标对象。
+end note
+
+@enduml
