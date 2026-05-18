@@ -20,14 +20,12 @@ const roleColorMap: Record<string, string> = {
 	KB_MANAGER: "red",
 	KB_CONTRIBUTOR: "blue",
 	KB_READER: "green",
-	KB_ASKER: "default",
 };
 
 const roleOptions: Array<{ value: KnowledgeBaseGrant["role"]; label: string }> = [
 	{ value: "KB_MANAGER", label: "管理者" },
 	{ value: "KB_CONTRIBUTOR", label: "贡献者" },
 	{ value: "KB_READER", label: "读者" },
-	{ value: "KB_ASKER", label: "问答者" },
 ];
 
 export function KnowledgeBaseGrantsPage() {

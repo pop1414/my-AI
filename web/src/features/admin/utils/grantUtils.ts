@@ -2,7 +2,6 @@ export const kbRoleOptions = [
 	{ label: "管理者 (KB_MANAGER)", value: "KB_MANAGER" },
 	{ label: "贡献者 (KB_CONTRIBUTOR)", value: "KB_CONTRIBUTOR" },
 	{ label: "读者 (KB_READER)", value: "KB_READER" },
-	{ label: "问答者 (KB_ASKER)", value: "KB_ASKER" },
 ] as const;
 
 export const documentPermissionOptions = [

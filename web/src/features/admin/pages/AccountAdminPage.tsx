@@ -43,7 +43,6 @@ const knowledgeRoleOptions = [
 	{ value: "KB_MANAGER", label: "管理者" },
 	{ value: "KB_CONTRIBUTOR", label: "贡献者" },
 	{ value: "KB_READER", label: "读者" },
-	{ value: "KB_ASKER", label: "问答者" },
 ] as const;
 
 export function AccountAdminPage() {
