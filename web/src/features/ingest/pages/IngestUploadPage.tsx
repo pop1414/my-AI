@@ -35,6 +35,7 @@ export function IngestUploadPage() {
 		}
 		const currentKbId = form.getFieldValue("kbId");
 		const lastKbId = localStorage.getItem("myai:lastKbId");
+		// Ensure candidate is strictly from active list
 		const candidate = [currentKbId, lastKbId, "default", activeKnowledgeBases[0]?.id].find((kbId) =>
 			kbId ? activeKnowledgeBases.some((item) => item.id === kbId) : false,
 		);

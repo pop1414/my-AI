@@ -170,12 +170,12 @@ export function IngestListPage() {
 	const knowledgeBaseOptions = useMemo(
 		() =>
 			(knowledgeQuery.data ?? [])
-				.filter((item) => item.status === "ACTIVE")
+				.filter((item) => canAccessAdmin || item.status === "ACTIVE")
 				.map((item) => ({
-					label: `${item.name} (${item.id})`,
+					label: `${item.name}${item.status === 'INACTIVE' ? ' (已停用)' : ''} (${item.id})`,
 					value: item.id,
 				})),
-		[knowledgeQuery.data],
+		[knowledgeQuery.data, canAccessAdmin],
 	);
 	
 	const onSubmit = () => {

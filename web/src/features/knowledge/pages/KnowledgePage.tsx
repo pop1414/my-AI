@@ -36,6 +36,7 @@ import {
 } from "../../../shared/ui/console/ConsolePageFrame";
 
 import { KnowledgeBaseForm } from "../components/KnowledgeBaseForm";
+import { KnowledgeBaseStatusTag } from "../components/KnowledgeBaseStatusTag";
 import "./KnowledgePage.css";
 
 const { Text, Title, Paragraph } = Typography;
@@ -137,12 +138,17 @@ export function KnowledgePage() {
 	};
 
 	const knowledgeBases = knowledgeQuery.data ?? [];
-	const activeKbs = knowledgeBases.filter(kb => kb.status === 'ACTIVE');
+	const visibleKbs = canAccessAdmin 
+		? knowledgeBases 
+		: knowledgeBases.filter(kb => kb.status === 'ACTIVE');
 
-	const stats = useMemo(() => ({
-		kbCount: knowledgeQuery.isLoading ? "--" : activeKbs.length,
-		docTotal: knowledgeQuery.isLoading ? "--" : activeKbs.reduce((acc, kb) => acc + kb.indexedDocumentCount, 0)
-	}), [activeKbs, knowledgeQuery.isLoading]);
+	const stats = useMemo(() => {
+		const activeKbs = knowledgeBases.filter(kb => kb.status === 'ACTIVE');
+		return {
+			kbCount: knowledgeQuery.isLoading ? "--" : activeKbs.length,
+			docTotal: knowledgeQuery.isLoading ? "--" : activeKbs.reduce((acc, kb) => acc + kb.indexedDocumentCount, 0)
+		};
+	}, [knowledgeBases, knowledgeQuery.isLoading]);
 
 	return (
 		<ConsolePageFrame
@@ -153,7 +159,7 @@ export function KnowledgePage() {
 					<div className="knowledge-desc-text">选择目标知识库以开启深度问答或查阅原始文档上下文。</div>
 					<div className="knowledge-desc-metrics">
 						<span className="metric-tag">
-							<span className="label">可访问知识库:</span>
+							<span className="label">活跃知识库:</span>
 							<span className="value">{stats.kbCount}</span>
 						</span>
 						<span className="metric-tag">
@@ -183,7 +189,7 @@ export function KnowledgePage() {
 						<div style={{ padding: '60px 0', textAlign: 'center' }}>
 							<Empty description="正在加载知识库目录..." />
 						</div>
-					) : activeKbs.length === 0 ? (
+					) : visibleKbs.length === 0 ? (
 						<Empty
 							image={Empty.PRESENTED_IMAGE_SIMPLE}
 							description="暂无可访问的知识库"
@@ -193,25 +199,27 @@ export function KnowledgePage() {
 						</Empty>
 					) : (
 						<Row gutter={[24, 24]}>
-							{activeKbs.map((kb) => (
+							{visibleKbs.map((kb) => (
 								<Col xs={24} md={12} xl={8} key={kb.id}>
 									<Card 
 										hoverable 
-										className="knowledge-entry-card"
+										className={`knowledge-entry-card ${kb.status === 'INACTIVE' ? 'kb-inactive' : ''}`}
 										actions={[
-											<Tooltip title="进入问答" key="qa">
+											<Tooltip title={kb.status === 'ACTIVE' ? "进入问答" : "知识库已停用"} key="qa">
 												<Button 
 													type="text" 
 													icon={<CommentOutlined />} 
+													disabled={kb.status !== 'ACTIVE'}
 													onClick={() => navigate(`/qa?kbId=${kb.id}`)}
 												>
 													进入问答
 												</Button>
 											</Tooltip>,
-											<Tooltip title="浏览文档" key="docs">
+											<Tooltip title={kb.status === 'ACTIVE' ? "浏览文档" : "知识库已停用"} key="docs">
 												<Button 
 													type="text" 
 													icon={<FileTextOutlined />} 
+													disabled={kb.status !== 'ACTIVE'}
 													onClick={() => navigate(`/ingest/documents?kbId=${kb.id}`)}
 												>
 													文档
@@ -236,7 +244,10 @@ export function KnowledgePage() {
 													<DatabaseOutlined />
 												</div>
 												<div className="knowledge-card-meta">
-													<Title level={4} className="knowledge-card-title">{kb.name}</Title>
+													<div className="knowledge-card-title-row">
+														<Title level={4} className="knowledge-card-title">{kb.name}</Title>
+														{kb.status === 'INACTIVE' && <KnowledgeBaseStatusTag status={kb.status} />}
+													</div>
 													<div className="knowledge-card-id-wrapper" onClick={() => handleCopyId(kb.id)}>
 														<Text className="knowledge-card-id">ID: {kb.id}</Text>
 														<CopyOutlined className="id-copy-icon" />

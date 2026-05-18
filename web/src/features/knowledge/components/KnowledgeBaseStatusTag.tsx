@@ -11,9 +11,15 @@ export function KnowledgeBaseStatusTag({ status }: KnowledgeBaseStatusTagProps) 
 		<Tag
 			bordered={false}
 			color={isActive ? "success" : "default"}
-			style={{ borderRadius: 4, fontWeight: 500 }}
+			style={{ 
+				borderRadius: 4, 
+				fontWeight: 600,
+				fontSize: '11px',
+				padding: '0 8px',
+				textTransform: 'uppercase'
+			}}
 		>
-			{status}
+			{isActive ? "ACTIVE" : "已停用"}
 		</Tag>
 	);
 }

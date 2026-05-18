@@ -133,12 +133,23 @@
   justify-content: center;
 }
 
+.knowledge-card-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
 .knowledge-card-title {
-  margin: 0 0 4px 0 !important;
+  margin: 0 !important;
   font-size: 18px !important;
   font-weight: 500 !important; /* DESIGN.md uses 500 for display */
   color: var(--console-ink) !important;
   letter-spacing: -0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .knowledge-card-id-wrapper {
@@ -152,7 +163,29 @@
   border-radius: 6px;
   transition: all 0.2s;
   width: fit-content;
-  margin-top: 6px;
+}
+
+/* Inactive State Styling */
+.kb-inactive {
+  opacity: 0.7;
+}
+
+.kb-inactive .knowledge-card-icon {
+  background: var(--console-canvas-soft);
+  color: var(--console-ink-mute);
+  filter: grayscale(1);
+}
+
+.kb-inactive .knowledge-card-title {
+  color: var(--console-ink-secondary) !important;
+}
+
+.kb-inactive .knowledge-stat-value {
+  color: var(--console-ink-mute);
+}
+
+.kb-inactive .ant-card-actions {
+  opacity: 0.8;
 }
 
 .knowledge-card-id-wrapper:hover {
