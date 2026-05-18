@@ -17,6 +17,7 @@ import java.util.Optional;
  *   <li>{@link #save} —— 保存聚合根（新增或更新，由实现决定具体策略）；</li>
  *   <li>{@link #findByKbId} —— 按业务键查询单个聚合根，不存在时返回
  *       {@link Optional#empty()}；</li>
+ *   <li>{@link #findByKbIdIncludingDeleted} —— 删除用例专用查询，包含软删除记录；</li>
  *   <li>{@link #listKnowledgeBases} —— 查询全量知识库摘要视图（读模型），
  *       包含聚合统计字段。</li>
  * </ul>
@@ -49,6 +50,18 @@ public interface KnowledgeBaseRepository {
      * @return 包含知识库聚合根的 {@link Optional}，不存在时为 {@link Optional#empty()}
      */
     Optional<KnowledgeBase> findByKbId(String workspaceId, String kbId);
+
+    /**
+     * 根据业务键查询知识库聚合根，包含已软删除记录。
+     *
+     * <p>仅用于删除等需要识别终态幂等性的治理用例。普通业务链路应使用
+     * {@link #findByKbId(String, String)}，避免已删除知识库重新进入上传、问答或授权流程。
+     *
+     * @param workspaceId 工作区标识
+     * @param kbId        知识库业务键
+     * @return 包含知识库聚合根的 {@link Optional}，不存在时为 {@link Optional#empty()}
+     */
+    Optional<KnowledgeBase> findByKbIdIncludingDeleted(String workspaceId, String kbId);
 
     /**
      * 查询全量知识库列表（含聚合统计）。

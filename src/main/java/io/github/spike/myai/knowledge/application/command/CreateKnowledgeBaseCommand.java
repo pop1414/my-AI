@@ -20,7 +20,8 @@ import io.github.spike.myai.knowledge.domain.model.KnowledgeBaseStatus;
  *   <li>{@code name}：必填，去除首尾空格后长度 1~100 字符；</li>
  *   <li>{@code description}：选填，去除首尾空格后最长 500 字符，
  *       未传时自动规整为空字符串；</li>
- *   <li>{@code status}：选填，未传时默认 {@link KnowledgeBaseStatus#ACTIVE}。</li>
+ *   <li>{@code status}：选填，未传时默认 {@link KnowledgeBaseStatus#ACTIVE}，
+ *       不允许创建时直接指定 {@link KnowledgeBaseStatus#DELETED}。</li>
  * </ul>
  *
  * @param name        知识库名称（必填，1~100 字符）
@@ -63,6 +64,11 @@ public record CreateKnowledgeBaseCommand(
         }
         // 将规整化后的描述写回字段，后续方法可直接使用
         description = normalizedDescription;
+
+        // 4. 创建入口不允许直接创建已删除知识库，删除语义必须走专用删除用例以保留审计
+        if (status == KnowledgeBaseStatus.DELETED) {
+            throw new IllegalArgumentException("status must not be DELETED when creating knowledge base");
+        }
     }
 
     /**

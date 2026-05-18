@@ -3,6 +3,7 @@ package io.github.spike.myai.knowledge.interfaces.rest;
 import io.github.spike.myai.knowledge.application.command.CreateKnowledgeBaseCommand;
 import io.github.spike.myai.knowledge.application.command.UpdateKnowledgeBaseCommand;
 import io.github.spike.myai.knowledge.application.exception.KnowledgeBaseNotFoundException;
+import io.github.spike.myai.knowledge.application.usecase.DeleteKnowledgeBaseUseCase;
 import io.github.spike.myai.knowledge.application.usecase.ListKnowledgeBasesUseCase;
 import io.github.spike.myai.knowledge.application.usecase.CreateKnowledgeBaseUseCase;
 import io.github.spike.myai.knowledge.application.usecase.UpdateKnowledgeBaseUseCase;
@@ -12,12 +13,14 @@ import io.github.spike.myai.knowledge.interfaces.rest.dto.UpdateKnowledgeBaseReq
 import java.util.List;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -41,6 +44,8 @@ public class KnowledgeBaseController {
     private final CreateKnowledgeBaseUseCase createKnowledgeBaseUseCase;
     /** 知识库更新用例 */
     private final UpdateKnowledgeBaseUseCase updateKnowledgeBaseUseCase;
+    /** 知识库删除用例 */
+    private final DeleteKnowledgeBaseUseCase deleteKnowledgeBaseUseCase;
 
     /**
      * 构造控制器，注入所需的应用层用例。
@@ -48,14 +53,17 @@ public class KnowledgeBaseController {
      * @param listKnowledgeBasesUseCase   列表查询用例
      * @param createKnowledgeBaseUseCase  创建用例
      * @param updateKnowledgeBaseUseCase  更新用例
+     * @param deleteKnowledgeBaseUseCase  删除用例
      */
     public KnowledgeBaseController(
             ListKnowledgeBasesUseCase listKnowledgeBasesUseCase,
             CreateKnowledgeBaseUseCase createKnowledgeBaseUseCase,
-            UpdateKnowledgeBaseUseCase updateKnowledgeBaseUseCase) {
+            UpdateKnowledgeBaseUseCase updateKnowledgeBaseUseCase,
+            DeleteKnowledgeBaseUseCase deleteKnowledgeBaseUseCase) {
         this.listKnowledgeBasesUseCase = listKnowledgeBasesUseCase;
         this.createKnowledgeBaseUseCase = createKnowledgeBaseUseCase;
         this.updateKnowledgeBaseUseCase = updateKnowledgeBaseUseCase;
+        this.deleteKnowledgeBaseUseCase = deleteKnowledgeBaseUseCase;
     }
 
     /**
@@ -149,6 +157,27 @@ public class KnowledgeBaseController {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, ex.getMessage(), ex);
         } catch (IllegalArgumentException ex) {
             // 参数校验失败（如 status 非法值），统一映射为 400
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, ex.getMessage(), ex);
+        }
+    }
+
+    /**
+     * 删除知识库。
+     *
+     * <p>删除采用软删除语义：知识库状态置为 {@code DELETED}，
+     * 默认从知识库列表隐藏，但保留文档、授权和审计追溯数据。
+     *
+     * @param kbId 知识库业务标识
+     * @throws ResponseStatusException 知识库不存在时返回 404，参数非法时返回 400
+     */
+    @DeleteMapping("/{kbId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void deleteKnowledgeBase(@PathVariable("kbId") String kbId) {
+        try {
+            deleteKnowledgeBaseUseCase.handle(kbId);
+        } catch (KnowledgeBaseNotFoundException ex) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, ex.getMessage(), ex);
+        } catch (IllegalArgumentException ex) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, ex.getMessage(), ex);
         }
     }

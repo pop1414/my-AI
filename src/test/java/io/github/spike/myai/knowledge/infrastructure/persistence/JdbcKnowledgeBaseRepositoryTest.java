@@ -40,6 +40,7 @@ class JdbcKnowledgeBaseRepositoryTest {
         ArgumentCaptor<String> sqlCaptor = ArgumentCaptor.forClass(String.class);
         verify(jdbcTemplate).query(sqlCaptor.capture(), any(RowMapper.class), eq(WorkspaceConstants.DEFAULT_WORKSPACE_ID));
         assertTrue(sqlCaptor.getValue().contains("kb.workspace_id = ?"));
+        assertTrue(sqlCaptor.getValue().contains("kb.status <> 'DELETED'"));
         assertTrue(sqlCaptor.getValue().contains("LEFT JOIN ingest_documents"));
         assertTrue(sqlCaptor.getValue().contains("doc.workspace_id = kb.workspace_id"));
         assertTrue(sqlCaptor.getValue().contains("doc.latest_status = 'INDEXED'"));

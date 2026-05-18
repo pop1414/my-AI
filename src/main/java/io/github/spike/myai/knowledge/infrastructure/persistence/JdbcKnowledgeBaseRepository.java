@@ -63,6 +63,13 @@ public class JdbcKnowledgeBaseRepository implements KnowledgeBaseRepository {
     private static final String FIND_BY_KB_ID_SQL = """
             SELECT kb_id, workspace_id, name, description, status, created_at, updated_at
             FROM knowledge_bases
+            WHERE workspace_id = ? AND kb_id = ? AND status <> 'DELETED'
+            """;
+
+    /** 按业务键查询单个知识库聚合根，包含已软删除记录 */
+    private static final String FIND_BY_KB_ID_INCLUDING_DELETED_SQL = """
+            SELECT kb_id, workspace_id, name, description, status, created_at, updated_at
+            FROM knowledge_bases
             WHERE workspace_id = ? AND kb_id = ?
             """;
 
@@ -93,6 +100,7 @@ public class JdbcKnowledgeBaseRepository implements KnowledgeBaseRepository {
                   AND doc.workspace_id = kb.workspace_id
                   AND doc.latest_status = 'INDEXED'
             WHERE kb.workspace_id = ?
+              AND kb.status <> 'DELETED'
             GROUP BY kb.kb_id, kb.workspace_id, kb.name, kb.description, kb.status, kb.created_at
             ORDER BY kb.created_at ASC, kb.kb_id ASC
             """;
@@ -193,6 +201,20 @@ public class JdbcKnowledgeBaseRepository implements KnowledgeBaseRepository {
     public Optional<KnowledgeBase> findByKbId(String workspaceId, String kbId) {
         // 执行查询，取 Stream 首元素（最多一条，因为 kb_id 有唯一索引）
         return jdbcTemplate.query(FIND_BY_KB_ID_SQL, KNOWLEDGE_BASE_ROW_MAPPER, workspaceId, kbId)
+                .stream()
+                .findFirst();
+    }
+
+    /**
+     * 按业务键查询知识库聚合根，包含已软删除记录。
+     *
+     * @param workspaceId 工作区标识
+     * @param kbId        知识库业务键
+     * @return 包含聚合根的 {@link Optional}，不存在时为空
+     */
+    @Override
+    public Optional<KnowledgeBase> findByKbIdIncludingDeleted(String workspaceId, String kbId) {
+        return jdbcTemplate.query(FIND_BY_KB_ID_INCLUDING_DELETED_SQL, KNOWLEDGE_BASE_ROW_MAPPER, workspaceId, kbId)
                 .stream()
                 .findFirst();
     }
