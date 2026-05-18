@@ -22,6 +22,7 @@ import {
 	CommentOutlined,
 	FileTextOutlined,
 	SettingOutlined,
+	TeamOutlined,
 	CopyOutlined,
 	SearchOutlined,
 	DeleteOutlined,
@@ -323,6 +324,16 @@ export function KnowledgePage() {
 												</Button>
 											</Tooltip>,
 											...(canAccessAdmin ? [
+												<Tooltip title={kb.status === 'DELETED' ? "已删除，禁止操作" : "成员授权"} key="grant">
+													<Button
+														type="text"
+														icon={<TeamOutlined />}
+														disabled={kb.status === 'DELETED'}
+														onClick={() => navigate(`/admin/knowledge-bases/${encodeURIComponent(kb.id)}/grants`)}
+													>
+														授权
+													</Button>
+												</Tooltip>,
 												<Tooltip title={kb.status === 'DELETED' ? "已删除，禁止操作" : "治理配置"} key="setting">
 													<Button 
 														type="text" 
