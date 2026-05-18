@@ -20,13 +20,58 @@ import {
 	type KnowledgeBaseGrant,
 	type WorkspaceMember,
 } from "../../../shared/api/adminApi";
-import { listDocuments } from "../../../shared/api/ingestApi";
+import { listDocuments, type DocumentListPageResponse } from "../../../shared/api/ingestApi";
 import { listKnowledgeBases, type KnowledgeBase } from "../../../shared/api/knowledgeApi";
 import { ApiErrorAlert } from "../../../shared/ui/ApiErrorAlert";
 
 import { MemberPageHeader } from "../components/MemberPageHeader";
 import { KnowledgeGrantTable } from "../components/KnowledgeGrantTable";
 import { DocumentGrantTable } from "../components/DocumentGrantTable";
+
+async function listDocumentsForKnowledgeBaseGrants(params: {
+	kbIds: string[];
+	filename?: string;
+	limit: number;
+	offset: number;
+}): Promise<DocumentListPageResponse> {
+	if (params.kbIds.length === 0) {
+		return { items: [], total: 0, limit: params.limit, offset: params.offset };
+	}
+	const pages = await Promise.all(
+		params.kbIds.map(async (kbId) => {
+			const items: DocumentListPageResponse["items"] = [];
+			let offset = 0;
+			let total = Number.POSITIVE_INFINITY;
+			while (offset < total) {
+				const page = await listDocuments({
+					kbId,
+					filename: params.filename,
+					limit: 100,
+					offset,
+				});
+				items.push(...page.items);
+				total = page.total;
+				if (page.items.length === 0) break;
+				offset += page.limit;
+			}
+			return items;
+		}),
+	);
+	const items = pages
+		.flat()
+		.sort((a, b) => {
+			const createdDelta = Date.parse(b.createdAt) - Date.parse(a.createdAt);
+			return createdDelta === 0 ? b.documentId.localeCompare(a.documentId) : createdDelta;
+		});
+	const fromIndex = Math.min(params.offset, items.length);
+	const toIndex = Math.min(fromIndex + params.limit, items.length);
+	return {
+		items: items.slice(fromIndex, toIndex),
+		total: items.length,
+		limit: params.limit,
+		offset: params.offset,
+	};
+}
 
 export function MemberGrantsPage() {
 	const { userId = "" } = useParams<{ userId: string }>();
@@ -60,11 +105,24 @@ export function MemberGrantsPage() {
 	const [documentSearch, setDocumentSearch] = useState("");
 	const [selectedDocumentIds, setSelectedDocumentIds] = useState<string[]>([]);
 	const [documentPermissions, setDocumentPermissions] = useState<Record<string, DocumentGrant["permission"]>>({});
+	const documentCandidateKnowledgeBaseIds = useMemo(
+		() => selectedKnowledgeBaseIds.filter((kbId) => !!knowledgeBaseRoles[kbId]).sort(),
+		[selectedKnowledgeBaseIds, knowledgeBaseRoles],
+	);
 
 	const documentsQuery = useQuery({
-		queryKey: ["admin", "member-grant-documents", documentSearch, documentPage, documentPageSize],
+		queryKey: [
+			"admin",
+			"member-grant-documents",
+			userId,
+			documentCandidateKnowledgeBaseIds,
+			documentSearch,
+			documentPage,
+			documentPageSize,
+		],
 		queryFn: () =>
-			listDocuments({
+			listDocumentsForKnowledgeBaseGrants({
+				kbIds: documentCandidateKnowledgeBaseIds,
 				filename: documentSearch || undefined,
 				limit: documentPageSize,
 				offset: (documentPage - 1) * documentPageSize,
