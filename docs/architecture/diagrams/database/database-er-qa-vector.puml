@@ -4,7 +4,9 @@ title 问答向量检索模块 ER 图
 skinparam shadowing false
 skinparam linetype ortho
 hide circle
-left to right direction
+top to bottom direction
+skinparam nodesep 70
+skinparam ranksep 55
 
 entity "knowledge_bases" as knowledge_bases {
   * id : bigserial <<PK>>
@@ -40,24 +42,27 @@ entity "vector_store" as vectors {
   content : text
   metadata : json/jsonb
   embedding : vector(1024)
-  --
-  metadata.workspaceId
-  metadata.documentId
-  metadata.kbId
-  metadata.chunkIndex
-  metadata.documentVersionNumber
-  metadata.splitVersion
 }
 
-knowledge_bases ||..o{ documents : workspace_id + kb_id
-documents ||--o{ versions : document_id
-documents ||..o{ vectors : metadata.documentId
-versions ||..o{ vectors : metadata.documentId + version
-knowledge_bases ||..o{ vectors : metadata.kbId
+knowledge_bases ||..o{ documents : 归属
+documents ||--o{ versions : 版本链
+versions ||..o{ vectors : 向量分块
 
-note bottom of vectors
+note right of documents
+  文档按 workspace_id + kb_id
+  逻辑归属知识库。
+end note
+
+note right of vectors
   vector_store 是 Spring AI PGVector 表。
-  当前没有数据库外键，问答检索通过 metadata 过滤可问答文档版本。
+  当前没有数据库外键。
+
+  问答检索通过 metadata 过滤：
+  - workspaceId
+  - kbId
+  - documentId
+  - documentVersionNumber
+  - splitVersion
 end note
 
 @enduml

@@ -7,7 +7,6 @@
 - 知识库与文档入库模块：`docs/architecture/diagrams/database/database-er-knowledge-ingest.puml`
 - 问答向量检索模块：`docs/architecture/diagrams/database/database-er-qa-vector.puml`
 - 审计治理模块：`docs/architecture/diagrams/database/database-er-audit.puml`
-- 完整大图备用：`docs/architecture/diagrams/current-project-er.puml`
 
 说明：表结构以 `src/main/resources/db/migration/V1__auth_flyway_schema.sql` 到 `V8__add_deleted_knowledge_base_status.sql` 为准。ER 图中实线表示数据库外键，虚线表示业务或元数据约定关系。
 
