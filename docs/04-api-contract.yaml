@@ -1610,6 +1610,7 @@ paths:
       description: |
         归属 knowledge 子域；
         返回当前用户可见的知识库主数据与已索引文档数量，统计口径固定为 status=INDEXED。
+        已软删除知识库（status=DELETED）默认不返回。
 
         当前可见性规则固定为：
         - `WORKSPACE_OWNER / WORKSPACE_ADMIN`：返回当前工作区全部知识库
@@ -1641,6 +1642,7 @@ paths:
       description: |
         归属 knowledge 子域；
         允许修改 name、description、status，不允许修改 kb_id；
+        status 仅允许 ACTIVE / INACTIVE；软删除必须使用 DELETE 接口；
         工作区所有者、管理员或知识库 KB_MANAGER 可编辑。
       x-stage: implemented
       security:
@@ -1680,6 +1682,54 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
         '403':
           description: 缺少或非法 CSRF Header，或当前用户无编辑知识库权限
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: 知识库不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    delete:
+      tags: [knowledge]
+      summary: 删除知识库（软删除）
+      description: |
+        归属 knowledge 子域；
+        删除采用软删除语义，将知识库状态置为 DELETED。
+        删除后知识库默认从列表隐藏，且不再参与上传、问答和授权治理；
+        文档、授权和审计记录保留用于追溯。
+
+        仅工作区所有者或管理员可删除知识库。
+      x-stage: implemented
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CsrfHeader'
+        - name: kbId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: 知识库业务键 kb_id
+      responses:
+        '204':
+          description: 删除成功；若知识库已处于 DELETED 状态，也按幂等成功处理
+        '400':
+          description: 路径参数非法
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: 未登录
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: 缺少或非法 CSRF Header，或当前用户无删除知识库权限
           content:
             application/json:
               schema:
@@ -2331,7 +2381,10 @@ components:
           type: string
         status:
           type: string
-          enum: [ACTIVE, INACTIVE]
+          enum: [ACTIVE, INACTIVE, DELETED]
+          description: |
+            ACTIVE 表示启用；INACTIVE 表示停用；DELETED 表示软删除。
+            常规列表接口默认不返回 DELETED。
         indexedDocumentCount:
           type: integer
           format: int64
@@ -2352,6 +2405,7 @@ components:
           type: string
           enum: [ACTIVE, INACTIVE]
           default: ACTIVE
+          description: 创建入口不允许指定 DELETED，删除必须使用 DELETE 接口。
 
     UpdateKnowledgeBaseRequest:
       type: object
@@ -2366,6 +2420,7 @@ components:
         status:
           type: string
           enum: [ACTIVE, INACTIVE]
+          description: 编辑入口不允许指定 DELETED，删除必须使用 DELETE 接口。
 
     AskRequest:
       type: object
