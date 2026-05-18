@@ -68,10 +68,35 @@
   min-height: 500px;
   overflow-y: auto;
   position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
+.knowledge-filter-card {
+  margin-bottom: 24px;
+  background: var(--console-canvas) !important;
+  border: 1px solid var(--console-hairline) !important;
+  border-radius: 10px !important;
+  flex-shrink: 0;
+}
+
+.knowledge-filter-card .ant-card-body {
+  padding: 16px !important;
+}
+
+.knowledge-filter-card .ant-form-item {
+  margin-bottom: 0;
+  margin-right: 24px;
+}
+
+.knowledge-selection-grid {
+  flex: 1;
 }
 
 /* Card Scalability & Design - Enlarged & Hairline focused */
 .knowledge-entry-card {
+  position: relative;
+  overflow: hidden;
   border: 1px solid var(--console-hairline) !important;
   border-radius: 12px !important;
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
@@ -170,22 +195,65 @@
   opacity: 0.7;
 }
 
+.kb-deleted {
+  border-color: color-mix(in srgb, var(--console-error) 54%, var(--console-hairline)) !important;
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--console-error) 8%, var(--console-canvas)) 0%,
+    var(--console-canvas) 72%
+  ) !important;
+}
+
+.kb-deleted::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 4px;
+  background: var(--console-error);
+}
+
 .kb-inactive .knowledge-card-icon {
   background: var(--console-canvas-soft);
   color: var(--console-ink-mute);
   filter: grayscale(1);
 }
 
+.kb-deleted .knowledge-card-icon {
+  background: color-mix(in srgb, var(--console-error) 10%, var(--console-canvas));
+  color: var(--console-error);
+  border-color: color-mix(in srgb, var(--console-error) 34%, var(--console-hairline));
+}
+
 .kb-inactive .knowledge-card-title {
   color: var(--console-ink-secondary) !important;
+}
+
+.kb-deleted .knowledge-card-title {
+  color: var(--console-error) !important;
 }
 
 .kb-inactive .knowledge-stat-value {
   color: var(--console-ink-mute);
 }
 
+.kb-deleted .knowledge-stat-value {
+  color: var(--console-error);
+}
+
 .kb-inactive .ant-card-actions {
   opacity: 0.8;
+}
+
+.kb-deleted .ant-card-actions {
+  background: color-mix(in srgb, var(--console-error) 6%, var(--console-canvas)) !important;
+  border-top-color: color-mix(in srgb, var(--console-error) 24%, var(--console-hairline)) !important;
+}
+
+.kb-deleted .ant-btn:disabled {
+  color: color-mix(in srgb, var(--console-error) 52%, var(--console-ink-faint)) !important;
+  background: transparent !important;
+  border-color: transparent !important;
+  opacity: 0.65;
 }
 
 .knowledge-card-id-wrapper:hover {

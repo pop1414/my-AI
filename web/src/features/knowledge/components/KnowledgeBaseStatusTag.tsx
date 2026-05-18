@@ -7,10 +7,25 @@ interface KnowledgeBaseStatusTagProps {
 
 export function KnowledgeBaseStatusTag({ status }: KnowledgeBaseStatusTagProps) {
 	const isActive = status === "ACTIVE";
+	const isDeleted = status === "DELETED";
+
+	let color: string = "default";
+	let label: string = status;
+
+	if (isActive) {
+		color = "success";
+		label = "ACTIVE";
+	} else if (isDeleted) {
+		color = "error";
+		label = "已删除";
+	} else if (status === "INACTIVE") {
+		label = "已停用";
+	}
+
 	return (
 		<Tag
 			bordered={false}
-			color={isActive ? "success" : "default"}
+			color={color}
 			style={{ 
 				borderRadius: 4, 
 				fontWeight: 600,
@@ -19,7 +34,8 @@ export function KnowledgeBaseStatusTag({ status }: KnowledgeBaseStatusTagProps) 
 				textTransform: 'uppercase'
 			}}
 		>
-			{isActive ? "ACTIVE" : "已停用"}
+			{label}
 		</Tag>
 	);
 }
+

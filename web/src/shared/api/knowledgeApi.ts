@@ -5,14 +5,27 @@ const knowledgeBaseSchema = z.object({
 	id: z.string().min(1),
 	name: z.string().min(1),
 	description: z.string(),
-	status: z.enum(["ACTIVE", "INACTIVE"]),
+	status: z.enum(["ACTIVE", "INACTIVE", "DELETED"]),
 	indexedDocumentCount: z.number().int(),
 });
 
 export type KnowledgeBase = z.infer<typeof knowledgeBaseSchema>;
 
 export async function listKnowledgeBases(): Promise<KnowledgeBase[]> {
-	const response = await requestJson<unknown>("/api/v1/knowledge-bases");
+	return listKnowledgeBasesWithOptions();
+}
+
+export async function listKnowledgeBasesWithOptions(params?: {
+	includeDeleted?: boolean;
+}): Promise<KnowledgeBase[]> {
+	const searchParams = new URLSearchParams();
+	if (params?.includeDeleted) {
+		searchParams.set("includeDeleted", "true");
+	}
+	const query = searchParams.toString();
+	const response = await requestJson<unknown>(
+		`/api/v1/knowledge-bases${query ? `?${query}` : ""}`,
+	);
 	return z.array(knowledgeBaseSchema).parse(response);
 }
 
@@ -48,4 +61,13 @@ export async function updateKnowledgeBase(
 		},
 	);
 	return knowledgeBaseSchema.parse(response);
+}
+
+export async function deleteKnowledgeBase(kbId: string): Promise<void> {
+	await requestJson<void>(
+		`/api/v1/knowledge-bases/${encodeURIComponent(kbId)}`,
+		{
+			method: "DELETE",
+		},
+	);
 }
