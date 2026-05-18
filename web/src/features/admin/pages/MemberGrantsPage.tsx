@@ -115,6 +115,18 @@ export function MemberGrantsPage() {
 		[knowledgeQuery.data],
 	);
 
+	const initialDocumentGrantIds = useMemo(
+		() => new Set((memberDocumentGrantsQuery.data ?? []).map((item) => item.documentId)),
+		[memberDocumentGrantsQuery.data],
+	);
+
+	const newDocumentGrantCount = selectedDocumentIds.filter(
+		(id) => !!documentPermissions[id] && !initialDocumentGrantIds.has(id),
+	).length;
+	const removedDocumentGrantCount = (memberDocumentGrantsQuery.data ?? []).filter(
+		(item) => !selectedDocumentIds.includes(item.documentId),
+	).length;
+
 	return (
 		<Space direction="vertical" size={16} style={{ width: "100%" }}>
 			<MemberPageHeader userId={userId} member={member} title="成员授权配置" />
@@ -199,8 +211,8 @@ export function MemberGrantsPage() {
 									</Space>
 								}
 							>
-								<Typography.Paragraph type="secondary">
-									显式指定成员对特定文档的访问权限。已选择 <Typography.Text strong>{Object.keys(documentPermissions).length}</Typography.Text> 项。
+								<Typography.Paragraph type="secondary" data-testid="member-document-grant-summary">
+									显式指定成员对特定文档的访问权限。本次新增 <Typography.Text strong>{newDocumentGrantCount}</Typography.Text> 项，待移除 <Typography.Text strong>{removedDocumentGrantCount}</Typography.Text> 项。
 								</Typography.Paragraph>
 								{replaceDocumentMutation.isError && (
 									<ApiErrorAlert error={replaceDocumentMutation.error} style={{ marginBottom: 12 }} />

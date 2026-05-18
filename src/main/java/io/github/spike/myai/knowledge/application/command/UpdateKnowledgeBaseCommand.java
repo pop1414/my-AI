@@ -19,7 +19,7 @@ import io.github.spike.myai.knowledge.domain.model.KnowledgeBaseStatus;
  *   <li>{@code kbId}：必填，不能为空白字符串；</li>
  *   <li>{@code name}：选填，若传入则去除首尾空格后长度须在 1~100 字符；</li>
  *   <li>{@code description}：选填，若传入则去除首尾空格后最长 500 字符；</li>
- *   <li>{@code status}：选填，无额外校验；</li>
+ *   <li>{@code status}：选填，不允许通过编辑入口设置为 {@link KnowledgeBaseStatus#DELETED}；</li>
  *   <li>至少有一个业务字段（name / description / status）不为 {@code null}。</li>
  * </ul>
  *
@@ -72,7 +72,12 @@ public record UpdateKnowledgeBaseCommand(
             throw new IllegalArgumentException("description length must be between 0 and 500");
         }
 
-        // 4. 兜底校验：至少需要传入一个可更新字段，防止空更新请求
+        // 4. DELETED 是删除用例的专属终态，不能通过普通编辑入口设置
+        if (status == KnowledgeBaseStatus.DELETED) {
+            throw new IllegalArgumentException("status must not be DELETED when updating knowledge base");
+        }
+
+        // 5. 兜底校验：至少需要传入一个可更新字段，防止空更新请求
         //    三个业务字段全为 null 时，请求无实际意义，应尽早拒绝
         if (name == null && description == null && status == null) {
             throw new IllegalArgumentException("at least one field must be provided");
