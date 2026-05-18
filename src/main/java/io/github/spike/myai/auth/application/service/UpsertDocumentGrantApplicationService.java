@@ -42,6 +42,8 @@ public class UpsertDocumentGrantApplicationService implements UpsertDocumentGran
     /** 授权服务，用于校验工作区管理权限 */
     private final AuthorizationService authorizationService;
     private final WorkspaceGovernanceGuard workspaceGovernanceGuard;
+    /** 文档授权父级知识库授权守卫 */
+    private final DocumentGrantKnowledgeBaseGuard documentGrantKnowledgeBaseGuard;
     /** 文档仓储，用于校验文档存在性并获取关联信息 */
     private final DocumentRepository documentRepository;
     /** 工作区成员仓储，用于校验目标用户是否为活跃成员 */
@@ -55,6 +57,7 @@ public class UpsertDocumentGrantApplicationService implements UpsertDocumentGran
      * 构造器注入所需依赖。
      *
      * @param authorizationService      授权服务
+     * @param documentGrantKnowledgeBaseGuard 文档授权父级知识库授权守卫
      * @param documentRepository        文档仓储
      * @param workspaceMemberRepository 工作区成员仓储
      * @param grantRepository           文档授权治理仓储
@@ -63,12 +66,14 @@ public class UpsertDocumentGrantApplicationService implements UpsertDocumentGran
     public UpsertDocumentGrantApplicationService(
             AuthorizationService authorizationService,
             WorkspaceGovernanceGuard workspaceGovernanceGuard,
+            DocumentGrantKnowledgeBaseGuard documentGrantKnowledgeBaseGuard,
             DocumentRepository documentRepository,
             WorkspaceMemberRepository workspaceMemberRepository,
             DocumentGrantManagementRepository grantRepository,
             AuditEventRepository auditEventRepository) {
         this.authorizationService = authorizationService;
         this.workspaceGovernanceGuard = workspaceGovernanceGuard;
+        this.documentGrantKnowledgeBaseGuard = documentGrantKnowledgeBaseGuard;
         this.documentRepository = documentRepository;
         this.workspaceMemberRepository = workspaceMemberRepository;
         this.grantRepository = grantRepository;
@@ -118,6 +123,11 @@ public class UpsertDocumentGrantApplicationService implements UpsertDocumentGran
         workspaceGovernanceGuard.requireCanManageGrantTarget(
                 currentUser,
                 member.workspaceRole());
+        // 文档权限覆盖必须依附于目标成员已拥有的知识库授权，避免产生孤儿授权。
+        documentGrantKnowledgeBaseGuard.requireMemberKnowledgeBaseGrant(
+                currentUser.workspaceId(),
+                member.userId(),
+                document.kbId());
 
         // Step 4: 解析目标权限枚举值
         DocumentPermission targetPermission = command.resolvedPermission();

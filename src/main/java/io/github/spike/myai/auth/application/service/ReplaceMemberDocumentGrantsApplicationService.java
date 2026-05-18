@@ -42,6 +42,7 @@ public class ReplaceMemberDocumentGrantsApplicationService implements ReplaceMem
 
     private final AuthorizationService authorizationService;
     private final WorkspaceGovernanceGuard workspaceGovernanceGuard;
+    private final DocumentGrantKnowledgeBaseGuard documentGrantKnowledgeBaseGuard;
     private final WorkspaceMemberRepository workspaceMemberRepository;
     private final DocumentRepository documentRepository;
     private final DocumentGrantManagementRepository grantRepository;
@@ -52,6 +53,7 @@ public class ReplaceMemberDocumentGrantsApplicationService implements ReplaceMem
      *
      * @param authorizationService        授权服务
      * @param workspaceGovernanceGuard    工作区治理边界守卫
+     * @param documentGrantKnowledgeBaseGuard 文档授权父级知识库授权守卫
      * @param workspaceMemberRepository   工作区成员仓储
      * @param documentRepository          文档仓储（校验文档存在性）
      * @param grantRepository             文档授权管理仓储
@@ -60,12 +62,14 @@ public class ReplaceMemberDocumentGrantsApplicationService implements ReplaceMem
     public ReplaceMemberDocumentGrantsApplicationService(
             AuthorizationService authorizationService,
             WorkspaceGovernanceGuard workspaceGovernanceGuard,
+            DocumentGrantKnowledgeBaseGuard documentGrantKnowledgeBaseGuard,
             WorkspaceMemberRepository workspaceMemberRepository,
             DocumentRepository documentRepository,
             DocumentGrantManagementRepository grantRepository,
             AuditEventRepository auditEventRepository) {
         this.authorizationService = authorizationService;
         this.workspaceGovernanceGuard = workspaceGovernanceGuard;
+        this.documentGrantKnowledgeBaseGuard = documentGrantKnowledgeBaseGuard;
         this.workspaceMemberRepository = workspaceMemberRepository;
         this.documentRepository = documentRepository;
         this.grantRepository = grantRepository;
@@ -93,9 +97,14 @@ public class ReplaceMemberDocumentGrantsApplicationService implements ReplaceMem
         // 2. 构建期望授权映射（documentId → permission），同时校验文档存在性
         Map<String, DocumentPermission> desiredAssignments = new LinkedHashMap<>();
         for (ReplaceMemberDocumentGrantsCommand.Assignment assignment : command.assignments()) {
-            if (documentRepository.findById(currentUser.workspaceId(), new DocumentId(assignment.normalizedDocumentId())).isEmpty()) {
-                throw new ManagedDocumentNotFoundException("document not found: " + assignment.normalizedDocumentId());
-            }
+            var document = documentRepository.findById(currentUser.workspaceId(), new DocumentId(assignment.normalizedDocumentId()))
+                    .orElseThrow(() -> new ManagedDocumentNotFoundException(
+                            "document not found: " + assignment.normalizedDocumentId()));
+            // 文档权限覆盖必须依附于目标成员已拥有的知识库授权，避免产生孤儿授权。
+            documentGrantKnowledgeBaseGuard.requireMemberKnowledgeBaseGrant(
+                    currentUser.workspaceId(),
+                    member.userId(),
+                    document.kbId());
             desiredAssignments.put(assignment.normalizedDocumentId(), assignment.resolvedPermission());
         }
 

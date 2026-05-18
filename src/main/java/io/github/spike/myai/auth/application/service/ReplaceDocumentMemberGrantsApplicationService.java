@@ -42,6 +42,7 @@ public class ReplaceDocumentMemberGrantsApplicationService implements ReplaceDoc
 
     private final AuthorizationService authorizationService;
     private final WorkspaceGovernanceGuard workspaceGovernanceGuard;
+    private final DocumentGrantKnowledgeBaseGuard documentGrantKnowledgeBaseGuard;
     private final DocumentRepository documentRepository;
     private final WorkspaceMemberRepository workspaceMemberRepository;
     private final DocumentGrantManagementRepository grantRepository;
@@ -52,6 +53,7 @@ public class ReplaceDocumentMemberGrantsApplicationService implements ReplaceDoc
      *
      * @param authorizationService        授权服务
      * @param workspaceGovernanceGuard    工作区治理边界守卫
+     * @param documentGrantKnowledgeBaseGuard 文档授权父级知识库授权守卫
      * @param documentRepository          文档仓储
      * @param workspaceMemberRepository   工作区成员仓储
      * @param grantRepository             文档授权管理仓储
@@ -60,12 +62,14 @@ public class ReplaceDocumentMemberGrantsApplicationService implements ReplaceDoc
     public ReplaceDocumentMemberGrantsApplicationService(
             AuthorizationService authorizationService,
             WorkspaceGovernanceGuard workspaceGovernanceGuard,
+            DocumentGrantKnowledgeBaseGuard documentGrantKnowledgeBaseGuard,
             DocumentRepository documentRepository,
             WorkspaceMemberRepository workspaceMemberRepository,
             DocumentGrantManagementRepository grantRepository,
             AuditEventRepository auditEventRepository) {
         this.authorizationService = authorizationService;
         this.workspaceGovernanceGuard = workspaceGovernanceGuard;
+        this.documentGrantKnowledgeBaseGuard = documentGrantKnowledgeBaseGuard;
         this.documentRepository = documentRepository;
         this.workspaceMemberRepository = workspaceMemberRepository;
         this.grantRepository = grantRepository;
@@ -84,9 +88,8 @@ public class ReplaceDocumentMemberGrantsApplicationService implements ReplaceDoc
         // 1. 权限校验 + 文档存在性校验
         CurrentUser currentUser = authorizationService.requireCanManageWorkspace();
         String documentId = command.normalizedDocumentId();
-        if (documentRepository.findById(currentUser.workspaceId(), new DocumentId(documentId)).isEmpty()) {
-            throw new ManagedDocumentNotFoundException("document not found: " + documentId);
-        }
+        var document = documentRepository.findById(currentUser.workspaceId(), new DocumentId(documentId))
+                .orElseThrow(() -> new ManagedDocumentNotFoundException("document not found: " + documentId));
 
         // 2. 构建期望授权映射（userId → permission），同时校验成员存在性 + 治理边界
         Map<String, DocumentPermission> desiredAssignments = new LinkedHashMap<>();
@@ -97,6 +100,11 @@ public class ReplaceDocumentMemberGrantsApplicationService implements ReplaceDoc
                     .orElseThrow(() -> new WorkspaceMemberNotFoundException("workspace member not found: " + assignment.normalizedUserId()));
             // 治理边界：确保操作者有权管理目标成员角色的授权
             workspaceGovernanceGuard.requireCanManageGrantTarget(currentUser, member.workspaceRole());
+            // 文档权限覆盖必须依附于目标成员已拥有的知识库授权，避免产生孤儿授权。
+            documentGrantKnowledgeBaseGuard.requireMemberKnowledgeBaseGrant(
+                    currentUser.workspaceId(),
+                    member.userId(),
+                    document.kbId());
             desiredAssignments.put(member.userId(), assignment.resolvedPermission());
         }
 
