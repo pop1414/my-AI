@@ -8,11 +8,12 @@ const uploadResponseSchema = z.object({
 
 const documentStatusResponseSchema = z.object({
 	documentId: z.string().min(1),
+  kbId: z.string().optional(),
 	latestVersionNumber: z.number().int().positive(),
 	latestFilename: z.string().min(1),
 	latestVersionOriginType: z.string().min(1),
 	status: z.string().min(1),
-	processingMetadata: z.string().nullable().optional(),
+	processingMetadata: z.record(z.string(), z.any()).nullable().optional(),
 });
 
 const documentChunkPreviewItemSchema = z.object({
@@ -105,6 +106,24 @@ export type DocumentVersionUploadResponse = z.infer<
 export type DocumentVersionRollbackResponse = z.infer<
 	typeof documentVersionRollbackResponseSchema
 >;
+
+const documentContentResponseSchema = z.object({
+	documentId: z.string().min(1),
+	versionNumber: z.number().int().positive(),
+	latestVersionNumber: z.number().int().positive(),
+	isLatestVersion: z.boolean(),
+	isAskableVersion: z.boolean(),
+	source: z.enum(["LATEST", "ASKABLE_BASELINE", "EXPLICIT_VERSION"]),
+	status: z.string().min(1),
+	filename: z.string().min(1),
+	createdAt: z.string().min(1),
+	updatedAt: z.string().min(1),
+	contentMarkdown: z.string(),
+	contentLength: z.number().int(),
+	truncated: z.boolean(),
+});
+
+export type DocumentContentResponse = z.infer<typeof documentContentResponseSchema>;
 
 // ── Document List ────────────────────────────────────────────────
 
@@ -265,4 +284,19 @@ export async function deleteDocument(documentId: string): Promise<void> {
 			method: "DELETE",
 		},
 	);
+}
+
+export async function getDocumentContent(params: {
+	documentId: string;
+	source: "LATEST" | "ASKABLE_BASELINE" | "EXPLICIT_VERSION";
+	versionNumber?: number;
+}): Promise<DocumentContentResponse> {
+	const query = new URLSearchParams({ source: params.source });
+	if (params.versionNumber !== undefined) {
+		query.set("versionNumber", String(params.versionNumber));
+	}
+	const response = await requestJson<unknown>(
+		`/api/v1/documents/${encodeURIComponent(params.documentId)}/content?${query.toString()}`,
+	);
+	return documentContentResponseSchema.parse(response);
 }

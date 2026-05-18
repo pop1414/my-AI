@@ -20,6 +20,15 @@ import org.springframework.transaction.annotation.Transactional;
  * <p>当前实现将稳定的 `document` 身份与 latest `document version`
  * 事实拆开存储，但对上层仍保持 `DocumentRepository` 端口不变。
  * 现阶段 `Document` 仍表示“文档资产 + latest version projection”。
+ *
+ * <p>这也是当前持久化适配器最明显的 shallow module：调用方通常只想“推进一个
+ * document version”，但该适配器内部还要手工维护
+ * {@code ingest_documents.latest_version_number/latest_status/latest_filename/latest_version_origin_type}
+ * 以及版本表当前 latest 行之间的镜像不变量。ADR-0006 已将这套 latest projection
+ * 定义为稳定语义；当前首批实现已通过数据库 function seam
+ * {@code ingest_append_document_latest_version(...)} /
+ * {@code ingest_update_latest_document_version_processing(...)}
+ * 收口高频路径。其余仍散落的双写 SQL 继续视为迁移期实现，不应再扩散。
  */
 @Repository
 @Transactional
@@ -104,6 +113,19 @@ public class JdbcDocumentRepository implements DocumentRepository {
               updated_at = EXCLUDED.updated_at
             """;
 
+    private static final String APPEND_LATEST_VERSION_FUNCTION_SQL = """
+            SELECT ingest_append_document_latest_version(
+                ?, ?, ?,
+                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CAST(? AS JSONB), ?, ?, ?
+            )
+            """;
+
+    private static final String UPDATE_LATEST_PROCESSING_FUNCTION_SQL = """
+            SELECT ingest_update_latest_document_version_processing(
+                ?, ?, ?, ?, ?, ?, ?, CAST(? AS JSONB), ?, ?, ?, ?
+            )
+            """;
+
     private static final String DOCUMENT_PROJECTION_SELECT = """
             SELECT d.document_id,
                    d.workspace_id,
@@ -184,8 +206,12 @@ public class JdbcDocumentRepository implements DocumentRepository {
             """;
 
     /**
-     * 以下主表状态/错误字段更新仅维护 latest projection 与旧兼容镜像。
-     * 版本级处理事实必须同步写入 {@code ingest_document_versions}。
+     * 以下状态推进 SQL 共同承担 latest projection maintenance。
+     *
+     * <p>这正是当前实现 locality 最差的部分：每个状态分支都要分别更新
+     * {@code ingest_documents} 与 {@code ingest_document_versions}，
+     * 调用方接口只表达“推进 latest version”，实现却暴露为多组手工双写。
+     * 在独立 module 落地前，任何新增状态流转都必须同时审查两张表上的镜像事实是否仍然一致。
      */
     private static final String COMPARE_AND_SET_DOCUMENT_STATUS_SQL = """
             UPDATE ingest_documents
@@ -196,104 +222,6 @@ public class JdbcDocumentRepository implements DocumentRepository {
     private static final String COMPARE_AND_SET_VERSION_STATUS_SQL = """
             UPDATE ingest_document_versions
             SET status = ?, failure_reason = ?, updated_at = ?
-            WHERE document_id = ?
-              AND version_number = (
-                  SELECT latest_version_number
-                  FROM ingest_documents
-                  WHERE workspace_id = ? AND document_id = ?
-              )
-            """;
-
-    private static final String MARK_INDEXED_DOCUMENT_SQL = """
-            UPDATE ingest_documents
-            SET status = 'INDEXED',
-                latest_status = 'INDEXED',
-                failure_reason = NULL,
-                retry_count = 0,
-                next_retry_at = NULL,
-                last_error_code = NULL,
-                last_error_message = NULL,
-                last_error_at = NULL,
-                processing_metadata = CAST(? AS JSONB),
-                updated_at = ?
-            WHERE workspace_id = ? AND document_id = ? AND latest_status = ?
-            """;
-
-    private static final String MARK_INDEXED_VERSION_SQL = """
-            UPDATE ingest_document_versions
-            SET status = 'INDEXED',
-                failure_reason = NULL,
-                retry_count = 0,
-                next_retry_at = NULL,
-                last_error_code = NULL,
-                last_error_message = NULL,
-                last_error_at = NULL,
-                processing_metadata = CAST(? AS JSONB),
-                updated_at = ?
-            WHERE document_id = ?
-              AND version_number = (
-                  SELECT latest_version_number
-                  FROM ingest_documents
-                  WHERE workspace_id = ? AND document_id = ?
-              )
-            """;
-
-    private static final String MARK_FAILED_DOCUMENT_SQL = """
-            UPDATE ingest_documents
-            SET status = 'FAILED',
-                latest_status = 'FAILED',
-                failure_reason = ?,
-                processing_metadata = CAST(? AS JSONB),
-                last_error_code = ?,
-                last_error_message = ?,
-                last_error_at = ?,
-                updated_at = ?
-            WHERE workspace_id = ? AND document_id = ? AND latest_status = ?
-            """;
-
-    private static final String MARK_FAILED_VERSION_SQL = """
-            UPDATE ingest_document_versions
-            SET status = 'FAILED',
-                failure_reason = ?,
-                processing_metadata = CAST(? AS JSONB),
-                last_error_code = ?,
-                last_error_message = ?,
-                last_error_at = ?,
-                updated_at = ?
-            WHERE document_id = ?
-              AND version_number = (
-                  SELECT latest_version_number
-                  FROM ingest_documents
-                  WHERE workspace_id = ? AND document_id = ?
-              )
-            """;
-
-    private static final String MARK_RETRY_DOCUMENT_SQL = """
-            UPDATE ingest_documents
-            SET status = 'UPLOADED',
-                latest_status = 'UPLOADED',
-                failure_reason = NULL,
-                retry_count = ?,
-                next_retry_at = ?,
-                processing_metadata = NULL,
-                last_error_code = ?,
-                last_error_message = ?,
-                last_error_at = ?,
-                updated_at = ?
-            WHERE workspace_id = ? AND document_id = ? AND latest_status = ?
-            """;
-
-    private static final String MARK_RETRY_VERSION_SQL = """
-            UPDATE ingest_document_versions
-            SET status = 'UPLOADED',
-                failure_reason = NULL,
-                retry_count = ?,
-                next_retry_at = ?,
-                processing_metadata = NULL,
-                last_error_code = ?,
-                last_error_message = ?,
-                last_error_at = ?,
-                updated_at = ?
             WHERE document_id = ?
               AND version_number = (
                   SELECT latest_version_number
@@ -334,34 +262,6 @@ public class JdbcDocumentRepository implements DocumentRepository {
                   FROM ingest_documents
                   WHERE workspace_id = ? AND document_id = ?
               )
-            """;
-
-    private static final String APPEND_UPLOAD_VERSION_DOCUMENT_SQL = """
-            UPDATE ingest_documents
-            SET file_hash = ?,
-                filename = ?,
-                file_size = ?,
-                status = 'UPLOADED',
-                latest_version_number = ?,
-                latest_status = 'UPLOADED',
-                latest_filename = ?,
-                latest_version_origin_type = ?,
-                failure_reason = NULL,
-                retry_count = 0,
-                retry_max = ?,
-                next_retry_at = NULL,
-                last_error_code = NULL,
-                last_error_message = NULL,
-                last_error_at = NULL,
-                reprocess_count = 0,
-                reprocess_requested_at = NULL,
-                split_version = ?,
-                processing_metadata = NULL,
-                updated_at = ?
-            WHERE workspace_id = ?
-              AND document_id = ?
-              AND latest_version_number = ?
-              AND latest_status IN ('INDEXED', 'FAILED')
             """;
 
     private static final String FIND_LATEST_INDEXED_VERSION_NUMBER_SQL = """
@@ -731,25 +631,19 @@ public class JdbcDocumentRepository implements DocumentRepository {
             UploadStatus expectedStatus,
             String processingMetadata,
             Instant updatedAt) {
-        // 先更新主表，CAS 不匹配时直接返回 false
-        int updatedRows = jdbcTemplate.update(
-                MARK_INDEXED_DOCUMENT_SQL,
-                processingMetadata,
-                Timestamp.from(updatedAt),
+        return invokeLatestProcessingUpdate(
                 workspaceId,
-                documentId.value(),
-                expectedStatus.name());
-        if (updatedRows != 1) {
-            return false;
-        }
-        jdbcTemplate.update(
-                MARK_INDEXED_VERSION_SQL,
+                documentId,
+                expectedStatus,
+                UploadStatus.INDEXED,
+                null,
+                0,
+                null,
                 processingMetadata,
-                Timestamp.from(updatedAt),
-                documentId.value(),
-                workspaceId,
-                documentId.value());
-        return true;
+                null,
+                null,
+                null,
+                updatedAt);
     }
 
     /**
@@ -780,33 +674,19 @@ public class JdbcDocumentRepository implements DocumentRepository {
             String errorMessage,
             Instant errorAt,
             Instant updatedAt) {
-        // 先更新主表，CAS 不匹配时直接返回 false
-        int updatedRows = jdbcTemplate.update(
-                MARK_FAILED_DOCUMENT_SQL,
+        return invokeLatestProcessingUpdate(
+                workspaceId,
+                documentId,
+                expectedStatus,
+                UploadStatus.FAILED,
                 failureReason,
+                0,
+                null,
                 processingMetadata,
                 errorCode,
                 errorMessage,
-                toTimestamp(errorAt),
-                Timestamp.from(updatedAt),
-                workspaceId,
-                documentId.value(),
-                expectedStatus.name());
-        if (updatedRows != 1) {
-            return false;
-        }
-        jdbcTemplate.update(
-                MARK_FAILED_VERSION_SQL,
-                failureReason,
-                processingMetadata,
-                errorCode,
-                errorMessage,
-                toTimestamp(errorAt),
-                Timestamp.from(updatedAt),
-                documentId.value(),
-                workspaceId,
-                documentId.value());
-        return true;
+                errorAt,
+                updatedAt);
     }
 
     /**
@@ -837,33 +717,19 @@ public class JdbcDocumentRepository implements DocumentRepository {
             String errorMessage,
             Instant errorAt,
             Instant updatedAt) {
-        // 先更新主表，CAS 不匹配时直接返回 false
-        int updatedRows = jdbcTemplate.update(
-                MARK_RETRY_DOCUMENT_SQL,
+        return invokeLatestProcessingUpdate(
+                workspaceId,
+                documentId,
+                expectedStatus,
+                UploadStatus.UPLOADED,
+                null,
                 retryCount,
-                toTimestamp(nextRetryAt),
+                nextRetryAt,
+                null,
                 errorCode,
                 errorMessage,
-                toTimestamp(errorAt),
-                Timestamp.from(updatedAt),
-                workspaceId,
-                documentId.value(),
-                expectedStatus.name());
-        if (updatedRows != 1) {
-            return false;
-        }
-        jdbcTemplate.update(
-                MARK_RETRY_VERSION_SQL,
-                retryCount,
-                toTimestamp(nextRetryAt),
-                errorCode,
-                errorMessage,
-                toTimestamp(errorAt),
-                Timestamp.from(updatedAt),
-                documentId.value(),
-                workspaceId,
-                documentId.value());
-        return true;
+                errorAt,
+                updatedAt);
     }
 
     /**
@@ -959,6 +825,10 @@ public class JdbcDocumentRepository implements DocumentRepository {
     /**
      * 追加版本并同步 latest projection。
      *
+     * <p>当前实现先更新主表 latest projection，再写入版本表新版本事实。
+     * 这说明“追加版本”对调用方是单一动作，但对适配器实现却仍需手工编排双写顺序；
+     * 后续 latest projection maintenance module 落地后，这里应退化为单一 seam 调用。
+     *
      * @param workspaceId                 工作区标识
      * @param documentId                  文档资产 ID
      * @param expectedLatestVersionNumber 调用方期望的当前最新版本号
@@ -972,28 +842,12 @@ public class JdbcDocumentRepository implements DocumentRepository {
             int expectedLatestVersionNumber,
             DocumentVersion newVersion,
             Instant updatedAt) {
-        // 先 CAS 更新主表 latest 快照
-        int updatedRows = jdbcTemplate.update(
-                APPEND_UPLOAD_VERSION_DOCUMENT_SQL,
-                newVersion.fileHash(),
-                newVersion.filename(),
-                newVersion.fileSize(),
-                newVersion.versionNumber(),
-                newVersion.filename(),
-                newVersion.versionOriginType().name(),
-                newVersion.retryMax(),
-                newVersion.splitVersion(),
-                Timestamp.from(updatedAt),
+        Boolean appended = jdbcTemplate.queryForObject(
+                APPEND_LATEST_VERSION_FUNCTION_SQL,
+                Boolean.class,
                 workspaceId,
                 documentId.value(),
-                expectedLatestVersionNumber);
-        if (updatedRows != 1) {
-            return false;
-        }
-
-        jdbcTemplate.update(
-                UPSERT_DOCUMENT_VERSION_SQL,
-                newVersion.documentId().value(),
+                expectedLatestVersionNumber,
                 newVersion.versionNumber(),
                 newVersion.versionOriginType().name(),
                 newVersion.rollbackFromVersionNumber(),
@@ -1014,8 +868,45 @@ public class JdbcDocumentRepository implements DocumentRepository {
                 newVersion.processingMetadata(),
                 newVersion.createdByUserId(),
                 Timestamp.from(newVersion.createdAt()),
-                Timestamp.from(newVersion.updatedAt()));
-        return true;
+                Timestamp.from(updatedAt));
+        return Boolean.TRUE.equals(appended);
+    }
+
+    /**
+     * 通过数据库函数推进 latest version 的处理状态。
+     *
+     * <p>首批只覆盖 INDEXED / FAILED / UPLOADED(RETRY) 三类处理链路，
+     * 让 caller 继续表达“推进 latest version”，而把主表/版本表双写细节下沉到数据库 seam。
+     */
+    private boolean invokeLatestProcessingUpdate(
+            String workspaceId,
+            DocumentId documentId,
+            UploadStatus expectedStatus,
+            UploadStatus targetStatus,
+            String failureReason,
+            int retryCount,
+            Instant nextRetryAt,
+            String processingMetadata,
+            String errorCode,
+            String errorMessage,
+            Instant errorAt,
+            Instant updatedAt) {
+        Boolean updated = jdbcTemplate.queryForObject(
+                UPDATE_LATEST_PROCESSING_FUNCTION_SQL,
+                Boolean.class,
+                workspaceId,
+                documentId.value(),
+                expectedStatus.name(),
+                targetStatus.name(),
+                failureReason,
+                retryCount,
+                toTimestamp(nextRetryAt),
+                processingMetadata,
+                errorCode,
+                errorMessage,
+                toTimestamp(errorAt),
+                Timestamp.from(updatedAt));
+        return Boolean.TRUE.equals(updated);
     }
 
     /**

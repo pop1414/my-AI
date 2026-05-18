@@ -104,6 +104,12 @@ const PlaceholderPage = lazy(() =>
 		default: m.PlaceholderPage,
 	})),
 );
+const MemberAskableBaselinePage = lazy(() =>
+	import("../features/member/pages/MemberAskableBaselinePage").then((m) => ({
+		default: m.MemberAskableBaselinePage,
+	}))
+);
+
 
 function HomeRedirect() {
 	const { defaultLandingPath } = useAuth();
@@ -135,14 +141,16 @@ export function AppRoutes() {
 						<Route path="ingest/upload" element={<IngestUploadPage />} />
 					</Route>
 
-					<Route
-						element={<CapabilityRoute requiredCapability="canAccessKnowledge" />}
-					>
+					<Route element={<AdminRoute />}>
 						<Route path="knowledge" element={<KnowledgePage />} />
 					</Route>
 
 					<Route element={<CapabilityRoute requiredCapability="canAskQuestion" />}>
 						<Route path="qa" element={<QaPage />} />
+					</Route>
+
+					<Route element={<CapabilityRoute requiredCapability="canAccessDocumentList" />}>
+						<Route path="member/read/:documentId" element={<MemberAskableBaselinePage />} />
 					</Route>
 
 					<Route

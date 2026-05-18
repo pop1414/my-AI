@@ -124,6 +124,7 @@ class ReprocessDocumentApplicationServiceTest {
         DocumentStatusResult result = service.handle(new ReprocessDocumentCommand("doc-rep-2"));
 
         assertEquals("doc-rep-2", result.documentId().value());
+        assertEquals("kb-1", result.kbId());
         assertEquals(3, result.latestVersionNumber());
         assertEquals("b.txt", result.latestFilename());
         assertEquals(DocumentVersionOriginType.ROLLBACK, result.latestVersionOriginType());

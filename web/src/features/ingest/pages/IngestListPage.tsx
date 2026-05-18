@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
 	Alert,
@@ -16,14 +16,11 @@ import {
 } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import {
-	DeleteOutlined,
-	FileSearchOutlined,
-	FileSyncOutlined,
-	InfoCircleOutlined,
 	SearchOutlined,
 	ReloadOutlined,
+	PlusOutlined,
 } from "@ant-design/icons";
-import { Link, useLocation, useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { z } from "zod";
 import {
 	deleteDocument,
@@ -33,9 +30,13 @@ import {
 import { listKnowledgeBases } from "../../../shared/api/knowledgeApi";
 import { ApiErrorAlert } from "../../../shared/ui/ApiErrorAlert";
 import { useAuth } from "../../../shared/auth/AuthContext";
-import { SafetyOutlined } from "@ant-design/icons";
-import { ConsoleLinkButton } from "../../../shared/ui/ConsoleLinkButton";
 import { DeleteDocumentConfirmModal } from "./DeleteDocumentConfirmModal";
+
+import { DocumentStatusTag } from "../components/DocumentStatusTag";
+import { DocumentTableActions } from "../components/DocumentTableActions";
+import { formatTime } from "../utils/formatters";
+
+import "./IngestListPage.css";
 
 const filterSchema = z.object({
 	kbId: z.string().optional(),
@@ -50,46 +51,6 @@ const DOCUMENT_STATUSES = [
 	"DELETING",
 	"DELETED",
 ];
-
-function statusColor(status: string): string {
-	switch (status) {
-		case "UPLOADED":
-		case "ACCEPTED":
-			return "blue";
-		case "INGESTING":
-			return "processing";
-		case "INDEXED":
-			return "success";
-		case "FAILED":
-			return "error";
-		case "DELETING":
-			return "warning";
-		case "DELETED":
-			return "default";
-		default:
-			return "default";
-	}
-}
-
-function formatFileSize(bytes: number): string {
-	if (bytes < 1024) return `${bytes} B`;
-	if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-	return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
-
-function formatTime(iso: string): string {
-	try {
-		return new Date(iso).toLocaleString("zh-CN", {
-			year: "numeric",
-			month: "2-digit",
-			day: "2-digit",
-			hour: "2-digit",
-			minute: "2-digit",
-		});
-	} catch {
-		return iso;
-	}
-}
 
 function parsePositiveInteger(value: string | null, fallback: number): number {
 	const parsed = Number(value);
@@ -113,6 +74,7 @@ function buildListSearch(params: {
 	page: number;
 	pageSize: number;
 	deletedDocumentId?: string | null;
+	deletedFilename?: string | null;
 }): URLSearchParams {
 	const next = new URLSearchParams();
 	if (params.filters.kbId) next.set("kbId", params.filters.kbId);
@@ -123,69 +85,19 @@ function buildListSearch(params: {
 	if (params.deletedDocumentId) {
 		next.set("deletedDocumentId", params.deletedDocumentId);
 	}
+	if (params.deletedFilename) {
+		next.set("deletedFilename", params.deletedFilename);
+	}
 	return next;
 }
 
-function buildReturnTo(locationSearch: string): string {
-	const params = new URLSearchParams(locationSearch);
-	params.delete("deletedDocumentId");
-	const qs = params.toString();
-	return `/ingest/documents${qs ? `?${qs}` : ""}`;
-}
-
-function ActionTextLink({
-	to,
-	label,
-	icon,
-	variant = "default",
-}: {
-	to: string;
-	label: string;
-	icon: ReactNode;
-	variant?: "default" | "primary";
-}) {
-	return (
-		<ConsoleLinkButton
-			to={to}
-			variant={variant}
-			size="small"
-			className="console-table-action-link"
-			testId={`ingest-action-${label}`}
-		>
-			<span className="console-table-action-link__icon">{icon}</span>
-			<span>{label}</span>
-		</ConsoleLinkButton>
-	);
-}
-
-function ActionDangerButton({
-	label,
-	icon,
-	onClick,
-}: {
-	label: string;
-	icon: ReactNode;
-	onClick: () => void;
-}) {
-	return (
-		<Button
-			size="small"
-			className="console-action-button console-action-button--danger console-table-action-button"
-			onClick={onClick}
-			title={label}
-		>
-			<span className="console-table-action-link__icon">{icon}</span>
-			<span>{label}</span>
-		</Button>
-	);
-}
-
 export function IngestListPage() {
-	const location = useLocation();
 	const [searchParams, setSearchParams] = useSearchParams();
 	const queryClient = useQueryClient();
 	const { user } = useAuth();
 	const canAccessAdmin = Boolean(user?.capabilities.canAccessAdmin);
+	const canUploadDocument = Boolean(user?.capabilities.canUploadDocument);
+	const canAuditDocumentProcessing = canAccessAdmin;
 	const [form] = Form.useForm<{
 		kbId?: string;
 		status?: string;
@@ -193,14 +105,32 @@ export function IngestListPage() {
 	}>();
 	const [deleteTarget, setDeleteTarget] = useState<DocumentListItem | null>(null);
 	const filters = useMemo(() => parseFilters(searchParams), [searchParams]);
+	const effectiveFilters = useMemo(
+		() =>
+			canAuditDocumentProcessing
+				? filters
+				: {
+						kbId: filters.kbId,
+						filename: filters.filename,
+					},
+		[canAuditDocumentProcessing, filters],
+	);
 	const page = parsePositiveInteger(searchParams.get("page"), 1);
 	const pageSize = parsePositiveInteger(searchParams.get("pageSize"), 20);
 	const deletedDocumentId = searchParams.get("deletedDocumentId");
-	const returnTo = buildReturnTo(location.search);
+	const deletedFilename = searchParams.get("deletedFilename");
+	const returnTo = useMemo(() => {
+		const qs = buildListSearch({
+			filters: effectiveFilters,
+			page,
+			pageSize,
+		}).toString();
+		return `/ingest/documents${qs ? `?${qs}` : ""}`;
+	}, [effectiveFilters, page, pageSize]);
 
 	useEffect(() => {
-		form.setFieldsValue(filters);
-	}, [filters, form]);
+		form.setFieldsValue(effectiveFilters);
+	}, [effectiveFilters, form]);
 
 	const knowledgeQuery = useQuery({
 		queryKey: ["knowledge-bases"],
@@ -208,12 +138,12 @@ export function IngestListPage() {
 	});
 
 	const docListQuery = useQuery({
-		queryKey: ["documents", filters, page, pageSize],
+		queryKey: ["documents", effectiveFilters, page, pageSize],
 		queryFn: () =>
 			listDocuments({
-				kbId: filters.kbId || undefined,
-				status: filters.status || undefined,
-				filename: filters.filename || undefined,
+				kbId: effectiveFilters.kbId || undefined,
+				status: effectiveFilters.status || undefined,
+				filename: effectiveFilters.filename || undefined,
 				limit: pageSize,
 				offset: (page - 1) * pageSize,
 			}),
@@ -222,14 +152,16 @@ export function IngestListPage() {
 	const deleteMutation = useMutation({
 		mutationFn: (documentId: string) => deleteDocument(documentId),
 		onSuccess: async (_, documentId) => {
+			const filename = deleteTarget?.filename;
 			setDeleteTarget(null);
 			await queryClient.invalidateQueries({ queryKey: ["documents"] });
 			setSearchParams(
 				buildListSearch({
-					filters,
+					filters: effectiveFilters,
 					page,
 					pageSize,
 					deletedDocumentId: documentId,
+					deletedFilename: filename,
 				}),
 			);
 		},
@@ -245,11 +177,18 @@ export function IngestListPage() {
 				})),
 		[knowledgeQuery.data],
 	);
+	
 	const onSubmit = () => {
 		const values = filterSchema.parse(form.getFieldsValue());
+		const nextFilters = canAuditDocumentProcessing
+			? values
+			: {
+					kbId: values.kbId,
+					filename: values.filename,
+				};
 		setSearchParams(
 			buildListSearch({
-				filters: values,
+				filters: nextFilters,
 				page: 1,
 				pageSize,
 			}),
@@ -264,213 +203,179 @@ export function IngestListPage() {
 	const closeDeleteResult = () => {
 		setSearchParams(
 			buildListSearch({
-				filters,
+				filters: effectiveFilters,
 				page,
 				pageSize,
 			}),
 		);
 	};
 
+	const kbNameMap = useMemo(() => {
+		const map: Record<string, string> = {};
+		(knowledgeQuery.data ?? []).forEach((kb) => {
+			map[kb.id] = kb.name;
+		});
+		return map;
+	}, [knowledgeQuery.data]);
+	const hasActiveFilters = Boolean(
+		effectiveFilters.kbId ||
+			effectiveFilters.status ||
+			effectiveFilters.filename,
+	);
+
 	const columns: ColumnsType<DocumentListItem> = [
 		{
-			title: "文档ID",
+			title: "文档 ID",
 			dataIndex: "documentId",
-			width: 200,
+			width: 180,
 			ellipsis: true,
 			render: (value: string) => (
-				<Tooltip title={value}>
-					<Typography.Text
-						copyable={{ text: value }}
-						style={{ fontSize: 12 }}
-					>
-						{value.length > 24 ? `${value.slice(0, 24)}…` : value}
-					</Typography.Text>
+				<Typography.Text
+					copyable={{ text: value }}
+					className="ingest-document-id"
+				>
+					{value.length > 20 ? `${value.slice(0, 20)}…` : value}
+				</Typography.Text>
+			),
+		},
+		{
+			title: "知识库",
+			dataIndex: "kbId",
+			width: 160,
+			ellipsis: true,
+			render: (val: string) => (
+				<Tooltip title={`ID: ${val}`} placement="topLeft">
+					<span className="ingest-kb-badge">
+						{kbNameMap[val] || val}
+					</span>
 				</Tooltip>
 			),
 		},
-		{ title: "知识库", dataIndex: "kbId", width: 160, ellipsis: true },
 		{
-			title: "最新文件名",
+			title: "文件名",
 			dataIndex: "filename",
-			width: 220,
+			width: 200,
 			ellipsis: true,
+			render: (val) => <span className="ingest-filename">{val}</span>
 		},
 		{
-			title: "最新版本",
+			title: "版本",
 			dataIndex: "latestVersionNumber",
-			width: 120,
-			render: (_: number, record) => (
-				<Space size={4} wrap>
-					<Tag color="gold">v{record.latestVersionNumber}</Tag>
-					<Tag>{record.latestVersionOriginType}</Tag>
-				</Space>
+			width: 80,
+			align: 'center',
+			render: (v: number) => (
+				<Tag bordered={false} className="ingest-version-tag">
+					v{v}
+				</Tag>
 			),
 		},
+		...(canAuditDocumentProcessing
+			? [
+					{
+						title: "处理状态",
+						dataIndex: "status",
+						width: 120,
+						render: (value: string) => <DocumentStatusTag status={value} />,
+					},
+				]
+			: []),
 		{
-			title: "大小",
-			dataIndex: "fileSize",
-			width: 90,
-			render: (value: number) => formatFileSize(value),
-		},
-		{
-			title: "状态",
-			dataIndex: "status",
-			width: 120,
-			render: (value: string) => (
-				<Tag color={statusColor(value)}>{value}</Tag>
-			),
-		},
-		{
-			title: "失败原因",
-			dataIndex: "failureReason",
-			width: 160,
-			ellipsis: true,
-			render: (value?: string | null) =>
-				value ? (
-					<Tooltip title={value}>
-						<Typography.Text type="danger" style={{ fontSize: 12 }}>
-							{value.length > 20
-								? `${value.slice(0, 20)}…`
-								: value}
-						</Typography.Text>
-					</Tooltip>
-				) : (
-					"-"
-				),
-		},
-		{
-			title: "创建时间",
-			dataIndex: "createdAt",
-			width: 150,
-			render: (value: string) => formatTime(value),
-		},
-		{
-			title: "更新时间",
+			title: "最后更新",
 			dataIndex: "updatedAt",
-			width: 150,
-			render: (value: string) => formatTime(value),
+			width: 160,
+			render: (value: string) => (
+				<span className="ingest-update-time">
+					{formatTime(value)}
+				</span>
+			),
 		},
 		{
 			title: "操作",
 			key: "action",
-			width: 360,
-			render: (_, record) => {
-				const showChunksPreview = record.status === "INDEXED";
-				const showReprocess =
-					record.status === "FAILED" || record.status === "INDEXED";
-				const showDelete =
-					record.status !== "DELETED" && record.status !== "DELETING";
-
-				return (
-					<div className="console-table-action-group">
-						<Tooltip title="查看文档详情、版本与处理上下文">
-							<ActionTextLink
-								label="查看详情"
-								icon={<InfoCircleOutlined />}
-								to={`/ingest/documents/${encodeURIComponent(record.documentId)}?returnTo=${encodeURIComponent(returnTo)}`}
-								variant="primary"
-							/>
-						</Tooltip>
-						{showChunksPreview && (
-							<Tooltip title="查看文档切块结果与预览内容">
-								<ActionTextLink
-									label="分块预览"
-									icon={<FileSearchOutlined />}
-									to={`/ingest/documents/${encodeURIComponent(record.documentId)}/chunks-preview`}
-								/>
-							</Tooltip>
-						)}
-						{showReprocess && (
-							<Tooltip title="将当前文档重新送入处理流水线">
-								<ActionTextLink
-									label="重处理"
-									icon={<FileSyncOutlined />}
-									to={`/ingest/documents/${encodeURIComponent(record.documentId)}/reprocess`}
-								/>
-							</Tooltip>
-						)}
-						{showDelete && (
-							<Tooltip title="删除整个 document 资产及其版本">
-								<ActionDangerButton
-									label="删除"
-									icon={<DeleteOutlined />}
-									onClick={() => setDeleteTarget(record)}
-								/>
-							</Tooltip>
-						)}
-						{canAccessAdmin && (
-							<Tooltip title="配置该文档的成员访问权限">
-								<ActionTextLink
-									label="授权管理"
-									icon={<SafetyOutlined />}
-									to={`/admin/documents/${encodeURIComponent(record.documentId)}/grants`}
-								/>
-							</Tooltip>
-						)}
-					</div>
-				);
-			},
+			width: 320,
+			fixed: 'right',
+			render: (_, record) => (
+				<DocumentTableActions
+					record={record}
+					canAccessAdmin={canAccessAdmin}
+					returnTo={returnTo}
+					onDelete={setDeleteTarget}
+				/>
+			),
 		},
 	];
+
 
 	const dataSource = docListQuery.data?.items ?? [];
 	const total = docListQuery.data?.total ?? 0;
 
 	return (
-		<Space direction="vertical" size={16} style={{ width: "100%" }}>
-			{/* 筛选区域 */}
-			<Card
-				title="文档列表"
-				extra={
+		<div className="ingest-list-container">
+			{/* 头部标题与操作 */}
+			<div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
+				<div>
+					<Typography.Title level={3} className="console-page-title">
+						文档目录
+					</Typography.Title>
 					<Typography.Text type="secondary">
-						GET /api/v1/documents
+						{canAuditDocumentProcessing
+							? "按知识库、当前最新版本状态或文件名筛选，浏览所有已上传文档的处理进度。"
+							: "按可访问知识库或文件名筛选，进入当前文档的问答基线阅读界面。"}
 					</Typography.Text>
-				}
-			>
-				<Typography.Paragraph type="secondary" style={{ marginTop: 0 }}>
-					按知识库、当前最新版本状态或文件名筛选，浏览所有已上传文档的处理进度。
-				</Typography.Paragraph>
+				</div>
+				{canUploadDocument && (
+					<Link to="/ingest/upload">
+						<Button type="primary" icon={<PlusOutlined />} size="large">
+							上传文档
+						</Button>
+					</Link>
+				)}
+			</div>
 
+			{/* 筛选区域 */}
+			<Card className="ingest-filter-card">
 				<Form
 					form={form}
 					layout="inline"
-					style={{ flexWrap: "wrap", gap: 8 }}
+					className="ingest-filter-form"
 					onFinish={onSubmit}
 				>
-					<Form.Item name="kbId" style={{ minWidth: 200 }}>
+					<Form.Item name="kbId" label="所属知识库" className="ingest-filter-item" style={{ minWidth: 240 }}>
 						<Select
 							aria-label="按知识库筛选文档"
 							allowClear
-							placeholder="选择知识库"
+							placeholder="全部知识库"
 							loading={knowledgeQuery.isLoading}
 							options={knowledgeBaseOptions}
 						/>
 					</Form.Item>
-					<Form.Item name="status" style={{ minWidth: 150 }}>
-						<Select
-							aria-label="按处理状态筛选文档"
-							allowClear
-							placeholder="处理状态"
-							options={DOCUMENT_STATUSES.map((s) => ({
-								label: s,
-								value: s,
-							}))}
-						/>
-					</Form.Item>
-					<Form.Item name="filename" style={{ minWidth: 200 }}>
+					{canAuditDocumentProcessing && (
+						<Form.Item name="status" label="处理状态" className="ingest-filter-item" style={{ minWidth: 180 }}>
+							<Select
+								aria-label="按处理状态筛选文档"
+								allowClear
+								placeholder="全部状态"
+								options={DOCUMENT_STATUSES.map((s) => ({
+									label: s,
+									value: s,
+								}))}
+							/>
+						</Form.Item>
+					)}
+					<Form.Item name="filename" label="搜索" className="ingest-filter-item" style={{ minWidth: 260 }}>
 						<Input
 							aria-label="按文件名搜索文档"
 							autoComplete="off"
 							allowClear
-							placeholder="搜索文件名（模糊匹配）"
+							placeholder="文件名模糊匹配"
+							prefix={<SearchOutlined style={{ color: 'var(--console-ink-faint)' }} />}
 						/>
 					</Form.Item>
-					<Form.Item>
-						<Space>
+					<Form.Item className="ingest-filter-item">
+						<Space size={8}>
 							<Button
 								type="primary"
 								htmlType="submit"
-								icon={<SearchOutlined />}
 								loading={docListQuery.isFetching}
 							>
 								查询
@@ -492,26 +397,38 @@ export function IngestListPage() {
 			)}
 			{deletedDocumentId && (
 				<Alert
+					className="ingest-delete-result"
 					data-testid="document-delete-result"
 					aria-live="polite"
 					aria-atomic="true"
 					type="success"
 					showIcon
-					message="document 资产已删除"
-					description={`旧 documentId：${deletedDocumentId}。同内容重新上传会生成新的 documentId，新文档不会继承旧文档级授权；如需继续使用，请重新上传并重新配置授权。`}
+					message="文档资产已删除"
+					description={
+						<div style={{ marginTop: 8 }}>
+							<div style={{ marginBottom: 4 }}>
+								<strong>文件名：</strong>
+								<span className="ingest-filename">{deletedFilename || "未知"}</span>
+							</div>
+							<div style={{ marginBottom: 12 }}>
+								<strong>文档 ID：</strong>
+								<Typography.Text code style={{ fontSize: 12 }}>{deletedDocumentId}</Typography.Text>
+							</div>
+							<Typography.Text type="secondary" style={{ fontSize: 13 }}>
+								该文档及其所有版本已从系统中移除。如需再次使用，请重新上传。
+							</Typography.Text>
+						</div>
+					}
 					action={
-						<Space wrap>
-							<Link to="/ingest/upload">上传新文档</Link>
-							<Button size="small" type="text" onClick={closeDeleteResult}>
-								关闭提示
-							</Button>
-						</Space>
+						<Button size="small" type="text" onClick={closeDeleteResult}>
+							关闭提示
+						</Button>
 					}
 				/>
 			)}
 
 			{/* 数据表格 */}
-			<Card>
+			<Card className="ingest-table-card">
 				{docListQuery.isLoading ? (
 					<Table<DocumentListItem>
 						loading
@@ -519,35 +436,47 @@ export function IngestListPage() {
 						dataSource={[]}
 						rowKey="documentId"
 						pagination={false}
+						className="ingest-table"
 					/>
 				) : dataSource.length === 0 ? (
-					<Empty
-						description={
-							Object.keys(filters).length > 0
-								? "未找到符合当前筛选条件的文档，请尝试调整筛选条件。"
-								: "暂无文档，请先上传文档开始使用。"
-						}
-					/>
+					<div className="ingest-empty-state">
+						<Empty
+							description={
+								hasActiveFilters
+									? "未找到符合当前筛选条件的文档，请尝试调整筛选条件。"
+									: "暂无文档，请先上传文档开始使用。"
+							}
+						>
+							{!hasActiveFilters && canUploadDocument && (
+								<Link to="/ingest/upload">
+									<Button type="primary" icon={<PlusOutlined />}>
+										立即上传
+									</Button>
+								</Link>
+							)}
+						</Empty>
+					</div>
 				) : (
 					<Table<DocumentListItem>
 						rowKey="documentId"
 						columns={columns}
 						dataSource={dataSource}
 						loading={docListQuery.isFetching}
-						scroll={{ x: 1680 }}
+						scroll={{ x: canAuditDocumentProcessing ? 1400 : 1280 }}
+						className="ingest-table"
 						pagination={{
 							current: page,
 							pageSize: pageSize,
 							total: total,
 							showSizeChanger: true,
 							showQuickJumper: true,
-							pageSizeOptions: [10, 20, 50, 100],
+							pageSizeOptions: ["10", "20", "50", "100"],
 							showTotal: (t, range) =>
 								`共 ${t} 条文档，当前 ${range[0]}-${range[1]}`,
 							onChange: (p, ps) => {
 								setSearchParams(
 									buildListSearch({
-										filters,
+										filters: effectiveFilters,
 										page: p,
 										pageSize: ps,
 									}),
@@ -569,6 +498,6 @@ export function IngestListPage() {
 					}
 				}}
 			/>
-		</Space>
+		</div>
 	);
 }

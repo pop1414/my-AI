@@ -20,6 +20,9 @@ import org.springframework.stereotype.Repository;
  *
  * <p>该类是 {@link DocumentListRepository} 端口接口的 JDBC 实现，
  * 位于六边形架构的<b>基础设施层</b>。
+ * 列表读取只依赖 document 主表上稳定的 latest projection，以及 latest version
+ * 对应版本行上的补充事实；它不应该重新回退到主表旧兼容镜像列，也不应该承担
+ * latest projection maintenance 责任。
  *
  * <h3>核心策略</h3>
  * <ol>
@@ -49,6 +52,9 @@ public class JdbcDocumentListRepository implements DocumentListRepository {
      *
      * <p>{@code failure_reason} 通过 {@code CASE WHEN} 仅在 FAILED 状态时返回，
      * 其他状态返回 {@code NULL}，避免前端展示无意义信息。
+     * 这里显式使用 {@code latest_*} 列，文档化列表读模型对 latest projection seam
+     * 的依赖；后续即使 latest projection maintenance 下沉到数据库 module，
+     * 此处读契约也应保持稳定。
      */
     private static final String SELECT_BASE_SQL = """
             SELECT d.document_id,

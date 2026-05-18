@@ -126,6 +126,10 @@
 	align-items: start;
 }
 
+.console-page-frame__body:has(.console-page-frame__status:empty) {
+	grid-template-columns: 1fr;
+}
+
 .console-page-frame__workspace {
 	display: flex;
 	flex-direction: column;

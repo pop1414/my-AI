@@ -643,6 +643,7 @@ public class DocumentIngestController {
     private DocumentStatusResponse toDocumentStatusResponse(DocumentStatusResult result) {
         return new DocumentStatusResponse(
                 result.documentId().value(),
+                result.kbId(),
                 result.latestVersionNumber(),
                 result.latestFilename(),
                 result.latestVersionOriginType().name(),

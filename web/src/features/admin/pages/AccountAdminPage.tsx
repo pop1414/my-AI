@@ -6,15 +6,14 @@ import {
 	Form,
 	Input,
 	Modal,
-	Popconfirm,
 	Select,
 	Space,
 	Steps,
 	Table,
-	Tag,
 	Typography,
 	message,
 } from "antd";
+import { WorkspaceRoleTag } from "../../../shared/ui/WorkspaceRoleTag";
 import { PlusOutlined } from "@ant-design/icons";
 import type { ColumnsType } from "antd/es/table";
 import { useNavigate } from "react-router-dom";
@@ -33,6 +32,10 @@ import {
 } from "../../../shared/api/knowledgeApi";
 import { useAuth } from "../../../shared/auth/AuthContext";
 import { ApiErrorAlert } from "../../../shared/ui/ApiErrorAlert";
+import { formatTime } from "../../ingest/utils/formatters";
+import { AccountStatusTags } from "../components/AccountStatusTags";
+import { ManagedAccountTableActions } from "../components/ManagedAccountTableActions";
+import { AdminAccountForm, PasswordResetForm } from "../components/AccountForms";
 
 const { Title } = Typography;
 
@@ -42,38 +45,6 @@ const knowledgeRoleOptions = [
 	{ value: "KB_READER", label: "读者" },
 	{ value: "KB_ASKER", label: "问答者" },
 ] as const;
-
-function formatTime(iso?: string | null): string {
-	if (!iso) {
-		return "-";
-	}
-	try {
-		return new Date(iso).toLocaleString("zh-CN", {
-			year: "numeric",
-			month: "2-digit",
-			day: "2-digit",
-			hour: "2-digit",
-			minute: "2-digit",
-			second: "2-digit",
-		});
-	} catch {
-		return iso;
-	}
-}
-
-function accountStatusPillClass(status: ManagedAccount["userStatus"]) {
-	return status === "ACTIVE"
-		? "console-pill console-pill--blue"
-		: "console-pill console-pill--neutral";
-}
-
-function membershipStatusPillClass(
-	status: ManagedAccount["membershipStatus"],
-) {
-	return status === "ACTIVE"
-		? "console-pill console-pill--blue"
-		: "console-pill console-pill--warning";
-}
 
 export function AccountAdminPage() {
 	const navigate = useNavigate();
@@ -95,17 +66,9 @@ export function AccountAdminPage() {
 	>({});
 	const [passwordModalAccount, setPasswordModalAccount] =
 		useState<ManagedAccount | null>(null);
-	const [adminForm] = Form.useForm<{
-		username: string;
-		displayName: string;
-		password: string;
-	}>();
-	const [memberForm] = Form.useForm<{
-		username: string;
-		displayName: string;
-		password: string;
-	}>();
-	const [passwordForm] = Form.useForm<{ password: string }>();
+	const [adminForm] = Form.useForm();
+	const [memberForm] = Form.useForm();
+	const [passwordForm] = Form.useForm();
 
 	const accountsQuery = useQuery({
 		queryKey: ["admin", "accounts"],
@@ -171,14 +134,9 @@ export function AccountAdminPage() {
 	});
 
 	const currentRole = user?.workspaceRole;
-	const canCreateAdmin = currentRole === "WORKSPACE_OWNER";
 	const canManageAccount = (record: ManagedAccount) => {
-		if (record.workspaceRole === "WORKSPACE_OWNER") {
-			return false;
-		}
-		if (currentRole === "WORKSPACE_OWNER") {
-			return true;
-		}
+		if (record.workspaceRole === "WORKSPACE_OWNER") return false;
+		if (currentRole === "WORKSPACE_OWNER") return true;
 		return record.workspaceRole === "WORKSPACE_MEMBER";
 	};
 
@@ -195,108 +153,67 @@ export function AccountAdminPage() {
 	};
 
 	const columns: ColumnsType<ManagedAccount> = [
-		{ title: "用户名", dataIndex: "username", width: 160 },
-		{ title: "显示名", dataIndex: "displayName", width: 160 },
+		{ 
+			title: "用户/显示名", 
+			dataIndex: "username", 
+			width: 220,
+			render: (_, record) => (
+				<Space direction="vertical" size={0}>
+					<span style={{ fontWeight: 500 }}>{record.displayName}</span>
+					<Typography.Text type="secondary" style={{ fontSize: 12, fontFamily: 'var(--console-font-mono)' }}>
+						@{record.username}
+					</Typography.Text>
+				</Space>
+			)
+		},
 		{
-			title: "账号状态",
-			dataIndex: "userStatus",
-			width: 120,
-			render: (value: ManagedAccount["userStatus"]) => (
-				<Tag className={accountStatusPillClass(value)}>{value}</Tag>
+			title: "角色与状态",
+			width: 240,
+			render: (_, record) => (
+				<Space direction="vertical" size={6} style={{ display: 'flex' }}>
+					<WorkspaceRoleTag role={record.workspaceRole} />
+					<div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+						<AccountStatusTags
+							userStatus={record.userStatus}
+							membershipStatus={record.membershipStatus}
+						/>
+					</div>
+				</Space>
 			),
 		},
 		{
-			title: "工作区角色",
-			dataIndex: "workspaceRole",
-			width: 180,
-			render: (value: ManagedAccount["workspaceRole"]) => (
-				<Tag className="console-pill console-pill--neutral">{value}</Tag>
+			title: "安全审计",
+			width: 260,
+			render: (_, record) => (
+				<Space direction="vertical" size={0}>
+					<Typography.Text type="secondary" style={{ fontSize: 12 }}>
+						登录失败：{record.failedLoginCount} 次
+					</Typography.Text>
+					{record.lockedUntil && (
+						<Typography.Text type="danger" style={{ fontSize: 12 }}>
+							锁定至：{formatTime(record.lockedUntil)}
+						</Typography.Text>
+					)}
+				</Space>
 			),
-		},
-		{
-			title: "成员状态",
-			dataIndex: "membershipStatus",
-			width: 120,
-			render: (value: ManagedAccount["membershipStatus"]) => (
-				<Tag className={membershipStatusPillClass(value)}>{value}</Tag>
-			),
-		},
-		{
-			title: "失败次数",
-			dataIndex: "failedLoginCount",
-			width: 100,
-		},
-		{
-			title: "锁定截止时间",
-			dataIndex: "lockedUntil",
-			width: 180,
-			render: (value: string | null | undefined) => formatTime(value),
 		},
 		{
 			title: "操作",
 			key: "action",
-			width: 320,
+			width: 280,
+			fixed: 'right',
 			render: (_, record) => (
-				<Space size="small" wrap>
-					<Button
-						size="small"
-						className={`console-action-button ${
-							record.userStatus === "ACTIVE"
-								? "console-action-button--warning"
-								: "console-action-button--primary"
-						}`}
-						disabled={!canManageAccount(record)}
-						onClick={() =>
-							statusMutation.mutate({
-								userId: record.userId,
-								userStatus:
-									record.userStatus === "ACTIVE"
-										? "DISABLED"
-										: "ACTIVE",
-							})
-						}
-						loading={
-							statusMutation.isPending &&
-							statusMutation.variables?.userId === record.userId
-						}
-					>
-						{record.userStatus === "ACTIVE" ? "停用账号" : "启用账号"}
-					</Button>
-					<Button
-						size="small"
-						className="console-action-button console-action-button--neutral"
-						disabled={!canManageAccount(record)}
-						onClick={() => {
-							setPasswordModalAccount(record);
-							passwordForm.resetFields();
-						}}
-					>
-						重置密码
-					</Button>
-					<Popconfirm
-						title="确认移除成员关系？"
-						description={`将移除 ${record.displayName || record.username} 的工作区成员关系`}
-						okText="确认移除"
-						cancelText="取消"
-						disabled={
-							record.membershipStatus !== "ACTIVE" ||
-							!canManageAccount(record)
-						}
-						onConfirm={() => removeMutation.mutate(record.userId)}
-					>
-						<Button
-							size="small"
-							danger
-							className="console-action-button console-action-button--danger"
-							disabled={
-								record.membershipStatus !== "ACTIVE" ||
-								!canManageAccount(record)
-							}
-						>
-							移除成员
-						</Button>
-					</Popconfirm>
-				</Space>
+				<ManagedAccountTableActions
+					record={record}
+					canManage={canManageAccount(record)}
+					statusPending={statusMutation.isPending && statusMutation.variables?.userId === record.userId}
+					onStatusUpdate={(r) => statusMutation.mutate({
+						userId: r.userId,
+						userStatus: r.userStatus === "ACTIVE" ? "DISABLED" : "ACTIVE",
+					})}
+					onPasswordReset={setPasswordModalAccount}
+					onMemberRemove={removeMutation.mutate}
+				/>
 			),
 		},
 	];
@@ -325,7 +242,7 @@ export function AccountAdminPage() {
 					>
 						新增成员
 					</Button>
-					{canCreateAdmin && (
+					{currentRole === "WORKSPACE_OWNER" && (
 						<Button
 							icon={<PlusOutlined />}
 							onClick={() => {
@@ -344,14 +261,9 @@ export function AccountAdminPage() {
 					<ApiErrorAlert error={accountsQuery.error} />
 				</div>
 			)}
-			{statusMutation.isError && (
+			{(statusMutation.isError || removeMutation.isError) && (
 				<div style={{ marginBottom: 16 }}>
-					<ApiErrorAlert error={statusMutation.error} />
-				</div>
-			)}
-			{removeMutation.isError && (
-				<div style={{ marginBottom: 16 }}>
-					<ApiErrorAlert error={removeMutation.error} />
+					<ApiErrorAlert error={statusMutation.error || removeMutation.error} />
 				</div>
 			)}
 
@@ -375,46 +287,20 @@ export function AccountAdminPage() {
 				confirmLoading={createAdminMutation.isPending}
 				destroyOnClose
 			>
-				<Form
+				<AdminAccountForm
 					form={adminForm}
-					layout="vertical"
 					onFinish={(values) =>
 						createAdminMutation.mutate({
 							...values,
 							workspaceRole: "WORKSPACE_ADMIN",
 						})
 					}
-				>
-					<Form.Item
-						name="username"
-						label="用户名"
-						rules={[{ required: true, message: "请输入用户名" }]}
-					>
-						<Input />
-					</Form.Item>
-					<Form.Item
-						name="displayName"
-						label="显示名"
-						rules={[{ required: true, message: "请输入显示名" }]}
-					>
-						<Input />
-					</Form.Item>
-					<Form.Item
-						name="password"
-						label="初始密码"
-						rules={[{ required: true, message: "请输入初始密码" }]}
-					>
-						<Input.Password />
-					</Form.Item>
-					<Form.Item label="工作区角色">
-						<Input value="WORKSPACE_ADMIN" disabled />
-					</Form.Item>
-					{createAdminMutation.isError && (
-						<Form.Item>
-							<ApiErrorAlert error={createAdminMutation.error} />
-						</Form.Item>
-					)}
-				</Form>
+				/>
+				{createAdminMutation.isError && (
+					<div style={{ marginTop: 12 }}>
+						<ApiErrorAlert error={createAdminMutation.error} />
+					</div>
+				)}
 			</Modal>
 
 			<Modal
@@ -509,7 +395,7 @@ export function AccountAdminPage() {
 								},
 							]}
 						>
-							<Input />
+							<Input placeholder="用户名" />
 						</Form.Item>
 						<Form.Item
 							name="displayName"
@@ -525,14 +411,14 @@ export function AccountAdminPage() {
 								},
 							]}
 						>
-							<Input />
+							<Input placeholder="显示名" />
 						</Form.Item>
 						<Form.Item
 							name="password"
 							label="初始密码"
 							rules={[{ required: true, message: "请输入初始密码" }]}
 						>
-							<Input.Password />
+							<Input.Password placeholder="初始密码" />
 						</Form.Item>
 					</Form>
 				) : (
@@ -621,9 +507,9 @@ export function AccountAdminPage() {
 				confirmLoading={passwordMutation.isPending}
 				destroyOnClose
 			>
-				<Form
+				<PasswordResetForm
 					form={passwordForm}
-					layout="vertical"
+					targetName={passwordModalAccount?.displayName ?? passwordModalAccount?.username ?? ""}
 					onFinish={(values) => {
 						if (passwordModalAccount) {
 							passwordMutation.mutate({
@@ -632,27 +518,12 @@ export function AccountAdminPage() {
 							});
 						}
 					}}
-				>
-					<Form.Item label="目标账号">
-						<span>
-							{passwordModalAccount?.displayName ??
-								passwordModalAccount?.username ??
-								""}
-						</span>
-					</Form.Item>
-					<Form.Item
-						name="password"
-						label="新密码"
-						rules={[{ required: true, message: "请输入新密码" }]}
-					>
-						<Input.Password />
-					</Form.Item>
-					{passwordMutation.isError && (
-						<Form.Item>
-							<ApiErrorAlert error={passwordMutation.error} />
-						</Form.Item>
-					)}
-				</Form>
+				/>
+				{passwordMutation.isError && (
+					<div style={{ marginTop: 12 }}>
+						<ApiErrorAlert error={passwordMutation.error} />
+					</div>
+				)}
 			</Modal>
 		</div>
 	);

@@ -1,4 +1,4 @@
-﻿import { useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
 	Button,
@@ -13,8 +13,11 @@ import {
 import { useNavigate, useParams } from "react-router-dom";
 import { z } from "zod";
 import { getDocumentStatus } from "../../../shared/api/ingestApi";
+import { listKnowledgeBases } from "../../../shared/api/knowledgeApi";
 import { ApiErrorAlert } from "../../../shared/ui/ApiErrorAlert";
 import "./IngestStatusPage.css";
+
+const { Text } = Typography;
 
 const statusFormSchema = z.object({
 	documentId: z.string().trim().min(1, "documentId 不能为空"),
@@ -70,6 +73,11 @@ export function IngestStatusPage() {
 		},
 	});
 
+  const kbQuery = useQuery({
+		queryKey: ["knowledge-bases"],
+		queryFn: listKnowledgeBases,
+	});
+
 	const currentStatus = statusQuery.data?.status;
 	const isTerminal = useMemo(
 		() => (currentStatus ? terminalStatuses.has(currentStatus) : false),
@@ -81,6 +89,11 @@ export function IngestStatusPage() {
 		setTargetDocumentId(values.documentId);
 		localStorage.setItem("myai:lastDocumentId", values.documentId);
 	};
+
+  const kbName = useMemo(() => {
+    const kbId = statusQuery.data?.kbId;
+    return kbId ? kbQuery.data?.find(kb => kb.id === kbId)?.name : undefined;
+  }, [statusQuery.data?.kbId, kbQuery.data]);
 
 	return (
 		<Space
@@ -153,12 +166,23 @@ export function IngestStatusPage() {
 			</Card>
 
 			{statusQuery.isError && <ApiErrorAlert error={statusQuery.error} />}
+      {kbQuery.isError && <ApiErrorAlert error={kbQuery.error} />}
 
 			{statusQuery.data && (
 				<Card title="当前状态" className="status-page__card">
 					<p>
+						<strong>文件名:</strong>{" "}
+						<span className="ingest-filename">{statusQuery.data.latestFilename}</span>
+					</p>
+          {kbName && (
+            <p>
+              <strong>知识库:</strong>{" "}
+              <Text>{kbName}</Text>
+            </p>
+          )}
+					<p>
 						<strong>documentId:</strong>{" "}
-						{statusQuery.data.documentId}
+						<Typography.Text code style={{ fontSize: 12 }}>{statusQuery.data.documentId}</Typography.Text>
 					</p>
 					<p>
 						<strong>status:</strong>{" "}

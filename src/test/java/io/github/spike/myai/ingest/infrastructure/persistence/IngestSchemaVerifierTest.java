@@ -103,6 +103,18 @@ class IngestSchemaVerifierTest {
     }
 
     @Test
+    @DisplayName("缺少 latest projection maintenance function 时，应拒绝启动")
+    void run_shouldFail_whenLatestProjectionFunctionMissing() {
+        JdbcTemplate jdbcTemplate = Mockito.mock(JdbcTemplate.class);
+        IngestProperties properties = new IngestProperties();
+        stubValidSchema(jdbcTemplate);
+        whenFunctionExists(jdbcTemplate, "ingest_update_latest_document_version_processing", null);
+
+        IngestSchemaVerifier verifier = new IngestSchemaVerifier(jdbcTemplate, properties);
+        assertThrows(IllegalStateException.class, () -> verifier.run(null));
+    }
+
+    @Test
     @DisplayName("配置关闭 schema-check 时，应跳过自检")
     void run_shouldSkip_whenSchemaCheckDisabled() {
         JdbcTemplate jdbcTemplate = Mockito.mock(JdbcTemplate.class);
@@ -128,6 +140,11 @@ class IngestSchemaVerifierTest {
                 "ingest_document_versions",
                 "idx_ingest_document_versions_file_hash",
                 "CREATE INDEX idx_ingest_document_versions_file_hash ON public.ingest_document_versions USING btree (file_hash)");
+        whenFunctionExists(jdbcTemplate, "ingest_append_document_latest_version", "ingest_append_document_latest_version");
+        whenFunctionExists(
+                jdbcTemplate,
+                "ingest_update_latest_document_version_processing",
+                "ingest_update_latest_document_version_processing");
     }
 
     private static void whenIndexDefinition(
@@ -150,6 +167,17 @@ class IngestSchemaVerifierTest {
                         eq("ingest_documents"),
                         eq("uk_ingest_documents_kb_file_hash")))
                 .thenReturn(predicate);
+    }
+
+    private static void whenFunctionExists(
+            JdbcTemplate jdbcTemplate,
+            String functionName,
+            String resolvedFunctionName) {
+        when(jdbcTemplate.query(
+                        argThat(sql -> sql != null && sql.contains("SELECT routine_name")),
+                        Mockito.<ResultSetExtractor<String>>any(),
+                        eq(functionName)))
+                .thenReturn(resolvedFunctionName);
     }
 
     private static List<Map<String, Object>> requiredDocumentColumns() {

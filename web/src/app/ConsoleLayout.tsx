@@ -1,11 +1,14 @@
-import { Suspense } from "react";
+import { Suspense, useEffect, useState, useCallback, useRef, useMemo } from "react";
 import {
 	AppstoreOutlined,
+	CloudSyncOutlined,
 	DatabaseOutlined,
 	DownOutlined,
 	FileTextOutlined,
 	LogoutOutlined,
 	MessageOutlined,
+	MenuFoldOutlined,
+	MenuUnfoldOutlined,
 	SearchOutlined,
 	SettingOutlined,
 	TeamOutlined,
@@ -13,20 +16,24 @@ import {
 	UserOutlined,
 } from "@ant-design/icons";
 import {
+	Badge,
 	Breadcrumb,
+	Button,
 	Dropdown,
-	Layout,
 	Menu,
 	Space,
 	Spin,
 	Tag,
+	Tooltip,
 	Typography,
 } from "antd";
 import type { MenuProps } from "antd";
-import { Link, Outlet, useLocation } from "react-router-dom";
+import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../shared/auth/AuthContext";
+import { WorkspaceRoleTag } from "../shared/ui/WorkspaceRoleTag";
+import { useQuery } from "@tanstack/react-query";
+import { listDocuments } from "../shared/api/ingestApi";
 
-const { Header, Sider, Content } = Layout;
 const { Title, Text } = Typography;
 
 type MenuItem = Required<MenuProps>["items"][number];
@@ -37,6 +44,10 @@ const MODULE_OPEN_KEYS = [
 	"module:qa",
 	"module:admin",
 ];
+
+const MIN_SIDEBAR_WIDTH = 200;
+const MAX_SIDEBAR_WIDTH = 480;
+const DEFAULT_SIDEBAR_WIDTH = 260;
 
 function createModuleLabel(testId: string, label: string) {
 	return <span data-testid={testId}>{label}</span>;
@@ -52,6 +63,22 @@ function createMenuLinkLabel(to: string, label: string) {
 
 function buildMenuItems(visibleMenuKeys: string[]): MenuItem[] {
 	const items: MenuItem[] = [];
+
+	if (visibleMenuKeys.includes("/knowledge") && visibleMenuKeys.includes("/admin")) {
+		items.push({
+			key: "module:knowledge",
+			icon: <DatabaseOutlined />,
+			label: createModuleLabel("console-module-knowledge", "知识库"),
+			children: [
+				{
+					key: "/knowledge",
+					icon: <DatabaseOutlined />,
+					label: createMenuLinkLabel("/knowledge", "知识库治理"),
+				},
+			],
+		});
+	}
+
 	const canAccessDocuments =
 		visibleMenuKeys.includes("/ingest/documents") ||
 		visibleMenuKeys.includes("/ingest/upload");
@@ -77,21 +104,6 @@ function buildMenuItems(visibleMenuKeys: string[]): MenuItem[] {
 			icon: <AppstoreOutlined />,
 			label: createModuleLabel("console-module-documents", "文档"),
 			children: documentChildren,
-		});
-	}
-
-	if (visibleMenuKeys.includes("/knowledge")) {
-		items.push({
-			key: "module:knowledge",
-			icon: <DatabaseOutlined />,
-			label: createModuleLabel("console-module-knowledge", "知识库"),
-			children: [
-				{
-					key: "/knowledge",
-					icon: <DatabaseOutlined />,
-					label: createMenuLinkLabel("/knowledge", "知识库总览"),
-				},
-			],
 		});
 	}
 	if (visibleMenuKeys.includes("/qa")) {
@@ -244,18 +256,77 @@ function resolveMenuSelectedKey(pathname: string, search: string): string {
 
 export function ConsoleLayout() {
 	const location = useLocation();
+	const navigate = useNavigate();
 	const { user, visibleMenuKeys, logout } = useAuth();
-	const isQaLayout = location.pathname === "/qa";
+	
+	// Activity Center State
+	const activityQuery = useQuery({
+		queryKey: ["admin", "activity-tasks"],
+		queryFn: () => listDocuments({ limit: 10 }), // In real app, filter by processing statuses
+		refetchInterval: 10000, // Poll every 10s
+		enabled: !!user,
+	});
+
+	const processingTasks = useMemo(() => {
+		const items = activityQuery.data?.items ?? [];
+		return items.filter(item => ["PROCESSING", "INDEXING", "UPLOADED", "PENDING"].includes(item.status));
+	}, [activityQuery.data]);
+
+	// Resizable Sidebar State
+	const [sidebarWidth, setSidebarWidth] = useState(() => {
+		const saved = localStorage.getItem("console-sidebar-width");
+		return saved ? parseInt(saved, 10) : DEFAULT_SIDEBAR_WIDTH;
+	});
+	const [isCollapsed, setIsCollapsed] = useState(() => {
+		return localStorage.getItem("console-sidebar-collapsed") === "true";
+	});
+	const [isDragging, setIsDragging] = useState(false);
+	const dragRef = useRef<boolean>(false);
+
+	const handleMouseDown = useCallback(() => {
+		if (isCollapsed) return;
+		setIsDragging(true);
+		dragRef.current = true;
+		document.body.style.cursor = "col-resize";
+		document.body.style.userSelect = "none";
+	}, [isCollapsed]);
+
+	useEffect(() => {
+		const handleMouseMove = (e: MouseEvent) => {
+			if (!dragRef.current) return;
+			const newWidth = Math.min(Math.max(e.clientX, MIN_SIDEBAR_WIDTH), MAX_SIDEBAR_WIDTH);
+			setSidebarWidth(newWidth);
+		};
+
+		const handleMouseUp = () => {
+			if (!dragRef.current) return;
+			setIsDragging(false);
+			dragRef.current = false;
+			document.body.style.cursor = "";
+			document.body.style.userSelect = "";
+			localStorage.setItem("console-sidebar-width", sidebarWidth.toString());
+		};
+
+		if (isDragging) {
+			window.addEventListener("mousemove", handleMouseMove);
+			window.addEventListener("mouseup", handleMouseUp);
+		}
+
+		return () => {
+			window.removeEventListener("mousemove", handleMouseMove);
+			window.removeEventListener("mouseup", handleMouseUp);
+		};
+	}, [isDragging, sidebarWidth]);
+
+	const toggleCollapse = () => {
+		const nextState = !isCollapsed;
+		setIsCollapsed(nextState);
+		localStorage.setItem("console-sidebar-collapsed", String(nextState));
+	};
 
 	const menuItems = buildMenuItems(visibleMenuKeys);
 	const showSidebar = menuItems.length > 0;
 	const routeMeta = resolveRouteMeta(location.pathname, location.search);
-
-	const roleColorMap: Record<string, string> = {
-		WORKSPACE_OWNER: "gold",
-		WORKSPACE_ADMIN: "blue",
-		WORKSPACE_MEMBER: "default",
-	};
 
 	const userMenuItems: MenuProps["items"] = [
 		{
@@ -272,103 +343,139 @@ export function ConsoleLayout() {
 		},
 	];
 
-	const content = (
-		<>
-			<Breadcrumb
-				items={[{ title: "控制台" }, { title: routeMeta.moduleLabel }, { title: routeMeta.pageTitle }]}
-				style={{ marginBottom: 16 }}
-			/>
-			<Suspense
-				fallback={
-					<div
-						style={{
-							display: "flex",
-							justifyContent: "center",
-							alignItems: "center",
-							minHeight: 300,
-						}}
-					>
-						<Spin size="large" />
+	const activityMenuItems: MenuProps["items"] = useMemo(() => {
+		if (processingTasks.length === 0) {
+			return [{
+				key: "empty",
+				label: <div style={{ padding: '8px 4px', textAlign: 'center', color: 'var(--console-ink-mute)' }}>暂无运行中的任务</div>,
+				disabled: true,
+			}];
+		}
+
+		return processingTasks.map(task => ({
+			key: task.documentId,
+			label: (
+				<div style={{ padding: '4px 0', minWidth: 200 }}>
+					<div style={{ fontWeight: 500, marginBottom: 2 }}>{task.filename}</div>
+					<div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+						<Tag bordered={false} color="processing" style={{ fontSize: 11, margin: 0 }}>{task.status}</Tag>
+						<Text type="secondary" style={{ fontSize: 11, fontFamily: 'var(--console-font-mono)' }}>{task.documentId.slice(0, 8)}...</Text>
 					</div>
-				}
-			>
-				<Outlet />
-			</Suspense>
-		</>
-	);
+				</div>
+			),
+			onClick: () => navigate(`/ingest/documents/${task.documentId}`)
+		}));
+	}, [processingTasks, navigate]);
 
 	return (
-		<>
+		<div className="console-shell" data-testid="console-layout">
 			<a className="console-skip-link" href="#console-main">
 				跳到主内容
 			</a>
-			<Layout
-				className={isQaLayout ? "console-root console-root--qa" : "console-root"}
-				data-testid="console-layout"
-			>
-				{showSidebar && (
-					<Sider
-						width={isQaLayout ? 92 : 268}
-						breakpoint="lg"
-						collapsed={isQaLayout}
-						collapsedWidth={isQaLayout ? 92 : 0}
-						className={isQaLayout ? "console-sidebar console-sidebar--qa" : "console-sidebar"}
-					>
-						<div className={isQaLayout ? "console-logo console-logo--qa" : "console-logo"}>
-							{isQaLayout ? "AI" : "my-AI / Web Console"}
-						</div>
-						<nav aria-label="控制台主导航">
-							<Menu
-								className="console-sidebar-menu"
-								mode="inline"
-								inlineCollapsed={isQaLayout}
-								selectedKeys={[
-									resolveMenuSelectedKey(location.pathname, location.search),
-								]}
-								defaultOpenKeys={MODULE_OPEN_KEYS}
-								items={menuItems}
-							/>
-						</nav>
-					</Sider>
-				)}
-				<Layout>
-					<Header className="console-header">
+			
+			{showSidebar && (
+				<aside 
+					className="console-aside" 
+					style={{ 
+						width: isCollapsed ? 0 : sidebarWidth,
+						transition: isDragging ? 'none' : 'width 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+						overflow: isCollapsed ? 'hidden' : 'visible'
+					}}
+				>
+					<div className="console-logo">
+						my-AI / Web Console
+					</div>
+					<nav className="console-sidebar-menu-wrapper" aria-label="控制台主导航">
+						<Menu
+							mode="inline"
+							selectedKeys={[
+								resolveMenuSelectedKey(location.pathname, location.search),
+							]}
+							defaultOpenKeys={MODULE_OPEN_KEYS}
+							items={menuItems}
+						/>
+					</nav>
+					{!isCollapsed && (
+						<div 
+							className={`console-aside-resizer ${isDragging ? "is-dragging" : ""}`}
+							onMouseDown={handleMouseDown}
+						/>
+					)}
+				</aside>
+			)}
+
+			<div className="console-main-container">
+				<header className="console-header">
+					<Space size={16}>
+						{showSidebar && (
+							<Tooltip title={isCollapsed ? "展开侧边栏" : "收起侧边栏"} placement="right">
+								<Button
+									type="text"
+									icon={isCollapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
+									onClick={toggleCollapse}
+									className="console-collapse-btn"
+									style={{ fontSize: 16, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+								/>
+							</Tooltip>
+						)}
 						<div className="console-header-copy">
-							<Space size={[8, 8]} wrap>
-								<Tag color="blue">{routeMeta.moduleLabel}</Tag>
-								<Text type="secondary">外层模块导航 + 统一页面骨架</Text>
-							</Space>
-							<Title level={4} style={{ margin: 0 }} data-testid="console-title">
-								my-AI 控制台
+							<Title level={4} className="console-page-title" data-testid="console-title" style={{ margin: 0 }}>
+								{routeMeta.pageTitle}
 							</Title>
-							<Text type="secondary">
-								以模块稳定分区承接文档、知识库、问答与治理任务，页面内统一为摘要、工作区和状态区。
-							</Text>
+							<Breadcrumb
+								items={[
+									{ title: "控制台" }, 
+									{ title: routeMeta.moduleLabel }, 
+									{ title: routeMeta.pageTitle }
+								]}
+							/>
 						</div>
-						<Space className="console-header-actions" size={12}>
+					</Space>
+					<div className="console-header-actions">
+						<Space size={20}>
+							<Dropdown menu={{ items: activityMenuItems }} placement="bottomRight" trigger={['click']}>
+								<Badge count={processingTasks.length} size="small" offset={[-2, 2]}>
+									<Button 
+										type="text" 
+										icon={<CloudSyncOutlined style={{ fontSize: 18, color: processingTasks.length > 0 ? 'var(--console-accent)' : 'inherit' }} />} 
+										className={processingTasks.length > 0 ? "console-activity-btn is-active" : "console-activity-btn"}
+									/>
+								</Badge>
+							</Dropdown>
+
 							<Dropdown menu={{ items: userMenuItems }} placement="bottomRight">
 								<Space style={{ cursor: "pointer" }}>
 									<UserOutlined />
-									<span>{user?.displayName ?? ""}</span>
+									<span style={{ fontWeight: 500 }}>{user?.displayName ?? ""}</span>
 									{user?.workspaceRole && (
-										<Tag
-											color={roleColorMap[user.workspaceRole] ?? "default"}
-										>
-											{user.workspaceRole}
-										</Tag>
+										<WorkspaceRoleTag role={user.workspaceRole} />
 									)}
-									<DownOutlined />
+									<DownOutlined style={{ fontSize: 10 }} />
 								</Space>
 							</Dropdown>
 						</Space>
-					</Header>
-					<Content className="console-content">
-						<main id="console-main" className="console-main">
-							{content}
-						</main>
-					</Content>
-				</Layout>
-			</Layout>
-		</>
+					</div>
+				</header>
+				
+				<main id="console-main" className="console-content">
+					<Suspense
+						fallback={
+							<div
+								style={{
+									display: "flex",
+									justifyContent: "center",
+									alignItems: "center",
+									minHeight: 300,
+								}}
+							>
+								<Spin size="large" />
+							</div>
+						}
+					>
+						<Outlet />
+					</Suspense>
+				</main>
+			</div>
+		</div>
 	);
 }
