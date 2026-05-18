@@ -2,6 +2,8 @@ package io.github.spike.myai.knowledge.application.service;
 
 import io.github.spike.myai.auth.application.context.CurrentUser;
 import io.github.spike.myai.auth.application.service.AuthorizationService;
+import io.github.spike.myai.auth.domain.model.AuditEvent;
+import io.github.spike.myai.auth.domain.port.AuditEventRepository;
 import io.github.spike.myai.knowledge.application.command.CreateKnowledgeBaseCommand;
 import io.github.spike.myai.knowledge.application.result.KnowledgeBaseResult;
 import io.github.spike.myai.knowledge.application.usecase.CreateKnowledgeBaseUseCase;
@@ -20,6 +22,7 @@ import org.springframework.stereotype.Service;
  *   <li>通过 {@link KnowledgeBaseIdGenerator} 生成全局唯一标识；</li>
  *   <li>调用领域模型 {@link KnowledgeBase#create} 工厂方法构造聚合根；</li>
  *   <li>通过 {@link KnowledgeBaseRepository} 持久化到存储层；</li>
+ *   <li>写入知识库创建审计事件；</li>
  *   <li>将领域对象映射为应用层 {@link KnowledgeBaseResult} 返回给调用方。</li>
  * </ol>
  *
@@ -42,6 +45,9 @@ public class CreateKnowledgeBaseApplicationService implements CreateKnowledgeBas
     /** 应用层授权服务，用于校验当前用户是否具备工作区管理权限（OWNER / ADMIN） */
     private final AuthorizationService authorizationService;
 
+    /** 审计事件仓储，用于记录知识库治理操作 */
+    private final AuditEventRepository auditEventRepository;
+
     /**
      * 构造器注入。
      *
@@ -51,14 +57,17 @@ public class CreateKnowledgeBaseApplicationService implements CreateKnowledgeBas
      * @param knowledgeBaseIdGenerator 知识库 ID 生成器（领域端口）
      * @param knowledgeBaseRepository  知识库持久化仓库（领域端口）
      * @param authorizationService     授权服务（应用层）
+     * @param auditEventRepository     审计事件仓储
      */
     public CreateKnowledgeBaseApplicationService(
             KnowledgeBaseIdGenerator knowledgeBaseIdGenerator,
             KnowledgeBaseRepository knowledgeBaseRepository,
-            AuthorizationService authorizationService) {
+            AuthorizationService authorizationService,
+            AuditEventRepository auditEventRepository) {
         this.knowledgeBaseIdGenerator = knowledgeBaseIdGenerator;
         this.knowledgeBaseRepository = knowledgeBaseRepository;
         this.authorizationService = authorizationService;
+        this.auditEventRepository = auditEventRepository;
     }
 
     /**
@@ -71,6 +80,7 @@ public class CreateKnowledgeBaseApplicationService implements CreateKnowledgeBas
      *   <li>从命令对象中提取已规整化的名称、描述及状态；</li>
      *   <li>调用领域模型的工厂方法创建聚合根；</li>
      *   <li>将聚合根持久化到仓库；</li>
+     *   <li>写入知识库创建审计事件；</li>
      *   <li>构建应用层结果对象并返回。</li>
      * </ol>
      *
@@ -103,7 +113,26 @@ public class CreateKnowledgeBaseApplicationService implements CreateKnowledgeBas
         // 将聚合根写入存储层，由仓储实现负责具体的 INSERT 或 UPSERT 语义
         knowledgeBaseRepository.save(knowledgeBase);
 
-        // ---------- 第四步：构建返回结果 ----------
+        // ---------- 第四步：审计 ----------
+        // 知识库是文档、权限与问答的治理边界，创建后需要可追溯
+        auditEventRepository.save(new AuditEvent(
+                currentUser.workspaceId(),
+                currentUser.userId(),
+                currentUser.username(),
+                "KNOWLEDGE_BASE_CREATED",
+                "KNOWLEDGE_BASE",
+                knowledgeBase.kbId(),
+                "SUCCESS",
+                "",
+                """
+                {"kbId":%s,"name":%s,"status":%s}
+                """.formatted(
+                        toJsonString(knowledgeBase.kbId()),
+                        toJsonString(knowledgeBase.name()),
+                        toJsonString(knowledgeBase.status().name())),
+                now));
+
+        // ---------- 第五步：构建返回结果 ----------
         // 将领域对象映射为应用层 DTO，隔离领域模型对接口层的暴露
         // 新建知识库的已索引文档数固定为 0
         return new KnowledgeBaseResult(
@@ -112,5 +141,15 @@ public class CreateKnowledgeBaseApplicationService implements CreateKnowledgeBas
                 knowledgeBase.description(),
                 knowledgeBase.status().name(),   // 枚举转字符串，确保接口契约稳定
                 0L);                             // 新建知识库尚无索引文档
+    }
+
+    /**
+     * 将字符串包装为 JSON 字符串值。
+     *
+     * @param value 原始字符串
+     * @return 已转义的 JSON 字符串值
+     */
+    private static String toJsonString(String value) {
+        return "\"" + value.replace("\\", "\\\\").replace("\"", "\\\"") + "\"";
     }
 }

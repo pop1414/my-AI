@@ -9,7 +9,9 @@ import static org.mockito.Mockito.when;
 
 import io.github.spike.myai.auth.application.context.CurrentUser;
 import io.github.spike.myai.auth.application.service.AuthorizationService;
+import io.github.spike.myai.auth.domain.model.AuditEvent;
 import io.github.spike.myai.auth.domain.model.WorkspaceRole;
+import io.github.spike.myai.auth.domain.port.AuditEventRepository;
 import io.github.spike.myai.knowledge.application.command.CreateKnowledgeBaseCommand;
 import io.github.spike.myai.knowledge.domain.port.KnowledgeBaseIdGenerator;
 import io.github.spike.myai.knowledge.domain.port.KnowledgeBaseRepository;
@@ -27,10 +29,11 @@ class CreateKnowledgeBaseApplicationServiceTest {
         KnowledgeBaseIdGenerator generator = Mockito.mock(KnowledgeBaseIdGenerator.class);
         KnowledgeBaseRepository repository = Mockito.mock(KnowledgeBaseRepository.class);
         AuthorizationService authorizationService = Mockito.mock(AuthorizationService.class);
+        AuditEventRepository auditEventRepository = Mockito.mock(AuditEventRepository.class);
         when(generator.nextKbId()).thenReturn("kb-generated");
         when(authorizationService.requireCanManageWorkspace()).thenReturn(currentUser(WorkspaceRole.WORKSPACE_ADMIN));
         CreateKnowledgeBaseApplicationService service =
-                new CreateKnowledgeBaseApplicationService(generator, repository, authorizationService);
+                new CreateKnowledgeBaseApplicationService(generator, repository, authorizationService, auditEventRepository);
 
         var result = service.handle(new CreateKnowledgeBaseCommand("知识库A", "描述", null));
 
@@ -44,6 +47,23 @@ class CreateKnowledgeBaseApplicationServiceTest {
         verify(repository).save(captor.capture());
         assertEquals("kb-generated", captor.getValue().kbId());
         assertEquals("workspace-a", captor.getValue().workspaceId());
+
+        var auditCaptor = ArgumentCaptor.forClass(AuditEvent.class);
+        verify(auditEventRepository).save(auditCaptor.capture());
+        AuditEvent auditEvent = auditCaptor.getValue();
+        assertEquals("workspace-a", auditEvent.workspaceId());
+        assertEquals("user-1", auditEvent.actorUserId());
+        assertEquals("alice", auditEvent.actorUsername());
+        assertEquals("KNOWLEDGE_BASE_CREATED", auditEvent.eventType());
+        assertEquals("KNOWLEDGE_BASE", auditEvent.targetType());
+        assertEquals("kb-generated", auditEvent.targetId());
+        assertEquals("SUCCESS", auditEvent.outcome());
+        assertEquals("", auditEvent.reason());
+        assertEquals(
+                """
+                {"kbId":"kb-generated","name":"知识库A","status":"ACTIVE"}
+                """,
+                auditEvent.metadata());
     }
 
     @Test
@@ -52,16 +72,18 @@ class CreateKnowledgeBaseApplicationServiceTest {
         KnowledgeBaseIdGenerator generator = Mockito.mock(KnowledgeBaseIdGenerator.class);
         KnowledgeBaseRepository repository = Mockito.mock(KnowledgeBaseRepository.class);
         AuthorizationService authorizationService = Mockito.mock(AuthorizationService.class);
+        AuditEventRepository auditEventRepository = Mockito.mock(AuditEventRepository.class);
         when(authorizationService.requireCanManageWorkspace())
                 .thenThrow(new AccessDeniedException("workspace manage access denied"));
         CreateKnowledgeBaseApplicationService service =
-                new CreateKnowledgeBaseApplicationService(generator, repository, authorizationService);
+                new CreateKnowledgeBaseApplicationService(generator, repository, authorizationService, auditEventRepository);
 
         assertThrows(
                 AccessDeniedException.class,
                 () -> service.handle(new CreateKnowledgeBaseCommand("知识库A", "描述", null)));
 
         verify(repository, never()).save(any());
+        verify(auditEventRepository, never()).save(any());
     }
 
     private static CurrentUser currentUser(WorkspaceRole workspaceRole) {
