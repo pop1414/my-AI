@@ -11,7 +11,9 @@ import static org.mockito.Mockito.when;
 import io.github.spike.myai.auth.application.context.CurrentUser;
 import io.github.spike.myai.auth.application.context.CurrentUserProvider;
 import io.github.spike.myai.auth.application.service.AuthorizationService;
+import io.github.spike.myai.auth.domain.model.AuditEvent;
 import io.github.spike.myai.auth.domain.model.WorkspaceRole;
+import io.github.spike.myai.auth.domain.port.AuditEventRepository;
 import io.github.spike.myai.knowledge.application.command.UpdateKnowledgeBaseCommand;
 import io.github.spike.myai.knowledge.application.exception.KnowledgeBaseNotFoundException;
 import io.github.spike.myai.knowledge.domain.model.KnowledgeBase;
@@ -23,6 +25,7 @@ import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 import org.springframework.security.access.AccessDeniedException;
 
@@ -34,13 +37,14 @@ class UpdateKnowledgeBaseApplicationServiceTest {
         KnowledgeBaseRepository repository = Mockito.mock(KnowledgeBaseRepository.class);
         CurrentUserProvider currentUserProvider = Mockito.mock(CurrentUserProvider.class);
         AuthorizationService authorizationService = Mockito.mock(AuthorizationService.class);
+        AuditEventRepository auditEventRepository = Mockito.mock(AuditEventRepository.class);
         when(currentUserProvider.requireCurrentUser()).thenReturn(currentUser());
         when(repository.findByKbId(eq("workspace-a"), eq("kb-1"))).thenReturn(Optional.of(
                 new KnowledgeBase("kb-1", "workspace-a", "旧名称", "旧描述", KnowledgeBaseStatus.ACTIVE, Instant.now(), Instant.now())));
         when(repository.listKnowledgeBases(eq("workspace-a"))).thenReturn(List.of(
                 new KnowledgeBaseSummary("kb-1", "workspace-a", "新名称", "新描述", KnowledgeBaseStatus.INACTIVE, 2)));
         UpdateKnowledgeBaseApplicationService service =
-                new UpdateKnowledgeBaseApplicationService(repository, currentUserProvider, authorizationService);
+                new UpdateKnowledgeBaseApplicationService(repository, currentUserProvider, authorizationService, auditEventRepository);
 
         var result = service.handle(new UpdateKnowledgeBaseCommand("kb-1", "新名称", "新描述", KnowledgeBaseStatus.INACTIVE));
 
@@ -50,6 +54,22 @@ class UpdateKnowledgeBaseApplicationServiceTest {
         assertEquals(2L, result.indexedDocumentCount());
         verify(authorizationService).requireCanManageKnowledgeBase("kb-1");
         verify(repository).save(any());
+        ArgumentCaptor<AuditEvent> auditCaptor = ArgumentCaptor.forClass(AuditEvent.class);
+        verify(auditEventRepository).save(auditCaptor.capture());
+        AuditEvent auditEvent = auditCaptor.getValue();
+        assertEquals("workspace-a", auditEvent.workspaceId());
+        assertEquals("user-1", auditEvent.actorUserId());
+        assertEquals("alice", auditEvent.actorUsername());
+        assertEquals("KNOWLEDGE_BASE_STATUS_UPDATED", auditEvent.eventType());
+        assertEquals("KNOWLEDGE_BASE", auditEvent.targetType());
+        assertEquals("kb-1", auditEvent.targetId());
+        assertEquals("SUCCESS", auditEvent.outcome());
+        assertEquals("", auditEvent.reason());
+        assertEquals(
+                """
+                {"kbId":"kb-1","previousStatus":"ACTIVE","newStatus":"INACTIVE"}
+                """,
+                auditEvent.metadata());
     }
 
     @Test
@@ -58,14 +78,16 @@ class UpdateKnowledgeBaseApplicationServiceTest {
         KnowledgeBaseRepository repository = Mockito.mock(KnowledgeBaseRepository.class);
         CurrentUserProvider currentUserProvider = Mockito.mock(CurrentUserProvider.class);
         AuthorizationService authorizationService = Mockito.mock(AuthorizationService.class);
+        AuditEventRepository auditEventRepository = Mockito.mock(AuditEventRepository.class);
         when(currentUserProvider.requireCurrentUser()).thenReturn(currentUser());
         when(repository.findByKbId(eq("workspace-a"), eq("kb-missing"))).thenReturn(Optional.empty());
         UpdateKnowledgeBaseApplicationService service =
-                new UpdateKnowledgeBaseApplicationService(repository, currentUserProvider, authorizationService);
+                new UpdateKnowledgeBaseApplicationService(repository, currentUserProvider, authorizationService, auditEventRepository);
 
         assertThrows(
                 KnowledgeBaseNotFoundException.class,
                 () -> service.handle(new UpdateKnowledgeBaseCommand("kb-missing", "新名称", null, null)));
+        verify(auditEventRepository, never()).save(any());
     }
 
     @Test
@@ -74,11 +96,12 @@ class UpdateKnowledgeBaseApplicationServiceTest {
         KnowledgeBaseRepository repository = Mockito.mock(KnowledgeBaseRepository.class);
         CurrentUserProvider currentUserProvider = Mockito.mock(CurrentUserProvider.class);
         AuthorizationService authorizationService = Mockito.mock(AuthorizationService.class);
+        AuditEventRepository auditEventRepository = Mockito.mock(AuditEventRepository.class);
         Mockito.doThrow(new AccessDeniedException("knowledge base manage access denied"))
                 .when(authorizationService)
                 .requireCanManageKnowledgeBase("kb-1");
         UpdateKnowledgeBaseApplicationService service =
-                new UpdateKnowledgeBaseApplicationService(repository, currentUserProvider, authorizationService);
+                new UpdateKnowledgeBaseApplicationService(repository, currentUserProvider, authorizationService, auditEventRepository);
 
         assertThrows(
                 AccessDeniedException.class,
@@ -86,6 +109,7 @@ class UpdateKnowledgeBaseApplicationServiceTest {
 
         verify(repository, never()).findByKbId(any(), any());
         verify(repository, never()).save(any());
+        verify(auditEventRepository, never()).save(any());
     }
 
     private static CurrentUser currentUser() {

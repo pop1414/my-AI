@@ -3,6 +3,8 @@ package io.github.spike.myai.knowledge.application.service;
 import io.github.spike.myai.auth.application.context.CurrentUser;
 import io.github.spike.myai.auth.application.context.CurrentUserProvider;
 import io.github.spike.myai.auth.application.service.AuthorizationService;
+import io.github.spike.myai.auth.domain.model.AuditEvent;
+import io.github.spike.myai.auth.domain.port.AuditEventRepository;
 import io.github.spike.myai.knowledge.application.command.UpdateKnowledgeBaseCommand;
 import io.github.spike.myai.knowledge.application.exception.KnowledgeBaseNotFoundException;
 import io.github.spike.myai.knowledge.application.result.KnowledgeBaseResult;
@@ -22,6 +24,7 @@ import org.springframework.stereotype.Service;
  *   <li>调用领域模型的 {@code update} 方法生成更新后的聚合根
  *       （保留未传入字段的原有值）；</li>
  *   <li>持久化更新后的聚合根；</li>
+ *   <li>当生命周期状态发生变更时写入审计事件；</li>
  *   <li>查询该知识库当前的已索引文档数量；</li>
  *   <li>将领域对象映射为应用层结果返回。</li>
  * </ol>
@@ -46,20 +49,26 @@ public class UpdateKnowledgeBaseApplicationService implements UpdateKnowledgeBas
     /** 应用层授权服务，用于校验知识库管理权限 */
     private final AuthorizationService authorizationService;
 
+    /** 审计事件仓储，用于记录知识库状态变更 */
+    private final AuditEventRepository auditEventRepository;
+
     /**
      * 构造器注入。
      *
      * @param knowledgeBaseRepository 知识库持久化仓库
      * @param currentUserProvider     当前用户上下文提供器
      * @param authorizationService    授权服务
+     * @param auditEventRepository    审计事件仓储
      */
     public UpdateKnowledgeBaseApplicationService(
             KnowledgeBaseRepository knowledgeBaseRepository,
             CurrentUserProvider currentUserProvider,
-            AuthorizationService authorizationService) {
+            AuthorizationService authorizationService,
+            AuditEventRepository auditEventRepository) {
         this.knowledgeBaseRepository = knowledgeBaseRepository;
         this.currentUserProvider = currentUserProvider;
         this.authorizationService = authorizationService;
+        this.auditEventRepository = auditEventRepository;
     }
 
     /**
@@ -70,6 +79,7 @@ public class UpdateKnowledgeBaseApplicationService implements UpdateKnowledgeBas
      *   <li>按 ID 查找现有知识库，若不存在则抛出 {@link KnowledgeBaseNotFoundException}；</li>
      *   <li>调用领域模型的 {@code update} 方法，传入规整化后的新值或当前值作为默认值；</li>
      *   <li>持久化更新后的聚合根；</li>
+     *   <li>若知识库状态发生变化，写入状态变更审计事件；</li>
      *   <li>从仓库列表中获取最新的已索引文档数量；</li>
      *   <li>构建并返回应用层结果对象。</li>
      * </ol>
@@ -101,17 +111,39 @@ public class UpdateKnowledgeBaseApplicationService implements UpdateKnowledgeBas
         //   - 若命令中 name 非空 → 使用新名称（已 trim）
         //   - 若命令中 name 为空 → 使用 current.name()（保持原值）
         // 传入当前时间戳作为更新时间
+        Instant now = Instant.now();
         KnowledgeBase updated = current.update(
                 command.normalizedNameOrDefault(current.name()),
                 command.normalizedDescriptionOrDefault(current.description()),
                 command.resolvedStatusOrDefault(current.status()),
-                Instant.now());
+                now);
 
         // ---------- 第三步：持久化更新后的聚合根 ----------
         // 仓储实现应保证原子性，通常使用 UPDATE WHERE 或乐观锁版本号
         knowledgeBaseRepository.save(updated);
 
-        // ---------- 第四步：查询已索引文档数量 ----------
+        // ---------- 第四步：状态变更审计 ----------
+        // 仅状态发生变化时记录，避免名称/描述编辑被误归类为停用/启用审计
+        if (current.status() != updated.status()) {
+            auditEventRepository.save(new AuditEvent(
+                    currentUser.workspaceId(),
+                    currentUser.userId(),
+                    currentUser.username(),
+                    "KNOWLEDGE_BASE_STATUS_UPDATED",
+                    "KNOWLEDGE_BASE",
+                    updated.kbId(),
+                    "SUCCESS",
+                    "",
+                    """
+                    {"kbId":%s,"previousStatus":%s,"newStatus":%s}
+                    """.formatted(
+                            toJsonString(updated.kbId()),
+                            toJsonString(current.status().name()),
+                            toJsonString(updated.status().name())),
+                    now));
+        }
+
+        // ---------- 第五步：查询已索引文档数量 ----------
         // 从仓库的全量列表中过滤出当前知识库并提取索引计数
         // 使用 mapToLong 避免 Long 自动装箱，减少 GC 压力
         long indexedDocumentCount = knowledgeBaseRepository.listKnowledgeBases(workspaceId).stream()
@@ -120,12 +152,22 @@ public class UpdateKnowledgeBaseApplicationService implements UpdateKnowledgeBas
                 .findFirst()
                 .orElse(0L);    // 未找到统计信息时默认为 0
 
-        // ---------- 第五步：构建并返回应用层结果 ----------
+        // ---------- 第六步：构建并返回应用层结果 ----------
         return new KnowledgeBaseResult(
                 updated.kbId(),
                 updated.name(),
                 updated.description(),
                 updated.status().name(),
                 indexedDocumentCount);
+    }
+
+    /**
+     * 将字符串包装为 JSON 字符串值。
+     *
+     * @param value 原始字符串
+     * @return 已转义的 JSON 字符串值
+     */
+    private static String toJsonString(String value) {
+        return "\"" + value.replace("\\", "\\\\").replace("\"", "\\\"") + "\"";
     }
 }
