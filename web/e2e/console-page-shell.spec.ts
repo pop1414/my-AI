@@ -41,7 +41,7 @@ async function mockConsoleShell(
 	await page.route("**/api/v1/auth/me", async (route) => {
 		await route.fulfill({ json: fullAccessUser });
 	});
-	await page.route("**/api/v1/knowledge-bases", async (route) => {
+	await page.route("**/api/v1/knowledge-bases**", async (route) => {
 		if (options?.knowledgeHandler) {
 			await options.knowledgeHandler(route);
 			return;

@@ -29,7 +29,7 @@ async function mockQaShell(page: Page) {
 	await page.route("**/api/v1/auth/me", async (route) => {
 		await route.fulfill({ json: currentUser });
 	});
-	await page.route("**/api/v1/knowledge-bases", async (route) => {
+	await page.route("**/api/v1/knowledge-bases**", async (route) => {
 		await route.fulfill({ json: knowledgeBases });
 	});
 }

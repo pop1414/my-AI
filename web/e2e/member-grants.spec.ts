@@ -57,7 +57,7 @@ test.describe("成员授权配置", () => {
 		await page.route("**/api/v1/admin/members", async (route) => {
 			await route.fulfill({ json: [member] });
 		});
-		await page.route("**/api/v1/knowledge-bases", async (route) => {
+		await page.route("**/api/v1/knowledge-bases**", async (route) => {
 			await route.fulfill({ json: [] });
 		});
 		await page.route("**/api/v1/admin/members/member-user/knowledge-base-grants", async (route) => {

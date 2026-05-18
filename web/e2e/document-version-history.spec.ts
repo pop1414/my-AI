@@ -241,7 +241,7 @@ const deletableDocument = {
 };
 
 async function mockKnowledgeBases(page: Page) {
-	await page.route("**/api/v1/knowledge-bases", async (route) => {
+	await page.route("**/api/v1/knowledge-bases**", async (route) => {
 		await route.fulfill({ json: knowledgeBases });
 	});
 }
