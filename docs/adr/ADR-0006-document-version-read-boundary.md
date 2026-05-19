@@ -1,10 +1,11 @@
-# ADR-0006 Document Version Read Boundary
+# ADR-0006：Document Version Read Boundary
 
-## Status
+- 编号：ADR-0006
+- 标题：Document Version Read Boundary
+- 状态：Accepted
+- 日期：2026-05-13
 
-Accepted
-
-## Context
+## 背景
 
 `ingest_documents` 已从单表事实模型演进为稳定 document 身份 + latest projection。
 `ingest_document_versions` 承载版本级文件事实、处理事实、错误事实和来源事实。
@@ -12,7 +13,7 @@ Accepted
 迁移期主表仍保留 `file_hash`、`filename`、`file_size`、`status`、`processing_metadata`
 等旧版本事实字段。它们只能作为兼容镜像写入，不能再作为新生产读路径的事实入口。
 
-## Decision
+## 决策
 
 - 文档聚合读取通过 `ingest_documents.latest_version_number` 关联 `ingest_document_versions`。
 - 上传幂等的文件哈希判断读取 `ingest_document_versions.file_hash`，删除排除读取 `ingest_documents.latest_status`。
@@ -43,7 +44,7 @@ Accepted
 - 知识库已索引文档计数读取 `ingest_documents.latest_status`。
 - schema 自检同时校验主表 latest projection、旧兼容镜像列、version 事实列与 version 文件哈希索引。
 
-## Latest Projection Maintenance Module
+## 补充决策：Latest Projection Maintenance Module
 
 - `ingest_documents.latest_version_number/latest_status/latest_filename/latest_version_origin_type` 是稳定业务语义，不是允许调用方随意拼接维护的偶然字段组合。
 - 应用层 caller 只表达“推进一个 document version”或“把某个 version 提升为 latest”；latest projection maintenance 应收敛为独立 module，而不是继续散落在多个 repository 分支里的双写 SQL。
@@ -54,7 +55,7 @@ Accepted
 - 在该 module 落地前，`ingest_documents.latest_*` 仍视为从版本事实导出的 latest projection；新增状态推进、回退、重处理、删除逻辑时，必须同步审查主表 latest projection、版本表当前 latest 行和旧兼容镜像是否仍满足同一组 invariant。
 - 列表读取、详情读取、版本历史读取等读路径继续把 latest projection 当作稳定读 seam，不因 maintenance module 的落地而改变读契约。
 
-## Consequences
+## 影响
 
 主表旧版本事实字段仍会被写入，但它们只是迁移兼容镜像。
 后续代码审阅时，若发现生产读路径使用 `ingest_documents.file_hash/filename/file_size/status/processing_metadata`
@@ -63,7 +64,7 @@ Accepted
 若发现新的状态推进分支继续直接复制 `UPDATE ingest_documents` + `UPDATE ingest_document_versions`
 双写模式，而不是收口到统一 latest projection seam，也应视为 module depth 退化。
 
-## Physical Drop Plan
+## 后续动作：Physical Drop Plan
 
 1. 先把 latest projection maintenance 收口为单一数据库 seam，停止在多个 repository 分支中复制主表/版本表双写逻辑。
 2. 确认生产读路径与报表均不再依赖主表旧版本事实列。
