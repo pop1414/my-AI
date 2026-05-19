@@ -37,11 +37,16 @@ npm.cmd run test:e2e
 
 ## 2. 阶段 1：补齐 P0 恢复性文档
 
-- [ ] 新增或补充 `ingest` 文档资产副作用恢复 runbook。
-- [ ] 定义 `orphan source`、`missing source`、`orphan artifact`、`orphan vector`、`DELETING` 卡住等状态的识别方式。
-- [ ] 明确每类状态的本地检查命令、人工恢复步骤和风险提示。
-- [ ] 明确哪些恢复操作需要停止 worker 或避免并发上传、删除、回退请求。
-- [ ] 在 `docs/runbooks/` 或相关导航中补充入口。
+- [x] 新增或补充 `ingest` 文档资产副作用恢复 runbook。
+- [x] 定义 `orphan source`、`missing source`、`orphan artifact`、`orphan vector`、`DELETING` 卡住等状态的识别方式。
+- [x] 明确每类状态的本地检查命令、人工恢复步骤和风险提示。
+- [x] 明确哪些恢复操作需要停止 worker 或避免并发上传、删除、回退请求。
+- [x] 在 `docs/runbooks/` 或相关导航中补充入口。
+
+执行产物：
+
+- [../../troubleshooting/ingest-document-asset-recovery.md](../../troubleshooting/ingest-document-asset-recovery.md)
+- [../../troubleshooting/README.md](../../troubleshooting/README.md)
 
 验收标准：
 

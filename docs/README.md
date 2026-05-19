@@ -72,6 +72,9 @@
 ### 2.5 执行与联调手册
 
 - [runbooks/](./runbooks/)：执行计划、联调手册、演示脚本、排障手册
+- 排障手册入口：
+  - [runbooks/troubleshooting/](./runbooks/troubleshooting/)
+  - [runbooks/troubleshooting/ingest-document-asset-recovery.md](./runbooks/troubleshooting/ingest-document-asset-recovery.md)：文档入库资产恢复手册
 - 其中权限体系专项计划入口：
   - [runbooks/plans/rag-access-control/rag-access-control-plan.md](./runbooks/plans/rag-access-control/rag-access-control-plan.md)
   - [runbooks/plans/rag-access-control/账号生命周期后端实施计划.md](./runbooks/plans/rag-access-control/账号生命周期后端实施计划.md)
