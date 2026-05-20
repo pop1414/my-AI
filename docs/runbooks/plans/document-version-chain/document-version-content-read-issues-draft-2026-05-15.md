@@ -315,7 +315,7 @@ PRD #21：文档版本正文读取专项
 
 对统一正文读取后端 endpoint 做统一收口，确保 OpenAPI 契约、响应字段、`source` 语义、业务错误码和 HTTP 状态码一致。该 issue 不包含前端页面实现，只处理后端契约与服务端行为一致性。
 
-收口后，`GET /api/v1/documents/{documentId}/content?source=LATEST|ASKABLE_BASELINE|EXPLICIT_VERSION` 的成功响应和错误响应应与 `docs/04-api-contract.yaml` 保持一致；`EXPLICIT_VERSION` 必须额外传入 `versionNumber`。
+收口后，`GET /api/v1/documents/{documentId}/content?source=LATEST|ASKABLE_BASELINE|EXPLICIT_VERSION` 的成功响应和错误响应应与 `docs/api/openapi.yaml` 保持一致；`EXPLICIT_VERSION` 必须额外传入 `versionNumber`。
 
 #### Acceptance criteria
 

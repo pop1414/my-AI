@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { requestJson } from "./request";
 
-// ── Zod schemas（严格对齐 docs/04-api-contract.yaml） ──
+// ── Zod schemas（严格对齐 docs/api/openapi.yaml） ──
 
 const currentUserResponseSchema = z.object({
 	userId: z.string().min(1),

@@ -69,9 +69,10 @@
 - `版本正文` 指某个 `document version` 处理后形成的 `cleaned.md` 文本产物
 - 文档版本正文读取默认读取版本级 `cleaned.md`，不从源文件实时解析，也不从 `vector_store` chunk 拼接
 - `cleaned.md` 的存储归属是 `document version`，不是 `document`；任一版本正文都必须能由 `workspaceId + documentId + versionNumber` 唯一定位
-- 版本处理产物应通过存储端口读取，应用层不直接依赖本地路径、MinIO SDK 或具体对象存储实现
-- 版本处理产物 key 语义应包含 `workspaceId`、`documentId`、`versionNumber` 与 artifact 名称，例如 `artifacts/workspaces/{workspaceId}/documents/{documentId}/versions/{versionNumber}/cleaned.md`
-- 源文件与处理产物在对象存储中应逻辑隔离；首期可使用同一 MinIO bucket 的不同 prefix，例如 `source/...` 与 `artifacts/...`
+- 版本处理产物应通过存储端口读取，应用层不直接依赖本地路径、S3 SDK 或具体对象存储产品实现
+- 版本处理产物 key 语义应包含 `workspaceId`、`documentId`、`versionNumber` 与 artifact 名称，例如 `artifacts/{workspaceId}/documents/{documentId}/versions/{versionNumber}/cleaned.md`
+- 源文件与处理产物的长期存储定位是 `S3-compatible document asset storage`；源文件与处理产物应逻辑隔离，首期可使用同一 bucket 的不同 prefix，例如 `source/...` 与 `artifacts/...`
+- `S3-compatible document asset storage` 首期使用单 bucket，例如 `myai-documents`；源文件 key 使用 `source/{workspaceId}/documents/{documentId}/versions/{versionNumber}/{filename}`，处理产物 key 使用 `artifacts/{workspaceId}/documents/{documentId}/versions/{versionNumber}/{artifactName}`
 - 当前阶段不要求在数据库中持久化完整 artifact 路径，优先通过稳定规则计算 key；必要时只记录产物是否已生成等状态事实
 - 文档详情页未显式指定 `versionNumber` 时，正文读取默认读取当前最新版本的 `cleaned.md`
 - 文档详情页显式指定 `versionNumber` 时，正文读取定位到该历史版本的 `cleaned.md`
@@ -90,7 +91,10 @@
 - 正文读取响应应至少返回 `documentId`、`versionNumber`、`latestVersionNumber`、`isLatestVersion`、`isAskableVersion`、`source`、`status`、`filename`、`createdAt`、`updatedAt`、`contentMarkdown`、`contentLength`、`truncated`
 - 正文读取错误码至少覆盖 `DOCUMENT_NOT_FOUND`、`DOCUMENT_CONTENT_FORBIDDEN`、`CONTENT_NOT_READY`、`CONTENT_ARTIFACT_MISSING`、`CONTENT_TOO_LARGE`、`VERSION_NOT_FOUND`、`VERSION_CONTENT_FORBIDDEN`
 - 源文件用于审计、重处理和未来原版预览，不作为文档版本正文读取的默认来源；当前阶段不提供源文件下载能力
-- 后续引入 MinIO 时，只改变源文件与处理产物的存储介质，不改变 `版本正文` 读取 `cleaned.md` 的语义
+- 当前阶段计划使用 RustFS 作为 `S3-compatible document asset storage` 的部署实现；RustFS 只改变源文件与处理产物的存储介质，不改变 `版本正文` 读取 `cleaned.md` 的语义
+- RustFS 首期接入范围只覆盖新上传 source 与新生成 artifacts；既有 `data/ingest` 本地历史文件不在首期自动迁移，历史迁移应通过单独迁移计划处理
+- 存储介质应通过配置切换，例如 `myai.ingest.storage.type=local|s3`；默认仍为 `local`，S3 模式通过 endpoint、bucket、access key、secret key、region 与 path-style access 等配置连接 RustFS
+- RustFS 不可用时不做本地文件系统 fallback；上传、处理或正文读取应进入明确失败分支，避免同一环境下 source 与 artifacts 分散写入多个存储介质
 - `raw.xhtml`、`cleaned.html`、`parse-result.json` 是可配置调试产物，不是对外契约
 - 当前阶段偏向纯文字质量基线；图片只保留占位或说明文本，表格只保留 Markdown 可读形态，尚未做图片理解、表格结构化节点或 OCR 稳定支持
 
@@ -673,11 +677,11 @@ chunk 是向量检索与引用展示的基本文本单元。
 
 1. `README.md`
 2. `docs/README.md`
-3. `docs/01-product-scope.md`
-4. `docs/02-roadmap.md`
-5. `docs/03-architecture.md`
-6. `docs/04-api-contract.yaml`
-7. `docs/07-ingest-processing-execution.md`
+3. `docs/product/scope.md`
+4. `docs/product/roadmap.md`
+5. `docs/architecture/README.md`
+6. `docs/api/openapi.yaml`
+7. `docs/architecture/ingest/processing-execution.md`
 8. `docs/runbooks/plans/ingest-cleaning/RAG 文档解析与清洗方案.md`
 9. `docs/runbooks/plans/ingest-cleaning/黄金样本与验收说明.md`
 10. `docs/runbooks/plans/ingest-cleaning/cleaned-md质量回归闭环.md`

@@ -86,7 +86,7 @@ jitter 避免多个任务在同一时刻一起重试，形成新的尖峰。
 
 ## 7. 相关代码 / 文档入口
 
-- 正式文档：[07-ingest-processing-execution.md](../../07-ingest-processing-execution.md)
-- 架构总览：[03-architecture.md](../../03-architecture.md)
+- 正式文档：[architecture/ingest/processing-execution.md](../../architecture/ingest/processing-execution.md)
+- 架构总览：[architecture/README.md](../../architecture/README.md)
 - 处理应用服务：[ProcessDocumentApplicationService.java](../../../src/main/java/io/github/spike/myai/ingest/application/service/ProcessDocumentApplicationService.java)
 - Worker：[InProcessWorker.java](../../../src/main/java/io/github/spike/myai/ingest/infrastructure/worker/InProcessWorker.java)

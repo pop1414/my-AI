@@ -138,7 +138,7 @@
 
 收口说明：
 
-- 已提供 `POST /api/v1/documents/{documentId}/versions`，接口阶段在 `docs/04-api-contract.yaml` 中标记为 `implemented`。
+- 已提供 `POST /api/v1/documents/{documentId}/versions`，接口阶段在 `docs/api/openapi.yaml` 中标记为 `implemented`。
 - 接口请求使用 `multipart/form-data`，路径参数绑定目标 `documentId`，请求字段包含 `file` 与 `expectedLatestVersionNumber`。
 - 应用服务统一校验目标 document 存在性、文档管理权限、`expectedLatestVersionNumber` 与当前 latest 是否一致、当前最新版本状态是否为 `INDEXED` / `FAILED`。
 - 新文件与当前最新版本 `fileHash` 一致时返回 `versionCreated = false` 与 `versionResultType = REUSED_IDENTICAL_CONTENT`，不创建新版本也不消耗新的 `versionNumber`。
@@ -188,7 +188,7 @@
 
 收口说明：
 
-- 已提供 `POST /api/v1/documents/{documentId}/versions/{versionNumber}/rollback`，接口阶段在 `docs/04-api-contract.yaml` 中标记为 `implemented`。
+- 已提供 `POST /api/v1/documents/{documentId}/versions/{versionNumber}/rollback`，接口阶段在 `docs/api/openapi.yaml` 中标记为 `implemented`。
 - 接口以路径参数绑定目标历史版本，并通过 `expectedLatestVersionNumber` 查询参数执行 latest 乐观并发校验。
 - 应用服务统一校验目标 document 存在性、文档管理权限、当前 latest 状态、目标版本是否为非 latest 且已 `INDEXED`。
 - 回退创建新的 latest 版本，`versionOriginType = ROLLBACK`，`rollbackFromVersionNumber` 指向被回退目标版本，新版本初始状态为 `UPLOADED`。
@@ -373,7 +373,7 @@
 
 收口说明：
 
-- 已提供 `GET /api/v1/documents/{documentId}/versions`，接口阶段在 `docs/04-api-contract.yaml` 中标记为 `implemented`。
+- 已提供 `GET /api/v1/documents/{documentId}/versions`，接口阶段在 `docs/api/openapi.yaml` 中标记为 `implemented`。
 - 响应 DTO 返回 `documentId`、`sort = versionNumber,DESC` 与 `versions[]`，版本项覆盖 #20 要求的核心字段。
 - 应用服务先校验目标 document 存在，再通过 `AuthorizationService.requireCanManageDocument` 统一校验文档管理权限。
 - JDBC 读仓储从 `ingest_document_versions` 读取版本事实，并结合 `ingest_documents.latest_version_number` 推导 latest 标记。

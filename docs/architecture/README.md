@@ -1,4 +1,4 @@
-﻿# 架构说明（Architecture）
+# 架构说明（Architecture）
 
 ## 1. 架构图
 - 主架构图：`docs/architecture/diagrams/core-architecture-latest.puml`
@@ -17,13 +17,13 @@
 - Ingest 共享状态机：`docs/architecture/diagrams/ingest/shared/ingest-shared-state-machine.puml`
 - Ingest 共享 ER/领域模型图：`docs/architecture/diagrams/ingest/shared/ingest-shared-er-domain.puml`
 - Ingest 技术指导参考：`docs/reference/ingest-文档处理技术指导.md`（参考资料，非图谱资产）
-- 受理闭环说明文档：`docs/06-ingest-acceptance-closure.md`
+- 受理闭环说明文档：`docs/architecture/ingest/acceptance-closure.md`
 - 执行责任域边界图：`docs/architecture/diagrams/ingest/execution/ingest-execution-boundary.puml`
 - 执行 worker 时序图：`docs/architecture/diagrams/ingest/execution/ingest-execution-worker-process-sequence.puml`
 - 执行分块预览时序图：`docs/architecture/diagrams/ingest/execution/ingest-execution-chunks-preview-sequence.puml`
 - 执行重处理时序图：`docs/architecture/diagrams/ingest/execution/ingest-execution-reprocess-sequence.puml`
 - 执行删除时序图：`docs/architecture/diagrams/ingest/execution/ingest-execution-delete-sequence.puml`
-- 处理执行说明文档：`docs/07-ingest-processing-execution.md`
+- 处理执行说明文档：`docs/architecture/ingest/processing-execution.md`
 - Knowledge 责任域边界图：`docs/architecture/diagrams/knowledge/knowledge-boundary.puml`
 - Knowledge 列表时序图：`docs/architecture/diagrams/knowledge/knowledge-list-sequence.puml`
 - QA 责任域边界图：`docs/architecture/diagrams/qa/qa-boundary.puml`

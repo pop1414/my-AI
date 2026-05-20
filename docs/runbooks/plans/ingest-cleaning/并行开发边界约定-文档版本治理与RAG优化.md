@@ -182,7 +182,7 @@
 - `src/main/java/io/github/spike/myai/qa/domain/model/RetrievedChunk.java`
 - `src/main/java/io/github/spike/myai/qa/application/result/AskReferenceResult.java`
 - `src/main/java/io/github/spike/myai/qa/interfaces/rest/dto/AskReferenceResponse.java`
-- `docs/04-api-contract.yaml`
+- `docs/api/openapi.yaml`
 
 典型高冲突改动：
 
@@ -199,7 +199,7 @@
 以下内容不是绝对禁止，但一旦触发，必须先写文档同步：
 
 1. Flyway 迁移新增或变更
-2. `docs/04-api-contract.yaml` 的 ingest / qa 契约变化
+2. `docs/api/openapi.yaml` 的 ingest / qa 契约变化
 3. `vector_store` metadata 字段增删或字段语义改变
 4. `processing_metadata` 结构升级
 5. `documents/{documentId}/status` 或未来详情接口的返回结构变化
@@ -259,7 +259,7 @@
 - `src/main/resources/db/migration/**`
 - `src/main/java/io/github/spike/myai/ingest/interfaces/rest/**` 中的版本治理入口
 - `src/main/java/io/github/spike/myai/qa/**` 中与版本信息暴露直接相关的 DTO / result
-- `docs/04-api-contract.yaml` 中版本治理与版本感知问答部分
+- `docs/api/openapi.yaml` 中版本治理与版本感知问答部分
 
 ### 7.2 RAG 优化分支优先所有权
 
@@ -278,7 +278,7 @@
 - `src/main/java/io/github/spike/myai/qa/application/service/AskQuestionApplicationService.java`
 - `src/main/java/io/github/spike/myai/qa/domain/model/RetrievedChunk.java`
 - `src/main/java/io/github/spike/myai/qa/interfaces/rest/dto/AskReferenceResponse.java`
-- `docs/04-api-contract.yaml`
+- `docs/api/openapi.yaml`
 
 ## 8. 一句话原则
 

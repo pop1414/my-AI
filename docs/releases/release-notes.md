@@ -1,4 +1,4 @@
-﻿# 发布说明（Release Notes）
+# 发布说明（Release Notes）
 
 ## [Unreleased]
 ### Added
@@ -77,9 +77,9 @@
 ## [1.0.0] - 2026-05-07
 ### Added
 - ADR-0003：明确 V1 落地基线为 DashScope + PostgreSQL(PGVector)
-- 新增受理闭环设计文档：`docs/06-ingest-acceptance-closure.md`
+- 新增受理闭环设计文档：`docs/architecture/ingest/acceptance-closure.md`
 - 新增 5 张受理闭环标准设计图（用例图/组件图/时序图/状态机/ER领域模型图）
-- 新增处理执行设计文档：`docs/07-ingest-processing-execution.md`
+- 新增处理执行设计文档：`docs/architecture/ingest/processing-execution.md`
 - 新增 5 张处理执行标准设计图（用例图/组件图/时序图/状态机/ER领域模型图）
 - 新增 ADR-0004：处理执行策略（当前状态已更新为 Accepted）
 - 新增单进程异步 worker 骨架（初版默认关闭）与任务启动 CAS 抢占能力

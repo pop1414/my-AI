@@ -94,7 +94,7 @@ PostgreSQL + PGVector 在一个数据底座里同时解决结构化数据和向�
 
 ## 7. 相关代码 / 文档入口
 
-- 正式文档：[03-architecture.md](../../03-architecture.md)
+- 正式文档：[architecture/README.md](../../architecture/README.md)
 - V1 基线 ADR：[ADR-0003-v1-dashscope-pgvector.md](../../adr/ADR-0003-v1-dashscope-pgvector.md)
 - 向量写入实现：[PgVectorDocumentVectorIndexer.java](../../../src/main/java/io/github/spike/myai/ingest/infrastructure/vector/PgVectorDocumentVectorIndexer.java)
 - 检索适配器：[PgVectorChunkRetrievalAdapter.java](../../../src/main/java/io/github/spike/myai/qa/infrastructure/retrieval/PgVectorChunkRetrievalAdapter.java)

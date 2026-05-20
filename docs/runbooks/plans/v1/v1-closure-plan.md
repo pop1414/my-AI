@@ -162,6 +162,6 @@ V1 完成时，应满足以下条件：
 当前系统事实请以以下文档为准：
 
 - `README.md`
-- `docs/02-roadmap.md`
-- `docs/03-architecture.md`
-- `docs/04-api-contract.yaml`
+- `docs/product/roadmap.md`
+- `docs/architecture/README.md`
+- `docs/api/openapi.yaml`

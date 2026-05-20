@@ -63,7 +63,7 @@
   - `users.status = ACTIVE`
   - `workspace_memberships.status = ACTIVE`
 - 成员角色调整成功后已写入 `audit_events`
-- `docs/04-api-contract.yaml` 已补充成员治理接口契约
+- `docs/api/openapi.yaml` 已补充成员治理接口契约
 - 后端测试 `.\\mvnw.cmd -q test` 已通过
 
 这意味着知识库 / 文档授权接口后续可以直接复用成员真源校验，不需要重复定义“谁可以被授权”。
@@ -99,7 +99,7 @@
 - 知识库授权写入已固定为 `(workspace_id, kb_id, user_id)` 单一真源，并通过 UPSERT 维持 ACTIVE 授权
 - 知识库授权回收已改为 `DISABLED`，不做物理删除
 - 知识库授权变更已写入 `audit_events`
-- `docs/04-api-contract.yaml` 已补充知识库授权治理接口契约、认证说明、CSRF Header 与 `400/401/403/404` 语义
+- `docs/api/openapi.yaml` 已补充知识库授权治理接口契约、认证说明、CSRF Header 与 `400/401/403/404` 语义
 - 后端测试 `.\\mvnw.cmd -q test` 已通过
 
 这意味着知识库级授权治理已经闭环，接下来可以继续实现文档级覆盖授权接口，并验证 `DOC_DENY` 与文档例外授权在治理侧的写入与回收流程。
@@ -133,7 +133,7 @@
 - 文档授权写入已固定为 `(workspace_id, document_id, user_id)` 单一真源，并通过 UPSERT 维持 ACTIVE 授权
 - 文档授权回收已改为 `DISABLED`，不做物理删除
 - 文档授权变更已写入 `audit_events`
-- `docs/04-api-contract.yaml` 已补充文档授权治理接口契约、认证说明、CSRF Header 与 `400/401/403/404` 语义
+- `docs/api/openapi.yaml` 已补充文档授权治理接口契约、认证说明、CSRF Header 与 `400/401/403/404` 语义
 - 后端测试 `.\\mvnw.cmd -q test` 已通过
 
 这意味着治理接口中与资源访问控制直接相关的成员、知识库授权、文档授权三块都已经闭环，接下来只剩审计查询接口建设。
@@ -170,14 +170,14 @@
   - `offset`
 - 审计查询结果已固定按 `occurredAt DESC, auditEventId DESC` 排序
 - 审计查询接口已统一要求 `WORKSPACE_OWNER` / `WORKSPACE_ADMIN`
-- `docs/04-api-contract.yaml` 已补充审计查询接口契约、过滤参数与分页返回模型
+- `docs/api/openapi.yaml` 已补充审计查询接口契约、过滤参数与分页返回模型
 - 后端测试 `.\\mvnw.cmd -q test` 已通过
 
 这意味着治理阶段后端接口已全部完成，当前分支不建议继续堆叠新的治理能力。
 
 ## 5. 接口与契约更新要求
 
-本分支落地时需要同步更新 `docs/04-api-contract.yaml`，至少新增：
+本分支落地时需要同步更新 `docs/api/openapi.yaml`，至少新增：
 
 - 成员管理接口
 - 知识库授权管理接口

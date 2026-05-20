@@ -8,10 +8,10 @@
 如果你是隔了一段时间重新接手这个项目，建议先看下面这些入口：
 
 - 项目文档总导航：[docs/README.md](./docs/README.md)
-- 产品范围：[docs/01-product-scope.md](./docs/01-product-scope.md)
-- 路线图：[docs/02-roadmap.md](./docs/02-roadmap.md)
-- 架构总览：[docs/03-architecture.md](./docs/03-architecture.md)
-- API 契约：[docs/04-api-contract.yaml](./docs/04-api-contract.yaml)
+- 产品范围：[docs/product/scope.md](./docs/product/scope.md)
+- 路线图：[docs/product/roadmap.md](./docs/product/roadmap.md)
+- 架构总览：[docs/architecture/README.md](./docs/architecture/README.md)
+- API 契约：[docs/api/openapi.yaml](./docs/api/openapi.yaml)
 - V1 收口计划：[docs/runbooks/plans/v1/v1-closure-plan.md](./docs/runbooks/plans/v1/v1-closure-plan.md)
 - V1 版本归档：[docs/runbooks/plans/v1/v1-release-archive.md](./docs/runbooks/plans/v1/v1-release-archive.md)
 - V1.1 规划草案：[docs/runbooks/plans/v1-1/v1-1-plan.md](./docs/runbooks/plans/v1-1/v1-1-plan.md)
@@ -139,10 +139,10 @@
 
 ## 4. 文档入口
 
-- 架构总览：`docs/03-architecture.md`
-- API 契约：`docs/04-api-contract.yaml`
-- 受理闭环：`docs/06-ingest-acceptance-closure.md`
-- 处理执行：`docs/07-ingest-processing-execution.md`
+- 架构总览：`docs/architecture/README.md`
+- API 契约：`docs/api/openapi.yaml`
+- 受理闭环：`docs/architecture/ingest/acceptance-closure.md`
+- 处理执行：`docs/architecture/ingest/processing-execution.md`
 - ADR：
     - `docs/adr/ADR-0003-v1-dashscope-pgvector.md`（V1 基线：DashScope + PGVector）
     - `docs/adr/ADR-0004-v1-ingest-processing-strategy.md`（状态：Accepted）
