@@ -20,14 +20,14 @@
 
 ## 总览
 
-| 本地编号 | GitHub Issue | 标题 | 类型 | 标签建议 | 阻塞 |
-| --- | --- | --- | --- | --- | --- |
-| RFS-01 | 未发布 | 验证 RustFS 本地 S3 兼容访问与 bucket 前提 | AFK | `ready-for-agent` | 无 |
-| RFS-02 | 未发布 | 实现 `local|s3` 存储模式配置与 S3 Client 装配 | AFK | `ready-for-agent` | RFS-01 |
-| RFS-03 | 未发布 | 实现 S3 source storage adapter | AFK | `ready-for-agent` | RFS-02 |
-| RFS-04 | 未发布 | 实现 S3 artifact storage adapter 与正文读取闭环 | AFK | `ready-for-agent` | RFS-02, RFS-03 |
-| RFS-05 | 未发布 | 完成 S3 模式端到端验收与 local 回归 | AFK | `ready-for-agent` | RFS-03, RFS-04 |
-| RFS-06 | 未发布 | 同步发布文档与历史迁移边界 | AFK | `ready-for-agent` | RFS-05 |
+| 本地编号 | GitHub Issue | 标题                                            | 类型                              | 标签建议          | 阻塞              |
+| -------- | ------------ | ----------------------------------------------- | --------------------------------- | ----------------- | ----------------- |
+| RFS-01   | 未发布       | 验证 RustFS 本地 S3 兼容访问与 bucket 前提      | AFK                               | `ready-for-agent` | 无                |
+| RFS-02   | 未发布       | 实现 `local                                     | s3` 存储模式配置与 S3 Client 装配 | AFK               | `ready-for-agent` |
+| RFS-03   | 未发布       | 实现 S3 source storage adapter                  | AFK                               | `ready-for-agent` | RFS-02            |
+| RFS-04   | 未发布       | 实现 S3 artifact storage adapter 与正文读取闭环 | AFK                               | `ready-for-agent` | RFS-02, RFS-03    |
+| RFS-05   | 未发布       | 完成 S3 模式端到端验收与 local 回归             | AFK                               | `ready-for-agent` | RFS-03, RFS-04    |
+| RFS-06   | 未发布       | 同步发布文档与历史迁移边界                      | AFK                               | `ready-for-agent` | RFS-05            |
 
 ## 建议执行顺序
 
@@ -52,8 +52,8 @@ Blocked by：None - can start immediately
 
 - Spec：`docs/runbooks/plans/object-storage/rustfs-storage-spec.md`
 - Spec coverage：
-  - FS：`4.1 Milestone 1: 存储接入前置验证`
-  - TS：`4.1 Milestone 1: 存储接入前置验证`
+    - FS：`4.1 Milestone 1: 存储接入前置验证`
+    - TS：`4.1 Milestone 1: 存储接入前置验证`
 - Plan：`docs/runbooks/plans/object-storage/rustfs-implementation-plan.md`
 - Runbook：`docs/runbooks/operations/rustfs-object-storage.md`
 
@@ -70,13 +70,13 @@ Blocked by：None - can start immediately
 
 #### Acceptance criteria
 
-- [ ] RustFS endpoint 可访问。
-- [ ] 当前配置中的 access key / secret key 可用于 S3 兼容访问。
-- [ ] `myai-documents` bucket 已创建或已有明确初始化步骤。
-- [ ] smoke test 可完成 put / get / delete 基础对象操作。
-- [ ] smoke test 使用非业务 key，不污染真实 document prefix。
-- [ ] bucket 缺失时，runbook 能指导定位为部署前提问题。
-- [ ] 本 issue 不实现后端 storage adapter，不修改业务读取语义。
+- [x] RustFS endpoint 可访问。
+- [x] 当前配置中的 access key / secret key 可用于 S3 兼容访问。
+- [x] `myai-documents` bucket 已创建或已有明确初始化步骤。
+- [x] smoke test 可完成 put / get / delete 基础对象操作。
+- [x] smoke test 使用非业务 key，不污染真实 document prefix。
+- [x] bucket 缺失时，runbook 能指导定位为部署前提问题。
+- [x] 本 issue 不实现后端 storage adapter，不修改业务读取语义。
 
 #### Blocked by
 
@@ -94,8 +94,8 @@ Blocked by：RFS-01
 
 - Spec：`docs/runbooks/plans/object-storage/rustfs-storage-spec.md`
 - Spec coverage：
-  - FS：`4.2 Milestone 2: 存储模式配置与 S3 Client 基线`
-  - TS：`4.2 Milestone 2: 存储模式配置与 S3 Client 基线`
+    - FS：`4.2 Milestone 2: 存储模式配置与 S3 Client 基线`
+    - TS：`4.2 Milestone 2: 存储模式配置与 S3 Client 基线`
 - ADR：`docs/adr/ADR-0007-s3-compatible-document-asset-storage.md`
 
 #### What to build
@@ -111,15 +111,15 @@ Blocked by：RFS-01
 
 #### Acceptance criteria
 
-- [ ] 新增 `myai.ingest.storage.type`，默认值为 `local`。
-- [ ] `type=local` 时不要求 S3 endpoint、bucket、access key、secret key。
-- [ ] `type=s3` 时会创建 S3 client。
-- [ ] `type=s3` 且必填 S3 配置缺失时，应用启动失败，并能定位缺失配置项。
-- [ ] S3 配置包含 endpoint、bucket、region、access key、secret key、path-style access。
-- [ ] 配置字段不使用 `rustfs` 作为配置命名。
-- [ ] 条件装配不会同时产生 local 和 S3 两套同类型 storage bean。
-- [ ] 默认 `local` 模式下，现有本地存储测试保持通过。
-- [ ] `domain` 和 `application` 代码不依赖 AWS SDK。
+- [x] 新增 `myai.ingest.storage.type`，默认值为 `local`。
+- [x] `type=local` 时不要求 S3 endpoint、bucket、access key、secret key。
+- [x] `type=s3` 时会创建 S3 client。
+- [x] `type=s3` 且必填 S3 配置缺失时，应用启动失败，并能定位缺失配置项。
+- [x] S3 配置包含 endpoint、bucket、region、access key、secret key、path-style access。
+- [x] 配置字段不使用 `rustfs` 作为配置命名。
+- [x] 条件装配不会同时产生 local 和 S3 两套同类型 storage bean。
+- [x] 默认 `local` 模式下，现有本地存储测试保持通过。
+- [x] `domain` 和 `application` 代码不依赖 AWS SDK。
 
 #### Blocked by
 
@@ -137,8 +137,8 @@ Blocked by：RFS-02
 
 - Spec：`docs/runbooks/plans/object-storage/rustfs-storage-spec.md`
 - Spec coverage：
-  - FS：`4.3 Milestone 3: S3 Source Storage Adapter`
-  - TS：`4.3 Milestone 3: S3 Source Storage Adapter`
+    - FS：`4.3 Milestone 3: S3 Source Storage Adapter`
+    - TS：`4.3 Milestone 3: S3 Source Storage Adapter`
 - Existing port：`DocumentSourceStorage`
 - Key resolver：`DocumentStorageKeyResolver`
 
@@ -155,18 +155,18 @@ Blocked by：RFS-02
 
 #### Acceptance criteria
 
-- [ ] S3 source adapter 实现 `DocumentSourceStorage`。
-- [ ] source object key 使用 `source/{workspaceId}/documents/{documentId}/versions/{versionNumber}/{filename}`。
-- [ ] `save(documentId, filename, content)` 等价写入 version 1。
-- [ ] `saveVersion(...)` 通过 `saveVersionIfAbsent(...)` 保持幂等保存契约。
-- [ ] 首次 `saveVersionIfAbsent(...)` 写入成功后返回 `true`。
-- [ ] 同一 key 内容一致时，`saveVersionIfAbsent(...)` 返回 `false`。
-- [ ] 同一 key 内容不一致时，抛出稳定冲突，保留 `version source file content conflict` 语义。
-- [ ] `load` / `loadVersion` 命中时返回完整字节，未命中时返回空。
-- [ ] `load` / `loadVersion` 不 fallback 到本地文件系统或旧 document 级路径。
-- [ ] `deleteByDocumentId` 删除 source prefix 下全部对象，并处理分页 list。
-- [ ] source 删除不影响 artifacts prefix。
-- [ ] 单元测试覆盖版本隔离、幂等命中、冲突、缺失读取和 prefix 删除。
+- [x] S3 source adapter 实现 `DocumentSourceStorage`。
+- [x] source object key 使用 `source/{workspaceId}/documents/{documentId}/versions/{versionNumber}/{filename}`。
+- [x] `save(documentId, filename, content)` 等价写入 version 1。
+- [x] `saveVersion(...)` 通过 `saveVersionIfAbsent(...)` 保持幂等保存契约。
+- [x] 首次 `saveVersionIfAbsent(...)` 写入成功后返回 `true`。
+- [x] 同一 key 内容一致时，`saveVersionIfAbsent(...)` 返回 `false`。
+- [x] 同一 key 内容不一致时，抛出稳定冲突异常类型 `DocumentSourceContentConflictException`。
+- [x] `load` / `loadVersion` 命中时返回完整字节，未命中时返回空。
+- [x] `load` / `loadVersion` 不 fallback 到本地文件系统或旧 document 级路径。
+- [x] `deleteByDocumentId` 删除 source prefix 下全部对象，并处理分页 list。
+- [x] source 删除不影响 artifacts prefix。
+- [x] 单元测试覆盖版本隔离、幂等命中、冲突、缺失读取和 prefix 删除。
 
 #### Blocked by
 
@@ -184,8 +184,8 @@ Blocked by：RFS-02、RFS-03
 
 - Spec：`docs/runbooks/plans/object-storage/rustfs-storage-spec.md`
 - Spec coverage：
-  - FS：`4.4 Milestone 4: S3 Artifact Storage Adapter 与正文读取闭环`
-  - TS：`4.4 Milestone 4: S3 Artifact Storage Adapter 与正文读取闭环`
+    - FS：`4.4 Milestone 4: S3 Artifact Storage Adapter 与正文读取闭环`
+    - TS：`4.4 Milestone 4: S3 Artifact Storage Adapter 与正文读取闭环`
 - Existing port：`DocumentProcessingArtifactStorage`
 - ADR：`docs/adr/ADR-0006-document-version-read-boundary.md`
 
@@ -202,19 +202,19 @@ Blocked by：RFS-02、RFS-03
 
 #### Acceptance criteria
 
-- [ ] S3 artifact adapter 实现 `DocumentProcessingArtifactStorage`。
-- [ ] artifact object key 使用 `artifacts/{workspaceId}/documents/{documentId}/versions/{versionNumber}/{artifactName}`。
-- [ ] `saveVersion(...)` 强制写入 `cleaned.md`。
-- [ ] `raw.xhtml`、`cleaned.html`、`parse-result.json` 按现有 artifacts 配置决定是否写入。
-- [ ] 同一版本同名 artifact 允许覆盖，以支持处理重试写入完整结果。
-- [ ] `loadVersionArtifact(...)` 命中时返回 stable key、UTF-8 正文和字节长度。
-- [ ] object 不存在时，`loadVersionArtifact(...)` 返回空。
-- [ ] object 超过 `maxBytes` 时，抛出 `DocumentVersionArtifactTooLargeException`。
-- [ ] 超过 `maxBytes` 的对象不得先完整读入内存再判断。
-- [ ] `loadVersionArtifact(...)` 不读取 source prefix、不触发重新解析、不从向量分块拼接正文。
-- [ ] `deleteByDocumentId(...)` 删除 artifacts prefix 下全部对象，并处理分页 list。
-- [ ] artifacts 删除不影响 source prefix。
-- [ ] 正文读取回归覆盖 `LATEST`、`ASKABLE_BASELINE`、`EXPLICIT_VERSION`、`CONTENT_NOT_READY`、`CONTENT_ARTIFACT_MISSING`、`CONTENT_TOO_LARGE` 和 `DELETED` document。
+- [x] S3 artifact adapter 实现 `DocumentProcessingArtifactStorage`。
+- [x] artifact object key 使用 `artifacts/{workspaceId}/documents/{documentId}/versions/{versionNumber}/{artifactName}`。
+- [x] `saveVersion(...)` 强制写入 `cleaned.md`。
+- [x] `raw.xhtml`、`cleaned.html`、`parse-result.json` 按现有 artifacts 配置决定是否写入。
+- [x] 同一版本同名 artifact 允许覆盖，以支持处理重试写入完整结果。
+- [x] `loadVersionArtifact(...)` 命中时返回 stable key、UTF-8 正文和字节长度。
+- [x] object 不存在时，`loadVersionArtifact(...)` 返回空。
+- [x] object 超过 `maxBytes` 时，抛出 `DocumentVersionArtifactTooLargeException`。
+- [x] 超过 `maxBytes` 的对象不得先完整读入内存再判断。
+- [x] `loadVersionArtifact(...)` 不读取 source prefix、不触发重新解析、不从向量分块拼接正文。
+- [x] `deleteByDocumentId(...)` 删除 artifacts prefix 下全部对象，并处理分页 list。
+- [x] artifacts 删除不影响 source prefix。
+- [x] 正文读取回归覆盖 `LATEST`、`ASKABLE_BASELINE`、`EXPLICIT_VERSION`、`CONTENT_NOT_READY`、`CONTENT_ARTIFACT_MISSING`、`CONTENT_TOO_LARGE` 和 `DELETED` document。
 
 #### Blocked by
 
@@ -233,8 +233,8 @@ Blocked by：RFS-03、RFS-04
 
 - Spec：`docs/runbooks/plans/object-storage/rustfs-storage-spec.md`
 - Spec coverage：
-  - FS：`4.5 Milestone 5: 端到端接入验收`
-  - TS：`4.5 Milestone 5: 端到端接入验收`
+    - FS：`4.5 Milestone 5: 端到端接入验收`
+    - TS：`4.5 Milestone 5: 端到端接入验收`
 - Runbook：`docs/runbooks/operations/rustfs-object-storage.md`
 
 #### What to build
@@ -250,15 +250,15 @@ Blocked by：RFS-03、RFS-04
 
 #### Acceptance criteria
 
-- [ ] `s3` 模式下上传文档后，RustFS 中存在对应 source object。
-- [ ] `s3` 模式下处理完成后，RustFS 中存在对应版本级 `cleaned.md` object。
-- [ ] `s3` 模式下正文读取成功，响应字段和错误码与本地模式一致。
-- [ ] artifact 缺失仍返回 `CONTENT_ARTIFACT_MISSING`，不触发 source 重新解析。
-- [ ] artifact 超过读取上限仍返回 `CONTENT_TOO_LARGE`。
-- [ ] 删除 document 后，source 与 artifacts object 都被清理。
-- [ ] RustFS 不可用时，上传、处理、读取或删除不 fallback 到本地文件系统。
-- [ ] 默认 `local` 模式回归通过。
-- [ ] 验收步骤沉淀到 runbook 或测试说明中。
+- [x] `s3` 模式下上传文档后，RustFS 中存在对应 source object。
+- [x] `s3` 模式下处理完成后，RustFS 中存在对应版本级 `cleaned.md` object。
+- [x] `s3` 模式下正文读取成功，响应字段和错误码与本地模式一致。
+- [x] artifact 缺失仍返回 `CONTENT_ARTIFACT_MISSING`，不触发 source 重新解析。
+- [x] artifact 超过读取上限仍返回 `CONTENT_TOO_LARGE`。
+- [x] 删除 document 后，source 与 artifacts object 都被清理。
+- [x] RustFS 不可用时，上传、处理、读取或删除不 fallback 到本地文件系统。
+- [x] 默认 `local` 模式回归通过。
+- [x] 验收步骤沉淀到 runbook 或测试说明中。
 
 #### Blocked by
 
@@ -277,8 +277,8 @@ Blocked by：RFS-05
 
 - Spec：`docs/runbooks/plans/object-storage/rustfs-storage-spec.md`
 - Spec coverage：
-  - FS：`4.6 Milestone 6: 发布与后续迁移准备`
-  - TS：`4.6 Milestone 6: 发布与后续迁移准备`
+    - FS：`4.6 Milestone 6: 发布与后续迁移准备`
+    - TS：`4.6 Milestone 6: 发布与后续迁移准备`
 - Runbook：`docs/runbooks/operations/rustfs-object-storage.md`
 - PostgreSQL runbook：`docs/runbooks/operations/postgresql-pgvector.md`
 
@@ -295,13 +295,13 @@ Blocked by：RFS-05
 
 #### Acceptance criteria
 
-- [ ] RustFS runbook 与最终配置字段一致。
-- [ ] RustFS runbook 明确 bucket 初始化、endpoint、region、path-style access 和凭证配置。
-- [ ] RustFS runbook 明确首期不迁移历史 `data/ingest`。
-- [ ] RustFS runbook 明确 RustFS 不可用时不 fallback 到本地文件系统。
-- [ ] RustFS runbook 明确回滚只通过配置切回 `local`，不会自动复制 RustFS 对象回本地。
-- [ ] 文档明确 PostgreSQL 备份不能替代 RustFS source/artifacts 备份。
-- [ ] 如需要历史迁移，仅创建后续 plan/spec 入口，不在本 issue 中实现迁移。
+- [x] RustFS runbook 与最终配置字段一致。
+- [x] RustFS runbook 明确 bucket 初始化、endpoint、region、path-style access 和凭证配置。
+- [x] RustFS runbook 明确首期不迁移历史 `data/ingest`。
+- [x] RustFS runbook 明确 RustFS 不可用时不 fallback 到本地文件系统。
+- [x] RustFS runbook 明确回滚只通过配置切回 `local`，不会自动复制 RustFS 对象回本地。
+- [x] 文档明确 PostgreSQL 备份不能替代 RustFS source/artifacts 备份。
+- [x] 如需要历史迁移，仅创建后续 plan/spec 入口，不在本 issue 中实现迁移。
 
 #### Blocked by
 

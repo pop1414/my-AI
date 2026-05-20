@@ -14,9 +14,6 @@ import java.util.Optional;
  */
 public interface DocumentSourceStorage {
 
-    /** 版本源文件路径已存在但内容不一致时使用的稳定异常消息。 */
-    String VERSION_SOURCE_CONTENT_CONFLICT_MESSAGE = "version source file content conflict";
-
     /**
      * 保存文档源文件。
      *

@@ -14,6 +14,7 @@ import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.Optional;
 import java.util.stream.Stream;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 /**
@@ -35,6 +36,7 @@ import org.springframework.stereotype.Component;
  * @since 1.0.0
  */
 @Component
+@ConditionalOnProperty(prefix = "myai.ingest.storage", name = "type", havingValue = "local", matchIfMissing = true)
 public class LocalDocumentProcessingArtifactStorage implements DocumentProcessingArtifactStorage {
 
     /** Tika 原始 XHTML 输出文件名 */

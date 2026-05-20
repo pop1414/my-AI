@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import io.github.spike.myai.ingest.domain.exception.DocumentSourceContentConflictException;
 import io.github.spike.myai.ingest.domain.model.DocumentId;
 import io.github.spike.myai.ingest.infrastructure.config.IngestProperties;
 import java.nio.charset.StandardCharsets;
@@ -84,7 +85,7 @@ class LocalDocumentSourceStorageTest {
                 "same.pdf",
                 "first-content".getBytes(StandardCharsets.UTF_8));
 
-        assertThrows(IllegalStateException.class, () -> storage.saveVersionIfAbsent(
+        assertThrows(DocumentSourceContentConflictException.class, () -> storage.saveVersionIfAbsent(
                 documentId,
                 4,
                 "same.pdf",

@@ -1,6 +1,7 @@
 package io.github.spike.myai.ingest.infrastructure.storage;
 
 import io.github.spike.myai.ingest.domain.model.DocumentId;
+import io.github.spike.myai.ingest.domain.exception.DocumentSourceContentConflictException;
 import io.github.spike.myai.ingest.domain.port.DocumentSourceStorage;
 import io.github.spike.myai.ingest.infrastructure.config.IngestProperties;
 import io.github.spike.myai.shared.workspace.WorkspaceConstants;
@@ -11,6 +12,7 @@ import java.nio.file.StandardOpenOption;
 import java.util.Arrays;
 import java.util.Optional;
 import java.util.stream.Stream;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 /**
@@ -32,6 +34,7 @@ import org.springframework.stereotype.Component;
  * @since 1.0.0
  */
 @Component
+@ConditionalOnProperty(prefix = "myai.ingest.storage", name = "type", havingValue = "local", matchIfMissing = true)
 public class LocalDocumentSourceStorage implements DocumentSourceStorage {
 
     /** 文件存储根目录路径 */
@@ -115,7 +118,7 @@ public class LocalDocumentSourceStorage implements DocumentSourceStorage {
             if (Files.exists(filePath)) {
                 byte[] existingContent = Files.readAllBytes(filePath);
                 if (!Arrays.equals(existingContent, content)) {
-                    throw new IllegalStateException(VERSION_SOURCE_CONTENT_CONFLICT_MESSAGE);
+                    throw new DocumentSourceContentConflictException();
                 }
                 return false;
             }

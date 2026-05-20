@@ -30,6 +30,8 @@ final class IngestAuditEvents {
 
     /** 文档目标类型 */
     private static final String TARGET_DOCUMENT = "DOCUMENT";
+    /** 上传请求目标类型 */
+    private static final String TARGET_DOCUMENT_UPLOAD = "DOCUMENT_UPLOAD";
     /** 文档版本目标类型 */
     private static final String TARGET_DOCUMENT_VERSION = "DOCUMENT_VERSION";
     /** 成功结果 */
@@ -78,6 +80,48 @@ final class IngestAuditEvents {
         metadata.put("versionOriginType", "UPLOAD");
         metadata.put("versionResultType", versionResultType);
         return success(currentUser, DOCUMENT_UPLOAD_REQUESTED, TARGET_DOCUMENT, documentId.value(), metadata, occurredAt);
+    }
+
+    /**
+     * 构造文档上传受理失败审计事件。
+     *
+     * @param currentUser 当前用户
+     * @param documentId 文档资产 ID，业务校验失败时可为空
+     * @param kbId 知识库 ID
+     * @param filename 文件名
+     * @param fileSize 文件大小
+     * @param fileHash 文件哈希
+     * @param failureCategory 失败分类
+     * @param errorCode 错误码
+     * @param errorMessage 错误消息
+     * @param occurredAt 事件发生时间
+     * @return 审计事件
+     */
+    static AuditEvent documentUploadFailed(
+            CurrentUser currentUser,
+            DocumentId documentId,
+            String kbId,
+            String filename,
+            long fileSize,
+            String fileHash,
+            String failureCategory,
+            String errorCode,
+            String errorMessage,
+            Instant occurredAt) {
+        Map<String, Object> metadata = new LinkedHashMap<>();
+        putIfPresent(metadata, "documentId", documentId == null ? null : documentId.value());
+        metadata.put("kbId", kbId);
+        metadata.put("filename", filename);
+        metadata.put("fileSize", fileSize);
+        metadata.put("fileHash", fileHash);
+        metadata.put("versionOriginType", "UPLOAD");
+        metadata.put("versionResultType", "FAILED");
+        metadata.put("failureCategory", failureCategory);
+        metadata.put("errorCode", errorCode);
+        metadata.put("errorMessage", errorMessage);
+        String targetType = documentId == null ? TARGET_DOCUMENT_UPLOAD : TARGET_DOCUMENT;
+        String targetId = documentId == null ? fileHash : documentId.value();
+        return failure(currentUser, DOCUMENT_UPLOAD_REQUESTED, targetType, targetId, failureCategory, metadata, occurredAt);
     }
 
     /**

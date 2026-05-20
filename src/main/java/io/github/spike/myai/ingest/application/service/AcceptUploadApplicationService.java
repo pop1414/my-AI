@@ -12,6 +12,7 @@ import io.github.spike.myai.ingest.domain.model.UploadStatus;
 import io.github.spike.myai.ingest.domain.model.UploadTicket;
 import io.github.spike.myai.ingest.domain.port.DocumentIdGenerator;
 import io.github.spike.myai.ingest.domain.port.DocumentRepository;
+import io.github.spike.myai.ingest.domain.port.DocumentSourceStorage;
 import io.github.spike.myai.knowledge.application.exception.KnowledgeBaseInactiveException;
 import io.github.spike.myai.knowledge.application.exception.KnowledgeBaseNotFoundException;
 import io.github.spike.myai.knowledge.domain.model.KnowledgeBaseStatus;
@@ -20,6 +21,7 @@ import java.time.Instant;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -68,6 +70,10 @@ public class AcceptUploadApplicationService implements AcceptUploadUseCase {
      * 后续可扩展为多知识库策略，届时此常量可废弃或改为配置项。
      */
     private static final String DEFAULT_KB_ID = "default";
+    /** 上传受理业务校验失败分类 */
+    private static final String FAILURE_BUSINESS_VALIDATION = "UPLOAD_BUSINESS_VALIDATION_FAILED";
+    /** 上传受理 source 保存失败分类 */
+    private static final String FAILURE_SOURCE_SAVE = "UPLOAD_SOURCE_SAVE_FAILED";
 
     /**
      * 文档 ID 生成器（领域端口）。
@@ -85,6 +91,9 @@ public class AcceptUploadApplicationService implements AcceptUploadUseCase {
      * （文件存储由独立的 FileStorage 端口处理）。
      */
     private final DocumentRepository documentRepository;
+
+    /** 源文件存储端口：上传受理新 document 时同步保存 version 1 source */
+    private final DocumentSourceStorage documentSourceStorage;
 
     /**
      * 知识库仓储端口：用于校验目标知识库的存在性与状态。
@@ -123,6 +132,7 @@ public class AcceptUploadApplicationService implements AcceptUploadUseCase {
      *
      * @param documentIdGenerator     文档 ID 生成器（领域端口）
      * @param documentRepository      文档仓储（领域端口）
+     * @param documentSourceStorage   源文件存储（领域端口）
      * @param knowledgeBaseRepository 知识库仓储（领域端口）
      * @param currentUserProvider     当前用户上下文提供器（应用层端口）
      * @param authorizationService    授权服务（应用层）
@@ -132,12 +142,14 @@ public class AcceptUploadApplicationService implements AcceptUploadUseCase {
     public AcceptUploadApplicationService(
             DocumentIdGenerator documentIdGenerator,
             DocumentRepository documentRepository,
+            DocumentSourceStorage documentSourceStorage,
             KnowledgeBaseRepository knowledgeBaseRepository,
             CurrentUserProvider currentUserProvider,
             AuthorizationService authorizationService,
             AuditEventRepository auditEventRepository) {
         this.documentIdGenerator = documentIdGenerator;
         this.documentRepository = documentRepository;
+        this.documentSourceStorage = documentSourceStorage;
         this.knowledgeBaseRepository = knowledgeBaseRepository;
         this.currentUserProvider = currentUserProvider;
         this.authorizationService = authorizationService;
@@ -175,19 +187,32 @@ public class AcceptUploadApplicationService implements AcceptUploadUseCase {
         // 前端可不传 kbId（为空时回退到默认知识库 "default"）
         String resolvedKbId = resolveKbId(command.kbId());
 
-        // ---------- 步骤2：权限校验 ----------
-        // 上传文档属于知识库贡献操作，需 KB_MANAGER / KB_CONTRIBUTOR 或工作区管理员
-        // 权限不足时直接抛出 AccessDeniedException，不创建任何记录
-        authorizationService.requireCanContributeKnowledgeBase(resolvedKbId);
-
-        // ---------- 步骤3：获取工作区上下文 ----------
-        // 从安全上下文中提取当前用户的工作空间 ID，后续所有查询和写入限定在此工作区内
+        // ---------- 步骤2：获取工作区上下文 ----------
+        // 从安全上下文中提取当前用户的工作空间 ID，后续所有查询、写入和审计均限定在此工作区内
         CurrentUser currentUser = currentUserProvider.requireCurrentUser();
         String workspaceId = currentUser.workspaceId();
 
+        // ---------- 步骤3：权限校验 ----------
+        // 上传文档属于知识库贡献操作，需 KB_MANAGER / KB_CONTRIBUTOR 或工作区管理员
+        // 权限不足时直接抛出 AccessDeniedException，不创建任何记录
+        try {
+            authorizationService.requireCanContributeKnowledgeBase(currentUser, resolvedKbId);
+        } catch (AccessDeniedException ex) {
+            auditBusinessValidationFailure(currentUser, command, resolvedKbId, "UPLOAD_NO_CONTRIBUTE_PERMISSION", ex);
+            throw ex;
+        }
+
         // ---------- 步骤4：校验目标知识库 ----------
         // 检查存在性 + 启用状态，不满足则快速失败（Fail-Fast）
-        validateKnowledgeBase(workspaceId, resolvedKbId);
+        try {
+            validateKnowledgeBase(workspaceId, resolvedKbId);
+        } catch (KnowledgeBaseNotFoundException ex) {
+            auditBusinessValidationFailure(currentUser, command, resolvedKbId, "UPLOAD_KB_NOT_FOUND", ex);
+            throw ex;
+        } catch (KnowledgeBaseInactiveException ex) {
+            auditBusinessValidationFailure(currentUser, command, resolvedKbId, "UPLOAD_KB_INACTIVE", ex);
+            throw ex;
+        }
 
         String fileHash = command.fileHash();
 
@@ -241,6 +266,13 @@ public class AcceptUploadApplicationService implements AcceptUploadUseCase {
                         now);
         // 持久化文档聚合根到存储层
         documentRepository.save(document, currentUser.userId());
+        // 同步保存 version 1 source。失败时由事务回滚 document fact，避免留下缺 source 的 UPLOADED document。
+        try {
+            documentSourceStorage.saveVersionIfAbsent(documentId, 1, command.filename(), command.sourceContent());
+        } catch (RuntimeException ex) {
+            auditSourceSaveFailure(currentUser, command, documentId, resolvedKbId, ex);
+            throw ex;
+        }
 
         // ---------- 步骤7：记录日志并返回票据 ----------
         // 记录关键链路日志：文档 ID、知识库、文件名、大小、哈希
@@ -326,5 +358,61 @@ public class AcceptUploadApplicationService implements AcceptUploadUseCase {
         if (knowledgeBase.status() != KnowledgeBaseStatus.ACTIVE) {
             throw new KnowledgeBaseInactiveException("knowledge base is inactive: " + kbId);
         }
+    }
+
+    /**
+     * 记录上传受理业务校验失败审计。
+     *
+     * @param currentUser 当前用户
+     * @param command 上传命令
+     * @param kbId 解析后的知识库 ID
+     * @param errorCode 业务错误码
+     * @param ex 业务异常
+     */
+    private void auditBusinessValidationFailure(
+            CurrentUser currentUser,
+            AcceptUploadCommand command,
+            String kbId,
+            String errorCode,
+            RuntimeException ex) {
+        IngestAuditEventRecorder.save(auditEventRepository, IngestAuditEvents.documentUploadFailed(
+                currentUser,
+                null,
+                kbId,
+                command.filename(),
+                command.fileSize(),
+                command.fileHash(),
+                FAILURE_BUSINESS_VALIDATION,
+                errorCode,
+                ex.getMessage(),
+                Instant.now()));
+    }
+
+    /**
+     * 记录上传受理 source 保存失败审计。
+     *
+     * @param currentUser 当前用户
+     * @param command 上传命令
+     * @param documentId 文档资产 ID
+     * @param kbId 解析后的知识库 ID
+     * @param ex 存储异常
+     */
+    private void auditSourceSaveFailure(
+            CurrentUser currentUser,
+            AcceptUploadCommand command,
+            DocumentId documentId,
+            String kbId,
+            RuntimeException ex) {
+        IngestAuditEventRecorder.save(auditEventRepository, IngestAuditEvents.documentUploadFailed(
+                currentUser,
+                documentId,
+                kbId,
+                command.filename(),
+                command.fileSize(),
+                command.fileHash(),
+                FAILURE_SOURCE_SAVE,
+                "UPLOAD_SOURCE_SAVE_FAILED",
+                ex.getMessage(),
+                Instant.now()));
     }
 }
