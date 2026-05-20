@@ -48,7 +48,6 @@ import io.github.spike.myai.ingest.domain.model.DocumentId;
 import io.github.spike.myai.ingest.domain.model.DocumentVersionOriginType;
 import io.github.spike.myai.ingest.domain.model.UploadStatus;
 import io.github.spike.myai.ingest.domain.model.UploadTicket;
-import io.github.spike.myai.ingest.domain.port.DocumentSourceStorage;
 import io.github.spike.myai.knowledge.application.exception.KnowledgeBaseInactiveException;
 import io.github.spike.myai.knowledge.application.exception.KnowledgeBaseNotFoundException;
 import io.github.spike.myai.shared.rest.BusinessException;
@@ -89,7 +88,6 @@ class DocumentIngestControllerTest {
     private DeleteDocumentUseCase deleteDocumentUseCase;
     private UploadNewDocumentVersionUseCase uploadNewDocumentVersionUseCase;
     private RollbackDocumentVersionUseCase rollbackDocumentVersionUseCase;
-    private DocumentSourceStorage documentSourceStorage;
     private MockMvc mockMvc;
 
     @BeforeEach
@@ -104,7 +102,6 @@ class DocumentIngestControllerTest {
         this.deleteDocumentUseCase = Mockito.mock(DeleteDocumentUseCase.class);
         this.uploadNewDocumentVersionUseCase = Mockito.mock(UploadNewDocumentVersionUseCase.class);
         this.rollbackDocumentVersionUseCase = Mockito.mock(RollbackDocumentVersionUseCase.class);
-        this.documentSourceStorage = Mockito.mock(DocumentSourceStorage.class);
         ObjectMapper objectMapper = new ObjectMapper()
                 .findAndRegisterModules()
                 .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
@@ -120,7 +117,6 @@ class DocumentIngestControllerTest {
                 deleteDocumentUseCase,
                 uploadNewDocumentVersionUseCase,
                 rollbackDocumentVersionUseCase,
-                documentSourceStorage,
                 objectMapper);
         this.mockMvc = MockMvcBuilders.standaloneSetup(controller)
                 .setControllerAdvice(new GlobalRestExceptionHandler())
@@ -215,7 +211,7 @@ class DocumentIngestControllerTest {
         org.junit.jupiter.api.Assertions.assertEquals(
                 "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824",
                 captured.fileHash());
-        verify(documentSourceStorage).save(any(DocumentId.class), any(String.class), any(byte[].class));
+        org.junit.jupiter.api.Assertions.assertArrayEquals("hello".getBytes(), captured.sourceContent());
     }
 
     @Test
@@ -228,7 +224,6 @@ class DocumentIngestControllerTest {
                 .andExpect(status().isBadRequest());
 
         verify(acceptUploadUseCase, never()).handle(any(AcceptUploadCommand.class));
-        verify(documentSourceStorage, never()).save(any(DocumentId.class), any(String.class), any(byte[].class));
     }
 
     @Test
@@ -457,15 +452,10 @@ class DocumentIngestControllerTest {
         org.junit.jupiter.api.Assertions.assertEquals(11L, captor.getValue().fileSize());
         org.junit.jupiter.api.Assertions.assertEquals(2, captor.getValue().expectedLatestVersionNumber());
         org.junit.jupiter.api.Assertions.assertArrayEquals("new content".getBytes(), captor.getValue().sourceContent());
-        verify(documentSourceStorage, never()).saveVersion(
-                any(DocumentId.class),
-                org.mockito.ArgumentMatchers.anyInt(),
-                any(String.class),
-                any(byte[].class));
     }
 
     @Test
-    @DisplayName("上传新版本同内容复用时，不应保存新的版本源文件")
+    @DisplayName("上传新版本同内容复用时，应返回复用结果")
     void uploadNewVersion_shouldNotSaveSource_whenReusedIdenticalContent() throws Exception {
         when(uploadNewDocumentVersionUseCase.handle(any(UploadNewDocumentVersionCommand.class)))
                 .thenReturn(new DocumentVersionUploadResult(
@@ -491,12 +481,6 @@ class DocumentIngestControllerTest {
                 .andExpect(jsonPath("$.versionResultType").value("REUSED_IDENTICAL_CONTENT"))
                 .andExpect(jsonPath("$.reusedLatestVersionNumber").value(2))
                 .andExpect(jsonPath("$.latestVersionNumber").value(2));
-
-        verify(documentSourceStorage, never()).saveVersion(
-                any(DocumentId.class),
-                org.mockito.ArgumentMatchers.anyInt(),
-                any(String.class),
-                any(byte[].class));
     }
 
     @Test

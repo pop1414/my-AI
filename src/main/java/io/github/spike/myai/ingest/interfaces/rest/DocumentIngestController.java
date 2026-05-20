@@ -35,9 +35,7 @@ import io.github.spike.myai.ingest.application.usecase.RollbackDocumentVersionUs
 import io.github.spike.myai.ingest.application.usecase.UploadNewDocumentVersionUseCase;
 import io.github.spike.myai.ingest.application.result.DocumentStatusResult;
 import org.springframework.http.ResponseEntity;
-import io.github.spike.myai.ingest.domain.model.DocumentId;
 import io.github.spike.myai.ingest.domain.model.UploadTicket;
-import io.github.spike.myai.ingest.domain.port.DocumentSourceStorage;
 import io.github.spike.myai.ingest.interfaces.rest.dto.DocumentChunkPreviewItemResponse;
 import io.github.spike.myai.ingest.interfaces.rest.dto.DocumentChunksPreviewResponse;
 import io.github.spike.myai.ingest.interfaces.rest.dto.DocumentContentResponse;
@@ -129,10 +127,6 @@ public class DocumentIngestController {
      */
     private final RollbackDocumentVersionUseCase rollbackDocumentVersionUseCase;
     /**
-     * 文档源文件存储端口：用于保存上传文件的原始内容，供异步处理链路读取。
-     */
-    private final DocumentSourceStorage documentSourceStorage;
-    /**
      * JSON 映射器：用于解析 processing_metadata 字段。
      */
     private final ObjectMapper objectMapper;
@@ -153,7 +147,6 @@ public class DocumentIngestController {
      * @param deleteDocumentUseCase          文档删除用例
      * @param uploadNewDocumentVersionUseCase 上传新版本用例
      * @param rollbackDocumentVersionUseCase 版本回退用例
-     * @param documentSourceStorage          源文件存储端口
      * @param objectMapper                   Jackson JSON 映射器
      */
     public DocumentIngestController(
@@ -167,7 +160,6 @@ public class DocumentIngestController {
             DeleteDocumentUseCase deleteDocumentUseCase,
             UploadNewDocumentVersionUseCase uploadNewDocumentVersionUseCase,
             RollbackDocumentVersionUseCase rollbackDocumentVersionUseCase,
-            DocumentSourceStorage documentSourceStorage,
             ObjectMapper objectMapper) {
         this.acceptUploadUseCase = acceptUploadUseCase;
         this.listDocumentsUseCase = listDocumentsUseCase;
@@ -179,7 +171,6 @@ public class DocumentIngestController {
         this.deleteDocumentUseCase = deleteDocumentUseCase;
         this.uploadNewDocumentVersionUseCase = uploadNewDocumentVersionUseCase;
         this.rollbackDocumentVersionUseCase = rollbackDocumentVersionUseCase;
-        this.documentSourceStorage = documentSourceStorage;
         this.objectMapper = objectMapper;
     }
 
@@ -247,17 +238,18 @@ public class DocumentIngestController {
 
         // 计算上传文件的内容哈希（SHA-256），用于后续判断是否重复文件或者走秒传逻辑。
         String fileHash = calculateFileHash(file);
-        // 将 HTTP 参数转换为应用层命令对象，隔离接口协议与用例编排。
-        AcceptUploadCommand command = new AcceptUploadCommand(file.getOriginalFilename(), file.getSize(), kbId, fileHash);
-
         // 调用应用层的处理逻辑处理上传命令。
         // 异常映射：领域异常 → HTTP 状态码，控制器负责语义转换
         UploadTicket uploadTicket;
         try {
+            // 将 HTTP 参数转换为应用层命令对象，隔离接口协议与用例编排。
+            AcceptUploadCommand command = new AcceptUploadCommand(
+                    file.getOriginalFilename(),
+                    file.getSize(),
+                    kbId,
+                    fileHash,
+                    file.getBytes());
             uploadTicket = acceptUploadUseCase.handle(command);
-            // 受理成功后立即持久化源文件，供异步处理链路（解析/分块/向量化）读取。
-            // 当命中幂等复用既有 documentId 时，这里会走存储端口的幂等写入（存在则不覆盖）。
-            documentSourceStorage.save(uploadTicket.documentId(), file.getOriginalFilename(), file.getBytes());
         } catch (KnowledgeBaseNotFoundException ex) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, ex.getMessage(), ex);
         } catch (KnowledgeBaseInactiveException ex) {

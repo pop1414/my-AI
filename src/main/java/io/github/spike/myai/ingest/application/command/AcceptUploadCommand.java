@@ -14,12 +14,16 @@ package io.github.spike.myai.ingest.application.command;
  * @param fileSize 文件大小（字节）
  * @param kbId 知识库 ID（可为空，默认值由应用服务解析）
  * @param fileHash 文件内容哈希（SHA-256 十六进制），用于上传受理幂等
+ * @param sourceContent 原始文件字节，用于在受理新 document 时同步形成版本 source
  */
-public record AcceptUploadCommand(String filename, long fileSize, String kbId, String fileHash) {
+public record AcceptUploadCommand(String filename, long fileSize, String kbId, String fileHash, byte[] sourceContent) {
 
     public AcceptUploadCommand {
         if (fileHash == null || fileHash.isBlank()) {
             throw new IllegalArgumentException("fileHash must not be blank");
+        }
+        if (sourceContent == null || sourceContent.length == 0) {
+            throw new IllegalArgumentException("sourceContent must not be empty");
         }
     }
 }

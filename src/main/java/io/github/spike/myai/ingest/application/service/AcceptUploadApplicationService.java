@@ -12,6 +12,7 @@ import io.github.spike.myai.ingest.domain.model.UploadStatus;
 import io.github.spike.myai.ingest.domain.model.UploadTicket;
 import io.github.spike.myai.ingest.domain.port.DocumentIdGenerator;
 import io.github.spike.myai.ingest.domain.port.DocumentRepository;
+import io.github.spike.myai.ingest.domain.port.DocumentSourceStorage;
 import io.github.spike.myai.knowledge.application.exception.KnowledgeBaseInactiveException;
 import io.github.spike.myai.knowledge.application.exception.KnowledgeBaseNotFoundException;
 import io.github.spike.myai.knowledge.domain.model.KnowledgeBaseStatus;
@@ -86,6 +87,9 @@ public class AcceptUploadApplicationService implements AcceptUploadUseCase {
      */
     private final DocumentRepository documentRepository;
 
+    /** 源文件存储端口：上传受理新 document 时同步保存 version 1 source */
+    private final DocumentSourceStorage documentSourceStorage;
+
     /**
      * 知识库仓储端口：用于校验目标知识库的存在性与状态。
      *
@@ -123,6 +127,7 @@ public class AcceptUploadApplicationService implements AcceptUploadUseCase {
      *
      * @param documentIdGenerator     文档 ID 生成器（领域端口）
      * @param documentRepository      文档仓储（领域端口）
+     * @param documentSourceStorage   源文件存储（领域端口）
      * @param knowledgeBaseRepository 知识库仓储（领域端口）
      * @param currentUserProvider     当前用户上下文提供器（应用层端口）
      * @param authorizationService    授权服务（应用层）
@@ -132,12 +137,14 @@ public class AcceptUploadApplicationService implements AcceptUploadUseCase {
     public AcceptUploadApplicationService(
             DocumentIdGenerator documentIdGenerator,
             DocumentRepository documentRepository,
+            DocumentSourceStorage documentSourceStorage,
             KnowledgeBaseRepository knowledgeBaseRepository,
             CurrentUserProvider currentUserProvider,
             AuthorizationService authorizationService,
             AuditEventRepository auditEventRepository) {
         this.documentIdGenerator = documentIdGenerator;
         this.documentRepository = documentRepository;
+        this.documentSourceStorage = documentSourceStorage;
         this.knowledgeBaseRepository = knowledgeBaseRepository;
         this.currentUserProvider = currentUserProvider;
         this.authorizationService = authorizationService;
@@ -241,6 +248,8 @@ public class AcceptUploadApplicationService implements AcceptUploadUseCase {
                         now);
         // 持久化文档聚合根到存储层
         documentRepository.save(document, currentUser.userId());
+        // 同步保存 version 1 source。失败时由事务回滚 document fact，避免留下缺 source 的 UPLOADED document。
+        documentSourceStorage.saveVersionIfAbsent(documentId, 1, command.filename(), command.sourceContent());
 
         // ---------- 步骤7：记录日志并返回票据 ----------
         // 记录关键链路日志：文档 ID、知识库、文件名、大小、哈希
