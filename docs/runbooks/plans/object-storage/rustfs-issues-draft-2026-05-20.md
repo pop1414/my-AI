@@ -111,15 +111,15 @@ Blocked by：RFS-01
 
 #### Acceptance criteria
 
-- [ ] 新增 `myai.ingest.storage.type`，默认值为 `local`。
-- [ ] `type=local` 时不要求 S3 endpoint、bucket、access key、secret key。
-- [ ] `type=s3` 时会创建 S3 client。
-- [ ] `type=s3` 且必填 S3 配置缺失时，应用启动失败，并能定位缺失配置项。
-- [ ] S3 配置包含 endpoint、bucket、region、access key、secret key、path-style access。
-- [ ] 配置字段不使用 `rustfs` 作为配置命名。
-- [ ] 条件装配不会同时产生 local 和 S3 两套同类型 storage bean。
-- [ ] 默认 `local` 模式下，现有本地存储测试保持通过。
-- [ ] `domain` 和 `application` 代码不依赖 AWS SDK。
+- [x] 新增 `myai.ingest.storage.type`，默认值为 `local`。
+- [x] `type=local` 时不要求 S3 endpoint、bucket、access key、secret key。
+- [x] `type=s3` 时会创建 S3 client。
+- [x] `type=s3` 且必填 S3 配置缺失时，应用启动失败，并能定位缺失配置项。
+- [x] S3 配置包含 endpoint、bucket、region、access key、secret key、path-style access。
+- [x] 配置字段不使用 `rustfs` 作为配置命名。
+- [x] 条件装配不会同时产生 local 和 S3 两套同类型 storage bean。
+- [x] 默认 `local` 模式下，现有本地存储测试保持通过。
+- [x] `domain` 和 `application` 代码不依赖 AWS SDK。
 
 #### Blocked by
 
