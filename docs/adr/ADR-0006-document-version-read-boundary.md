@@ -22,8 +22,8 @@
 - 文档详情状态读取同样以 latest projection + latest version fact 为主视图事实源，返回当前最新版本的状态、来源文件名、版本号和来源类型。
 - 文档版本正文读取通过 `documentId + versionNumber` 定位版本级处理产物，并读取该版本对应的 `cleaned.md`。
 - `cleaned.md` 是版本级 artifact，不是 document 级共享文件；artifact key 必须包含 `workspaceId`、`documentId`、`versionNumber` 和 artifact 名称。
-- 源文件和处理产物在对象存储中逻辑隔离；首期可使用同一 MinIO bucket 的不同 prefix，例如 `source/...` 与 `artifacts/...`。
-- 应用层通过版本处理产物存储端口读取正文，不直接依赖本地文件路径或 MinIO SDK。
+- 源文件和处理产物在 S3 兼容对象存储中逻辑隔离；首期可使用同一 bucket 的不同 prefix，例如 `source/...` 与 `artifacts/...`。
+- 应用层通过版本处理产物存储端口读取正文，不直接依赖本地文件路径或 S3 SDK。
 - 文档版本正文读取使用统一接口 `GET /api/v1/documents/{documentId}/content`，通过必填查询参数 `source` 表达读取意图。
 - `source=LATEST` 表示服务端选择当前 latest version 并忠实表达 latest 状态；该分支不能自动回退到旧版本，也不能通过前端传入 `versionNumber` 来模拟 latest。
 - `source=ASKABLE_BASELINE` 表示服务端选择当前 QA 可问答基线版本，用于问答引用侧栏和普通读者正文核对。
