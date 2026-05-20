@@ -202,19 +202,19 @@ Blocked by：RFS-02、RFS-03
 
 #### Acceptance criteria
 
-- [ ] S3 artifact adapter 实现 `DocumentProcessingArtifactStorage`。
-- [ ] artifact object key 使用 `artifacts/{workspaceId}/documents/{documentId}/versions/{versionNumber}/{artifactName}`。
-- [ ] `saveVersion(...)` 强制写入 `cleaned.md`。
-- [ ] `raw.xhtml`、`cleaned.html`、`parse-result.json` 按现有 artifacts 配置决定是否写入。
-- [ ] 同一版本同名 artifact 允许覆盖，以支持处理重试写入完整结果。
-- [ ] `loadVersionArtifact(...)` 命中时返回 stable key、UTF-8 正文和字节长度。
-- [ ] object 不存在时，`loadVersionArtifact(...)` 返回空。
-- [ ] object 超过 `maxBytes` 时，抛出 `DocumentVersionArtifactTooLargeException`。
-- [ ] 超过 `maxBytes` 的对象不得先完整读入内存再判断。
-- [ ] `loadVersionArtifact(...)` 不读取 source prefix、不触发重新解析、不从向量分块拼接正文。
-- [ ] `deleteByDocumentId(...)` 删除 artifacts prefix 下全部对象，并处理分页 list。
-- [ ] artifacts 删除不影响 source prefix。
-- [ ] 正文读取回归覆盖 `LATEST`、`ASKABLE_BASELINE`、`EXPLICIT_VERSION`、`CONTENT_NOT_READY`、`CONTENT_ARTIFACT_MISSING`、`CONTENT_TOO_LARGE` 和 `DELETED` document。
+- [x] S3 artifact adapter 实现 `DocumentProcessingArtifactStorage`。
+- [x] artifact object key 使用 `artifacts/{workspaceId}/documents/{documentId}/versions/{versionNumber}/{artifactName}`。
+- [x] `saveVersion(...)` 强制写入 `cleaned.md`。
+- [x] `raw.xhtml`、`cleaned.html`、`parse-result.json` 按现有 artifacts 配置决定是否写入。
+- [x] 同一版本同名 artifact 允许覆盖，以支持处理重试写入完整结果。
+- [x] `loadVersionArtifact(...)` 命中时返回 stable key、UTF-8 正文和字节长度。
+- [x] object 不存在时，`loadVersionArtifact(...)` 返回空。
+- [x] object 超过 `maxBytes` 时，抛出 `DocumentVersionArtifactTooLargeException`。
+- [x] 超过 `maxBytes` 的对象不得先完整读入内存再判断。
+- [x] `loadVersionArtifact(...)` 不读取 source prefix、不触发重新解析、不从向量分块拼接正文。
+- [x] `deleteByDocumentId(...)` 删除 artifacts prefix 下全部对象，并处理分页 list。
+- [x] artifacts 删除不影响 source prefix。
+- [x] 正文读取回归覆盖 `LATEST`、`ASKABLE_BASELINE`、`EXPLICIT_VERSION`、`CONTENT_NOT_READY`、`CONTENT_ARTIFACT_MISSING`、`CONTENT_TOO_LARGE` 和 `DELETED` document。
 
 #### Blocked by
 
