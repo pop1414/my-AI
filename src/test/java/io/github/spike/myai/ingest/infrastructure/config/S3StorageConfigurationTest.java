@@ -6,6 +6,7 @@ import io.github.spike.myai.ingest.domain.port.DocumentProcessingArtifactStorage
 import io.github.spike.myai.ingest.domain.port.DocumentSourceStorage;
 import io.github.spike.myai.ingest.infrastructure.storage.LocalDocumentProcessingArtifactStorage;
 import io.github.spike.myai.ingest.infrastructure.storage.LocalDocumentSourceStorage;
+import io.github.spike.myai.ingest.infrastructure.storage.S3DocumentSourceStorage;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
@@ -40,7 +41,7 @@ class S3StorageConfigurationTest {
 
     @Test
     @DisplayName("s3 存储模式应创建 S3Client，并关闭本地存储实现")
-    void s3StorageMode_shouldCreateS3ClientAndDisableLocalStorage() {
+    void s3StorageMode_shouldCreateS3ClientAndUseS3SourceStorage() {
         contextRunner
                 .withPropertyValues(
                         "myai.ingest.storage.type=s3",
@@ -55,7 +56,8 @@ class S3StorageConfigurationTest {
                     assertThat(context.getBean(IngestProperties.class).getStorage().getType())
                             .isEqualTo(IngestProperties.StorageType.S3);
                     assertThat(context).hasSingleBean(S3Client.class);
-                    assertThat(context).doesNotHaveBean(DocumentSourceStorage.class);
+                    assertThat(context).hasSingleBean(DocumentSourceStorage.class);
+                    assertThat(context).hasSingleBean(S3DocumentSourceStorage.class);
                     assertThat(context).doesNotHaveBean(DocumentProcessingArtifactStorage.class);
                     assertThat(context).doesNotHaveBean(LocalDocumentSourceStorage.class);
                     assertThat(context).doesNotHaveBean(LocalDocumentProcessingArtifactStorage.class);
@@ -85,7 +87,8 @@ class S3StorageConfigurationTest {
     @Import({
             S3StorageConfiguration.class,
             LocalDocumentSourceStorage.class,
-            LocalDocumentProcessingArtifactStorage.class
+            LocalDocumentProcessingArtifactStorage.class,
+            S3DocumentSourceStorage.class
     })
     static class StorageModeTestConfiguration {
     }
