@@ -11,6 +11,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * <ul>
  *   <li>{@link Parser}：Tika 解析参数</li>
  *   <li>{@link Storage}：源文件与中间产物存储参数</li>
+ *   <li>{@link S3}：S3 兼容对象存储连接参数</li>
  *   <li>{@link Artifacts}：调试产物保留策略</li>
  *   <li>{@link Chunk}：文本分块参数</li>
  *   <li>{@link Worker}：异步 worker 调度参数</li>
@@ -49,10 +50,48 @@ public class IngestProperties {
     @Setter
     @Getter
     public static class Storage {
+        /** 存储介质类型，默认使用本地文件系统 */
+        private StorageType type = StorageType.LOCAL;
         /** 文件存储根目录，源文件和中间产物均在此目录下按 documentId 分目录存放 */
         private String rootDir = "data/ingest";
+        /** S3 兼容对象存储连接配置 */
+        private final S3 s3 = new S3();
         /** 中间产物保留策略配置 */
         private final Artifacts artifacts = new Artifacts();
+
+    }
+
+    /**
+     * 文档资产存储介质类型。
+     */
+    public enum StorageType {
+        /** 本地文件系统存储 */
+        LOCAL,
+        /** S3 兼容对象存储 */
+        S3
+    }
+
+    /**
+     * S3 兼容对象存储连接参数。
+     *
+     * <p>该配置只描述标准 S3 访问参数，不绑定 RustFS 产品名。应用进入 {@code s3}
+     * 存储模式时，基础设施层使用这些参数创建 S3 client。
+     */
+    @Setter
+    @Getter
+    public static class S3 {
+        /** S3 兼容服务端点，例如 http://localhost:9000 */
+        private String endpoint = "";
+        /** 文档资产 bucket 名称 */
+        private String bucket = "myai-documents";
+        /** S3 region，RustFS 本地验证默认使用 us-east-1 */
+        private String region = "us-east-1";
+        /** S3 access key */
+        private String accessKey = "";
+        /** S3 secret key */
+        private String secretKey = "";
+        /** 是否启用 path-style access，本地 RustFS 默认需要开启 */
+        private boolean pathStyleAccess = true;
 
     }
 

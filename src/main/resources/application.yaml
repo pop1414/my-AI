@@ -57,8 +57,23 @@ myai:
       # 是否允许解析嵌入资源（默认关闭，避免图片/附件污染正文）
       parse-embedded-resource: ${INGEST_PARSER_PARSE_EMBEDDED_RESOURCE:false}
     storage:
-      # 上传源文件本地落盘目录（可替换为对象存储适配器）
+      # 存储介质类型：local 为本地文件系统，s3 为 S3 兼容对象存储
+      type: ${INGEST_STORAGE_TYPE:local}
+      # 上传源文件本地落盘目录；仅 local 模式使用
       root-dir: ${INGEST_STORAGE_ROOT_DIR:data/ingest}
+      s3:
+        # S3 兼容对象存储 endpoint；s3 模式必填
+        endpoint: ${INGEST_STORAGE_S3_ENDPOINT:http://localhost:9000}
+        # 文档资产 bucket；首期由部署或本地初始化提前创建
+        bucket: ${INGEST_STORAGE_S3_BUCKET:myai-documents}
+        # S3 region；RustFS 本地验证默认使用 us-east-1
+        region: ${INGEST_STORAGE_S3_REGION:us-east-1}
+        # S3 access key；通过环境变量注入
+        access-key: ${INGEST_STORAGE_S3_ACCESS_KEY:admin}
+        # S3 secret key；通过环境变量注入
+        secret-key: ${INGEST_STORAGE_S3_SECRET_KEY:Admin@123}
+        # RustFS 本地部署使用 path-style access
+        path-style-access: ${INGEST_STORAGE_S3_PATH_STYLE_ACCESS:true}
       artifacts:
         # 正文读取单次最大字节数；超出时返回 CONTENT_TOO_LARGE，不静默截断
         max-read-bytes: ${INGEST_STORAGE_ARTIFACT_MAX_READ_BYTES:2000000}
