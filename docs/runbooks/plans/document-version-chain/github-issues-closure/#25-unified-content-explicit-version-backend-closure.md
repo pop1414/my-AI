@@ -19,7 +19,7 @@
 - 应用层测试：`src/test/java/io/github/spike/myai/ingest/application/service/GetDocumentContentApplicationServiceTest.java`
 - REST controller 测试：`src/test/java/io/github/spike/myai/ingest/interfaces/rest/DocumentIngestControllerTest.java`
 - 授权测试：`src/test/java/io/github/spike/myai/auth/application/service/AuthorizationServiceTest.java`
-- OpenAPI 契约：`docs/04-api-contract.yaml`
+- OpenAPI 契约：`docs/api/openapi.yaml`
 - 架构决策记录：`docs/adr/ADR-0006-document-version-read-boundary.md`
 
 ## 3. 验收对照
@@ -36,7 +36,7 @@
 - `DELETED` document 拒绝正文读取：应用服务在读取版本或 artifact 前即拒绝，不因用户具备管理权限而放行。
 - 指定版本正文未就绪、产物缺失、正文过大时分别映射到 `CONTENT_NOT_READY`、`CONTENT_ARTIFACT_MISSING`、`CONTENT_TOO_LARGE`：处理中版本缺 artifact 走未就绪，终态缺 artifact 走产物缺失，超过服务端读取上限走过大错误。
 - 读取历史版本不改变 QA baseline：应用服务对显式版本分支只执行读取类调用，不写 document，不推进 askable baseline，也不把历史版本切成新的默认问答基线。
-- OpenAPI 与 ADR 已对齐：`docs/04-api-contract.yaml` 与 `ADR-0006` 已同步表达 `source=EXPLICIT_VERSION&versionNumber={versionNumber}` 的权限和语义边界。
+- OpenAPI 与 ADR 已对齐：`docs/api/openapi.yaml` 与 `ADR-0006` 已同步表达 `source=EXPLICIT_VERSION&versionNumber={versionNumber}` 的权限和语义边界。
 
 ## 4. 关闭判断
 

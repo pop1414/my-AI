@@ -319,13 +319,13 @@
 
 后续仍建议同步：
 
-- [docs/04-api-contract.yaml](D:/Code/project/my-AI-ingest/docs/04-api-contract.yaml)
+- [docs/api/openapi.yaml](D:/Code/project/my-AI-ingest/docs/api/openapi.yaml)
   - 新增上传新版本接口
   - 新增版本回退接口
   - 扩展成功响应 DTO
   - 扩展业务错误码
 
-- [docs/03-architecture.md](D:/Code/project/my-AI-ingest/docs/03-architecture.md)
+- [docs/architecture/README.md](D:/Code/project/my-AI-ingest/docs/architecture/README.md)
   - `document` / `document version` / `processing attempt` 三层关系
   - 最新版本投影与版本事实边界
 

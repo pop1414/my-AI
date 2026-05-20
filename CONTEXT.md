@@ -677,11 +677,11 @@ chunk 是向量检索与引用展示的基本文本单元。
 
 1. `README.md`
 2. `docs/README.md`
-3. `docs/01-product-scope.md`
-4. `docs/02-roadmap.md`
-5. `docs/03-architecture.md`
-6. `docs/04-api-contract.yaml`
-7. `docs/07-ingest-processing-execution.md`
+3. `docs/product/scope.md`
+4. `docs/product/roadmap.md`
+5. `docs/architecture/README.md`
+6. `docs/api/openapi.yaml`
+7. `docs/architecture/ingest/processing-execution.md`
 8. `docs/runbooks/plans/ingest-cleaning/RAG 文档解析与清洗方案.md`
 9. `docs/runbooks/plans/ingest-cleaning/黄金样本与验收说明.md`
 10. `docs/runbooks/plans/ingest-cleaning/cleaned-md质量回归闭环.md`

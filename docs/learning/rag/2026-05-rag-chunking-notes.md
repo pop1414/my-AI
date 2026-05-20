@@ -84,7 +84,7 @@ RAG 很容易陷入“效果不好但不知道哪一步坏了”。
 
 ## 7. 相关代码 / 文档入口
 
-- 正式文档：[07-ingest-processing-execution.md](../../07-ingest-processing-execution.md)
+- 正式文档：[architecture/ingest/processing-execution.md](../../architecture/ingest/processing-execution.md)
 - 分块器：[StructuredFallbackDocumentChunker.java](../../../src/main/java/io/github/spike/myai/ingest/infrastructure/chunking/StructuredFallbackDocumentChunker.java)
 - 预览接口：[DocumentIngestController.java](../../../src/main/java/io/github/spike/myai/ingest/interfaces/rest/DocumentIngestController.java)
 - 前端预览页：[IngestChunksPreviewPage.tsx](../../../web/src/features/ingest/pages/IngestChunksPreviewPage.tsx)

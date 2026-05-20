@@ -68,8 +68,8 @@ docs(ingest): 补充文档资产副作用恢复手册
 
 ## 3. 阶段 2：同步产品范围和路线图事实
 
-- [ ] 更新 `docs/01-product-scope.md`，说明原 V1 范围与当前已落地权限基线的差异。
-- [ ] 更新 `docs/02-roadmap.md`，把权限体系拆成“已落地基线”和“后续增强”。
+- [ ] 更新 `docs/product/scope.md`，说明原 V1 范围与当前已落地权限基线的差异。
+- [ ] 更新 `docs/product/roadmap.md`，把权限体系拆成“已落地基线”和“后续增强”。
 - [ ] 更新 `README.md`，补齐账号治理、成员管理、知识库授权、文档授权和审计 API 摘要。
 - [ ] 统一 README 中的“截至日期”，避免同一入口出现多个事实时间。
 
@@ -80,7 +80,7 @@ docs(ingest): 补充文档资产副作用恢复手册
 
 建议提交分组：
 
-- 文件：`docs/01-product-scope.md`、`docs/02-roadmap.md`、`README.md`
+- 文件：`docs/product/scope.md`、`docs/product/roadmap.md`、`README.md`
 - Commit message：
 
 ```text
@@ -93,7 +93,7 @@ docs(scope): 同步 V1 范围与权限治理事实
 
 ## 4. 阶段 3：同步架构当前事实
 
-- [ ] 更新 `docs/03-architecture.md` 的目标架构章节。
+- [ ] 更新 `docs/architecture/README.md` 的目标架构章节。
 - [ ] 将“当前实现事实”和“未来目标蓝图”拆成独立小节。
 - [ ] 当前事实明确写为 PostgreSQL/PGVector、本地存储、Session auth、无 SSE。
 - [ ] 未来蓝图再说明 MySQL、MinIO、Tenant、SSE 等演进方向。
@@ -106,7 +106,7 @@ docs(scope): 同步 V1 范围与权限治理事实
 
 建议提交分组：
 
-- 文件：`docs/03-architecture.md`
+- 文件：`docs/architecture/README.md`
 - Commit message：
 
 ```text

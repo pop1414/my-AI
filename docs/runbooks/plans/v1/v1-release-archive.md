@@ -33,11 +33,11 @@
 本次版本归档以以下事实源为准：
 
 - [README.md](../../README.md)
-- [docs/01-product-scope.md](../01-product-scope.md)
-- [docs/02-roadmap.md](../02-roadmap.md)
-- [docs/03-architecture.md](../03-architecture.md)
-- [docs/04-api-contract.yaml](../04-api-contract.yaml)
-- [docs/05-release-notes.md](../05-release-notes.md)
+- [docs/product/scope.md](../../../product/scope.md)
+- [docs/product/roadmap.md](../../../product/roadmap.md)
+- [docs/architecture/README.md](../../../architecture/README.md)
+- [docs/api/openapi.yaml](../../../api/openapi.yaml)
+- [docs/releases/release-notes.md](../../../releases/release-notes.md)
 - [docs/runbooks/plans/v1/v1-closure-plan.md](./v1-closure-plan.md)
 - [docs/runbooks/handoffs/2026-05-07-session-handoff-v1-closure.md](./handoffs/2026-05-07-session-handoff-v1-closure.md)
 
@@ -62,9 +62,9 @@
 本次归档完成后，仓库内应形成以下留痕：
 
 - `README`：声明当前已归档的 V1.0.0 能力边界
-- `docs/01-product-scope.md`：标记 M3 已完成
-- `docs/02-roadmap.md`：把 V1 发布归档转入已完成状态
-- `docs/05-release-notes.md`：形成正式 `1.0.0` 发布条目
+- `docs/product/scope.md`：标记 M3 已完成
+- `docs/product/roadmap.md`：把 V1 发布归档转入已完成状态
+- `docs/releases/release-notes.md`：形成正式 `1.0.0` 发布条目
 - 本文档：作为 V1 版本归档总记录
 - Git 注解 tag：`v1.0.0`
 

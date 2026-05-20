@@ -55,7 +55,7 @@
 
 同时建议同步更新：
 
-- [docs/05-release-notes.md](D:\Code\project\my-AI\docs\05-release-notes.md)
+- [docs/releases/release-notes.md](D:\Code\project\my-AI\docs\releases/release-notes.md)
 - [docs/runbooks/README.md](D:\Code\project\my-AI\docs\runbooks\README.md)
 - [docs/runbooks/plans/README.md](D:\Code\project\my-AI\docs\runbooks\plans\README.md)
 - [docs/README.md](D:\Code\project\my-AI\docs\README.md)

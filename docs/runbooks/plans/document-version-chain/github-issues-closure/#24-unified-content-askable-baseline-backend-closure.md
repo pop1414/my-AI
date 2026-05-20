@@ -19,7 +19,7 @@
 - 应用层测试：`src/test/java/io/github/spike/myai/ingest/application/service/GetDocumentContentApplicationServiceTest.java`
 - REST controller 测试：`src/test/java/io/github/spike/myai/ingest/interfaces/rest/DocumentIngestControllerTest.java`
 - 授权测试：`src/test/java/io/github/spike/myai/auth/application/service/AuthorizationServiceTest.java`
-- OpenAPI 契约：`docs/04-api-contract.yaml`
+- OpenAPI 契约：`docs/api/openapi.yaml`
 - 架构决策记录：`docs/adr/ADR-0006-document-version-read-boundary.md`
 
 ## 3. 验收对照
@@ -35,7 +35,7 @@
 - 普通读者不会因此获得历史版本浏览能力：本次查询对象只接受 `documentId + source`，不接受显式 `versionNumber`；`ASKABLE_BASELINE` 只能由服务端选择当前问答基线。
 - `KB_ASKER` 兼容边界已明确：`KB_ASKER` 仍可用于问答，但不能读取 askable baseline 正文。
 - 读取 askable baseline 不改变后续 QA baseline：应用服务只调用 `findById(...)`、`findLatestIndexedVersionNumber(...)`、`findVersionByNumber(...)` 和 artifact 读取；测试显式验证不会再读取 latest 版本事实，也没有任何写路径。
-- OpenAPI 与 ADR 已对齐：`docs/04-api-contract.yaml` 和 `ADR-0006` 已同步表达 `ASKABLE_BASELINE` 语义。
+- OpenAPI 与 ADR 已对齐：`docs/api/openapi.yaml` 和 `ADR-0006` 已同步表达 `ASKABLE_BASELINE` 语义。
 
 ## 4. 关闭判断
 

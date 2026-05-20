@@ -37,19 +37,19 @@
 ## 4. 当前可映射来源
 
 - 需求和范围：
-  - [docs/01-product-scope.md](../../docs/01-product-scope.md)
-  - [docs/02-roadmap.md](../../docs/02-roadmap.md)
+  - [docs/product/scope.md](../../docs/product/scope.md)
+  - [docs/product/roadmap.md](../../docs/product/roadmap.md)
 - 架构和模块设计：
-  - [docs/03-architecture.md](../../docs/03-architecture.md)
+  - [docs/architecture/README.md](../../docs/architecture/README.md)
   - [docs/architecture/diagrams/](../../docs/architecture/diagrams/)
 - 接口与能力：
-  - [docs/04-api-contract.yaml](../../docs/04-api-contract.yaml)
+  - [docs/api/openapi.yaml](../../docs/api/openapi.yaml)
   - [README.md](../../README.md)
 - 专题设计与处理流程：
-  - [docs/06-ingest-acceptance-closure.md](../../docs/06-ingest-acceptance-closure.md)
-  - [docs/07-ingest-processing-execution.md](../../docs/07-ingest-processing-execution.md)
+  - [docs/architecture/ingest/acceptance-closure.md](../../docs/architecture/ingest/acceptance-closure.md)
+  - [docs/architecture/ingest/processing-execution.md](../../docs/architecture/ingest/processing-execution.md)
 - 版本变化与里程碑：
-  - [docs/05-release-notes.md](../../docs/05-release-notes.md)
+  - [docs/releases/release-notes.md](../../docs/releases/release-notes.md)
   - [docs/runbooks/plans/v1/v1-release-archive.md](../../docs/runbooks/plans/v1/v1-release-archive.md)
 
 其中 `docs/runbooks/plans/v1/v1-release-archive.md` 可作为课程包装时的固定版本边界来源，用来说明：

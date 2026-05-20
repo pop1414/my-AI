@@ -103,7 +103,7 @@
 - CSRF Header 名称与触发规则稳定
 - Session Cookie 行为在本地开发环境验证通过
 
-满足以上条件后，再更新 `docs/04-api-contract.yaml` 并开始前端登录态与路由守卫接入。
+满足以上条件后，再更新 `docs/api/openapi.yaml` 并开始前端登录态与路由守卫接入。
 
 ## 7. 当前完成状态（2026-05-09）
 
@@ -122,7 +122,7 @@
 - 写操作已接入统一 CSRF Header 基线：`X-MYAI-CSRF: 1`
 - 登录失败计数已接入 `login_lock_states`
 - 登录成功、失败与锁定事件已接入 `audit_events`
-- `docs/04-api-contract.yaml` 已补充 auth 接口、Cookie 认证和 CSRF Header 说明
+- `docs/api/openapi.yaml` 已补充 auth 接口、Cookie 认证和 CSRF Header 说明
 
 空库初始账号引导已完成：
 
@@ -202,7 +202,7 @@
 - 更新知识库已接入 `AuthorizationService.requireCanManageKnowledgeBase(kbId)`
 - 更新知识库允许 `WORKSPACE_OWNER` / `WORKSPACE_ADMIN` / `KB_MANAGER`
 - 查询知识库列表已使用当前用户 `workspaceId`
-- `docs/04-api-contract.yaml` 已补充 knowledge-bases 接口的 Cookie 认证、CSRF Header 与 `401/403` 语义
+- `docs/api/openapi.yaml` 已补充 knowledge-bases 接口的 Cookie 认证、CSRF Header 与 `401/403` 语义
 - 已补充知识库应用服务与授权服务单元测试
 
 上传接口权限接入已完成：
@@ -212,7 +212,7 @@
 - 上传文档无贡献权限时拒绝，并沿用 `403` JSON 语义
 - 上传文档已使用当前用户 `workspaceId` 查询知识库、执行幂等去重与保存文档
 - 无贡献权限时不会查询知识库、不会生成文档 ID、不会保存文档记录
-- `docs/04-api-contract.yaml` 已补充 `documents/upload` 的 Cookie 认证、CSRF Header 与 `401/403` 语义
+- `docs/api/openapi.yaml` 已补充 `documents/upload` 的 Cookie 认证、CSRF Header 与 `401/403` 语义
 - 已补充上传受理应用服务单元测试，覆盖贡献权限放行、无权限拒绝和当前工作区写入
 
 文档其他接口权限接入已完成：
@@ -222,14 +222,14 @@
 - `documents/{id}/chunks/preview` 已要求可读取目标文档
 - `documents/{id}/reprocess` 已要求可贡献目标文档所属知识库
 - `documents/{id}` 删除已要求可管理目标文档
-- `docs/04-api-contract.yaml` 已补充上述接口的 Cookie 认证、CSRF Header 与 `401/403` 语义
+- `docs/api/openapi.yaml` 已补充上述接口的 Cookie 认证、CSRF Header 与 `401/403` 语义
 
 问答接口权限接入已完成：
 
 - `qa.ask` 已要求当前用户对目标知识库具备 `ask` 权限
 - `qa.ask` 已在“召回后、生成前”按文档授权过滤候选分块
 - `qa.ask` 过滤后无可用内容时返回问答兜底结果，不返回 `403`
-- `docs/04-api-contract.yaml` 已补充 `qa.ask` 的 Cookie 认证、CSRF Header 与 `401/403` 语义
+- `docs/api/openapi.yaml` 已补充 `qa.ask` 的 Cookie 认证、CSRF Header 与 `401/403` 语义
 
 已完成验证：
 
@@ -255,7 +255,7 @@
 - 知识库授权列表、授予、调整、回收接口
 - 文档级覆盖授权列表、授予、调整、回收接口
 - 审计事件查询接口
-- 同步更新 `docs/04-api-contract.yaml` 中治理接口的契约说明
+- 同步更新 `docs/api/openapi.yaml` 中治理接口的契约说明
 
 建议测试覆盖：
 

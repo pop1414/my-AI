@@ -46,8 +46,8 @@
 只修改了这 4 个“必须做”的文件：
 
 - [README.md](../../../README.md)
-- [docs/02-roadmap.md](../../02-roadmap.md)
-- [docs/05-release-notes.md](../../05-release-notes.md)
+- [docs/product/roadmap.md](../../product/roadmap.md)
+- [docs/releases/release-notes.md](../../releases/release-notes.md)
 - [docs/runbooks/plans/v1/v1-closure-plan.md](../plans/v1/v1-closure-plan.md)
 
 具体改动：

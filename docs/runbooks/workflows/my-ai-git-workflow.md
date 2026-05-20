@@ -319,8 +319,8 @@ git merge feature/qa-page
 例如：
 
 - 页面范围变了 -> 更新 `README` / `web/README`
-- 接口字段变了 -> 更新 `docs/04-api-contract.yaml`
-- 架构边界变了 -> 更新 `docs/03-architecture.md`
+- 接口字段变了 -> 更新 `docs/api/openapi.yaml`
+- 架构边界变了 -> 更新 `docs/architecture/README.md`
 
 ### 9.2 当文档本身是独立治理改动
 

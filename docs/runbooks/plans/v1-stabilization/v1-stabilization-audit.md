@@ -60,18 +60,18 @@ npm.cmd run test:e2e
 | --------------------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------- |
 | `README.md`                 | 需更新 | 当前能力列表较新，但治理 API 摘要未完整覆盖账号治理接口组；文档日期混用 `2026-05-13` 与 `2026-05-16`，不利于判断事实新旧。                             | 保留为项目入口，补齐账号治理 API 摘要，并统一“截至日期”为最新稳定基线。                                  |
 | `docs/README.md`            | 可信   | 文档分层、阅读顺序、真源规则清晰，适合作为文档治理入口。                                                                                               | 后续新增本报告后，可在 plans 导航中补充入口。                                                            |
-| `docs/01-product-scope.md`  | 冲突   | 文档仍写 V1 是“单用户模式”，并把“复杂权限系统”列为 out of scope；当前代码和 API 契约已经包含 auth/governance、工作区角色、知识库授权、文档授权和审计。 | 改为历史 V1 范围说明，或新增“当前基线已超出原 V1 scope”的显式说明。                                      |
-| `docs/02-roadmap.md`        | 需更新 | 当前快照承认权限体系规划，但“V1.1 范围调整”仍表达为权限从 V1.1 拆出；实际 auth/governance 已经工程化落地。                                             | 将权限体系状态拆成“已落地基线”和“后续增强”，避免读者误以为权限还停留在规划阶段。                         |
-| `docs/03-architecture.md`   | 冲突   | 第 2 章目标架构仍包含 `MySQL / MinIO / Tenant / SSE` 等未实现或仅预留内容；第 2.1 又描述当前已实现子集，二者并列容易误读。                             | 将目标蓝图与当前事实分成两个显式小节；当前事实应写 PostgreSQL/PGVector、本地存储、Session auth、无 SSE。 |
-| `docs/04-api-contract.yaml` | 可信   | 契约覆盖 auth/governance/ingest/knowledge/qa，和当前实现方向基本一致。                                                                                 | 后续以它作为 API 真源，README 只保留摘要，不重复维护完整接口细节。                                       |
-| `docs/05-release-notes.md`  | 需更新 | `Unreleased` 内容已经很大，包含多个专题完成项；继续堆叠会降低检索效率。                                                                                | 下一轮稳定化可切一个 `1.1.x` 或 `v1-stabilization` 小节，把已收口事项从 Unreleased 中归档。              |
+| `docs/product/scope.md`  | 冲突   | 文档仍写 V1 是“单用户模式”，并把“复杂权限系统”列为 out of scope；当前代码和 API 契约已经包含 auth/governance、工作区角色、知识库授权、文档授权和审计。 | 改为历史 V1 范围说明，或新增“当前基线已超出原 V1 scope”的显式说明。                                      |
+| `docs/product/roadmap.md`        | 需更新 | 当前快照承认权限体系规划，但“V1.1 范围调整”仍表达为权限从 V1.1 拆出；实际 auth/governance 已经工程化落地。                                             | 将权限体系状态拆成“已落地基线”和“后续增强”，避免读者误以为权限还停留在规划阶段。                         |
+| `docs/architecture/README.md`   | 冲突   | 第 2 章目标架构仍包含 `MySQL / MinIO / Tenant / SSE` 等未实现或仅预留内容；第 2.1 又描述当前已实现子集，二者并列容易误读。                             | 将目标蓝图与当前事实分成两个显式小节；当前事实应写 PostgreSQL/PGVector、本地存储、Session auth、无 SSE。 |
+| `docs/api/openapi.yaml` | 可信   | 契约覆盖 auth/governance/ingest/knowledge/qa，和当前实现方向基本一致。                                                                                 | 后续以它作为 API 真源，README 只保留摘要，不重复维护完整接口细节。                                       |
+| `docs/releases/release-notes.md`  | 需更新 | `Unreleased` 内容已经很大，包含多个专题完成项；继续堆叠会降低检索效率。                                                                                | 下一轮稳定化可切一个 `1.1.x` 或 `v1-stabilization` 小节，把已收口事项从 Unreleased 中归档。              |
 | `web/README.md`             | 需更新 | 仍聚焦文档、知识库、问答；未完整同步系统管理、成员/账号/授权/审计、成员阅读页和问答基线阅读页等当前前端范围。                                          | 补成前端控制台当前能力摘要，并声明 E2E 覆盖范围。                                                        |
 
 ### 2.1 需要明确标记的冲突
 
-- 产品范围冲突：`docs/01-product-scope.md` 的“单用户 / 不做复杂权限”与当前 `auth` module、OpenAPI `governance` tag、前端系统管理页面冲突。
-- 架构蓝图冲突：`docs/03-architecture.md` 的 MySQL、MinIO、Tenant、SSE 是目标蓝图或未来扩展，不是当前实现。
-- 路线图状态冲突：`docs/02-roadmap.md` 仍把权限体系表述成独立规划，但仓库已有本地账号、Session、权限和审计的实现基线。
+- 产品范围冲突：`docs/product/scope.md` 的“单用户 / 不做复杂权限”与当前 `auth` module、OpenAPI `governance` tag、前端系统管理页面冲突。
+- 架构蓝图冲突：`docs/architecture/README.md` 的 MySQL、MinIO、Tenant、SSE 是目标蓝图或未来扩展，不是当前实现。
+- 路线图状态冲突：`docs/product/roadmap.md` 仍把权限体系表述成独立规划，但仓库已有本地账号、Session、权限和审计的实现基线。
 
 ## 3. 代码债务清单
 
@@ -316,14 +316,14 @@ npm.cmd run test:e2e
 - 优先级：P1
 - 类型：文档同步
 - 背景：产品范围仍写单用户和不做复杂权限，但当前权限基线已经落地。
-- 范围：更新 `docs/01-product-scope.md`、`docs/02-roadmap.md`、`README.md` 中的权限状态。
+- 范围：更新 `docs/product/scope.md`、`docs/product/roadmap.md`、`README.md` 中的权限状态。
 - 不做什么：不新增权限功能。
 - 验收标准：
     - 文档明确区分“原 V1 范围”和“当前已落地权限基线”。
     - 不再把已实现 auth/governance 表述为纯规划。
 - 涉及文件：
-    - `docs/01-product-scope.md`
-    - `docs/02-roadmap.md`
+    - `docs/product/scope.md`
+    - `docs/product/roadmap.md`
     - `README.md`
 
 ### 5.4 `docs(architecture): 区分目标蓝图与当前实现事实`
@@ -331,13 +331,13 @@ npm.cmd run test:e2e
 - 优先级：P1
 - 类型：文档同步
 - 背景：架构文档混写 MySQL/MinIO/Tenant/SSE 蓝图和当前 PostgreSQL/本地存储/Session auth 实现。
-- 范围：重写 `docs/03-architecture.md` 的第 2 章和当前实现子集说明。
+- 范围：重写 `docs/architecture/README.md` 的第 2 章和当前实现子集说明。
 - 不做什么：不更新架构图，不迁移目录结构。
 - 验收标准：
     - 当前事实和未来蓝图分区清晰。
     - 读者不会误以为当前已实现 Tenant/SSE/MinIO。
 - 涉及文件：
-    - `docs/03-architecture.md`
+    - `docs/architecture/README.md`
 
 ### 5.5 `test(ingest): 增加副作用半成功 characterization tests`
 

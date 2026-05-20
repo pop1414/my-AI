@@ -95,5 +95,5 @@
 5. ER/领域模型图：保证数据结构可落地
 
 ## 8. 下一阶段导航
-- 处理执行阶段文档：`docs/07-ingest-processing-execution.md`
+- 处理执行阶段文档：`docs/architecture/ingest/processing-execution.md`
 - 处理执行 ADR（已采纳）：`docs/adr/ADR-0004-v1-ingest-processing-strategy.md`

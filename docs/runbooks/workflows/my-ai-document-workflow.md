@@ -30,11 +30,11 @@
 典型文档：
 
 - `README.md`
-- `docs/01-product-scope.md`
-- `docs/02-roadmap.md`
-- `docs/03-architecture.md`
-- `docs/04-api-contract.yaml`
-- `docs/05-release-notes.md`
+- `docs/product/scope.md`
+- `docs/product/roadmap.md`
+- `docs/architecture/README.md`
+- `docs/api/openapi.yaml`
+- `docs/releases/release-notes.md`
 - `docs/06-07` 专题设计
 - `docs/runbooks/` 里的执行与联调手册
 
@@ -114,8 +114,8 @@
 应该更新什么：
 
 - `README.md`
-- `docs/04-api-contract.yaml`
-- `docs/03-architecture.md`
+- `docs/api/openapi.yaml`
+- `docs/architecture/README.md`
 - `web/README.md`
 - `docs/runbooks/` 中的联调/演示说明
 
@@ -228,8 +228,8 @@
 做完后最少要检查：
 
 - `README.md`
-- `docs/04-api-contract.yaml`
-- `docs/03-architecture.md`
+- `docs/api/openapi.yaml`
+- `docs/architecture/README.md`
 - `web/README.md`
 - 对应 runbook / 演示步骤
 
@@ -274,7 +274,7 @@
 对应动作：
 
 - `1` -> 更新 `README` / 页面说明 / 演示文档
-- `2` -> 更新 `docs/04-api-contract.yaml`
+- `2` -> 更新 `docs/api/openapi.yaml`
 - `3` -> 更新架构文档，必要时补 ADR
 - `4` -> 更新 `docs/runbooks/`
 - `5` -> 补 ADR
@@ -285,8 +285,8 @@
 ### 第一优先级：必须尽量保持同步
 
 - `README.md`
-- `docs/04-api-contract.yaml`
-- `docs/03-architecture.md`
+- `docs/api/openapi.yaml`
+- `docs/architecture/README.md`
 - `web/README.md`
 - `docs/runbooks/` 中的联调/演示文档
 
@@ -294,9 +294,9 @@
 
 ### 第二优先级：版本变化较大时同步
 
-- `docs/01-product-scope.md`
-- `docs/02-roadmap.md`
-- `docs/05-release-notes.md`
+- `docs/product/scope.md`
+- `docs/product/roadmap.md`
+- `docs/releases/release-notes.md`
 
 ### 第三优先级：按需补充
 
@@ -406,8 +406,8 @@ AI 最适合帮你做的是“提炼、归类、检查、生成最小草稿”�
 2. 做关键架构取舍时，补 `docs/adr/`
 3. 做完后至少检查：
    - `README.md`
-   - `docs/04-api-contract.yaml`
-   - `docs/03-architecture.md`
+   - `docs/api/openapi.yaml`
+   - `docs/architecture/README.md`
    - `web/README.md`
 4. 如果这一轮学到了一个关键技术点，补一篇 `docs/learning/`
 5. 如果要准备课程展示，再从 `docs/` 整理到 `deliverables/course/`
