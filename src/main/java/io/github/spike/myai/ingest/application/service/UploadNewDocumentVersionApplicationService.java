@@ -7,6 +7,7 @@ import io.github.spike.myai.auth.domain.port.AuditEventRepository;
 import io.github.spike.myai.ingest.application.command.UploadNewDocumentVersionCommand;
 import io.github.spike.myai.ingest.application.result.DocumentVersionUploadResult;
 import io.github.spike.myai.ingest.application.usecase.UploadNewDocumentVersionUseCase;
+import io.github.spike.myai.ingest.domain.exception.DocumentSourceContentConflictException;
 import io.github.spike.myai.ingest.domain.model.Document;
 import io.github.spike.myai.ingest.domain.model.DocumentId;
 import io.github.spike.myai.ingest.domain.model.DocumentVersion;
@@ -275,14 +276,11 @@ public class UploadNewDocumentVersionApplicationService implements UploadNewDocu
             byte[] sourceContent) {
         try {
             documentSourceStorage.saveVersionIfAbsent(documentId, versionNumber, filename, sourceContent);
-        } catch (IllegalStateException ex) {
-            if (DocumentSourceStorage.VERSION_SOURCE_CONTENT_CONFLICT_MESSAGE.equals(ex.getMessage())) {
-                throw business(
-                        HttpStatus.CONFLICT,
-                        "VERSION_CONFLICT_STALE_LATEST_VERSION",
-                        "当前最新版本已变化，请刷新详情后重试");
-            }
-            throw ex;
+        } catch (DocumentSourceContentConflictException ex) {
+            throw business(
+                    HttpStatus.CONFLICT,
+                    "VERSION_CONFLICT_STALE_LATEST_VERSION",
+                    "当前最新版本已变化，请刷新详情后重试");
         }
     }
 

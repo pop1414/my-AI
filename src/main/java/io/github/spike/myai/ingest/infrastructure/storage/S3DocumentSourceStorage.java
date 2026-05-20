@@ -1,6 +1,7 @@
 package io.github.spike.myai.ingest.infrastructure.storage;
 
 import io.github.spike.myai.ingest.domain.model.DocumentId;
+import io.github.spike.myai.ingest.domain.exception.DocumentSourceContentConflictException;
 import io.github.spike.myai.ingest.domain.port.DocumentSourceStorage;
 import io.github.spike.myai.ingest.infrastructure.config.IngestProperties;
 import io.github.spike.myai.shared.workspace.WorkspaceConstants;
@@ -77,7 +78,7 @@ public class S3DocumentSourceStorage implements DocumentSourceStorage {
             byte[] existingContent = loadObject(key)
                     .orElseThrow(() -> new IllegalStateException("source object disappeared during idempotency check"));
             if (!Arrays.equals(existingContent, content)) {
-                throw new IllegalStateException(VERSION_SOURCE_CONTENT_CONFLICT_MESSAGE);
+                throw new DocumentSourceContentConflictException();
             }
             return false;
         }

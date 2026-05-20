@@ -20,6 +20,7 @@ import io.github.spike.myai.auth.domain.model.WorkspaceRole;
 import io.github.spike.myai.auth.domain.port.AuditEventRepository;
 import io.github.spike.myai.ingest.application.command.UploadNewDocumentVersionCommand;
 import io.github.spike.myai.ingest.application.result.DocumentVersionUploadResult;
+import io.github.spike.myai.ingest.domain.exception.DocumentSourceContentConflictException;
 import io.github.spike.myai.ingest.domain.model.Document;
 import io.github.spike.myai.ingest.domain.model.DocumentId;
 import io.github.spike.myai.ingest.domain.model.DocumentVersion;
@@ -309,7 +310,7 @@ class UploadNewDocumentVersionApplicationServiceTest {
         when(repository.findLatestIndexedVersionNumber(eq("workspace-a"), eq(new DocumentId("doc-8")))).thenReturn(2);
         when(repository.appendUploadVersion(eq("workspace-a"), eq(new DocumentId("doc-8")), eq(2), any(DocumentVersion.class), any(Instant.class)))
                 .thenReturn(true);
-        doThrow(new IllegalStateException(DocumentSourceStorage.VERSION_SOURCE_CONTENT_CONFLICT_MESSAGE))
+        doThrow(new DocumentSourceContentConflictException())
                 .when(sourceStorage)
                 .saveVersionIfAbsent(eq(new DocumentId("doc-8")), eq(3), eq("new.pdf"), eq(bytes("new content")));
         UploadNewDocumentVersionApplicationService service =

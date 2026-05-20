@@ -19,6 +19,7 @@ import io.github.spike.myai.auth.domain.model.WorkspaceRole;
 import io.github.spike.myai.auth.domain.port.AuditEventRepository;
 import io.github.spike.myai.ingest.application.command.RollbackDocumentVersionCommand;
 import io.github.spike.myai.ingest.application.result.DocumentVersionRollbackResult;
+import io.github.spike.myai.ingest.domain.exception.DocumentSourceContentConflictException;
 import io.github.spike.myai.ingest.domain.model.Document;
 import io.github.spike.myai.ingest.domain.model.DocumentId;
 import io.github.spike.myai.ingest.domain.model.DocumentVersion;
@@ -342,7 +343,7 @@ class RollbackDocumentVersionApplicationServiceTest {
                 .thenReturn(Optional.of(bytes("v1 content")));
         when(repository.appendRollbackVersion(eq("workspace-a"), eq(documentId), eq(3), any(DocumentVersion.class), any(Instant.class)))
                 .thenReturn(true);
-        doThrow(new IllegalStateException(DocumentSourceStorage.VERSION_SOURCE_CONTENT_CONFLICT_MESSAGE))
+        doThrow(new DocumentSourceContentConflictException())
                 .when(sourceStorage)
                 .saveVersionIfAbsent(eq(documentId), eq(4), eq("v1.pdf"), eq(bytes("v1 content")));
         RollbackDocumentVersionApplicationService service =

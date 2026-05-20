@@ -10,8 +10,8 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import io.github.spike.myai.ingest.domain.exception.DocumentSourceContentConflictException;
 import io.github.spike.myai.ingest.domain.model.DocumentId;
-import io.github.spike.myai.ingest.domain.port.DocumentSourceStorage;
 import io.github.spike.myai.ingest.infrastructure.config.IngestProperties;
 import java.nio.charset.StandardCharsets;
 import org.junit.jupiter.api.DisplayName;
@@ -86,13 +86,12 @@ class S3DocumentSourceStorageTest {
         when(s3Client.getObjectAsBytes(any(GetObjectRequest.class)))
                 .thenReturn(responseBytes("first".getBytes(StandardCharsets.UTF_8)));
 
-        IllegalStateException exception = assertThrows(IllegalStateException.class, () -> storage.saveVersionIfAbsent(
+        assertThrows(DocumentSourceContentConflictException.class, () -> storage.saveVersionIfAbsent(
                 new DocumentId("doc-source-s3-3"),
                 1,
                 "same.txt",
                 "second".getBytes(StandardCharsets.UTF_8)));
 
-        assertEquals(DocumentSourceStorage.VERSION_SOURCE_CONTENT_CONFLICT_MESSAGE, exception.getMessage());
         verify(s3Client, never()).putObject(any(PutObjectRequest.class), any(RequestBody.class));
     }
 
