@@ -161,7 +161,7 @@ Blocked by：RFS-02
 - [x] `saveVersion(...)` 通过 `saveVersionIfAbsent(...)` 保持幂等保存契约。
 - [x] 首次 `saveVersionIfAbsent(...)` 写入成功后返回 `true`。
 - [x] 同一 key 内容一致时，`saveVersionIfAbsent(...)` 返回 `false`。
-- [x] 同一 key 内容不一致时，抛出稳定冲突，保留 `version source file content conflict` 语义。
+- [x] 同一 key 内容不一致时，抛出稳定冲突异常类型 `DocumentSourceContentConflictException`。
 - [x] `load` / `loadVersion` 命中时返回完整字节，未命中时返回空。
 - [x] `load` / `loadVersion` 不 fallback 到本地文件系统或旧 document 级路径。
 - [x] `deleteByDocumentId` 删除 source prefix 下全部对象，并处理分页 list。

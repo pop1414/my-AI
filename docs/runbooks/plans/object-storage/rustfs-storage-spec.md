@@ -195,7 +195,7 @@ source/{workspaceId}/documents/{documentId}/versions/{versionNumber}/{filename}
 错误处理：
 
 - S3 写入失败：抛出基础设施异常，由上传或版本上传链路映射为请求失败。
-- source 内容冲突：保留稳定冲突消息 `version source file content conflict`。
+- source 内容冲突：抛出稳定异常类型 `DocumentSourceContentConflictException`。
 
 #### Verification
 

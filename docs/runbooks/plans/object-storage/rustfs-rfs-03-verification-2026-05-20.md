@@ -42,7 +42,7 @@ source/default/documents/doc-001/versions/1/example.pdf
 - `saveVersion(documentId, versionNumber, filename, content)` 复用幂等保存逻辑。
 - `saveVersionIfAbsent(...)` 首次写入返回 `true`。
 - 同一 key 内容一致时返回 `false`，表示幂等命中。
-- 同一 key 内容不一致时抛出稳定异常：`version source file content conflict`。
+- 同一 key 内容不一致时抛出稳定异常类型：`DocumentSourceContentConflictException`。
 - `load(...)` 读取 version 1 source。
 - `loadVersion(...)` 读取指定版本 source。
 - source 缺失时返回 `Optional.empty()`。
@@ -58,7 +58,7 @@ source/default/documents/doc-001/versions/1/example.pdf
 | `saveVersion(...)` 通过 `saveVersionIfAbsent(...)` 保持幂等保存契约 | 完成 | `saveVersion(...)` 委托 `saveVersionIfAbsent(...)` |
 | 首次 `saveVersionIfAbsent(...)` 写入成功后返回 `true` | 完成 | 单元测试覆盖对象不存在时写入成功 |
 | 同一 key 内容一致时，`saveVersionIfAbsent(...)` 返回 `false` | 完成 | 单元测试覆盖幂等命中 |
-| 同一 key 内容不一致时，抛出稳定冲突，保留 `version source file content conflict` 语义 | 完成 | 单元测试覆盖冲突异常消息 |
+| 同一 key 内容不一致时，抛出稳定冲突异常类型 `DocumentSourceContentConflictException` | 完成 | 单元测试覆盖冲突异常类型 |
 | `load` / `loadVersion` 命中时返回完整字节，未命中时返回空 | 完成 | 单元测试覆盖命中读取和缺失读取 |
 | `load` / `loadVersion` 不 fallback 到本地文件系统或旧 document 级路径 | 完成 | S3 adapter 只通过 S3 client 读取 object |
 | `deleteByDocumentId` 删除 source prefix 下全部对象，并处理分页 list | 完成 | 单元测试覆盖两页 list 和批量 delete |
