@@ -20,14 +20,14 @@
 
 ## 总览
 
-| 本地编号 | GitHub Issue | 标题 | 类型 | 标签建议 | 阻塞 |
-| --- | --- | --- | --- | --- | --- |
-| RFS-01 | 未发布 | 验证 RustFS 本地 S3 兼容访问与 bucket 前提 | AFK | `ready-for-agent` | 无 |
-| RFS-02 | 未发布 | 实现 `local|s3` 存储模式配置与 S3 Client 装配 | AFK | `ready-for-agent` | RFS-01 |
-| RFS-03 | 未发布 | 实现 S3 source storage adapter | AFK | `ready-for-agent` | RFS-02 |
-| RFS-04 | 未发布 | 实现 S3 artifact storage adapter 与正文读取闭环 | AFK | `ready-for-agent` | RFS-02, RFS-03 |
-| RFS-05 | 未发布 | 完成 S3 模式端到端验收与 local 回归 | AFK | `ready-for-agent` | RFS-03, RFS-04 |
-| RFS-06 | 未发布 | 同步发布文档与历史迁移边界 | AFK | `ready-for-agent` | RFS-05 |
+| 本地编号 | GitHub Issue | 标题                                            | 类型                              | 标签建议          | 阻塞              |
+| -------- | ------------ | ----------------------------------------------- | --------------------------------- | ----------------- | ----------------- |
+| RFS-01   | 未发布       | 验证 RustFS 本地 S3 兼容访问与 bucket 前提      | AFK                               | `ready-for-agent` | 无                |
+| RFS-02   | 未发布       | 实现 `local                                     | s3` 存储模式配置与 S3 Client 装配 | AFK               | `ready-for-agent` |
+| RFS-03   | 未发布       | 实现 S3 source storage adapter                  | AFK                               | `ready-for-agent` | RFS-02            |
+| RFS-04   | 未发布       | 实现 S3 artifact storage adapter 与正文读取闭环 | AFK                               | `ready-for-agent` | RFS-02, RFS-03    |
+| RFS-05   | 未发布       | 完成 S3 模式端到端验收与 local 回归             | AFK                               | `ready-for-agent` | RFS-03, RFS-04    |
+| RFS-06   | 未发布       | 同步发布文档与历史迁移边界                      | AFK                               | `ready-for-agent` | RFS-05            |
 
 ## 建议执行顺序
 
@@ -52,8 +52,8 @@ Blocked by：None - can start immediately
 
 - Spec：`docs/runbooks/plans/object-storage/rustfs-storage-spec.md`
 - Spec coverage：
-  - FS：`4.1 Milestone 1: 存储接入前置验证`
-  - TS：`4.1 Milestone 1: 存储接入前置验证`
+    - FS：`4.1 Milestone 1: 存储接入前置验证`
+    - TS：`4.1 Milestone 1: 存储接入前置验证`
 - Plan：`docs/runbooks/plans/object-storage/rustfs-implementation-plan.md`
 - Runbook：`docs/runbooks/operations/rustfs-object-storage.md`
 
@@ -70,13 +70,13 @@ Blocked by：None - can start immediately
 
 #### Acceptance criteria
 
-- [ ] RustFS endpoint 可访问。
-- [ ] 当前配置中的 access key / secret key 可用于 S3 兼容访问。
-- [ ] `myai-documents` bucket 已创建或已有明确初始化步骤。
-- [ ] smoke test 可完成 put / get / delete 基础对象操作。
-- [ ] smoke test 使用非业务 key，不污染真实 document prefix。
-- [ ] bucket 缺失时，runbook 能指导定位为部署前提问题。
-- [ ] 本 issue 不实现后端 storage adapter，不修改业务读取语义。
+- [x] RustFS endpoint 可访问。
+- [x] 当前配置中的 access key / secret key 可用于 S3 兼容访问。
+- [x] `myai-documents` bucket 已创建或已有明确初始化步骤。
+- [x] smoke test 可完成 put / get / delete 基础对象操作。
+- [x] smoke test 使用非业务 key，不污染真实 document prefix。
+- [x] bucket 缺失时，runbook 能指导定位为部署前提问题。
+- [x] 本 issue 不实现后端 storage adapter，不修改业务读取语义。
 
 #### Blocked by
 
@@ -94,8 +94,8 @@ Blocked by：RFS-01
 
 - Spec：`docs/runbooks/plans/object-storage/rustfs-storage-spec.md`
 - Spec coverage：
-  - FS：`4.2 Milestone 2: 存储模式配置与 S3 Client 基线`
-  - TS：`4.2 Milestone 2: 存储模式配置与 S3 Client 基线`
+    - FS：`4.2 Milestone 2: 存储模式配置与 S3 Client 基线`
+    - TS：`4.2 Milestone 2: 存储模式配置与 S3 Client 基线`
 - ADR：`docs/adr/ADR-0007-s3-compatible-document-asset-storage.md`
 
 #### What to build
@@ -137,8 +137,8 @@ Blocked by：RFS-02
 
 - Spec：`docs/runbooks/plans/object-storage/rustfs-storage-spec.md`
 - Spec coverage：
-  - FS：`4.3 Milestone 3: S3 Source Storage Adapter`
-  - TS：`4.3 Milestone 3: S3 Source Storage Adapter`
+    - FS：`4.3 Milestone 3: S3 Source Storage Adapter`
+    - TS：`4.3 Milestone 3: S3 Source Storage Adapter`
 - Existing port：`DocumentSourceStorage`
 - Key resolver：`DocumentStorageKeyResolver`
 
@@ -184,8 +184,8 @@ Blocked by：RFS-02、RFS-03
 
 - Spec：`docs/runbooks/plans/object-storage/rustfs-storage-spec.md`
 - Spec coverage：
-  - FS：`4.4 Milestone 4: S3 Artifact Storage Adapter 与正文读取闭环`
-  - TS：`4.4 Milestone 4: S3 Artifact Storage Adapter 与正文读取闭环`
+    - FS：`4.4 Milestone 4: S3 Artifact Storage Adapter 与正文读取闭环`
+    - TS：`4.4 Milestone 4: S3 Artifact Storage Adapter 与正文读取闭环`
 - Existing port：`DocumentProcessingArtifactStorage`
 - ADR：`docs/adr/ADR-0006-document-version-read-boundary.md`
 
@@ -233,8 +233,8 @@ Blocked by：RFS-03、RFS-04
 
 - Spec：`docs/runbooks/plans/object-storage/rustfs-storage-spec.md`
 - Spec coverage：
-  - FS：`4.5 Milestone 5: 端到端接入验收`
-  - TS：`4.5 Milestone 5: 端到端接入验收`
+    - FS：`4.5 Milestone 5: 端到端接入验收`
+    - TS：`4.5 Milestone 5: 端到端接入验收`
 - Runbook：`docs/runbooks/operations/rustfs-object-storage.md`
 
 #### What to build
@@ -277,8 +277,8 @@ Blocked by：RFS-05
 
 - Spec：`docs/runbooks/plans/object-storage/rustfs-storage-spec.md`
 - Spec coverage：
-  - FS：`4.6 Milestone 6: 发布与后续迁移准备`
-  - TS：`4.6 Milestone 6: 发布与后续迁移准备`
+    - FS：`4.6 Milestone 6: 发布与后续迁移准备`
+    - TS：`4.6 Milestone 6: 发布与后续迁移准备`
 - Runbook：`docs/runbooks/operations/rustfs-object-storage.md`
 - PostgreSQL runbook：`docs/runbooks/operations/postgresql-pgvector.md`
 
