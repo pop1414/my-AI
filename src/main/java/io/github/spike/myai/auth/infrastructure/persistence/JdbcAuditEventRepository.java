@@ -5,6 +5,8 @@ import io.github.spike.myai.auth.domain.port.AuditEventRepository;
 import java.sql.Timestamp;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * 基于 JDBC 的审计事件仓储实现。
@@ -45,12 +47,14 @@ public class JdbcAuditEventRepository implements AuditEventRepository {
      * 保存一条审计事件到数据库。
      *
      * <p>执行简单的 INSERT 语句，将审计事件的所有字段写入
-     * {@code audit_events} 表。{@code metadata} 字段作为 JSONB 类型处理，
+     * {@code audit_events} 表。审计写入使用独立事务提交，避免主业务事务
+     * 回滚时丢失失败审计记录。{@code metadata} 字段作为 JSONB 类型处理，
      * 使用 PostgreSQL 的 {@code ?::jsonb} 类型转换语法。
      *
      * @param event 待持久化的审计事件
      */
     @Override
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void save(AuditEvent event) {
         // 执行 INSERT 语句，将审计事件的各个字段写入 audit_events 表
         jdbcTemplate.update(
