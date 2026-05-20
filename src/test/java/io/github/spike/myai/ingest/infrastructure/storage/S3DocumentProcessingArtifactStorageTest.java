@@ -32,6 +32,7 @@ import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
 import software.amazon.awssdk.services.s3.model.HeadObjectResponse;
 import software.amazon.awssdk.services.s3.model.ListObjectsV2Request;
 import software.amazon.awssdk.services.s3.model.ListObjectsV2Response;
+import software.amazon.awssdk.services.s3.model.NoSuchBucketException;
 import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 import software.amazon.awssdk.services.s3.model.PutObjectResponse;
@@ -104,6 +105,27 @@ class S3DocumentProcessingArtifactStorageTest {
                         DocumentProcessingArtifactStorage.CLEANED_MARKDOWN_ARTIFACT_NAME,
                         1024)
                 .isPresent());
+        verify(s3Client, never()).getObjectAsBytes(any(GetObjectRequest.class));
+    }
+
+    @Test
+    @DisplayName("S3 读取异常不应伪装为 artifact 缺失")
+    void loadVersionArtifact_shouldPropagateS3Failure_whenStorageUnavailable() {
+        S3Client s3Client = org.mockito.Mockito.mock(S3Client.class);
+        S3DocumentProcessingArtifactStorage storage = storage(s3Client, false, false, true);
+        S3Exception unavailable = noSuchBucket();
+        when(s3Client.headObject(any(HeadObjectRequest.class))).thenThrow(unavailable);
+
+        S3Exception exception = assertThrows(
+                S3Exception.class,
+                () -> storage.loadVersionArtifact(
+                        "workspace-1",
+                        new DocumentId("doc-artifact-s3-unavailable"),
+                        1,
+                        DocumentProcessingArtifactStorage.CLEANED_MARKDOWN_ARTIFACT_NAME,
+                        1024));
+
+        assertEquals(unavailable, exception);
         verify(s3Client, never()).getObjectAsBytes(any(GetObjectRequest.class));
     }
 
@@ -190,6 +212,13 @@ class S3DocumentProcessingArtifactStorageTest {
         return NoSuchKeyException.builder()
                 .statusCode(404)
                 .awsErrorDetails(AwsErrorDetails.builder().errorCode("NoSuchKey").build())
+                .build();
+    }
+
+    private static S3Exception noSuchBucket() {
+        return NoSuchBucketException.builder()
+                .statusCode(404)
+                .awsErrorDetails(AwsErrorDetails.builder().errorCode("NoSuchBucket").build())
                 .build();
     }
 }
