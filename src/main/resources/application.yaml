@@ -58,7 +58,7 @@ myai:
       parse-embedded-resource: ${INGEST_PARSER_PARSE_EMBEDDED_RESOURCE:false}
     storage:
       # 存储介质类型：local 为本地文件系统，s3 为 S3 兼容对象存储
-      type: ${INGEST_STORAGE_TYPE:local}
+      type: ${INGEST_STORAGE_TYPE:s3}
       # 上传源文件本地落盘目录；仅 local 模式使用
       root-dir: ${INGEST_STORAGE_ROOT_DIR:data/ingest}
       s3:
@@ -69,9 +69,9 @@ myai:
         # S3 region；RustFS 本地验证默认使用 us-east-1
         region: ${INGEST_STORAGE_S3_REGION:us-east-1}
         # S3 access key；通过环境变量注入
-        access-key: ${INGEST_STORAGE_S3_ACCESS_KEY:admin}
+        access-key: ${INGEST_STORAGE_S3_ACCESS_KEY:}
         # S3 secret key；通过环境变量注入
-        secret-key: ${INGEST_STORAGE_S3_SECRET_KEY:Admin@123}
+        secret-key: ${INGEST_STORAGE_S3_SECRET_KEY:}
         # RustFS 本地部署使用 path-style access
         path-style-access: ${INGEST_STORAGE_S3_PATH_STYLE_ACCESS:true}
       artifacts:
@@ -101,3 +101,4 @@ management:
     web:
       exposure:
         include: health,info,metrics
+
