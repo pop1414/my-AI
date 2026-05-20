@@ -155,18 +155,18 @@ Blocked by：RFS-02
 
 #### Acceptance criteria
 
-- [ ] S3 source adapter 实现 `DocumentSourceStorage`。
-- [ ] source object key 使用 `source/{workspaceId}/documents/{documentId}/versions/{versionNumber}/{filename}`。
-- [ ] `save(documentId, filename, content)` 等价写入 version 1。
-- [ ] `saveVersion(...)` 通过 `saveVersionIfAbsent(...)` 保持幂等保存契约。
-- [ ] 首次 `saveVersionIfAbsent(...)` 写入成功后返回 `true`。
-- [ ] 同一 key 内容一致时，`saveVersionIfAbsent(...)` 返回 `false`。
-- [ ] 同一 key 内容不一致时，抛出稳定冲突，保留 `version source file content conflict` 语义。
-- [ ] `load` / `loadVersion` 命中时返回完整字节，未命中时返回空。
-- [ ] `load` / `loadVersion` 不 fallback 到本地文件系统或旧 document 级路径。
-- [ ] `deleteByDocumentId` 删除 source prefix 下全部对象，并处理分页 list。
-- [ ] source 删除不影响 artifacts prefix。
-- [ ] 单元测试覆盖版本隔离、幂等命中、冲突、缺失读取和 prefix 删除。
+- [x] S3 source adapter 实现 `DocumentSourceStorage`。
+- [x] source object key 使用 `source/{workspaceId}/documents/{documentId}/versions/{versionNumber}/{filename}`。
+- [x] `save(documentId, filename, content)` 等价写入 version 1。
+- [x] `saveVersion(...)` 通过 `saveVersionIfAbsent(...)` 保持幂等保存契约。
+- [x] 首次 `saveVersionIfAbsent(...)` 写入成功后返回 `true`。
+- [x] 同一 key 内容一致时，`saveVersionIfAbsent(...)` 返回 `false`。
+- [x] 同一 key 内容不一致时，抛出稳定冲突，保留 `version source file content conflict` 语义。
+- [x] `load` / `loadVersion` 命中时返回完整字节，未命中时返回空。
+- [x] `load` / `loadVersion` 不 fallback 到本地文件系统或旧 document 级路径。
+- [x] `deleteByDocumentId` 删除 source prefix 下全部对象，并处理分页 list。
+- [x] source 删除不影响 artifacts prefix。
+- [x] 单元测试覆盖版本隔离、幂等命中、冲突、缺失读取和 prefix 删除。
 
 #### Blocked by
 
