@@ -76,6 +76,54 @@ artifacts/default/documents/018f.../versions/1/cleaned.md
 - 文档处理完成后，RustFS 中出现 `cleaned.md`。
 - 正文读取接口能读取对应版本正文。
 
+## RFS-05 验收
+
+RFS-05 用于确认 `s3` 模式下 source、版本级 `cleaned.md`、正文读取错误语义、删除清理和默认 `local` 回归均可用。真实 RustFS 验收不进入默认 Maven test，避免让普通回归依赖外部对象存储服务。
+
+### 自动 smoke test
+
+启动 RustFS 并确保 `myai-documents` bucket 已存在后，执行：
+
+```powershell
+$env:MYAI_RUSTFS_SMOKE_TEST = "true"
+$env:INGEST_STORAGE_S3_ENDPOINT = "http://localhost:9000"
+$env:INGEST_STORAGE_S3_BUCKET = "myai-documents"
+$env:INGEST_STORAGE_S3_REGION = "us-east-1"
+$env:INGEST_STORAGE_S3_ACCESS_KEY = "admin"
+$env:INGEST_STORAGE_S3_SECRET_KEY = "Admin@123"
+$env:INGEST_STORAGE_S3_PATH_STYLE_ACCESS = "true"
+.\mvnw.cmd -q "-Dtest=S3DocumentStorageSmokeTest" test
+```
+
+该 smoke test 会使用临时 `rfs05-smoke-*` documentId 验证：
+
+- 写入 source object：`source/default/documents/{documentId}/versions/1/rfs05-smoke.txt`。
+- 写入并读取版本级 `cleaned.md` object：`artifacts/default/documents/{documentId}/versions/1/cleaned.md`。
+- artifact 缺失时由 adapter 返回空，供应用层保持 `CONTENT_ARTIFACT_MISSING` 映射。
+- artifact 超过读取上限时抛出 `DocumentVersionArtifactTooLargeException`，供应用层保持 `CONTENT_TOO_LARGE` 映射。
+- 删除后 source 与 artifacts prefix 下的 smoke 对象均不存在。
+
+默认回归仍应执行：
+
+```powershell
+.\mvnw.cmd -q test
+```
+
+### 手工 API 验收
+
+当需要走完整 REST 链路时，按以下顺序验收：
+
+1. 设置 `INGEST_STORAGE_TYPE=s3` 及上述 S3 环境变量，启动后端。
+2. 通过既有 `POST /api/v1/documents/upload` 上传测试文档。
+3. 在 RustFS 中确认 source key 存在。
+4. 等待 worker 处理完成，或通过既有处理链路推进到 `INDEXED`。
+5. 在 RustFS 中确认版本级 `cleaned.md` key 存在。
+6. 调用 `GET /api/v1/documents/{documentId}/content?source=LATEST`，确认响应字段、状态码和本地模式一致。
+7. 临时移除目标 `cleaned.md` 后读取正文，确认仍返回 `CONTENT_ARTIFACT_MISSING`，且不会从 source 重新解析。
+8. 将目标 `cleaned.md` 替换为超过 `INGEST_STORAGE_ARTIFACT_MAX_READ_BYTES` 的对象后读取正文，确认返回 `CONTENT_TOO_LARGE`。
+9. 调用 `DELETE /api/v1/documents/{documentId}`，确认 source 与 artifacts object 均被清理。
+10. 停止 RustFS 后重复上传、处理、读取或删除操作，确认请求失败且不会写入 `data/ingest`。
+
 ## 常见问题
 
 ### 连接失败

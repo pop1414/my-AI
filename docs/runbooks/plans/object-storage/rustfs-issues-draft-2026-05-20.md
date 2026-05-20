@@ -250,15 +250,15 @@ Blocked by：RFS-03、RFS-04
 
 #### Acceptance criteria
 
-- [ ] `s3` 模式下上传文档后，RustFS 中存在对应 source object。
-- [ ] `s3` 模式下处理完成后，RustFS 中存在对应版本级 `cleaned.md` object。
-- [ ] `s3` 模式下正文读取成功，响应字段和错误码与本地模式一致。
-- [ ] artifact 缺失仍返回 `CONTENT_ARTIFACT_MISSING`，不触发 source 重新解析。
-- [ ] artifact 超过读取上限仍返回 `CONTENT_TOO_LARGE`。
-- [ ] 删除 document 后，source 与 artifacts object 都被清理。
-- [ ] RustFS 不可用时，上传、处理、读取或删除不 fallback 到本地文件系统。
-- [ ] 默认 `local` 模式回归通过。
-- [ ] 验收步骤沉淀到 runbook 或测试说明中。
+- [x] `s3` 模式下上传文档后，RustFS 中存在对应 source object。
+- [x] `s3` 模式下处理完成后，RustFS 中存在对应版本级 `cleaned.md` object。
+- [x] `s3` 模式下正文读取成功，响应字段和错误码与本地模式一致。
+- [x] artifact 缺失仍返回 `CONTENT_ARTIFACT_MISSING`，不触发 source 重新解析。
+- [x] artifact 超过读取上限仍返回 `CONTENT_TOO_LARGE`。
+- [x] 删除 document 后，source 与 artifacts object 都被清理。
+- [x] RustFS 不可用时，上传、处理、读取或删除不 fallback 到本地文件系统。
+- [x] 默认 `local` 模式回归通过。
+- [x] 验收步骤沉淀到 runbook 或测试说明中。
 
 #### Blocked by
 
