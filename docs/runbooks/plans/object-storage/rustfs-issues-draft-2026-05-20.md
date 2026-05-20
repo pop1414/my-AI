@@ -295,13 +295,13 @@ Blocked by：RFS-05
 
 #### Acceptance criteria
 
-- [ ] RustFS runbook 与最终配置字段一致。
-- [ ] RustFS runbook 明确 bucket 初始化、endpoint、region、path-style access 和凭证配置。
-- [ ] RustFS runbook 明确首期不迁移历史 `data/ingest`。
-- [ ] RustFS runbook 明确 RustFS 不可用时不 fallback 到本地文件系统。
-- [ ] RustFS runbook 明确回滚只通过配置切回 `local`，不会自动复制 RustFS 对象回本地。
-- [ ] 文档明确 PostgreSQL 备份不能替代 RustFS source/artifacts 备份。
-- [ ] 如需要历史迁移，仅创建后续 plan/spec 入口，不在本 issue 中实现迁移。
+- [x] RustFS runbook 与最终配置字段一致。
+- [x] RustFS runbook 明确 bucket 初始化、endpoint、region、path-style access 和凭证配置。
+- [x] RustFS runbook 明确首期不迁移历史 `data/ingest`。
+- [x] RustFS runbook 明确 RustFS 不可用时不 fallback 到本地文件系统。
+- [x] RustFS runbook 明确回滚只通过配置切回 `local`，不会自动复制 RustFS 对象回本地。
+- [x] 文档明确 PostgreSQL 备份不能替代 RustFS source/artifacts 备份。
+- [x] 如需要历史迁移，仅创建后续 plan/spec 入口，不在本 issue 中实现迁移。
 
 #### Blocked by
 

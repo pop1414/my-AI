@@ -17,6 +17,39 @@ RustFS 只承载文档 source 与 artifacts 的存储介质，不改变 ingest �
 - 已准备访问凭证。
 - 已创建 bucket：`myai-documents`。
 
+本地开发默认使用：
+
+- image：`rustfs/rustfs:latest`
+- container：`myai-rustfs`
+- endpoint：`http://localhost:9000`
+- console：`http://localhost:9001`
+- access key：`admin`
+- secret key：`Admin@123`
+- bucket：`myai-documents`
+
+## Docker Compose
+
+当前本地开发环境使用 `infra/docker-compose.yml` 中的 `rustfs` 服务：
+
+```yaml
+services:
+  rustfs:
+    image: rustfs/rustfs:latest
+    container_name: myai-rustfs
+    environment:
+      RUSTFS_ACCESS_KEY: admin
+      RUSTFS_SECRET_KEY: Admin@123
+      TZ: Asia/Shanghai
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - rustfs_data:/data
+    restart: always
+```
+
+启动后应确认 9000 端口可用于 S3 API，9001 端口可用于控制台访问。生产或共享环境不得继续使用本地默认凭证。
+
 ## 推荐配置
 
 后端配置项建议通过环境变量注入：
@@ -26,14 +59,28 @@ myai:
   ingest:
     storage:
       type: ${INGEST_STORAGE_TYPE:local}
+      root-dir: ${INGEST_STORAGE_ROOT_DIR:data/ingest}
       s3:
         endpoint: ${INGEST_STORAGE_S3_ENDPOINT:http://localhost:9000}
         bucket: ${INGEST_STORAGE_S3_BUCKET:myai-documents}
         region: ${INGEST_STORAGE_S3_REGION:us-east-1}
-        access-key: ${INGEST_STORAGE_S3_ACCESS_KEY:}
-        secret-key: ${INGEST_STORAGE_S3_SECRET_KEY:}
+        access-key: ${INGEST_STORAGE_S3_ACCESS_KEY:admin}
+        secret-key: ${INGEST_STORAGE_S3_SECRET_KEY:Admin@123}
         path-style-access: ${INGEST_STORAGE_S3_PATH_STYLE_ACCESS:true}
+      artifacts:
+        max-read-bytes: ${INGEST_STORAGE_ARTIFACT_MAX_READ_BYTES:2000000}
+        keep-raw-xhtml: ${INGEST_STORAGE_KEEP_RAW_XHTML:false}
+        keep-cleaned-html: ${INGEST_STORAGE_KEEP_CLEANED_HTML:false}
+        keep-parse-result-json: ${INGEST_STORAGE_KEEP_PARSE_RESULT_JSON:true}
 ```
+
+配置说明：
+
+- `myai.ingest.storage.type` 默认为 `local`；只有显式设置为 `s3` 时才启用 S3 兼容对象存储。
+- `myai.ingest.storage.root-dir` 仅在 `local` 模式使用，默认 `data/ingest`。
+- `myai.ingest.storage.s3.endpoint`、`bucket`、`region`、`access-key`、`secret-key`、`path-style-access` 是 S3 模式的连接配置。
+- `myai.ingest.storage.artifacts.max-read-bytes` 控制正文 artifact 读取上限，超出后返回既有 `CONTENT_TOO_LARGE` 语义。
+- `keep-raw-xhtml`、`keep-cleaned-html`、`keep-parse-result-json` 控制可选调试产物是否保留；`cleaned.md` 始终写入。
 
 首期默认仍使用 `local`。需要启用 RustFS 时设置：
 
@@ -46,6 +93,16 @@ $env:INGEST_STORAGE_S3_ACCESS_KEY = "<access-key>"
 $env:INGEST_STORAGE_S3_SECRET_KEY = "<secret-key>"
 $env:INGEST_STORAGE_S3_PATH_STYLE_ACCESS = "true"
 ```
+
+## 发布边界
+
+首期 `s3` 模式只覆盖切换后新上传的 source 与新生成的 artifacts。
+
+- 切换到 `s3` 不会自动迁移既有 `data/ingest` 本地历史文件。
+- S3 模式不会双读本地文件系统，也不会在 artifact 缺失时回退到 source 重新解析。
+- RustFS 不可用时，上传、处理、读取或删除应进入明确失败分支，不得 fallback 到本地文件系统。
+- PostgreSQL 只保存业务事实、版本状态和向量检索数据，不保存 source/artifacts 对象内容。
+- PostgreSQL 备份不能替代 RustFS 备份；恢复方案必须同时覆盖数据库与对象存储。
 
 ## Bucket 与 Key 规则
 
@@ -64,6 +121,18 @@ $env:INGEST_STORAGE_S3_PATH_STYLE_ACCESS = "true"
 source/default/documents/018f.../versions/1/example.pdf
 artifacts/default/documents/018f.../versions/1/cleaned.md
 ```
+
+## Bucket 初始化
+
+首期应用不负责自动创建 bucket。进入 `s3` 模式前，部署或本地初始化流程必须先创建 `myai-documents`。
+
+初始化后至少完成一次非业务 key 的 put / get / delete smoke test。推荐使用临时 key，例如：
+
+```text
+smoke/rfs-setup-check.txt
+```
+
+如果 bucket 缺失，后端启动或首次访问对象存储时会暴露为部署前提问题。不要通过切回本地写入来绕过该错误，否则会导致同一环境的 source 与 artifacts 分散在不同存储介质。
 
 ## 健康检查
 
@@ -146,6 +215,10 @@ $env:INGEST_STORAGE_S3_PATH_STYLE_ACCESS = "true"
 
 首期应用不负责自动创建 bucket。部署前应显式创建 `myai-documents`。
 
+### RustFS 不可用后本地目录没有新文件
+
+这是预期行为。`s3` 模式下不允许 fallback 到 `data/ingest`，否则同一 document 的 source 与 artifacts 会分散到不同存储介质，后续删除、备份和恢复都会失去一致边界。
+
 ### 正文读取返回 `CONTENT_ARTIFACT_MISSING`
 
 说明目标版本的 `cleaned.md` 未命中。检查：
@@ -159,6 +232,8 @@ $env:INGEST_STORAGE_S3_PATH_STYLE_ACCESS = "true"
 
 这是首期预期边界。既有 `data/ingest` 历史文件不会自动迁移到 RustFS。需要通过单独迁移计划处理。
 
+后续迁移入口见：`docs/runbooks/plans/object-storage/rustfs-history-migration-plan.md`。
+
 ## 回滚
 
 如果 RustFS 接入出现阻塞，可将后端切回本地存储：
@@ -171,7 +246,19 @@ $env:INGEST_STORAGE_TYPE = "local"
 
 - 回滚只影响切换后的新写入路径。
 - 已写入 RustFS 的对象不会自动复制回本地文件系统。
+- 回滚后，新写入会回到 `INGEST_STORAGE_ROOT_DIR`；回滚前写入 RustFS 的 source/artifacts 仍需通过 RustFS 备份保留。
 - 历史数据一致性需要按迁移计划单独处理。
+
+## 备份
+
+RustFS 承载 source 与 artifacts 对象内容，必须单独纳入备份和恢复演练。
+
+备份原则：
+
+- PostgreSQL 备份只覆盖业务事实、版本状态、权限、审计和向量数据，不能恢复 RustFS 中的 source/artifacts。
+- RustFS 数据目录或 RustFS 推荐的冗余部署方式必须与 PostgreSQL 备份一起设计恢复点。
+- 恢复演练应同时验证数据库记录、source object、版本级 `cleaned.md` object 和正文读取接口。
+- 只恢复 PostgreSQL 而不恢复 RustFS 时，历史 document 可能存在元数据但缺少 source/artifacts，正文读取会进入既有缺失语义。
 
 ## 运维注意事项
 

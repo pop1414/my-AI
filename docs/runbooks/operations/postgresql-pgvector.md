@@ -254,7 +254,7 @@ docker exec myai-pg pg_restore -U admin -d myai --clean --if-exists /tmp/myai.ba
 
 - 恢复到非空库前必须确认目标环境，避免覆盖有效数据。
 - 生产或长期演示环境应建立定期备份和恢复演练。
-- 对象存储中的 source/artifacts 不在 PostgreSQL 备份中，需单独备份 RustFS。
+- 对象存储中的 source/artifacts 不在 PostgreSQL 备份中，需按 `docs/runbooks/operations/rustfs-object-storage.md` 单独备份 RustFS。
 
 ## 回滚
 
@@ -275,4 +275,4 @@ PostgreSQL schema 迁移不建议依赖自动 downgrade。
 - 定期检查磁盘空间，向量表和审计表会持续增长。
 - 对大批量重处理或重新向量化任务，应关注连接池、索引维护和磁盘 IO。
 - 修改 embedding 模型或维度前，必须先制定向量重建计划。
-- PostgreSQL 备份不能替代 RustFS 备份；数据库事实与文档对象需要一起纳入恢复方案。
+- PostgreSQL 备份不能替代 RustFS 备份；数据库事实与文档对象需要一起纳入恢复方案，恢复演练应同时覆盖 PostgreSQL 与 RustFS。
