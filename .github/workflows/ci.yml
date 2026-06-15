@@ -1,12 +1,12 @@
 # =============================================================================
-# my-AI CI Pipeline
+# my-AI CI 流水线
 # -----------------------------------------------------------------------------
-# Stage 1: Fast Feedback (< 2 min target) — parallel compile/test/lint
-#   - backend-build: compile Java + unit tests (no DB required)
-#   - frontend-build: tsc type check + Vite build + ESLint
-# Stage 2: Integration Checks (optional/manual)
-#   - integration-test: full backend test suite with PostgreSQL + S3 services
-#   - e2e-test: Playwright E2E with live backend
+# 阶段 1：快速反馈（< 2 分钟）— 并行编译/测试/lint
+#   - backend-build：Java 编译 + 单元测试（不需要数据库）
+#   - frontend-build：tsc 类型检查 + Vite 构建 + ESLint
+# 阶段 2：集成检查（仅 main 推送或手动触发）
+#   - integration-test：完整后端测试 + PostgreSQL + S3 服务
+#   - e2e-test：Playwright E2E 测试 + 实时后端
 # =============================================================================
 
 name: CI
@@ -16,6 +16,7 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  workflow_dispatch:
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -26,11 +27,11 @@ env:
 
 jobs:
   # ===========================================================================
-  # Stage 1: Fast Feedback
+  # 阶段 1：快速反馈
   # ===========================================================================
 
   backend-build:
-    name: "Backend: Compile + Unit Tests"
+    name: "后端：编译 + 单元测试"
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -42,22 +43,22 @@ jobs:
           java-version: 21
           cache: maven
 
-      - name: Compile
+      - name: 编译
         run: ./mvnw clean compile -B
 
-      - name: Unit Tests (no DB)
+      - name: 单元测试（不需要数据库）
         run: ./mvnw test -B "-Dtest=!MyAiApplicationTests"
 
-      - name: Upload Test Results
+      - name: 上传测试报告
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: backend-test-results
+          name: 后端测试报告
           path: target/surefire-reports/
           retention-days: 7
 
   frontend-build:
-    name: "Frontend: Type Check + Build + Lint"
+    name: "前端：类型检查 + 构建 + Lint"
     runs-on: ubuntu-latest
     timeout-minutes: 5
     defaults:
@@ -72,21 +73,21 @@ jobs:
           cache: npm
           cache-dependency-path: web/package-lock.json
 
-      - name: Install Dependencies
+      - name: 安装依赖
         run: npm ci
 
-      - name: Type Check + Build
+      - name: 类型检查 + 构建
         run: npm run build
 
-      - name: Lint
+      - name: 代码规范检查
         run: npm run lint
 
   # ===========================================================================
-  # Stage 2: Integration / E2E (manual trigger or on main)
+  # 阶段 2：集成测试 / E2E（仅 main 推送或手动触发）
   # ===========================================================================
 
   integration-test:
-    name: "Backend: Integration Tests (DB)"
+    name: "后端：集成测试（数据库）"
     if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -123,19 +124,19 @@ jobs:
           java-version: 21
           cache: maven
 
-      - name: Full Backend Tests
+      - name: 完整后端测试
         run: ./mvnw test -B
 
-      - name: Upload Test Results
+      - name: 上传测试报告
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: integration-test-results
+          name: 集成测试报告
           path: target/surefire-reports/
           retention-days: 7
 
   e2e-test:
-    name: "Frontend: Playwright E2E"
+    name: "前端：Playwright E2E 测试"
     if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -178,40 +179,40 @@ jobs:
           cache: npm
           cache-dependency-path: web/package-lock.json
 
-      - name: Install Frontend Dependencies
+      - name: 安装前端依赖
         working-directory: web
         run: npm ci
 
-      - name: Install Playwright Browsers
+      - name: 安装 Playwright 浏览器
         working-directory: web
         run: npx playwright install --with-deps chromium
 
-      - name: Start Backend (background)
+      - name: 启动后端服务（后台）
         run: ./mvnw spring-boot:run -B &
         env:
           INGEST_STORAGE_ROOT_DIR: /tmp/myai-e2e-storage
 
-      - name: Wait for Backend Ready
+      - name: 等待后端就绪
         run: |
           for i in $(seq 1 60); do
             if curl -sf http://localhost:8080/actuator/health > /dev/null 2>&1; then
-              echo "Backend is ready"
+              echo "后端已就绪"
               exit 0
             fi
-            echo "Waiting for backend... ($i/60)"
+            echo "等待后端启动... ($i/60)"
             sleep 2
           done
-          echo "Backend failed to start"
+          echo "后端启动失败"
           exit 1
 
-      - name: Run Playwright E2E Tests
+      - name: 运行 Playwright E2E 测试
         working-directory: web
         run: npx playwright test
 
-      - name: Upload Playwright Report
+      - name: 上传 Playwright 报告
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: playwright-report
+          name: playwright-报告
           path: web/playwright-report/
           retention-days: 7
