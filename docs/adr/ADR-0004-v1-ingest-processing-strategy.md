@@ -5,9 +5,9 @@
 - 状态：Superseded
 - 日期：2026-04-01
 - 接受日期：2026-04-08
-- 被取代日期：2026-06-05
+- Superseded-by：decision-register.md
 
-> **Superseded by**: [decision-register-2026-06-04](../../_bmad-output/planning-artifacts/research/decision-register-2026-06-04.md)
+> **Superseded by**: [decision-register.md](../../_bmad-output/planning-artifacts/research/decision-register.md)
 > - **D1**: @Scheduled 单线程 → Virtual Threads + @Async + Semaphore 并发
 > - **D11**: Tika 完全移除，Docling 成为所有复杂格式的唯一解析路径
 > - **D22**: Docling HybridChunker 接管所有格式的 chunking（含原生 MD/HTML/TXT），Java 侧 chunker 移除
@@ -59,13 +59,6 @@
   4. 状态幂等：状态更新需带前置状态，拒绝非法回退
   5. reprocess 幂等：重复执行 reprocess 后结果保持一致
 
-实现状态（2026-04-02）：
-- 控制点 1（受理幂等）已在代码落地：上传时计算 `fileHash`，按 `kbId + fileHash` 查重并复用既有 `documentId`，数据库增加唯一索引保护。
-- 控制点 2（抢占幂等）已落地：仓储提供 `UPLOADED -> INGESTING` 的 CAS 更新接口，单进程 worker 已接入并调用处理用例。
-- 控制点 3（chunk 幂等）已落地基础能力：采用确定性 `chunkId`，并以“先删后写”方式避免重复膨胀。
-- 控制点 4（状态幂等）已落地基础能力：`INGESTING -> INDEXED/FAILED` 状态推进均通过 CAS 完成。
-- 控制点 5（reprocess 幂等）仍待实现。
-
 ### 6) 状态可见性
 - V1 先不做百分比进度
 - 保留阶段状态：`UPLOADED/INGESTING/INDEXED/FAILED`
@@ -84,6 +77,3 @@
 - 落地瞬时错误重试（3 次指数退避 + jitter）
 - 落地 `POST /api/v1/documents/{documentId}/reprocess` 并保证“先删旧向量再重建”的幂等语义
 - 持续同步设计文档、图纸与实现边界，避免文档状态漂移
-
-补充实现进展（2026-04-02）：
-- 解析能力已从“纯文本直读”升级为 `Tika + NoOpEmbeddedDocumentExtractor + TextCleaningService`，用于抑制嵌入资源噪音并提升文本质量。

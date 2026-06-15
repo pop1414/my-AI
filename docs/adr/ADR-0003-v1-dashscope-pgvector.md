@@ -4,8 +4,9 @@
 - 标题：V1 使用 DashScope + PostgreSQL(PGVector) 作为固定技术基线
 - 状态：Accepted
 - 日期：2026-03-31
+- 接受日期：2026-03-31
 - 更新：2026-04-08（与 Spring AI Alibaba 实现收敛）
-- 替代：ADR-0002
+- Supersedes：ADR-0002
 
 ## 背景
 在 `ADR-0002` 中，V1 选择了本地向量库以降低启动门槛。  

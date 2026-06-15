@@ -11,9 +11,8 @@
 
 ## 当前权威文档
 
-- **决策结论**: `_bmad-output/planning-artifacts/research/decision-register-2026-06-04.md`
+- **决策结论**: `_bmad-output/planning-artifacts/research/decision-register.md`
 - **正式 ADR**: `docs/adr/`
-- **功能 SPEC**: `docs/features/<feature>/SPEC.md`
 
 ## 为什么归档而不是修改
 

@@ -33,12 +33,14 @@ build/
 .vscode/
 
 ### Data ###
-data/
 .agents/
 skills-lock.json
 
 ### Claude Code ###
 .claude/
+
+### Codex ###
+.codex/
 
 ### BMAD METHOD ###
 _bmad/
