@@ -43,6 +43,9 @@ jobs:
           java-version: 21
           cache: maven
 
+      - name: 赋予 mvnw 执行权限
+        run: chmod +x ./mvnw
+
       - name: 编译
         run: ./mvnw clean compile -B
 
@@ -124,6 +127,9 @@ jobs:
           java-version: 21
           cache: maven
 
+      - name: 赋予 mvnw 执行权限
+        run: chmod +x ./mvnw
+
       - name: 完整后端测试
         run: ./mvnw test -B
 
@@ -178,6 +184,9 @@ jobs:
           node-version: 22
           cache: npm
           cache-dependency-path: web/package-lock.json
+
+      - name: 赋予 mvnw 执行权限
+        run: chmod +x ./mvnw
 
       - name: 安装前端依赖
         working-directory: web
