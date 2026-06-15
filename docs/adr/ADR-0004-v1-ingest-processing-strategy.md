@@ -2,9 +2,16 @@
 
 - 编号：ADR-0004
 - 标题：V1 采用异步处理执行链路与最小可追踪策略
-- 状态：Accepted
+- 状态：Superseded
 - 日期：2026-04-01
 - 接受日期：2026-04-08
+- 被取代日期：2026-06-05
+
+> **Superseded by**: [decision-register-2026-06-04](../../_bmad-output/planning-artifacts/research/decision-register-2026-06-04.md)
+> - **D1**: @Scheduled 单线程 → Virtual Threads + @Async + Semaphore 并发
+> - **D11**: Tika 完全移除，Docling 成为所有复杂格式的唯一解析路径
+> - **D22**: Docling HybridChunker 接管所有格式的 chunking（含原生 MD/HTML/TXT），Java 侧 chunker 移除
+> - 本 ADR 的分块策略、解析路由、调试产物等内容以决策登记册为准。
 
 ## 背景
 当前系统已完成“受理闭环”：

@@ -36,3 +36,9 @@ build/
 data/
 .agents/
 skills-lock.json
+
+### Claude Code ###
+.claude/
+
+### BMAD METHOD ###
+_bmad/

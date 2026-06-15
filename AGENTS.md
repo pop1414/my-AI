@@ -1,16 +1,35 @@
-## Agent skills
+## AI-native document system
+
+### Document loading order
+
+开始任务时优先读取：
+
+1. `docs/agents/document-system.md`
+2. `docs/agents/domain.md`
+3. `docs/agents/issue-tracker.md`
+4. `docs/agents/triage-labels.md`
+5. 当前任务相关的 `CONTEXT.md`、`docs/adr/`、`docs/features/<feature>/...`
+6. `docs/BMAD_INTEGRATION.md` 和 `docs/LEVEL3_BMAD_WORKFLOW.md`
 
 ### Issue tracker
 
-GitHub Issues 是本仓库的任务与缺陷跟踪入口。See `docs/agents/issue-tracker.md`.
+Local markdown — issues 存放在 `docs/features/<feature>/issues/` 下。See `docs/agents/issue-tracker.md`.
 
 ### Triage labels
 
-使用默认 triage 标签：`needs-triage`、`needs-info`、`ready-for-agent`、`ready-for-human`、`wontfix`。See `docs/agents/triage-labels.md`.
+使用默认 triage 标签：`needs-triage`、`needs-info`、`ready-for-agent`、`ready-for-human`、`wontfix`。附加 BMad control issue kinds。看 `docs/agents/triage-labels.md`.
 
 ### Domain docs
 
 Single-context 仓库；领域上下文采用仓库级统一视角，架构决策记录位于 `docs/adr/`。See `docs/agents/domain.md`.
+
+### Project document system
+
+AI-native 文档链：`PRD → SPEC → issues`，可选 Plan 和 ADR。See `docs/agents/document-system.md`.
+
+### BMad extension
+
+Enabled — BMad story cycle 掌管执行队列，local issues 作为控制面板。See `docs/BMAD_INTEGRATION.md` and `docs/LEVEL3_BMAD_WORKFLOW.md`.
 
 ### Java代码注释要求
 
