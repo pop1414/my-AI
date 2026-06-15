@@ -108,6 +108,7 @@ jobs:
           --health-interval=10s
           --health-timeout=5s
           --health-retries=5
+          --health-start-period=10s
     env:
       DASHSCOPE_API_KEY: ${{ secrets.DASHSCOPE_API_KEY }}
       PGVECTOR_DATASOURCE_URL: jdbc:postgresql://localhost:5432/myai
@@ -160,6 +161,7 @@ jobs:
           --health-interval=10s
           --health-timeout=5s
           --health-retries=5
+          --health-start-period=10s
     env:
       DASHSCOPE_API_KEY: ${{ secrets.DASHSCOPE_API_KEY }}
       PGVECTOR_DATASOURCE_URL: jdbc:postgresql://localhost:5432/myai
