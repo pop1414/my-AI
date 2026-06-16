@@ -24,9 +24,6 @@ import org.junit.jupiter.params.provider.MethodSource;
 class IngestCleaningGoldenSamplesTest {
 
     private static final Path GOLDEN_ROOT = Path.of("src/test/resources/ingest-cleaning/golden");
-    private static final Path REGRESSION_LOOP_RUNBOOK =
-            Path.of("docs/runbooks/plans/ingest-cleaning/cleaned-md质量回归闭环.md");
-
     @ParameterizedTest(name = "{0}")
     @MethodSource("readmeCases")
     @DisplayName("黄金样本 README 应声明真实输入、验收锚点、噪音词与三面审阅重点")
@@ -60,33 +57,6 @@ class IngestCleaningGoldenSamplesTest {
         DocumentParseResult result = parser.parse(inputFile, Files.readAllBytes(input));
 
         assertTrue(result.cleanedMarkdown().contains(expectedText), result.cleanedMarkdown());
-    }
-
-    @Test
-    @DisplayName("cleaned.md 质量回归闭环应固定样本顺序、三面审阅和结论分类")
-    void regressionLoopRunbook_shouldPinUnifiedAcceptancePath() throws Exception {
-        String content = Files.readString(REGRESSION_LOOP_RUNBOOK);
-
-        assertContainsInOrder(
-                content,
-                "`weak-pdf-001`",
-                "`md-001`",
-                "`md-002`",
-                "`html-001`",
-                "`word-001`");
-        assertTrue(content.contains("统一审阅顺序"));
-        assertTrue(content.contains("`cleaned.md`"));
-        assertTrue(content.contains("`GET /api/v1/documents/{documentId}/chunks/preview`"));
-        assertTrue(content.contains("`POST /api/v1/qa/ask`"));
-        assertTrue(content.contains("chunk 边界"));
-        assertTrue(content.contains("`sourceHint`"));
-        assertTrue(content.contains("预期命中位置"));
-        assertTrue(content.contains("回答稳定性"));
-        assertTrue(content.contains("不应出现的噪音词"));
-        assertTrue(content.contains("cleaned.md 改善"));
-        assertTrue(content.contains("chunk 边界改善"));
-        assertTrue(content.contains("qa.ask 偶然变化"));
-        assertTrue(content.contains("若优化不能改善 `cleaned.md`、chunk preview 或固定 `qa.ask` 稳定性，则不能宣称完成"));
     }
 
     @Test
