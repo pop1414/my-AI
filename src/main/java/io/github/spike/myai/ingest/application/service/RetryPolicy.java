@@ -1,5 +1,7 @@
 package io.github.spike.myai.ingest.application.service;
 
+import io.github.spike.myai.ingest.domain.model.DoclingPermanentException;
+import io.github.spike.myai.ingest.domain.model.DoclingTransientException;
 import java.io.IOException;
 import java.net.ConnectException;
 import java.net.SocketTimeoutException;
@@ -16,7 +18,7 @@ import org.springframework.web.client.HttpStatusCodeException;
  *
  * <p>设计目标：
  * <ul>
- *   <li>最大化“可恢复”错误的自动处理能力。</li>
+ *   <li>最大化"可恢复"错误的自动处理能力。</li>
  *   <li>避免对永久性错误的无意义重试。</li>
  *   <li>兼容 web / webflux 两类调用栈。</li>
  * </ul>
@@ -78,14 +80,22 @@ public class RetryPolicy {
                 || cause instanceof UnknownHostException) {
             return new RetryDecision(true, classifyCode(cause), safeMessage(cause));
         }
-        // 5) IO 异常：默认视为瞬时错误，但需排除“磁盘满”等永久性情况。
+        // 5) IO 异常：默认视为瞬时错误，但需排除"磁盘满"等永久性情况。
         if (cause instanceof IOException io) {
             if (isDiskFull(io)) {
                 return new RetryDecision(false, classifyCode(io), safeMessage(io));
             }
             return new RetryDecision(true, classifyCode(io), safeMessage(io));
         }
-        // 6) 参数/校验类错误：直接失败，不重试。
+        // 6) Docling 永久错误（4xx 客户端错误）。
+        if (cause instanceof DoclingPermanentException ex) {
+            return new RetryDecision(false, "DOCLING_PERMANENT_" + ex.httpStatusCode(), safeMessage(ex));
+        }
+        // 7) Docling 瞬时错误（5xx 服务端错误、超时、网络异常）。
+        if (cause instanceof DoclingTransientException) {
+            return new RetryDecision(true, "DOCLING_TRANSIENT", safeMessage(cause));
+        }
+        // 8) 参数/校验类错误：直接失败，不重试。
         if (cause instanceof IllegalArgumentException) {
             return new RetryDecision(false, classifyCode(cause), safeMessage(cause));
         }
@@ -148,7 +158,7 @@ public class RetryPolicy {
     }
 
     /**
-     * 根据 HTTP 状态码决定是否标记为“瞬时错误”（意味着可以重试）。
+     * 根据 HTTP 状态码决定是否标记为"瞬时错误"（意味着可以重试）。
      * 策略规则：408(请求超时)、429(过多请求) 和所有 5xx(服务器侧异常) 被认为是瞬时错误。
      * 其他如 400(损坏的请求)、401(未鉴权)、403(禁止) 或 404(未找到) 皆视为应立即中止的客户端永久错误。
      *
@@ -168,7 +178,7 @@ public class RetryPolicy {
      * 磁盘满的故障通常难以通过简单的瞬时等待与重试进行自我恢复，被视作永久性受阻（应触发报警人工介入）。
      *
      * @param io 捕获的 IO 异常
-     * @return 错误信息中若带有常见“磁盘满”文案，返回 true
+     * @return 错误信息中若带有常见"磁盘满"文案，返回 true
      */
     private static boolean isDiskFull(IOException io) {
         String message = io.getMessage();

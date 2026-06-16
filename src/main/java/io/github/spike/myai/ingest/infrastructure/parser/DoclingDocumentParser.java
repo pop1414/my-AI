@@ -10,11 +10,12 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.spike.myai.ingest.domain.model.ChunkContentType;
 import io.github.spike.myai.ingest.domain.model.ChunkMetadata;
+import io.github.spike.myai.ingest.domain.model.DoclingPermanentException;
+import io.github.spike.myai.ingest.domain.model.DoclingTransientException;
 import io.github.spike.myai.ingest.domain.model.DocumentParseResult;
 import io.github.spike.myai.ingest.domain.port.DocumentTextParser;
 import io.github.spike.myai.ingest.infrastructure.config.IngestProperties;
 import java.time.Clock;
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.LinkedHashMap;
@@ -24,8 +25,11 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
+import org.springframework.web.client.HttpClientErrorException;
+import org.springframework.web.client.HttpServerErrorException;
+import org.springframework.web.client.ResourceAccessException;
 
 /**
  * 基于 Docling Serve 的文档解析实现。
@@ -41,8 +45,7 @@ import org.springframework.stereotype.Component;
  * @author spike
  * @since 1.0.0
  */
-@Component
-@Qualifier("docling")
+@Component("docling")
 public class DoclingDocumentParser implements DocumentTextParser {
 
     // === Constants ===
@@ -61,6 +64,9 @@ public class DoclingDocumentParser implements DocumentTextParser {
     /** title_outline_sample 最大条目数 */
     private static final int MAX_TITLE_OUTLINE_SIZE = 3;
 
+    /** 输入文件最大字节数（50MB），防止 Base64 编码时 OOM */
+    private static final int MAX_INPUT_BYTES = 50 * 1024 * 1024;
+
     // === Instance Fields ===
 
     private final DoclingServeApi doclingServeApi;
@@ -77,6 +83,7 @@ public class DoclingDocumentParser implements DocumentTextParser {
      * @param objectMapper     JSON 序列化器
      * @param ingestProperties ingest 管道配置属性
      */
+    @Autowired
     public DoclingDocumentParser(
             DoclingServeApi doclingServeApi,
             ObjectMapper objectMapper,
@@ -109,14 +116,20 @@ public class DoclingDocumentParser implements DocumentTextParser {
      *   <li>从响应映射 cleanedMarkdown 和 processingMetadata。</li>
      * </ol>
      *
-     * <p>异常策略：所有异常统一包装为 {@link IllegalStateException}，
-     * 由上游 Worker 层统一处理。DoclingParseException 异常层次（4xx/5xx 映射）
-     * 是 Story 2.4 的职责。
+     * <p>异常策略：
+     * <ul>
+     *   <li>输入/响应校验失败 → {@link IllegalStateException}（不可重试的逻辑错误）</li>
+     *   <li>Docling 4xx → {@link DoclingPermanentException}（永久失败，不重试）</li>
+     *   <li>Docling 5xx / 超时 / 网络 → {@link DoclingTransientException}（瞬时错误，可重试）</li>
+     *   <li>其他未知异常 → {@link DoclingTransientException}（保守策略：先尝试重试）</li>
+     * </ul>
      *
      * @param filename 原始文件名
      * @param content  文件字节数组
      * @return 解析结果（cleanedMarkdown + processingMetadata）
-     * @throws IllegalStateException 内容为空或解析失败时
+     * @throws IllegalStateException           内容为空或响应校验失败时
+     * @throws DoclingPermanentException       Docling 4xx 客户端错误时
+     * @throws DoclingTransientException       Docling 5xx / 超时 / 网络错误时
      */
     @Override
     public DocumentParseResult parse(String filename, byte[] content) {
@@ -128,9 +141,25 @@ public class DoclingDocumentParser implements DocumentTextParser {
             ChunkDocumentResponse response = callDoclingApi(filename, content);
             return mapToDocumentParseResult(filename, response);
         } catch (IllegalStateException ex) {
+            // 输入校验/响应校验错误（空内容、空 documents、null markdownContent、超长文本）
+            // 这些是逻辑错误，不可重试
             throw ex;
+        } catch (HttpClientErrorException ex) {
+            // 4xx 客户端错误 → 永久失败（不重试）
+            throw new DoclingPermanentException(
+                    "docling returned client error: " + ex.getStatusCode(),
+                    ex.getStatusCode().value(),
+                    ex);
+        } catch (HttpServerErrorException ex) {
+            // 5xx 服务端错误 → 瞬时错误（可重试）
+            throw new DoclingTransientException(
+                    "docling returned server error: " + ex.getStatusCode(), ex);
+        } catch (ResourceAccessException ex) {
+            // 连接超时 / 读超时 → 瞬时错误（可重试）
+            throw new DoclingTransientException("docling connection failed", ex);
         } catch (Exception ex) {
-            throw new IllegalStateException("failed to parse content with docling", ex);
+            // 其他未知异常 → 保守策略：视为瞬时错误（先尝试重试）
+            throw new DoclingTransientException("unexpected docling error", ex);
         }
     }
 
@@ -144,6 +173,10 @@ public class DoclingDocumentParser implements DocumentTextParser {
      * @return Docling 响应
      */
     private ChunkDocumentResponse callDoclingApi(String filename, byte[] content) {
+        if (content.length > MAX_INPUT_BYTES) {
+            throw new IllegalStateException("input file exceeds max size: " + content.length);
+        }
+
         String base64Content = Base64.getEncoder().encodeToString(content);
 
         FileSource source = FileSource.builder()
@@ -192,6 +225,13 @@ public class DoclingDocumentParser implements DocumentTextParser {
         var document = response.getDocuments().getFirst();
         if (document.getContent() == null || document.getContent().getMarkdownContent() == null) {
             throw new IllegalStateException("docling response document has no markdown content");
+        }
+
+        if ("error".equalsIgnoreCase(document.getStatus())) {
+            throw new IllegalStateException("docling conversion failed: " + document.getStatus());
+        }
+        if (document.getErrors() != null && !document.getErrors().isEmpty()) {
+            log.warn("Docling 文档转换存在错误 (status={}): {}", document.getStatus(), document.getErrors());
         }
 
         return document.getContent().getMarkdownContent();

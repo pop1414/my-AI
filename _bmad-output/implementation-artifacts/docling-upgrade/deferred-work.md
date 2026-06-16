@@ -16,3 +16,10 @@
 - `ProcessDocumentApplicationService.java:135` parseResult null 初始化模式，未来扩展时需注意 NPE 风险 [Story 2.2]
 - `ProcessDocumentApplicationService.markFailed()` null processingMetadata 测试覆盖缺失 [Story 2.2]
 - `DocumentParseResult` 失去 rawXhtml/cleanedHtml 中间产物审计能力 — 设计取舍 [Story 2.2]
+
+## Deferred from: code review of Story 2.3 (2026-06-16)
+
+- MIME type硬编码为"application/octet-stream" — Docling API不提供精确MIME，设计取舍。如有更高精度需求，可在Story 4.1配置化时通过file_ext映射 [Story 2.3]
+- mapChunkMetadata()未被主流程调用 — 为Story 3.4（SourceHint → ChunkMetadata切换）预置，当前为package-private dead code [Story 2.3]
+- contentType硬编码为PARAGRAPH — AC6要求的Docling原始类型映射由Story 3.4（chunk pipeline集成）完成 [Story 2.3]
+- Markdown heading正则匹配代码块内注释行 — title_outline_sample可能含噪声，当前影响仅为metadata质量，非关键路径 [Story 2.3]

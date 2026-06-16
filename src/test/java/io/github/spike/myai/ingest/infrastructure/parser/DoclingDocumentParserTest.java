@@ -18,6 +18,8 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.spike.myai.ingest.domain.model.ChunkContentType;
 import io.github.spike.myai.ingest.domain.model.ChunkMetadata;
+import io.github.spike.myai.ingest.domain.model.DoclingPermanentException;
+import io.github.spike.myai.ingest.domain.model.DoclingTransientException;
 import io.github.spike.myai.ingest.domain.model.DocumentParseResult;
 import io.github.spike.myai.ingest.infrastructure.config.IngestProperties;
 import java.nio.charset.StandardCharsets;
@@ -133,17 +135,125 @@ class DoclingDocumentParserTest {
     // === API 异常 ===
 
     @Test
-    @DisplayName("Docling API 异常应包装为 IllegalStateException 并保留 cause")
+    @DisplayName("Docling API 异常应包装为 DoclingTransientException 并保留 cause")
     void parse_shouldThrowException_whenApiThrowsException() {
         RuntimeException apiError = new RuntimeException("connection refused");
         when(doclingServeApi.chunkSourceWithHybridChunker(any())).thenThrow(apiError);
 
-        IllegalStateException ex = assertThrows(
-                IllegalStateException.class,
+        DoclingTransientException ex = assertThrows(
+                DoclingTransientException.class,
                 () -> parser.parse("error.pdf", "data".getBytes(StandardCharsets.UTF_8)));
 
-        assertEquals("failed to parse content with docling", ex.getMessage());
+        assertEquals("unexpected docling error", ex.getMessage());
         assertEquals(apiError, ex.getCause());
+    }
+
+    // === Docling HTTP 错误映射 ===
+
+    @Test
+    @DisplayName("Docling 4xx 错误应映射为 DoclingPermanentException（含 HTTP 状态码）")
+    void parse_shouldThrowPermanentException_when4xxError() {
+        var httpError = org.springframework.web.client.HttpClientErrorException.create(
+                org.springframework.http.HttpStatus.BAD_REQUEST,
+                "Bad Request",
+                org.springframework.http.HttpHeaders.EMPTY,
+                new byte[0],
+                StandardCharsets.UTF_8);
+        when(doclingServeApi.chunkSourceWithHybridChunker(any())).thenThrow(httpError);
+
+        DoclingPermanentException ex = assertThrows(
+                DoclingPermanentException.class,
+                () -> parser.parse("bad.pdf", "data".getBytes(StandardCharsets.UTF_8)));
+
+        assertEquals(400, ex.httpStatusCode());
+        assertEquals(httpError, ex.getCause());
+        assertTrue(ex.getMessage().contains("400"));
+    }
+
+    @Test
+    @DisplayName("Docling 422 错误应映射为 DoclingPermanentException")
+    void parse_shouldThrowPermanentException_when422Error() {
+        var httpError = org.springframework.web.client.HttpClientErrorException.create(
+                org.springframework.http.HttpStatus.UNPROCESSABLE_ENTITY,
+                "Unprocessable Entity",
+                org.springframework.http.HttpHeaders.EMPTY,
+                new byte[0],
+                StandardCharsets.UTF_8);
+        when(doclingServeApi.chunkSourceWithHybridChunker(any())).thenThrow(httpError);
+
+        DoclingPermanentException ex = assertThrows(
+                DoclingPermanentException.class,
+                () -> parser.parse("unprocessable.pdf", "data".getBytes(StandardCharsets.UTF_8)));
+
+        assertEquals(422, ex.httpStatusCode());
+        assertTrue(ex.getMessage().contains("422"));
+    }
+
+    @Test
+    @DisplayName("Docling 5xx 错误应映射为 DoclingTransientException")
+    void parse_shouldThrowTransientException_when5xxError() {
+        var httpError = org.springframework.web.client.HttpServerErrorException.create(
+                org.springframework.http.HttpStatus.INTERNAL_SERVER_ERROR,
+                "Internal Server Error",
+                org.springframework.http.HttpHeaders.EMPTY,
+                new byte[0],
+                StandardCharsets.UTF_8);
+        when(doclingServeApi.chunkSourceWithHybridChunker(any())).thenThrow(httpError);
+
+        DoclingTransientException ex = assertThrows(
+                DoclingTransientException.class,
+                () -> parser.parse("server-error.pdf", "data".getBytes(StandardCharsets.UTF_8)));
+
+        assertEquals(httpError, ex.getCause());
+        assertTrue(ex.getMessage().contains("500"));
+    }
+
+    @Test
+    @DisplayName("Docling 503 错误应映射为 DoclingTransientException")
+    void parse_shouldThrowTransientException_when503Error() {
+        var httpError = org.springframework.web.client.HttpServerErrorException.create(
+                org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE,
+                "Service Unavailable",
+                org.springframework.http.HttpHeaders.EMPTY,
+                new byte[0],
+                StandardCharsets.UTF_8);
+        when(doclingServeApi.chunkSourceWithHybridChunker(any())).thenThrow(httpError);
+
+        DoclingTransientException ex = assertThrows(
+                DoclingTransientException.class,
+                () -> parser.parse("unavailable.pdf", "data".getBytes(StandardCharsets.UTF_8)));
+
+        assertEquals(httpError, ex.getCause());
+        assertTrue(ex.getMessage().contains("503"));
+    }
+
+    @Test
+    @DisplayName("连接超时应映射为 DoclingTransientException")
+    void parse_shouldThrowTransientException_whenConnectionTimeout() {
+        var timeoutError = new org.springframework.web.client.ResourceAccessException(
+                "I/O error", new java.net.SocketTimeoutException("connect timed out"));
+        when(doclingServeApi.chunkSourceWithHybridChunker(any())).thenThrow(timeoutError);
+
+        DoclingTransientException ex = assertThrows(
+                DoclingTransientException.class,
+                () -> parser.parse("timeout.pdf", "data".getBytes(StandardCharsets.UTF_8)));
+
+        assertEquals("docling connection failed", ex.getMessage());
+        assertEquals(timeoutError, ex.getCause());
+    }
+
+    @Test
+    @DisplayName("未知异常应映射为 DoclingTransientException（保守策略）")
+    void parse_shouldThrowTransientException_whenUnknownError() {
+        var unknownError = new IllegalArgumentException("bad argument from API");
+        when(doclingServeApi.chunkSourceWithHybridChunker(any())).thenThrow(unknownError);
+
+        DoclingTransientException ex = assertThrows(
+                DoclingTransientException.class,
+                () -> parser.parse("unknown.pdf", "data".getBytes(StandardCharsets.UTF_8)));
+
+        assertEquals("unexpected docling error", ex.getMessage());
+        assertEquals(unknownError, ex.getCause());
     }
 
     // === 响应校验 ===
@@ -182,6 +292,66 @@ class DoclingDocumentParserTest {
                 () -> parser.parse("null-md.pdf", "data".getBytes(StandardCharsets.UTF_8)));
 
         assertEquals("docling response document has no markdown content", ex.getMessage());
+    }
+
+    // === Docling 文档状态校验 ===
+
+    @Test
+    @DisplayName("文档 status 为 error 时应抛出 IllegalStateException")
+    void parse_shouldThrowException_whenDocumentStatusError() {
+        Document doc = Document.builder()
+                .content(ExportDocumentResponse.builder()
+                        .markdownContent("partial content")
+                        .build())
+                .status("error")
+                .build();
+        ChunkDocumentResponse response = ChunkDocumentResponse.builder()
+                .documents(List.of(doc))
+                .chunks(List.of())
+                .build();
+        when(doclingServeApi.chunkSourceWithHybridChunker(any())).thenReturn(response);
+
+        IllegalStateException ex = assertThrows(
+                IllegalStateException.class,
+                () -> parser.parse("error-status.pdf", "data".getBytes(StandardCharsets.UTF_8)));
+
+        assertEquals("docling conversion failed: error", ex.getMessage());
+    }
+
+    @Test
+    @DisplayName("文档存在 errors 但 markdownContent 有效时应解析成功（仅记录警告）")
+    void parse_shouldSucceedWithWarning_whenDocumentHasErrors() throws Exception {
+        ErrorItem errorItem = org.mockito.Mockito.mock(ErrorItem.class);
+        Document doc = Document.builder()
+                .content(ExportDocumentResponse.builder()
+                        .markdownContent("# Valid Markdown")
+                        .build())
+                .status("partial")
+                .errors(List.of(errorItem))
+                .build();
+        ChunkDocumentResponse response = ChunkDocumentResponse.builder()
+                .documents(List.of(doc))
+                .chunks(List.of())
+                .build();
+        when(doclingServeApi.chunkSourceWithHybridChunker(any())).thenReturn(response);
+
+        DocumentParseResult result = parser.parse("partial.pdf", "data".getBytes(StandardCharsets.UTF_8));
+
+        assertEquals("# Valid Markdown", result.cleanedMarkdown());
+    }
+
+    // === 输入大小校验 ===
+
+    @Test
+    @DisplayName("输入字节数超出上限时应抛出 IllegalStateException")
+    void parse_shouldThrowException_whenInputExceedsMaxBytes() {
+        byte[] largeContent = new byte[50 * 1024 * 1024 + 1]; // 50MB + 1 byte
+
+        IllegalStateException ex = assertThrows(
+                IllegalStateException.class,
+                () -> parser.parse("large.pdf", largeContent));
+
+        assertTrue(ex.getMessage().startsWith("input file exceeds max size"));
     }
 
     // === 长度校验 ===
