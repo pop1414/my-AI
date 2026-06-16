@@ -26,23 +26,27 @@ my-AI 是一个基于 Spring Boot + Spring AI 的 RAG 文档入库与检索系�
 
 ## 常用命令
 
-### 后端 (始终用 `./mvnw`，不要用系统 `mvn`)
+### 后端
+
+- 默认使用本机已安装的 `mvn`，不要默认使用项目内 Maven Wrapper（`./mvnw` / `mvnw.cmd`）。
+- 如果本机 `mvn` 无法运行、版本异常或环境缺失，先告知用户并等待用户修复；不要自行切换到 `mvnw`、下载其他 Maven，或绕过问题继续开发。
+- 只有用户明确要求验证 Maven Wrapper 时，才使用 `./mvnw`。
 
 ```bash
 # 编译
-./mvnw clean compile
+mvn clean compile
 
 # 启动（端口 8080，Flyway 自动迁移）
-./mvnw spring-boot:run
+mvn spring-boot:run
 
 # 纯单元测试（无外部依赖，日常开发推荐）
-./mvnw "-Dtest=!MyAiApplicationTests" test
+mvn "-Dtest=!MyAiApplicationTests" test
 
 # 完整测试（需要本地 PostgreSQL）
-./mvnw test
+mvn test
 
 # 构建
-./mvnw clean package -DskipTests
+mvn clean package -DskipTests
 ```
 
 ### 前端 (`web/`)
@@ -65,8 +69,8 @@ cd infra && docker compose up -d   # 启动 PGVector 16 (5432) + RustFS S3 (9000
 ### 运行单个测试
 
 ```bash
-./mvnw test "-Dtest=LoginApplicationServiceTest"                 # 单个测试类
-./mvnw test "-Dtest=LoginApplicationServiceTest#testMethod"      # 单个测试方法
+mvn test "-Dtest=LoginApplicationServiceTest"                 # 单个测试类
+mvn test "-Dtest=LoginApplicationServiceTest#testMethod"      # 单个测试方法
 ```
 
 ## 架构核心规则
