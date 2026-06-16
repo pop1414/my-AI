@@ -141,10 +141,15 @@ mvn test "-Dtest=LoginApplicationServiceTest#testMethod"      # 单个测试方�
 - scope: `auth`、`ingest`、`knowledge`、`qa`、`web`
 - 一次提交只做一件事，依赖变更独立提交
 
-### 文档语言约定
+### 文档语言约定（遵循阿里巴巴规范）
 
-- Java: 中文 Javadoc，类级别含 `@author spike` + `@since 1.0.0`
-- TypeScript: `//` 行内注释用中文，`/** */` JSDoc 用英文
+- **Java 注释**（详见 `docs/project-context.md`）：
+  - 类/接口/枚举：中文 Javadoc + `@author spike` + `@since 1.0.0`，说明职责和设计意图
+  - 方法：中文 Javadoc + `@param` + `@return` + `@throws`，不加 `@author`
+  - 字段：注入依赖必须有单行注释说明职责归属；常量说明业务含义
+  - 行内：复杂逻辑关键节点必须有中文注释，解释决策原因
+  - 禁止空洞注释（如 `// 获取用户信息`）、禁止注释掉的代码
+- **TypeScript**：`//` 行内注释用中文，`/** */` JSDoc 用英文
 
 ## 子域快速索引
 
