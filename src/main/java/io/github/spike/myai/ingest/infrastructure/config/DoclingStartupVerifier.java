@@ -4,6 +4,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.SmartLifecycle;
 
+import java.time.Duration;
+
 import ai.docling.serve.api.DoclingServeApi;
 import ai.docling.serve.api.health.HealthCheckResponse;
 
@@ -32,34 +34,63 @@ public class DoclingStartupVerifier implements SmartLifecycle {
 
     private static final int PHASE = Integer.MAX_VALUE - 100;
 
+    /** 最大重试次数，覆盖 Docling Serve 冷启动模型下载窗口（约 5 分钟）。 */
+    private static final int MAX_RETRIES = 6;
+
+    /** 重试间隔，6 次 × 30s = 3 分钟等待 + 每次超时 ≈ 5 分钟覆盖。 */
+    private static final Duration RETRY_INTERVAL = Duration.ofSeconds(30);
+
     private final DoclingServeApi doclingServeApi;
+    private final int maxRetries;
+    private final Duration retryInterval;
 
     private volatile boolean running = false;
 
     public DoclingStartupVerifier(DoclingServeApi doclingServeApi) {
+        this(doclingServeApi, MAX_RETRIES, RETRY_INTERVAL);
+    }
+
+    /** Package-private 构造器，供测试注入重试参数。 */
+    DoclingStartupVerifier(DoclingServeApi doclingServeApi, int maxRetries, Duration retryInterval) {
         this.doclingServeApi = doclingServeApi;
+        this.maxRetries = maxRetries;
+        this.retryInterval = retryInterval;
     }
 
     @Override
     public void start() {
         log.info("正在校验 Docling Serve 连通性...");
 
-        try {
-            HealthCheckResponse response = doclingServeApi.health();
+        Exception lastException = null;
+        for (int attempt = 1; attempt <= maxRetries; attempt++) {
+            try {
+                HealthCheckResponse response = doclingServeApi.health();
 
-            if (!"ok".equals(response.getStatus())) {
-                throw new DoclingUnavailableException(
-                        "Docling Serve 健康检查返回非 ok 状态: %s".formatted(response.getStatus()));
+                if (!"ok".equals(response.getStatus())) {
+                    throw new DoclingUnavailableException(
+                            "健康检查返回非 ok 状态: %s".formatted(response.getStatus()));
+                }
+
+                log.info("Docling Serve 连通性校验通过（第 {} 次尝试）", attempt);
+                running = true;
+                return;
+            } catch (DoclingUnavailableException e) {
+                throw e;
+            } catch (Exception e) {
+                lastException = e;
+                log.warn("Docling Serve 连接失败（第 {}/{} 次尝试），{}s 后重试...",
+                        attempt, maxRetries, retryInterval.toSeconds());
+                if (attempt < maxRetries) {
+                    try {
+                        Thread.sleep(retryInterval.toMillis());
+                    } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                        break;
+                    }
+                }
             }
-
-            log.info("Docling Serve 连通性校验通过");
-            running = true;
-        } catch (DoclingUnavailableException e) {
-            throw e;
-        } catch (Exception e) {
-            throw new DoclingUnavailableException(
-                    "Docling Serve 不可用 — 无法连接到 Docling Serve API", e);
         }
+        throw new DoclingUnavailableException("无法连接到 Docling Serve API", lastException);
     }
 
     @Override

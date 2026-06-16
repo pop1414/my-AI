@@ -4,7 +4,11 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+
+import java.time.Duration;
 
 import ai.docling.serve.api.DoclingServeApi;
 import ai.docling.serve.api.health.HealthCheckResponse;
@@ -13,6 +17,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.client.HttpServerErrorException;
 import org.springframework.web.client.ResourceAccessException;
 
 /**
@@ -58,17 +64,65 @@ class DoclingStartupVerifierTest {
     }
 
     @Test
-    @DisplayName("启动校验 — Docling 连接超时时抛出异常")
+    @DisplayName("启动校验 — Docling 连接超时重试耗尽后抛出异常")
     void start_shouldThrowException_whenDoclingConnectionTimesOut() {
-        // given
+        // given — maxRetries=1 避免测试等待
         when(doclingServeApi.health()).thenThrow(new ResourceAccessException("连接超时"));
-        DoclingStartupVerifier verifier = new DoclingStartupVerifier(doclingServeApi);
+        DoclingStartupVerifier verifier = new DoclingStartupVerifier(doclingServeApi, 1, Duration.ZERO);
 
         // when & then
         DoclingUnavailableException exception = assertThrows(
                 DoclingUnavailableException.class, verifier::start);
         assertTrue(exception.getMessage().contains("无法连接到 Docling Serve API"));
         assertFalse(verifier.isRunning());
+    }
+
+    @Test
+    @DisplayName("启动校验 — Docling 返回 5xx 错误重试耗尽后抛出异常")
+    void start_shouldThrowException_whenDoclingReturns5xx() {
+        // given — maxRetries=1 避免测试等待
+        when(doclingServeApi.health())
+                .thenThrow(new HttpServerErrorException(HttpStatus.INTERNAL_SERVER_ERROR));
+        DoclingStartupVerifier verifier = new DoclingStartupVerifier(doclingServeApi, 1, Duration.ZERO);
+
+        // when & then
+        DoclingUnavailableException exception = assertThrows(
+                DoclingUnavailableException.class, verifier::start);
+        assertTrue(exception.getMessage().contains("无法连接到 Docling Serve API"));
+        assertFalse(verifier.isRunning());
+    }
+
+    @Test
+    @DisplayName("启动校验 — 连接失败后重试成功，正常完成")
+    void start_shouldSucceed_whenRetrySucceeds() {
+        // given — 第一次失败，第二次成功
+        HealthCheckResponse healthyResponse = HealthCheckResponse.builder().status("ok").build();
+        when(doclingServeApi.health())
+                .thenThrow(new ResourceAccessException("连接超时"))
+                .thenReturn(healthyResponse);
+        DoclingStartupVerifier verifier = new DoclingStartupVerifier(doclingServeApi, 2, Duration.ZERO);
+
+        // when
+        verifier.start();
+
+        // then
+        assertTrue(verifier.isRunning());
+        verify(doclingServeApi, times(2)).health();
+    }
+
+    @Test
+    @DisplayName("启动校验 — 重试耗尽后抛出异常，cause 保留最后一次失败原因")
+    void start_shouldThrowException_whenRetriesExhausted() {
+        // given — 3 次全部失败
+        when(doclingServeApi.health()).thenThrow(new ResourceAccessException("连接超时"));
+        DoclingStartupVerifier verifier = new DoclingStartupVerifier(doclingServeApi, 3, Duration.ZERO);
+
+        // when & then
+        DoclingUnavailableException exception = assertThrows(
+                DoclingUnavailableException.class, verifier::start);
+        assertTrue(exception.getMessage().contains("无法连接到 Docling Serve API"));
+        assertTrue(exception.getCause() instanceof ResourceAccessException);
+        verify(doclingServeApi, times(3)).health();
     }
 
     @Test

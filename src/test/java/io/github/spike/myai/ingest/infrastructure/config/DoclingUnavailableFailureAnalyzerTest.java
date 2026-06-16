@@ -23,7 +23,7 @@ class DoclingUnavailableFailureAnalyzerTest {
     void analyze_shouldReturnFailureAnalysisWithAction_whenConnectionFailed() {
         // given
         DoclingUnavailableException exception = new DoclingUnavailableException(
-                "Docling Serve 不可用 — 无法连接到 Docling Serve API",
+                "无法连接到 Docling Serve API",
                 new RuntimeException("Connection refused"));
 
         // when
