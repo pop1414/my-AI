@@ -1,13 +1,8 @@
 import { Button, DatePicker, Form, Input, Select, Space, type FormInstance } from "antd";
 import { ReloadOutlined, SearchOutlined } from "@ant-design/icons";
+import { OUTCOME_OPTIONS } from "./auditFilterOptions";
 
 const { RangePicker } = DatePicker;
-
-export const OUTCOME_OPTIONS = [
-	{ label: "SUCCESS", value: "SUCCESS" },
-	{ label: "FAILURE", value: "FAILURE" },
-	{ label: "DENIED", value: "DENIED" },
-];
 
 interface AuditEventsFilterProps {
 	form: FormInstance;

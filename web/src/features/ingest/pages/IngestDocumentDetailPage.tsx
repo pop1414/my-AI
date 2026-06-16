@@ -115,16 +115,6 @@ export function IngestDocumentDetailPage() {
 	const { isAdmin, status } = useAuth();
 	const navigate = useNavigate();
 	const { documentId = "" } = useParams<{ documentId?: string }>();
-
-	// 等待认证状态加载完成
-	if (status === 'loading') {
-		return <div className="detail-page"><Skeleton active paragraph={{ rows: 10 }} /></div>;
-	}
-
-	if (!isAdmin) {
-		return <Navigate to={`/member/read/${encodeURIComponent(documentId)}`} replace />;
-	}
-
 	const [searchParams, setSearchParams] = useSearchParams();
 	const queryClient = useQueryClient();
 	const [uploadModalOpen, setUploadModalOpen] = useState(false);
@@ -136,6 +126,7 @@ export function IngestDocumentDetailPage() {
 		useState<DocumentVersionHistoryItem | null>(null);
 	const [rollbackResult, setRollbackResult] =
 		useState<DocumentVersionRollbackResponse | null>(null);
+
 	const expandedHistory = searchParams.get("history") === "expanded";
 	const listReturnTo = useMemo(
 		() => resolveListReturnTo(searchParams),
@@ -143,19 +134,21 @@ export function IngestDocumentDetailPage() {
 	);
 	const preservedReturnTo = searchParams.get("returnTo") ?? undefined;
 
+	// ── 所有 Hooks 必须在条件返回之前 ──
+
 	const historyQuery = useQuery({
 		queryKey: ["document-version-history", documentId],
 		queryFn: () => getDocumentVersionHistory(documentId),
 		enabled: documentId.length > 0,
 	});
 
-  const statusQuery = useQuery({
-    queryKey: ["document-status", documentId],
-    queryFn: () => getDocumentStatus(documentId),
-    enabled: documentId.length > 0,
-  });
+	const statusQuery = useQuery({
+		queryKey: ["document-status", documentId],
+		queryFn: () => getDocumentStatus(documentId),
+		enabled: documentId.length > 0,
+	});
 
-  const kbQuery = useQuery({
+	const kbQuery = useQuery({
 		queryKey: ["knowledge-bases"],
 		queryFn: listKnowledgeBases,
 	});
@@ -193,22 +186,22 @@ export function IngestDocumentDetailPage() {
 		);
 	}, [isViewingLatest, latestVersion, versions, viewingVersion]);
 
+	const kbId = statusQuery.data?.kbId;
+	const knowledgeBase = useMemo(() => {
+		return kbId ? kbQuery.data?.find(kb => kb.id === kbId) : undefined;
+	}, [kbId, kbQuery.data]);
+	const knowledgeBaseName = knowledgeBase?.name ?? kbId;
+	const knowledgeBaseIdLabel =
+		knowledgeBase && knowledgeBase.name !== knowledgeBase.id
+			? knowledgeBase.id
+			: undefined;
+
 	const errorStatus = (historyQuery.error as { status?: number } | null)?.status;
 	const canUploadNewVersion = Boolean(
 		isViewingLatest &&
 			latestVersion &&
 			uploadAllowedStatuses.has(latestVersion.status),
 	);
-
-  const kbId = statusQuery.data?.kbId;
-  const knowledgeBase = useMemo(() => {
-    return kbId ? kbQuery.data?.find(kb => kb.id === kbId) : undefined;
-  }, [kbId, kbQuery.data]);
-  const knowledgeBaseName = knowledgeBase?.name ?? kbId;
-  const knowledgeBaseIdLabel =
-    knowledgeBase && knowledgeBase.name !== knowledgeBase.id
-      ? knowledgeBase.id
-      : undefined;
 
 	const uploadVersionMutation = useMutation({
 		mutationFn: (file: File) =>
@@ -269,6 +262,19 @@ export function IngestDocumentDetailPage() {
 			});
 		},
 	});
+
+	// ── 条件返回 ──
+
+	// 等待认证状态加载完成
+	if (status === 'loading') {
+		return <div className="detail-page"><Skeleton active paragraph={{ rows: 10 }} /></div>;
+	}
+
+	if (!isAdmin) {
+		return <Navigate to={`/member/read/${encodeURIComponent(documentId)}`} replace />;
+	}
+
+	// ── 非 Hook 辅助函数 ──
 
 	const expandHistory = () => {
 		setSearchParams((current) => {
@@ -511,7 +517,7 @@ export function IngestDocumentDetailPage() {
 
 				{/* --- Side Rail --- */}
 				<VersionHistoryList
-					historyData={historyData}
+					historyData={historyData ?? null}
 					versions={versions}
 					viewingVersion={viewingVersion}
 					latestVersion={latestVersion}

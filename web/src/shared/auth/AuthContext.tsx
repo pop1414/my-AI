@@ -63,6 +63,7 @@ function resolveDefaultLandingPath(visibleMenuKeys: string[]): string {
 
 // ── Hook ──
 
+// eslint-disable-next-line react-refresh/only-export-components -- Hook 与 Provider 紧密耦合，同文件导出
 export function useAuth(): AuthState {
 	const ctx = useContext(AuthContext);
 	if (!ctx) {

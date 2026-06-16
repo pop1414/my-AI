@@ -129,17 +129,27 @@ export function MemberGrantsPage() {
 			}),
 	});
 
+	/* eslint-disable react-hooks/set-state-in-effect -- 服务端数据同步到编辑态 */
 	useEffect(() => {
 		const grants = memberKnowledgeGrantsQuery.data ?? [];
-		setSelectedKnowledgeBaseIds(grants.map((item) => item.kbId));
+		setSelectedKnowledgeBaseIds((prev) => {
+			const next = grants.map((item) => item.kbId);
+			if (prev.length === next.length && prev.every((v, i) => v === next[i])) return prev;
+			return next;
+		});
 		setKnowledgeBaseRoles(Object.fromEntries(grants.map((item) => [item.kbId, item.role])));
 	}, [memberKnowledgeGrantsQuery.data, userId]);
 
 	useEffect(() => {
 		const grants = memberDocumentGrantsQuery.data ?? [];
-		setSelectedDocumentIds(grants.map((item) => item.documentId));
+		setSelectedDocumentIds((prev) => {
+			const next = grants.map((item) => item.documentId);
+			if (prev.length === next.length && prev.every((v, i) => v === next[i])) return prev;
+			return next;
+		});
 		setDocumentPermissions(Object.fromEntries(grants.map((item) => [item.documentId, item.permission])));
 	}, [memberDocumentGrantsQuery.data, userId]);
+	/* eslint-enable react-hooks/set-state-in-effect */
 
 	const replaceKnowledgeMutation = useMutation({
 		mutationFn: (assignments: Array<{ kbId: string; role: KnowledgeBaseGrant["role"] }>) =>

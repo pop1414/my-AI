@@ -292,7 +292,7 @@ export function AccountAdminPage() {
 						createAdminMutation.mutate({
 							...values,
 							workspaceRole: "WORKSPACE_ADMIN",
-						})
+						} as Parameters<typeof createManagedAccount>[0])
 					}
 				/>
 				{createAdminMutation.isError && (
@@ -513,7 +513,7 @@ export function AccountAdminPage() {
 						if (passwordModalAccount) {
 							passwordMutation.mutate({
 								userId: passwordModalAccount.userId,
-								password: values.password,
+								password: values.password as string,
 							});
 						}
 					}}

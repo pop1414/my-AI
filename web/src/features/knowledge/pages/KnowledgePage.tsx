@@ -98,7 +98,7 @@ export function KnowledgePage() {
 			values,
 		}: {
 			kbId: string;
-			values: any;
+			values: Record<string, unknown>;
 		}) => updateKnowledgeBase(kbId, values),
 		onSuccess: () => {
 			setDrawerOpen(false);
@@ -143,7 +143,7 @@ export function KnowledgePage() {
 		deleteMutation.mutate(kbId);
 	};
 
-	const handleSubmit = async (values: any) => {
+	const handleSubmit = async (values: Record<string, unknown>) => {
 		try {
 			if (editingKb) {
 				const parsed = knowledgeBaseUpdateSchema.parse(values);
@@ -164,7 +164,7 @@ export function KnowledgePage() {
 		}
 	};
 
-	const knowledgeBases = knowledgeQuery.data ?? [];
+	const knowledgeBases = useMemo(() => knowledgeQuery.data ?? [], [knowledgeQuery.data]);
 	
 	const filteredKbs = useMemo(() => {
 		let result = knowledgeBases;
@@ -196,7 +196,7 @@ export function KnowledgePage() {
 		};
 	}, [knowledgeBases, knowledgeQuery.isLoading]);
 
-	const onFilterSubmit = (values: any) => {
+	const onFilterSubmit = (values: Record<string, string>) => {
 		setFilters({
 			keyword: values.keyword || "",
 			status: values.status || "ALL",

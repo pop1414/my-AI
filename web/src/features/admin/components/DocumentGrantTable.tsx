@@ -51,7 +51,7 @@ export function DocumentGrantTable({
 								onPermissionChange({ ...permissions, [id]: "DOC_ALLOW_READ" });
 							}
 						} else {
-							const { [id]: _, ...rest } = permissions;
+							const { [id]: _unused, ...rest } = permissions; // eslint-disable-line @typescript-eslint/no-unused-vars -- 解构排除
 							onPermissionChange(rest);
 						}
 					}}
@@ -84,7 +84,7 @@ export function DocumentGrantTable({
 					style={{ width: "100%" }}
 					disabled={!selectedIds.includes(id)}
 					value={permissions[id] ?? "DOC_ALLOW_READ"}
-					options={documentPermissionOptions as any}
+					options={documentPermissionOptions}
 					onChange={(value: DocumentGrant["permission"]) =>
 						onPermissionChange({ ...permissions, [id]: value })
 					}

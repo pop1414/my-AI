@@ -68,7 +68,7 @@ export function KnowledgeGrantTable({
 					style={{ width: "100%" }}
 					disabled={!selectedIds.includes(kbId)}
 					value={roles[kbId] ?? "KB_READER"}
-					options={kbRoleOptions as any}
+					options={kbRoleOptions}
 					onChange={(value: KnowledgeBaseGrant["role"]) =>
 						onRoleChange({ ...roles, [kbId]: value })
 					}

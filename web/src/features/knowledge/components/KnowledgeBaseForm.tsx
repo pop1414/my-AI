@@ -2,7 +2,7 @@ import { Form, Input, Select, type FormInstance } from "antd";
 
 interface KnowledgeBaseFormProps {
 	form: FormInstance;
-	onFinish: (values: any) => void;
+	onFinish: (values: Record<string, unknown>) => void;
 }
 
 export function KnowledgeBaseForm({
