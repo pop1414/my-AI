@@ -46,8 +46,6 @@
 | `INGEST_STORAGE_S3_REGION` | `us-east-1` | S3 region |
 | `INGEST_STORAGE_S3_PATH_STYLE_ACCESS` | `true` | S3 path-style access（本地 MinIO/RustFS 用 true） |
 | `INGEST_STORAGE_ARTIFACT_MAX_READ_BYTES` | `2000000` | 正文读取单次最大字节数 |
-| `INGEST_STORAGE_KEEP_RAW_XHTML` | `false` | 是否保留 Tika 原始 XHTML 调试产物 |
-| `INGEST_STORAGE_KEEP_CLEANED_HTML` | `false` | 是否保留 cleaned.html 调试产物 |
 | `INGEST_STORAGE_KEEP_PARSE_RESULT_JSON` | `true` | 是否保留 parse-result.json |
 
 ## 本地开发启动

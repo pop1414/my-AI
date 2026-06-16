@@ -263,14 +263,12 @@ UPLOADED → INGESTING → INDEXED（成功）
 
 ### DocumentParseResult
 
-文档解析结果。携带第一阶段处理的中间产物：Tika 原始 XHTML、Jsoup 清洗后的 HTML、清洗后的 Markdown（主管线输出），以及处理元数据 JSON 字符串。
+文档解析结果。携带清洗后的 Markdown（主管线输出）和处理元数据 JSON 字符串。
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
-| `rawXhtml` | `String` | Tika 产出的原始 XHTML（用于调试和审计） |
-| `cleanedHtml` | `String` | Jsoup 清洗后的 HTML（去除样式/脚本/噪声标签） |
-| `cleanedMarkdown` | `String` | flexmark 转换的 Markdown 主管线输出，作为分块输入 |
-| `processingMetadata` | `String` | 文档级处理结果元数据 JSON 字符串 |
+| `cleanedMarkdown` | `String` | 清洗后经转换的 Markdown 主管线输出，作为分块输入 |
+| `processingMetadata` | `String` | 文档级处理结果元数据 JSON 字符串，在终态回填到 ingest_documents.processing_metadata |
 
 ---
 
@@ -455,7 +453,7 @@ DocumentVersion ──(版本事实)──→ DocumentId, UploadStatus, Document
 DocumentVersionHistory ──(版本链)──→ List<DocumentVersionHistoryItem>
 DocumentVersionHistoryItem ──(版本项)──→ DocumentId, UploadStatus, DocumentVersionOriginType
 DocumentChunk ──(分块结果)──→ SourceHint
-DocumentParseResult ──(解析产物)──→ rawXhtml, cleanedHtml, cleanedMarkdown
+DocumentParseResult ──(解析产物)──→ cleanedMarkdown, processingMetadata
 UploadTicket ──(受理票据)──→ DocumentId, UploadStatus
 
 跨子域关联：

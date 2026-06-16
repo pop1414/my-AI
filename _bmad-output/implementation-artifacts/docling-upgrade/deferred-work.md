@@ -8,3 +8,11 @@
 - 12 个基础设施测试被 @Disabled 无跟踪 — scope 外，需独立 story 跟进重构 [Story 1.3]
 - spring.factories FailureAnalyzer 注册机制 — 当前功能正常，Spring Boot 4.x 可能移除支持 [Story 1.3]
 - SmartLifecycle stop(Runnable callback) 未重写 — 当前 stop() 已满足需求 [Story 1.3]
+
+## Deferred from: code review of Story 2.2 (2026-06-16)
+
+- 外部部署环境变量 `INGEST_STORAGE_KEEP_RAW_XHTML` / `INGEST_STORAGE_KEEP_CLEANED_HTML` 需同步清理运维文档，否则 Spring Boot 启动会报 unknown property [Story 2.2]
+- `docs/architecture/domain/ingest.md:270-271, :458` 数据模型表/实体关系图仍列出已删除字段 `rawXhtml` / `cleanedHtml`，需同步更新架构文档 [Story 2.2]
+- `ProcessDocumentApplicationService.java:135` parseResult null 初始化模式，未来扩展时需注意 NPE 风险 [Story 2.2]
+- `ProcessDocumentApplicationService.markFailed()` null processingMetadata 测试覆盖缺失 [Story 2.2]
+- `DocumentParseResult` 失去 rawXhtml/cleanedHtml 中间产物审计能力 — 设计取舍 [Story 2.2]
