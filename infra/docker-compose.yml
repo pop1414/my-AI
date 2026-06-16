@@ -31,6 +31,31 @@ services:
       - rustfs_data:/data
     restart: always
 
+  docling-serve:
+    image: quay.io/docling-project/docling-serve-cpu:latest
+    container_name: myai-docling-serve
+    environment:
+      DOCLING_SERVE_LOAD_MODELS_AT_BOOT: "true"
+      DOCLING_SERVE_SHOW_VERSION_INFO: "true"
+      TZ: Asia/Shanghai
+    ports:
+      - "5001:5001"
+    volumes:
+      - docling_model_cache:/root/.cache/docling
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5001/version', timeout=5)",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 5m
+
 volumes:
   pgdata:
   rustfs_data:
+  docling_model_cache:
