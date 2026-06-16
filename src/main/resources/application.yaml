@@ -83,10 +83,6 @@ myai:
       artifacts:
         # 正文读取单次最大字节数；超出时返回 CONTENT_TOO_LARGE，不静默截断
         max-read-bytes: ${INGEST_STORAGE_ARTIFACT_MAX_READ_BYTES:2000000}
-        # 是否保留 Tika 原始 XHTML 调试产物
-        keep-raw-xhtml: ${INGEST_STORAGE_KEEP_RAW_XHTML:false}
-        # 是否保留 cleaned.html 调试产物
-        keep-cleaned-html: ${INGEST_STORAGE_KEEP_CLEANED_HTML:false}
         # 是否保留 processing_metadata 的文件化载体 parse-result.json
         keep-parse-result-json: ${INGEST_STORAGE_KEEP_PARSE_RESULT_JSON:true}
     chunk:

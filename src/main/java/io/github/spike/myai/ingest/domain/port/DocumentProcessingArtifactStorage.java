@@ -10,15 +10,14 @@ import java.util.Optional;
 /**
  * 文档处理中间产物存储端口（Domain Port）。
  *
- * <p>该端口定义处理链路中产生的中间产物（如 cleaned.md、raw.xhtml 等）
+ * <p>该端口定义处理链路中产生的中间产物（如 cleaned.md、parse-result.json 等）
  * 的持久化能力。领域层只声明"需要保存解析产物"，不关心底层是本地文件系统、
  * 对象存储还是其他实现。
  *
  * <p>设计约定：
  * <ul>
  *   <li>cleaned.md 为强制写入的主链产物，不可跳过；</li>
- *   <li>raw.xhtml / cleaned.html / parse-result.json 为可选调试产物，
- *       由配置开关控制是否保留。</li>
+ *   <li>parse-result.json 为可选调试产物，由配置开关控制是否保留。</li>
  * </ul>
  *
  * @author Spike

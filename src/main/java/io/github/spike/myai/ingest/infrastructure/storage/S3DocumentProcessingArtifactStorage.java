@@ -41,16 +41,12 @@ import software.amazon.awssdk.services.s3.model.S3Object;
 @ConditionalOnProperty(prefix = "myai.ingest.storage", name = "type", havingValue = "s3")
 public class S3DocumentProcessingArtifactStorage implements DocumentProcessingArtifactStorage {
 
-    static final String RAW_XHTML_FILENAME = "raw.xhtml";
-    static final String CLEANED_HTML_FILENAME = "cleaned.html";
     static final String CLEANED_MARKDOWN_FILENAME = CLEANED_MARKDOWN_ARTIFACT_NAME;
     static final String PARSE_RESULT_FILENAME = "parse-result.json";
 
     private final S3Client s3Client;
     private final String bucket;
     private final DocumentStorageKeyResolver keyResolver = new DocumentStorageKeyResolver();
-    private final boolean keepRawXhtml;
-    private final boolean keepCleanedHtml;
     private final boolean keepParseResultJson;
 
     /**
@@ -62,20 +58,12 @@ public class S3DocumentProcessingArtifactStorage implements DocumentProcessingAr
     public S3DocumentProcessingArtifactStorage(S3Client s3Client, IngestProperties ingestProperties) {
         this.s3Client = s3Client;
         this.bucket = ingestProperties.getStorage().getS3().getBucket();
-        this.keepRawXhtml = ingestProperties.getStorage().getArtifacts().isKeepRawXhtml();
-        this.keepCleanedHtml = ingestProperties.getStorage().getArtifacts().isKeepCleanedHtml();
         this.keepParseResultJson = ingestProperties.getStorage().getArtifacts().isKeepParseResultJson();
     }
 
     @Override
     public void saveVersion(String workspaceId, DocumentId documentId, int versionNumber, DocumentParseResult parseResult) {
         putText(resolveArtifactKey(workspaceId, documentId, versionNumber, CLEANED_MARKDOWN_FILENAME), parseResult.cleanedMarkdown());
-        if (keepRawXhtml && parseResult.rawXhtml() != null && !parseResult.rawXhtml().isBlank()) {
-            putText(resolveArtifactKey(workspaceId, documentId, versionNumber, RAW_XHTML_FILENAME), parseResult.rawXhtml());
-        }
-        if (keepCleanedHtml && parseResult.cleanedHtml() != null && !parseResult.cleanedHtml().isBlank()) {
-            putText(resolveArtifactKey(workspaceId, documentId, versionNumber, CLEANED_HTML_FILENAME), parseResult.cleanedHtml());
-        }
         if (keepParseResultJson
                 && parseResult.processingMetadata() != null
                 && !parseResult.processingMetadata().isBlank()) {

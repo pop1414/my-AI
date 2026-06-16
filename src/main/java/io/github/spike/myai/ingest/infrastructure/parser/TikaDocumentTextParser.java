@@ -22,8 +22,8 @@ import org.xml.sax.SAXException;
  * <p>负责完成从原始文件字节到结构化中间产物（{@link DocumentParseResult}）的完整解析链路：
  * <ol>
  *   <li>调用 Tika 产出原始 XHTML；</li>
- *   <li>委托 {@link TextCleaningService} 语义清洗产出 cleaned.html；</li>
- *   <li>委托 {@link TextCleaningService} 转换为 cleaned.md；</li>
+ *   <li>委托 {@link TextCleaningService} 语义清洗产出 cleaned HTML；</li>
+ *   <li>委托 {@link TextCleaningService} 转换为 cleaned Markdown；</li>
  *   <li>从 Tika 元数据与 Markdown 内容中提取 processingMetadata。</li>
  * </ol>
  *
@@ -76,7 +76,7 @@ public class TikaDocumentTextParser implements DocumentTextParser {
      *
      * @param filename 原始文件名，用于 MIME 类型推断和元数据
      * @param content  文件原始字节数组
-     * @return 结构化解析结果，包含 rawXhtml、cleanedHtml、cleanedMarkdown 和 processingMetadata
+     * @return 结构化解析结果，包含 cleanedMarkdown 和 processingMetadata
      * @throws IllegalStateException 内容为空或解析失败时抛出
      */
     @Override
@@ -107,7 +107,7 @@ public class TikaDocumentTextParser implements DocumentTextParser {
      *   <li>产出原始 XHTML 并委托 {@link TextCleaningService} 执行
      *       语义清洗（cleanHtml → toMarkdown）；</li>
      *   <li>校验清洗结果的有效性；</li>
-     *   <li>组装 {@link DocumentParseResult} 并提取 processingMetadata。</li>
+     *   <li>组装 {@link DocumentParseResult}（cleanedMarkdown + processingMetadata）。</li>
      * </ol>
      *
      * <p>异常策略：Tika 解析异常（{@link TikaException}、{@link SAXException}）
@@ -140,10 +140,8 @@ public class TikaDocumentTextParser implements DocumentTextParser {
             String cleanedHtml = textCleaningService.cleanHtml(rawXhtml);
             String cleanedMarkdown = textCleaningService.toMarkdown(cleanedHtml);
             validateCleanedMarkdown(cleanedMarkdown);
-            // 组装最终解析结果，包含四类中间产物和 processingMetadata
+            // 组装最终解析结果
             return new DocumentParseResult(
-                    rawXhtml,
-                    cleanedHtml,
                     cleanedMarkdown,
                     processingMetadataBuilder.build(filename, metadata, cleanedMarkdown));
         } catch (TikaException | SAXException ex) {
@@ -165,7 +163,7 @@ public class TikaDocumentTextParser implements DocumentTextParser {
      *
      * @param filename 原始文件名
      * @param content  文件原始字节数组
-     * @return 结构化解析结果（rawXhtml 和 cleanedHtml 均为空字符串）
+     * @return 结构化解析结果
      */
     private DocumentParseResult parseNativeMarkdown(String filename, byte[] content) throws CharacterCodingException {
         // 第 1 步：按 BOM 或严格 UTF-8 解码为原始 Markdown 文本
@@ -181,10 +179,8 @@ public class TikaDocumentTextParser implements DocumentTextParser {
         metadata.set(TikaCoreProperties.RESOURCE_NAME_KEY, filename);
         metadata.set(Metadata.CONTENT_TYPE, "text/markdown; charset=" + decodedMarkdown.charset().name());
 
-        // 第 5 步：组装解析结果——rawXhtml 和 cleanedHtml 均为空，因为未经过 Tika 管道
+        // 第 5 步：组装解析结果
         return new DocumentParseResult(
-                "",
-                "",
                 cleanedMarkdown,
                 processingMetadataBuilder.build(filename, metadata, cleanedMarkdown));
     }
@@ -200,8 +196,6 @@ public class TikaDocumentTextParser implements DocumentTextParser {
         metadata.set(Metadata.CONTENT_TYPE, "text/html; charset=" + decodedHtml.charset().name());
 
         return new DocumentParseResult(
-                decodedHtml.text(),
-                cleanedHtml,
                 cleanedMarkdown,
                 processingMetadataBuilder.build(filename, metadata, cleanedMarkdown));
     }

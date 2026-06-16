@@ -38,7 +38,6 @@ class TikaDocumentTextParserTest {
 
         DocumentParseResult result = parser.parse("resume.txt", raw.getBytes(StandardCharsets.UTF_8));
 
-        assertTrue(result.rawXhtml().contains("姓名"));
         assertTrue(result.cleanedMarkdown().contains("姓名"));
         assertTrue(result.cleanedMarkdown().contains("技术栈"));
         assertTrue(!result.cleanedMarkdown().contains("image1.jpeg"));
@@ -77,8 +76,6 @@ class TikaDocumentTextParserTest {
 
         DocumentParseResult result = parser.parse("handoff.md", raw.getBytes(StandardCharsets.UTF_8));
 
-        assertEquals("", result.rawXhtml());
-        assertEquals("", result.cleanedHtml());
         assertTrue(result.cleanedMarkdown().contains("# 接手文档质量回归清单"));
         assertTrue(result.cleanedMarkdown().contains("| 检查项 | 通过标准 | 常见失真 |"));
         assertTrue(result.cleanedMarkdown().contains("  - 一级标题不能和正文粘连"));
@@ -117,8 +114,6 @@ class TikaDocumentTextParserTest {
 
         DocumentParseResult result = parser.parse("utf16.md", content);
 
-        assertEquals("", result.rawXhtml());
-        assertEquals("", result.cleanedHtml());
         assertTrue(result.cleanedMarkdown().contains("# UTF16 标题"));
         assertTrue(result.cleanedMarkdown().contains("正文内容"));
 

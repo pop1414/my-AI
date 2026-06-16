@@ -42,34 +42,30 @@ import software.amazon.awssdk.services.s3.model.S3Object;
 class S3DocumentProcessingArtifactStorageTest {
 
     @Test
-    @DisplayName("保存版本产物时应强制写入 cleaned.md 并按配置写入可选产物")
+    @DisplayName("保存版本产物时应强制写入 cleaned.md 和可选 parse-result.json")
     void saveVersion_shouldWriteCleanedMarkdownAndConfiguredArtifacts() {
         S3Client s3Client = org.mockito.Mockito.mock(S3Client.class);
-        S3DocumentProcessingArtifactStorage storage = storage(s3Client, true, false, true);
+        S3DocumentProcessingArtifactStorage storage = storage(s3Client, true);
         when(s3Client.putObject(any(PutObjectRequest.class), any(RequestBody.class)))
                 .thenReturn(PutObjectResponse.builder().build());
         DocumentParseResult parseResult = new DocumentParseResult(
-                "<html>raw</html>",
-                "<p>cleaned</p>",
                 "# title",
                 "{\"schema_version\":\"v1\"}");
 
         storage.saveVersion("workspace-1", new DocumentId("doc-artifact-s3-1"), 2, parseResult);
 
         ArgumentCaptor<PutObjectRequest> requestCaptor = ArgumentCaptor.forClass(PutObjectRequest.class);
-        verify(s3Client, org.mockito.Mockito.times(3)).putObject(requestCaptor.capture(), any(RequestBody.class));
+        verify(s3Client, org.mockito.Mockito.times(2)).putObject(requestCaptor.capture(), any(RequestBody.class));
         List<String> keys = requestCaptor.getAllValues().stream().map(PutObjectRequest::key).toList();
         assertTrue(keys.contains("artifacts/workspace-1/documents/doc-artifact-s3-1/versions/2/cleaned.md"));
-        assertTrue(keys.contains("artifacts/workspace-1/documents/doc-artifact-s3-1/versions/2/raw.xhtml"));
         assertTrue(keys.contains("artifacts/workspace-1/documents/doc-artifact-s3-1/versions/2/parse-result.json"));
-        assertFalse(keys.contains("artifacts/workspace-1/documents/doc-artifact-s3-1/versions/2/cleaned.html"));
     }
 
     @Test
     @DisplayName("读取版本 artifact 时应先检查大小，再返回 stable key、正文和字节长度")
     void loadVersionArtifact_shouldReturnContentWithStableKey() {
         S3Client s3Client = org.mockito.Mockito.mock(S3Client.class);
-        S3DocumentProcessingArtifactStorage storage = storage(s3Client, false, false, true);
+        S3DocumentProcessingArtifactStorage storage = storage(s3Client, true);
         byte[] content = "hello markdown".getBytes(StandardCharsets.UTF_8);
         when(s3Client.headObject(any(HeadObjectRequest.class))).thenReturn(HeadObjectResponse.builder()
                 .contentLength((long) content.length)
@@ -94,7 +90,7 @@ class S3DocumentProcessingArtifactStorageTest {
     @DisplayName("artifact 缺失时应返回空且不读取正文")
     void loadVersionArtifact_shouldReturnEmpty_whenObjectMissing() {
         S3Client s3Client = org.mockito.Mockito.mock(S3Client.class);
-        S3DocumentProcessingArtifactStorage storage = storage(s3Client, false, false, true);
+        S3DocumentProcessingArtifactStorage storage = storage(s3Client, true);
         when(s3Client.headObject(any(HeadObjectRequest.class))).thenThrow(notFound());
 
         assertFalse(storage
@@ -112,7 +108,7 @@ class S3DocumentProcessingArtifactStorageTest {
     @DisplayName("S3 读取异常不应伪装为 artifact 缺失")
     void loadVersionArtifact_shouldPropagateS3Failure_whenStorageUnavailable() {
         S3Client s3Client = org.mockito.Mockito.mock(S3Client.class);
-        S3DocumentProcessingArtifactStorage storage = storage(s3Client, false, false, true);
+        S3DocumentProcessingArtifactStorage storage = storage(s3Client, true);
         S3Exception unavailable = noSuchBucket();
         when(s3Client.headObject(any(HeadObjectRequest.class))).thenThrow(unavailable);
 
@@ -133,7 +129,7 @@ class S3DocumentProcessingArtifactStorageTest {
     @DisplayName("artifact 超过最大读取字节数时应抛出稳定异常且不完整读取对象")
     void loadVersionArtifact_shouldRejectTooLargeObjectBeforeReadingBody() {
         S3Client s3Client = org.mockito.Mockito.mock(S3Client.class);
-        S3DocumentProcessingArtifactStorage storage = storage(s3Client, false, false, true);
+        S3DocumentProcessingArtifactStorage storage = storage(s3Client, true);
         when(s3Client.headObject(any(HeadObjectRequest.class))).thenReturn(HeadObjectResponse.builder()
                 .contentLength(2048L)
                 .build());
@@ -156,7 +152,7 @@ class S3DocumentProcessingArtifactStorageTest {
     @DisplayName("删除文档 artifact 时应分页清理 artifacts prefix 且不触碰 source prefix")
     void deleteByDocumentId_shouldDeleteArtifactsPrefixWithPagination() {
         S3Client s3Client = org.mockito.Mockito.mock(S3Client.class);
-        S3DocumentProcessingArtifactStorage storage = storage(s3Client, false, false, true);
+        S3DocumentProcessingArtifactStorage storage = storage(s3Client, true);
         when(s3Client.listObjectsV2(any(ListObjectsV2Request.class)))
                 .thenReturn(ListObjectsV2Response.builder()
                         .contents(S3Object.builder()
@@ -191,13 +187,9 @@ class S3DocumentProcessingArtifactStorageTest {
 
     private static S3DocumentProcessingArtifactStorage storage(
             S3Client s3Client,
-            boolean keepRawXhtml,
-            boolean keepCleanedHtml,
             boolean keepParseResultJson) {
         IngestProperties properties = new IngestProperties();
         properties.getStorage().getS3().setBucket("myai-documents");
-        properties.getStorage().getArtifacts().setKeepRawXhtml(keepRawXhtml);
-        properties.getStorage().getArtifacts().setKeepCleanedHtml(keepCleanedHtml);
         properties.getStorage().getArtifacts().setKeepParseResultJson(keepParseResultJson);
         return new S3DocumentProcessingArtifactStorage(s3Client, properties);
     }

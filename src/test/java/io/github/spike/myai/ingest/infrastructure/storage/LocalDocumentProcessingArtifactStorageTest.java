@@ -24,19 +24,15 @@ class LocalDocumentProcessingArtifactStorageTest {
     Path tempDir;
 
     @Test
-    @DisplayName("应按版本级 artifacts prefix 写入 cleaned.md 和 parse-result.json，并按配置决定是否保留调试产物")
+    @DisplayName("应按版本级 artifacts prefix 写入 cleaned.md 和 parse-result.json")
     void saveVersion_shouldWriteArtifactsUnderVersionArtifactsPrefix() throws Exception {
         IngestProperties properties = new IngestProperties();
         properties.getStorage().setRootDir(tempDir.toString());
-        properties.getStorage().getArtifacts().setKeepRawXhtml(true);
-        properties.getStorage().getArtifacts().setKeepCleanedHtml(false);
         properties.getStorage().getArtifacts().setKeepParseResultJson(true);
         LocalDocumentProcessingArtifactStorage storage = new LocalDocumentProcessingArtifactStorage(properties);
 
         DocumentId documentId = new DocumentId("doc-artifact-1");
         DocumentParseResult parseResult = new DocumentParseResult(
-                "<html><body>raw</body></html>",
-                "<p>cleaned</p>",
                 "# 标题",
                 "{\"schema_version\":\"v1\"}");
 
@@ -50,8 +46,6 @@ class LocalDocumentProcessingArtifactStorageTest {
                 .resolve("versions")
                 .resolve("2");
         assertTrue(Files.exists(artifactDirectory.resolve("cleaned.md")));
-        assertTrue(Files.exists(artifactDirectory.resolve("raw.xhtml")));
-        assertFalse(Files.exists(artifactDirectory.resolve("cleaned.html")));
         assertTrue(Files.exists(artifactDirectory.resolve("parse-result.json")));
         assertEquals("# 标题", Files.readString(artifactDirectory.resolve("cleaned.md")));
         assertFalse(Files.exists(tempDir.resolve("source").resolve("workspace-1")));
@@ -64,7 +58,7 @@ class LocalDocumentProcessingArtifactStorageTest {
         properties.getStorage().setRootDir(tempDir.toString());
         LocalDocumentProcessingArtifactStorage storage = new LocalDocumentProcessingArtifactStorage(properties);
         DocumentId documentId = new DocumentId("doc-artifact-2");
-        DocumentParseResult parseResult = new DocumentParseResult("raw", "html", "hello markdown", "{}");
+        DocumentParseResult parseResult = new DocumentParseResult("hello markdown", "{}");
 
         storage.saveVersion("workspace-1", documentId, 3, parseResult);
 
@@ -118,7 +112,7 @@ class LocalDocumentProcessingArtifactStorageTest {
         properties.getStorage().setRootDir(tempDir.toString());
         LocalDocumentProcessingArtifactStorage storage = new LocalDocumentProcessingArtifactStorage(properties);
         DocumentId documentId = new DocumentId("doc-artifact-4");
-        storage.saveVersion("workspace-1", documentId, 5, new DocumentParseResult("raw", "html", "123456", "{}"));
+        storage.saveVersion("workspace-1", documentId, 5, new DocumentParseResult("123456", "{}"));
 
         DocumentVersionArtifactTooLargeException exception = assertThrows(
                 DocumentVersionArtifactTooLargeException.class,
@@ -140,7 +134,7 @@ class LocalDocumentProcessingArtifactStorageTest {
         properties.getStorage().setRootDir(tempDir.toString());
         LocalDocumentProcessingArtifactStorage storage = new LocalDocumentProcessingArtifactStorage(properties);
         DocumentId documentId = new DocumentId("doc-artifact-delete");
-        storage.saveVersion("workspace-1", documentId, 1, new DocumentParseResult("raw", "html", "content", "{}"));
+        storage.saveVersion("workspace-1", documentId, 1, new DocumentParseResult("content", "{}"));
         Path sourceDirectory = tempDir
                 .resolve("source")
                 .resolve("workspace-1")

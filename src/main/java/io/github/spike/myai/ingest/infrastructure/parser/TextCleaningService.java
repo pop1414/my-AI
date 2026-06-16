@@ -16,20 +16,20 @@ public class TextCleaningService {
     private final MarkdownTextCleaner markdownTextCleaner = new MarkdownTextCleaner();
 
     /**
-     * 清洗原始 XHTML，输出语义更稳定的 HTML。
+     * 清洗原始 HTML/XHTML，输出语义更稳定的 HTML。
      *
-     * @param rawXhtml Tika 输出的 XHTML
-     * @return cleaned.html 内容
+     * @param rawHtml 原始 HTML/XHTML 内容
+     * @return 语义清洗后的 HTML
      */
-    public String cleanHtml(String rawXhtml) {
-        return htmlSemanticCleaner.clean(rawXhtml);
+    public String cleanHtml(String rawHtml) {
+        return htmlSemanticCleaner.clean(rawHtml);
     }
 
     /**
-     * 将 cleaned.html 转换为 Markdown。
+     * 将语义清洗后的 HTML 转换为 Markdown。
      *
      * @param cleanedHtml 语义清洗后的 HTML
-     * @return cleaned.md 内容
+     * @return 转换并规整后的 Markdown 内容
      */
     public String toMarkdown(String cleanedHtml) {
         if (cleanedHtml == null || cleanedHtml.isBlank()) {

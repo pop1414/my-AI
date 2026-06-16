@@ -100,8 +100,6 @@ public class IngestProperties {
      *
      * <p>控制处理链路中调试产物的文件化保留行为：
      * <ul>
-     *   <li>{@code keepRawXhtml}：是否保留 Tika 原始 XHTML（默认 false）</li>
-     *   <li>{@code keepCleanedHtml}：是否保留 Jsoup 清洗后的 HTML（默认 false）</li>
      *   <li>{@code keepParseResultJson}：是否保留 processing_metadata 文件化载体（默认 true）</li>
      * </ul>
      *
@@ -112,8 +110,6 @@ public class IngestProperties {
     public static class Artifacts {
         /** 正文读取允许的最大 artifact 字节数，超过时拒绝返回完整正文 */
         private long maxReadBytes = 2_000_000L;
-        private boolean keepRawXhtml = false;
-        private boolean keepCleanedHtml = false;
         private boolean keepParseResultJson = true;
 
     }
