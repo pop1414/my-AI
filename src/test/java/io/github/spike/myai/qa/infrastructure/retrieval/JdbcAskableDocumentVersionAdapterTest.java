@@ -10,6 +10,7 @@ import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -19,6 +20,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
  * JdbcAskableDocumentVersionAdapter 读边界测试。
  */
 @SpringBootTest(properties = "myai.ingest.worker.enabled=false")
+@Tag("integration")
 class JdbcAskableDocumentVersionAdapterTest {
 
     @Autowired

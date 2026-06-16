@@ -50,7 +50,7 @@ jobs:
         run: ./mvnw clean compile -B
 
       - name: 单元测试（不需要数据库）
-        run: ./mvnw test -B "-Dtest=!MyAiApplicationTests"
+        run: ./mvnw test -B -DexcludedGroups=integration
 
       - name: 上传测试报告
         if: always()
