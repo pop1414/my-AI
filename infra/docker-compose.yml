@@ -54,6 +54,7 @@ services:
       timeout: 5s
       retries: 30
       start_period: 5m
+    restart: unless-stopped
 
 volumes:
   pgdata:
