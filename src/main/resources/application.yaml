@@ -42,11 +42,12 @@ spring:
         max-document-batch-size: 10000
         # 是否删除旧表
         remove-existing-vector-store-table: false
-    arconia:
-      docling:
-        base-url: ${ARCONIA_DOCLING_BASE_URL:http://localhost:5001}
-        connect-timeout: 5s
-        read-timeout: 30s
+
+arconia:
+  docling:
+    base-url: ${ARCONIA_DOCLING_BASE_URL:http://localhost:5001}
+    connect-timeout: 5s
+    read-timeout: 30s
 
 myai:
   auth:
@@ -104,7 +105,7 @@ myai:
 management:
   endpoint:
     health:
-      show-details: always
+      show-details: when_authorized
   endpoints:
     web:
       exposure:
