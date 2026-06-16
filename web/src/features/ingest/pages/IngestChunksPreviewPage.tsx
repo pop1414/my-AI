@@ -64,7 +64,20 @@ export function IngestChunksPreviewPage() {
 	const [form] = Form.useForm<QueryInput>();
 	const initialDocumentId =
 		urlDocumentId ?? localStorage.getItem("myai:lastDocumentId") ?? "";
-	const [queryInput, setQueryInput] = useState<QueryInput | null>(null);
+	const [queryInput, setQueryInput] = useState<QueryInput | null>(() => {
+		const docId = urlDocumentId ?? localStorage.getItem("myai:lastDocumentId");
+		if (docId) {
+			return { documentId: docId, limit: 20, offset: 0, previewChars: 200 };
+		}
+		return null;
+	});
+
+	// URL 带 documentId 时同步表单字段
+	useEffect(() => {
+		if (urlDocumentId && queryInput) {
+			form.setFieldsValue(queryInput);
+		}
+	}, [urlDocumentId]); // eslint-disable-line react-hooks/exhaustive-deps
 
 	const docStatusQuery = useQuery({
 		queryKey: ["document-status", queryInput?.documentId],
@@ -72,24 +85,10 @@ export function IngestChunksPreviewPage() {
 		enabled: !!queryInput?.documentId,
 	});
 
-  const kbQuery = useQuery({
+	const kbQuery = useQuery({
 		queryKey: ["knowledge-bases"],
 		queryFn: listKnowledgeBases,
 	});
-
-	// 如果 URL 带了 documentId，自动触发首次查询
-	useEffect(() => {
-		if (urlDocumentId && !queryInput) {
-			const initial: QueryInput = {
-				documentId: urlDocumentId,
-				limit: 20,
-				offset: 0,
-				previewChars: 200,
-			};
-			setQueryInput(initial);
-			form.setFieldsValue(initial);
-		}
-	}, [urlDocumentId]); // eslint-disable-line react-hooks/exhaustive-deps
 
 	const previewQuery = useQuery({
 		queryKey: ["ingest-chunks-preview", queryInput],

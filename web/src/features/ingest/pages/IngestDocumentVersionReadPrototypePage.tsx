@@ -11,9 +11,8 @@ import {
 	buildPrototypeDocument,
 	formatFileSize,
 	formatTime,
-	type PrototypeVersion,
-	type ResultState,
-} from "./IngestDocumentDetailPrototypePage";
+} from "./prototypePageUtils";
+import type { PrototypeVersion, ResultState } from "./IngestDocumentDetailPrototypePage";
 import "./IngestDocumentVersionReadPrototypePage.css";
 
 type ReadMode = "single" | "compare";

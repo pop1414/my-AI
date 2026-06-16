@@ -2,7 +2,7 @@ import { Form, Input, type FormInstance } from "antd";
 
 interface AdminAccountFormProps {
 	form: FormInstance;
-	onFinish: (values: any) => void;
+	onFinish: (values: Record<string, unknown>) => void;
 }
 
 export function AdminAccountForm({ form, onFinish }: AdminAccountFormProps) {
@@ -38,7 +38,7 @@ export function AdminAccountForm({ form, onFinish }: AdminAccountFormProps) {
 
 interface PasswordResetFormProps {
 	form: FormInstance;
-	onFinish: (values: any) => void;
+	onFinish: (values: Record<string, unknown>) => void;
 	targetName: string;
 }
 

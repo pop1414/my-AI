@@ -51,13 +51,19 @@ export function KnowledgeBaseGrantsPage() {
 		queryFn: listMembers,
 	});
 
+	/* eslint-disable react-hooks/set-state-in-effect -- 服务端数据同步到编辑态 */
 	useEffect(() => {
 		const grants = grantsQuery.data ?? [];
-		setSelectedUserIds(grants.map((item) => item.userId));
+		setSelectedUserIds((prev) => {
+			const next = grants.map((item) => item.userId);
+			if (prev.length === next.length && prev.every((v, i) => v === next[i])) return prev;
+			return next;
+		});
 		setRolesByUserId(
 			Object.fromEntries(grants.map((item) => [item.userId, item.role])),
 		);
 	}, [grantsQuery.data, kbId]);
+	/* eslint-enable react-hooks/set-state-in-effect */
 
 	const replaceMutation = useMutation({
 		mutationFn: async () => {

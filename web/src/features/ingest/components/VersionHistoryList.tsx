@@ -8,7 +8,7 @@ import type { DocumentVersionHistoryItem } from "../../../shared/api/ingestApi";
 const defaultVisibleVersionCount = 8;
 
 interface VersionHistoryListProps {
-	historyData: any;
+	historyData: { documentId: string } | null;
 	versions: DocumentVersionHistoryItem[];
 	viewingVersion: DocumentVersionHistoryItem;
 	latestVersion: DocumentVersionHistoryItem;

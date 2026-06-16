@@ -29,7 +29,7 @@ function ReaderPane({
 	isLatest: boolean;
 	isAskable: boolean;
   onVersionChange: (v: number) => void;
-  versionOptions: any[];
+  versionOptions: Array<{ label: string; value: number }>;
   documentId: string;
   source?: "LATEST" | "ASKABLE_BASELINE" | "EXPLICIT_VERSION";
 }) {

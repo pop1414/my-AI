@@ -1,4 +1,4 @@
-import { useEffect, useEffectEvent } from "react";
+import { useCallback, useEffect } from "react";
 import { LeftOutlined, RightOutlined } from "@ant-design/icons";
 import { Button, Space, Typography } from "antd";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -42,7 +42,7 @@ export function PrototypeVariantSwitcher({
 	);
 	const currentVariant = variants[currentIndex] ?? variants[0];
 
-	const switchVariant = useEffectEvent((direction: -1 | 1) => {
+	const switchVariant = useCallback((direction: -1 | 1) => {
 		if (variants.length === 0) {
 			return;
 		}
@@ -58,7 +58,7 @@ export function PrototypeVariantSwitcher({
 			},
 			{ replace: true },
 		);
-	});
+	}, [variants, currentIndex, location, paramName, navigate]);
 
 	useEffect(() => {
 		if (import.meta.env.PROD) {
