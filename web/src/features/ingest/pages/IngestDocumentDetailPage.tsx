@@ -115,16 +115,6 @@ export function IngestDocumentDetailPage() {
 	const { isAdmin, status } = useAuth();
 	const navigate = useNavigate();
 	const { documentId = "" } = useParams<{ documentId?: string }>();
-
-	// 等待认证状态加载完成
-	if (status === 'loading') {
-		return <div className="detail-page"><Skeleton active paragraph={{ rows: 10 }} /></div>;
-	}
-
-	if (!isAdmin) {
-		return <Navigate to={`/member/read/${encodeURIComponent(documentId)}`} replace />;
-	}
-
 	const [searchParams, setSearchParams] = useSearchParams();
 	const queryClient = useQueryClient();
 	const [uploadModalOpen, setUploadModalOpen] = useState(false);
@@ -136,6 +126,16 @@ export function IngestDocumentDetailPage() {
 		useState<DocumentVersionHistoryItem | null>(null);
 	const [rollbackResult, setRollbackResult] =
 		useState<DocumentVersionRollbackResponse | null>(null);
+
+	// 等待认证状态加载完成
+	if (status === 'loading') {
+		return <div className="detail-page"><Skeleton active paragraph={{ rows: 10 }} /></div>;
+	}
+
+	if (!isAdmin) {
+		return <Navigate to={`/member/read/${encodeURIComponent(documentId)}`} replace />;
+	}
+
 	const expandedHistory = searchParams.get("history") === "expanded";
 	const listReturnTo = useMemo(
 		() => resolveListReturnTo(searchParams),

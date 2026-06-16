@@ -51,7 +51,7 @@ export function DocumentGrantTable({
 								onPermissionChange({ ...permissions, [id]: "DOC_ALLOW_READ" });
 							}
 						} else {
-							const { [id]: _, ...rest } = permissions;
+							const { [id]: _unused, ...rest } = permissions; // eslint-disable-line @typescript-eslint/no-unused-vars -- 解构排除
 							onPermissionChange(rest);
 						}
 					}}
