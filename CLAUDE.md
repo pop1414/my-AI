@@ -31,6 +31,11 @@ my-AI 是一个基于 Spring Boot + Spring AI 的 RAG 文档入库与检索系�
 - 默认使用本机已安装的 `mvn`，不要默认使用项目内 Maven Wrapper（`./mvnw` / `mvnw.cmd`）。
 - 如果本机 `mvn` 无法运行、版本异常或环境缺失，先告知用户并等待用户修复；不要自行切换到 `mvnw`、下载其他 Maven，或绕过问题继续开发。
 - 只有用户明确要求验证 Maven Wrapper 时，才使用 `./mvnw`。
+- **Maven 环境**:
+  - Maven Home: `D:\02_Scoop\Scoop\apps\maven\current` (或你的实际路径)
+  - 本地仓库: `D:\Administrator\.m2\repo` (或你的实际路径)
+  - 配置文件: `D:\02_Scoop\Scoop\apps\maven\current\conf\settings.xml`
+  - 如果命令失败，先检查 `mvn -version` 确认环境正常
 
 ```bash
 # 编译
