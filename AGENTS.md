@@ -163,6 +163,7 @@ mvn test "-Dtest=LoginApplicationServiceTest#testMethod"      # 单个测试方�
 - 方法命名 `method_shouldExpectedBehavior_whenCondition`
 - **禁止 mock JdbcTemplate/JDBC 链路** — SQL 正确性只能靠真实 DB 验证
 - `MyAiApplicationTests` 是集成测试，需要完整 Spring 上下文 + 本地 PG
+- **验证改动时，只运行与修改代码相关的测试类**（用 `mvn test "-Dtest=XxxTest"` 指定），不要跑全量测试套件。不确定哪些测试相关时，先用 Glob 查找对应测试文件再运行
 
 ## 认证与安全
 
