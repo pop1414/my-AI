@@ -64,8 +64,10 @@ graph LR
 ### 三步跑起来
 
 ```bash
-# 1. 启动基础设施（PostgreSQL + RustFS）
+# 1. 启动基础设施（PostgreSQL + RustFS + Docling Serve）
 cd infra && docker compose up -d
+# 首次启动 Docling Serve 会自动下载模型，通常在 5 分钟内完成
+# 用 docker compose ps 确认 docling-serve 进入 healthy 状态后再继续
 
 # 2. 启动后端（Flyway 自动建表）
 export DASHSCOPE_API_KEY="sk-xxx"
@@ -155,7 +157,7 @@ my-AI/
 │   └── shared/        # 共享工具
 ├── src/main/resources/db/migration/   # Flyway 迁移脚本
 ├── web/               # React 前端
-├── infra/             # Docker Compose（PGVector + RustFS）
+├── infra/             # Docker Compose（PGVector + RustFS + Docling Serve）
 ├── docs/              # 项目文档
 └── _bmad-output/      # BMad 工作流产物
 ```

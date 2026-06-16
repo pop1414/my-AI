@@ -5,7 +5,7 @@
 | 依赖 | 版本要求 | 说明 |
 |---|---|---|
 | JDK | 21（LTS） | 不可使用 22+ 特性 |
-| Docker | 最新版 | 用于 PostgreSQL + RustFS |
+| Docker | 最新版 | 用于 PostgreSQL + RustFS + Docling Serve |
 | Node.js | — | 仅前端开发需要（`web/` 目录） |
 | DashScope API Key | — | 阿里云百炼平台申请 |
 
@@ -55,8 +55,10 @@
 ### 启动步骤
 
 ```bash
-# 1. 启动基础设施（PostgreSQL + RustFS）
+# 1. 启动基础设施（PostgreSQL + RustFS + Docling Serve）
 cd infra && docker compose up -d
+# 首次启动 Docling Serve 会自动下载模型，通常在 5 分钟内完成
+# 用 docker compose ps 确认 docling-serve 进入 healthy 状态后再启动应用
 
 # 2. 设置环境变量
 export DASHSCOPE_API_KEY=your-api-key
@@ -179,9 +181,12 @@ curl http://localhost:8080/actuator/metrics/myai.ingest.delete.conflict.total
 |---|---|---|---|
 | postgres | `pgvector/pgvector:pg16` | 5432 | 数据库 + 向量扩展 |
 | rustfs | `rustfs/rustfs:latest` | 9000 (API), 9001 (Console) | S3 兼容对象存储 |
+| docling-serve | `quay.io/docling-project/docling-serve-cpu:latest` | 5001 | Docling Serve API，首次启动自动下载模型并写入持久化缓存 |
 
 - 数据库：`myai`，用户/密码：`admin/admin`
 - RustFS 凭证：`admin/Admin@123`
+- Docling Serve：服务地址 `http://localhost:5001`，健康检查使用 `/version`
+- Docling 模型缓存：Docker volume `docling_model_cache`
 - 时区：`Asia/Shanghai`
 
 ## CI/CD
