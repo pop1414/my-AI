@@ -1,6 +1,8 @@
 # Deferred Work
 
-## Deferred from: code review of 1-3-retrieval-parameter-externalization (2026-06-17)
+## Deferred from: code review of 2-2-scope-filter-builder (2026-06-17)
 
-- **应用层 import infrastructure 层** (`AskQuestionApplicationService.java:22` → `QaRetrievalProperties`) — 既存模式，`GetDocumentContentApplicationService` 已有同模式，spec 明确批准此位置。如需修复，需整体重构配置类注入方式（例如通过 domain port 抽象配置接口）。
-- **双重默认值来源** — Java 字段默认值（20/4）与 YAML 默认值（`${...:20}`）相同，存在维护不一致风险。建议二选一：只在 Java 设置默认值，YAML 去掉 `:20/:4`；或只在 YAML 占位符设置默认值，Java 字段不设初始值。
+- [Defer] metadata 常量重复定义（ScopeFilterBuilder 与 PgVectorChunkRetrievalAdapter）— AC#5 明确要求独立定义
+- [Defer] scope 列表含 null 元素的 NPE — 与原始 `buildScopeFilter` 行为一致，Java 约定 List 元素非 null
+- [Defer] `::int` 强制转换失败风险 — 数据由 ingest 管线写入，非本 Story 范围
+- [Defer] SqlScopeCondition 当前无生产调用者 — Story 2.3 前置依赖
