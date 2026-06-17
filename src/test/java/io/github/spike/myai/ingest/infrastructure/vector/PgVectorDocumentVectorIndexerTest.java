@@ -8,9 +8,10 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 import io.github.spike.myai.ingest.domain.model.Document;
+import io.github.spike.myai.ingest.domain.model.ChunkContentType;
+import io.github.spike.myai.ingest.domain.model.ChunkMetadata;
 import io.github.spike.myai.ingest.domain.model.DocumentChunk;
 import io.github.spike.myai.ingest.domain.model.DocumentId;
-import io.github.spike.myai.ingest.domain.model.SourceHint;
 import io.github.spike.myai.ingest.domain.model.UploadStatus;
 import java.time.Instant;
 import java.util.List;
@@ -71,8 +72,8 @@ class PgVectorDocumentVectorIndexerTest {
                 Instant.now(),
                 Instant.now());
         List<DocumentChunk> chunks = List.of(
-                new DocumentChunk("chunk-a", SourceHint.none()),
-                new DocumentChunk("chunk-b", SourceHint.none()));
+                new DocumentChunk("chunk-a", ChunkMetadata.of(null, 0, null)),
+                new DocumentChunk("chunk-b", ChunkMetadata.of(null, 0, null)));
 
         indexer.index(document, chunks);
         indexer.index(document, chunks);
@@ -106,8 +107,8 @@ class PgVectorDocumentVectorIndexerTest {
     }
 
     @Test
-    @DisplayName("index 应通过 SourceHint 写入稳定的 metadata 字符串")
-    void index_shouldStoreSourceHintMetadataFromValueObject() {
+    @DisplayName("index 应通过 ChunkMetadata 写入稳定的 metadata 字符串")
+    void index_shouldStoreChunkMetadataFromValueObject() {
         VectorStore vectorStore = Mockito.mock(VectorStore.class);
         JdbcTemplate jdbcTemplate = Mockito.mock(JdbcTemplate.class);
         PgVectorDocumentVectorIndexer indexer = new PgVectorDocumentVectorIndexer(vectorStore, jdbcTemplate);
@@ -132,14 +133,15 @@ class PgVectorDocumentVectorIndexerTest {
                 null,
                 Instant.now(),
                 updatedAt);
-        List<DocumentChunk> chunks = List.of(new DocumentChunk("chunk-a", SourceHint.heading("第1章 \"结构\"")));
+        List<DocumentChunk> chunks = List.of(new DocumentChunk("chunk-a",
+                ChunkMetadata.of(List.of("第1章 \"结构\""), 0, ChunkContentType.PARAGRAPH)));
 
         indexer.index(document, chunks);
 
         ArgumentCaptor<List<org.springframework.ai.document.Document>> documentsCaptor = ArgumentCaptor.forClass(List.class);
         verify(vectorStore).add(documentsCaptor.capture());
         Map<String, Object> metadata = documentsCaptor.getValue().getFirst().getMetadata();
-        assertEquals("{\"heading\":\"第1章 \\\"结构\\\"\"}", metadata.get("sourceHint"));
+        assertEquals("{\"headings\":[\"第1章 \\\"结构\\\"\"],\"pageNumber\":0,\"contentType\":\"PARAGRAPH\"}", metadata.get("chunkMetadata"));
         assertEquals("default", metadata.get("workspaceId"));
         assertEquals(1, metadata.get("documentVersionNumber"));
         assertEquals("a.txt", metadata.get("sourceFile"));

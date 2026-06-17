@@ -1,5 +1,7 @@
 package io.github.spike.myai.ingest.infrastructure.persistence;
 
+import io.github.spike.myai.ingest.domain.model.ChunkContentType;
+import io.github.spike.myai.ingest.domain.model.ChunkMetadata;
 import io.github.spike.myai.ingest.domain.model.DocumentChunkPreview;
 import io.github.spike.myai.ingest.domain.model.DocumentId;
 import io.github.spike.myai.ingest.domain.port.DocumentChunkPreviewRepository;
@@ -19,7 +21,7 @@ import org.springframework.stereotype.Repository;
  *   <li>通过 {@code JOIN ingest_documents} 关联文档表，
  *       利用文档表的 {@code workspace_id} 实现工作区隔离；</li>
  *   <li>从 {@code vector_store} 表的 JSONB {@code metadata} 字段中
- *       提取 {@code chunkIndex / sourceFile / contentHash / splitVersion / sourceHint}
+ *       提取 {@code chunkIndex / sourceFile / contentHash / splitVersion / chunkMetadata}
  *       等分块元信息；</li>
  *   <li>使用 {@code COALESCE} 处理 JSONB 字段可能为 {@code NULL} 的边界情况；</li>
  *   <li>按 {@code chunkIndex} 升序排列，保证预览顺序与原文一致。</li>
@@ -42,7 +44,8 @@ public class JdbcDocumentChunkPreviewRepository implements DocumentChunkPreviewR
      * <ul>
      *   <li>{@code chunkIndex} —— 默认 0，保证排序不报错；</li>
      *   <li>{@code content} —— 默认空字符串；</li>
-     *   <li>{@code sourceFile / contentHash / splitVersion / sourceHint} —— 默认空字符串。</li>
+     *   <li>{@code sourceFile / contentHash / splitVersion} —— 默认空字符串；</li>
+     *   <li>{@code chunkMetadata} —— 默认空 JSON 对象。</li>
      * </ul>
      */
     private static final String FIND_BY_DOCUMENT_ID_SQL = """
@@ -53,7 +56,7 @@ public class JdbcDocumentChunkPreviewRepository implements DocumentChunkPreviewR
               COALESCE(metadata->>'sourceFile', '') AS source_file,
               COALESCE(metadata->>'contentHash', '') AS content_hash,
               COALESCE(metadata->>'splitVersion', '') AS split_version,
-              COALESCE(metadata->>'sourceHint', '') AS source_hint
+              COALESCE(metadata->>'chunkMetadata', '{}') AS chunk_metadata
             FROM vector_store vs
             JOIN ingest_documents doc
               ON doc.document_id = vs.metadata->>'documentId'
@@ -85,6 +88,7 @@ public class JdbcDocumentChunkPreviewRepository implements DocumentChunkPreviewR
      * {@link DocumentChunkPreview} 读模型的 JDBC 行映射器。
      *
      * <p>将向量存储表的分块元数据映射为领域读模型对象。
+     * chunkMetadata 从 JSONB 字符串反序列化为 {@link ChunkMetadata}。
      */
     private static final RowMapper<DocumentChunkPreview> ROW_MAPPER = (rs, rowNum) -> new DocumentChunkPreview(
             rs.getInt("chunk_index"),
@@ -93,7 +97,7 @@ public class JdbcDocumentChunkPreviewRepository implements DocumentChunkPreviewR
             rs.getString("source_file"),
             rs.getString("content_hash"),
             rs.getString("split_version"),
-            rs.getString("source_hint"));
+            parseChunkMetadata(rs.getString("chunk_metadata")));
 
     /** Spring JDBC 模板，用于执行所有数据库操作 */
     private final JdbcTemplate jdbcTemplate;
@@ -157,5 +161,95 @@ public class JdbcDocumentChunkPreviewRepository implements DocumentChunkPreviewR
                 documentId.value(),
                 splitVersion);
         return count == null ? 0 : count;
+    }
+
+    /**
+     * 从 JSONB 字符串解析 ChunkMetadata。
+     *
+     * <p>支持新格式 {@code {"headings":[...],"pageNumber":0,"contentType":"PARAGRAPH"}}。
+     * 格式不合法或为空时返回默认 ChunkMetadata。
+     */
+    private static ChunkMetadata parseChunkMetadata(String json) {
+        if (json == null || json.isBlank() || "{}".equals(json.trim())) {
+            return ChunkMetadata.of(null, 0, null);
+        }
+        // 简单 JSON 解析：提取 headings、pageNumber、contentType
+        try {
+            List<String> headings = extractJsonStringArray(json, "headings");
+            int pageNumber = extractJsonInt(json, "pageNumber", 0);
+            String contentTypeStr = extractJsonString(json, "contentType");
+            ChunkContentType contentType = contentTypeStr != null
+                    ? ChunkContentType.valueOf(contentTypeStr)
+                    : ChunkContentType.PARAGRAPH;
+            return ChunkMetadata.of(headings, pageNumber, contentType);
+        } catch (Exception ex) {
+            // 格式不兼容（如旧版 {"heading":"..."} 格式），返回默认值
+            return ChunkMetadata.of(null, 0, null);
+        }
+    }
+
+    /** 从 JSON 字符串中提取指定 key 的字符串数组值（简易解析）。 */
+    private static List<String> extractJsonStringArray(String json, String key) {
+        String pattern = "\"" + key + "\":";
+        int start = json.indexOf(pattern);
+        if (start < 0) {
+            return List.of();
+        }
+        start += pattern.length();
+        int arrayStart = json.indexOf('[', start);
+        if (arrayStart < 0) {
+            return List.of();
+        }
+        int arrayEnd = json.indexOf(']', arrayStart);
+        if (arrayEnd < 0) {
+            return List.of();
+        }
+        String arrayContent = json.substring(arrayStart + 1, arrayEnd).trim();
+        if (arrayContent.isEmpty()) {
+            return List.of();
+        }
+        // 按逗号分割，去除引号
+        List<String> result = new java.util.ArrayList<>();
+        for (String item : arrayContent.split(",")) {
+            String trimmed = item.trim();
+            if (trimmed.startsWith("\"") && trimmed.endsWith("\"")) {
+                result.add(trimmed.substring(1, trimmed.length() - 1)
+                        .replace("\\\"", "\"").replace("\\\\", "\\"));
+            }
+        }
+        return List.copyOf(result);
+    }
+
+    /** 从 JSON 字符串中提取指定 key 的 int 值（简易解析）。 */
+    private static int extractJsonInt(String json, String key, int defaultValue) {
+        String pattern = "\"" + key + "\":";
+        int start = json.indexOf(pattern);
+        if (start < 0) {
+            return defaultValue;
+        }
+        start += pattern.length();
+        int end = start;
+        while (end < json.length() && (Character.isDigit(json.charAt(end)) || json.charAt(end) == '-')) {
+            end++;
+        }
+        if (end == start) {
+            return defaultValue;
+        }
+        return Integer.parseInt(json.substring(start, end));
+    }
+
+    /** 从 JSON 字符串中提取指定 key 的字符串值（简易解析）。 */
+    private static String extractJsonString(String json, String key) {
+        String pattern = "\"" + key + "\":\"";
+        int start = json.indexOf(pattern);
+        if (start < 0) {
+            return null;
+        }
+        start += pattern.length();
+        int end = json.indexOf('"', start);
+        if (end < 0) {
+            return null;
+        }
+        return json.substring(start, end);
     }
 }

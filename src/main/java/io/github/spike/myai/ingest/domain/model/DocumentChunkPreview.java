@@ -9,7 +9,9 @@ package io.github.spike.myai.ingest.domain.model;
  * @param sourceFile 源文件名
  * @param contentHash 分块内容哈希
  * @param splitVersion 分块版本
- * @param sourceHint 来源提示
+ * @param chunkMetadata 分块结构化元数据
+ * @author spike
+ * @since 1.0.0
  */
 public record DocumentChunkPreview(
         int chunkIndex,
@@ -18,29 +20,14 @@ public record DocumentChunkPreview(
         String sourceFile,
         String contentHash,
         String splitVersion,
-        SourceHint sourceHint) {
+        ChunkMetadata chunkMetadata) {
 
-    public DocumentChunkPreview(
-            int chunkIndex,
-            String content,
-            int contentLength,
-            String sourceFile,
-            String contentHash,
-            String splitVersion,
-            String sourceHint) {
-        this(
-                chunkIndex,
-                content,
-                contentLength,
-                sourceFile,
-                contentHash,
-                splitVersion,
-                SourceHint.fromStorageValue(sourceHint));
-    }
-
+    /**
+     * 紧凑构造函数：chunkMetadata 为 null 时归一化为默认值。
+     */
     public DocumentChunkPreview {
-        if (sourceHint == null) {
-            sourceHint = SourceHint.none();
+        if (chunkMetadata == null) {
+            chunkMetadata = ChunkMetadata.of(null, 0, null);
         }
     }
 }

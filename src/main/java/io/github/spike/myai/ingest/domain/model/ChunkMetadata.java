@@ -9,7 +9,7 @@ import java.util.stream.Collectors;
 /**
  * chunk 结构化元数据。
  *
- * <p>替代原有的 {@link SourceHint}，由 Docling Serve 的 HybridChunker 在 server-side
+ * <p>由 Docling Serve 的 HybridChunker 在 server-side
  * 产出后映射到此值对象。携带面包屑标题链、源页码和内容类型三个结构化信号，
  * 供下游向量索引和检索使用。
  *

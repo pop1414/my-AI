@@ -1,5 +1,7 @@
 package io.github.spike.myai.ingest.application.result;
 
+import io.github.spike.myai.ingest.domain.model.ChunkMetadata;
+
 /**
  * 文档分块预览项。
  *
@@ -10,7 +12,7 @@ package io.github.spike.myai.ingest.application.result;
  * @param sourceFile 源文件名
  * @param contentHash 分块内容哈希
  * @param splitVersion 分块版本
- * @param sourceHint 来源提示
+ * @param chunkMetadata 分块结构化元数据
  */
 public record DocumentChunkPreviewItemResult(
         int chunkIndex,
@@ -20,5 +22,5 @@ public record DocumentChunkPreviewItemResult(
         String sourceFile,
         String contentHash,
         String splitVersion,
-        String sourceHint) {
+        ChunkMetadata chunkMetadata) {
 }

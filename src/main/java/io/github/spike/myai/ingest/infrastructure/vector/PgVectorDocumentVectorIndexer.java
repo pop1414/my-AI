@@ -1,9 +1,9 @@
 package io.github.spike.myai.ingest.infrastructure.vector;
 
+import io.github.spike.myai.ingest.domain.model.ChunkMetadata;
 import io.github.spike.myai.ingest.domain.model.Document;
 import io.github.spike.myai.ingest.domain.model.DocumentChunk;
 import io.github.spike.myai.ingest.domain.model.DocumentId;
-import io.github.spike.myai.ingest.domain.model.SourceHint;
 import io.github.spike.myai.ingest.domain.port.DocumentVectorIndexer;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -112,10 +112,10 @@ public class PgVectorDocumentVectorIndexer implements DocumentVectorIndexer {
             metadata.put("sourceUpdatedAt", document.updatedAt().toString()); // 来源版本更新时间
             metadata.put("contentHash", sha256(chunkText));         // 文本指纹（去重/校验）
             metadata.put("splitVersion", splitVersion);             // 逻辑版本锁
-            SourceHint sourceHint = chunk.sourceHint();
-            if (!sourceHint.isEmpty()) {
-                // 存储来自解析器的额外提示（如 PDF 页码、章节标题等 JSON 信息）。
-                metadata.put("sourceHint", sourceHint.toStorageValue());
+            ChunkMetadata chunkMetadata = chunk.chunkMetadata();
+            if (!chunkMetadata.headings().isEmpty() || chunkMetadata.pageNumber() > 0) {
+                // 存储分块的结构化元数据（headings 面包屑、页码、内容类型）。
+                metadata.put("chunkMetadata", serializeChunkMetadata(chunkMetadata));
             }
 
             // 构建 Spring AI 标准的 Document 对象（包含文本、元数据和 ID）。
@@ -168,6 +168,48 @@ public class PgVectorDocumentVectorIndexer implements DocumentVectorIndexer {
     public void deleteByDocumentId(DocumentId documentId) {
         // 删除指定文档的所有版本向量，用于文档资产下线。
         jdbcTemplate.update(DELETE_BY_DOCUMENT_SQL, documentId.value());
+    }
+
+    /**
+     * 序列化 ChunkMetadata 为 JSON 字符串。
+     *
+     * <p>格式：{@code {"headings":["h1","h2"],"pageNumber":3,"contentType":"PARAGRAPH"}}
+     *
+     * @param chunkMetadata 分块结构化元数据
+     * @return JSON 字符串
+     */
+    private static String serializeChunkMetadata(ChunkMetadata chunkMetadata) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("{\"headings\":[");
+        List<String> headings = chunkMetadata.headings();
+        for (int j = 0; j < headings.size(); j++) {
+            if (j > 0) {
+                sb.append(',');
+            }
+            sb.append('"').append(escapeJson(headings.get(j))).append('"');
+        }
+        sb.append("],\"pageNumber\":").append(chunkMetadata.pageNumber());
+        sb.append(",\"contentType\":\"").append(chunkMetadata.contentType().name()).append("\"}");
+        return sb.toString();
+    }
+
+    /**
+     * 转义 JSON 字符串中的特殊字符。
+     */
+    private static String escapeJson(String text) {
+        StringBuilder sb = new StringBuilder(text.length());
+        for (int i = 0; i < text.length(); i++) {
+            char c = text.charAt(i);
+            switch (c) {
+                case '"' -> sb.append("\\\"");
+                case '\\' -> sb.append("\\\\");
+                case '\n' -> sb.append("\\n");
+                case '\r' -> sb.append("\\r");
+                case '\t' -> sb.append("\\t");
+                default -> sb.append(c);
+            }
+        }
+        return sb.toString();
     }
 
     /**

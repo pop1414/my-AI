@@ -124,6 +124,10 @@ public class IngestProperties {
         private int chunkSize = 500;
         /** chunk 之间的重叠大小（字符数），默认 100，用于保持语义连续性 */
         private int overlapSize = 100;
+        /** HybridChunker 单块最大 token 数，默认 512（对齐论文最优 faithfulness 97.59） */
+        private int maxTokens = 512;
+        /** 是否合并过小块，默认 true（对齐论文最优 faithfulness） */
+        private boolean mergePeers = true;
 
     }
 

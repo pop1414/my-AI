@@ -135,7 +135,7 @@ public class GetDocumentChunksPreviewApplicationService implements GetDocumentCh
                 chunk.sourceFile(),
                 chunk.contentHash(),
                 chunk.splitVersion(),
-                blankToNull(chunk.sourceHint().toStorageValue()));
+                chunk.chunkMetadata());
     }
 
     /**
@@ -153,15 +153,5 @@ public class GetDocumentChunksPreviewApplicationService implements GetDocumentCh
             return content;
         }
         return content.substring(0, previewChars) + "...";
-    }
-
-    /**
-     * 将空白字符串转换为 null，以便 API 输出更加整洁。
-     */
-    private static String blankToNull(String value) {
-        if (value == null || value.isBlank()) {
-            return null;
-        }
-        return value;
     }
 }
