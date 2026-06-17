@@ -1,6 +1,7 @@
 package io.github.spike.myai.ingest.infrastructure.parser;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -8,16 +9,15 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import ai.docling.serve.api.DoclingServeApi;
-import ai.docling.serve.api.chunk.request.HybridChunkDocumentRequest;
-import ai.docling.serve.api.chunk.response.Chunk;
-import ai.docling.serve.api.chunk.response.ChunkDocumentResponse;
-import ai.docling.serve.api.chunk.response.Document;
-import ai.docling.serve.api.chunk.response.ExportDocumentResponse;
+import ai.docling.serve.api.convert.request.ConvertDocumentRequest;
+import ai.docling.serve.api.convert.request.options.OutputFormat;
+import ai.docling.serve.api.convert.request.source.FileSource;
+import ai.docling.serve.api.convert.request.target.InBodyTarget;
+import ai.docling.serve.api.convert.response.ConvertDocumentResponse;
+import ai.docling.serve.api.convert.response.DocumentResponse;
 import ai.docling.serve.api.convert.response.ErrorItem;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.github.spike.myai.ingest.domain.model.ChunkContentType;
-import io.github.spike.myai.ingest.domain.model.ChunkMetadata;
 import io.github.spike.myai.ingest.domain.model.DoclingPermanentException;
 import io.github.spike.myai.ingest.domain.model.DoclingTransientException;
 import io.github.spike.myai.ingest.domain.model.DocumentParseResult;
@@ -48,23 +48,26 @@ class DoclingDocumentParserTest {
     void setUp() {
         doclingServeApi = org.mockito.Mockito.mock(DoclingServeApi.class);
         textCleaningService = org.mockito.Mockito.mock(TextCleaningService.class);
-        // 默认 pass-through：cleanNativeMarkdown 原样返回输入
         when(textCleaningService.cleanNativeMarkdown(any()))
                 .thenAnswer(invocation -> invocation.getArgument(0));
+
         IngestProperties properties = new IngestProperties();
-        parser = new DoclingDocumentParser(doclingServeApi, new ObjectMapper(), properties,
-                textCleaningService, FIXED_CLOCK);
+        parser = new DoclingDocumentParser(
+                doclingServeApi,
+                new ObjectMapper(),
+                properties,
+                textCleaningService,
+                FIXED_CLOCK);
     }
 
-    // === 正常解析 ===
-
     @Test
-    @DisplayName("应将 Docling 响应映射为 DocumentParseResult（cleanedMarkdown + processingMetadata）")
+    @DisplayName("应将 Convert 响应映射为 DocumentParseResult")
     void parse_shouldReturnParseResult_whenValidDocument() throws Exception {
-        ChunkDocumentResponse response = buildResponse(
-                "# 标题\n\n正文内容",
-                List.of(buildChunk("正文内容", List.of("标题"), List.of(1), 0)));
-        when(doclingServeApi.chunkSourceWithHybridChunker(any())).thenReturn(response);
+        ConvertDocumentResponse response = buildResponse(DocumentResponse.builder()
+                .filename("test.pdf")
+                .markdownContent("# 标题\n\n正文内容")
+                .build());
+        when(doclingServeApi.convertSource(any())).thenReturn(response);
 
         DocumentParseResult result = parser.parse("test.pdf", "dummy".getBytes(StandardCharsets.UTF_8));
 
@@ -78,35 +81,14 @@ class DoclingDocumentParserTest {
     }
 
     @Test
-    @DisplayName("应正确映射 ChunkMetadata（headings + pageNumber + contentType）")
-    void parse_shouldMapChunkMetadata_whenChunksReturned() {
-        Chunk doclingChunk = buildChunk("正文", List.of("章标题", "节标题"), List.of(3, 5), 0);
-
-        ChunkMetadata metadata = parser.mapChunkMetadata(doclingChunk);
-
-        assertEquals(List.of("章标题", "节标题"), metadata.headings());
-        assertEquals(3, metadata.pageNumber());
-        assertEquals(ChunkContentType.PARAGRAPH, metadata.contentType());
-    }
-
-    @Test
-    @DisplayName("应使用 ChunkMetadata.of() 归一化 headings 为 null 的 chunk")
-    void parse_shouldUseChunkMetadataOf_whenHeadingsNull() {
-        Chunk doclingChunk = buildChunk("纯文本", null, null, 0);
-
-        ChunkMetadata metadata = parser.mapChunkMetadata(doclingChunk);
-
-        assertTrue(metadata.headings().isEmpty());
-        assertEquals(0, metadata.pageNumber());
-        assertEquals(ChunkContentType.PARAGRAPH, metadata.contentType());
-    }
-
-    @Test
     @DisplayName("应正确提取 processingMetadata 中的 title_outline_sample")
     void parse_shouldExtractTitleOutlineSample_whenMarkdownHasHeadings() throws Exception {
         String markdown = "# 主标题\n\n## 节一\n\n正文\n\n## 节二\n\n正文";
-        ChunkDocumentResponse response = buildResponse(markdown, List.of());
-        when(doclingServeApi.chunkSourceWithHybridChunker(any())).thenReturn(response);
+        ConvertDocumentResponse response = buildResponse(DocumentResponse.builder()
+                .filename("doc.md")
+                .markdownContent(markdown)
+                .build());
+        when(doclingServeApi.convertSource(any())).thenReturn(response);
 
         DocumentParseResult result = parser.parse("doc.md", "dummy".getBytes(StandardCharsets.UTF_8));
 
@@ -117,8 +99,6 @@ class DoclingDocumentParserTest {
         assertEquals("节一", metadata.path("conditional").path("title_outline_sample").get(1).asText());
         assertEquals("节二", metadata.path("conditional").path("title_outline_sample").get(2).asText());
     }
-
-    // === 输入校验 ===
 
     @Test
     @DisplayName("空内容应抛出 IllegalStateException")
@@ -138,13 +118,11 @@ class DoclingDocumentParserTest {
         assertEquals("empty source content", ex.getMessage());
     }
 
-    // === 未知异常兜底 ===
-
     @Test
-    @DisplayName("未知 Runtime 异常应包装为 DoclingTransientException 并保留 cause（保守策略）")
+    @DisplayName("未知 Runtime 异常应包装为 DoclingTransientException")
     void parse_shouldThrowTransientException_whenUnknownRuntimeException() {
         RuntimeException apiError = new RuntimeException("connection refused");
-        when(doclingServeApi.chunkSourceWithHybridChunker(any())).thenThrow(apiError);
+        when(doclingServeApi.convertSource(any())).thenThrow(apiError);
 
         DoclingTransientException ex = assertThrows(
                 DoclingTransientException.class,
@@ -154,10 +132,8 @@ class DoclingDocumentParserTest {
         assertEquals(apiError, ex.getCause());
     }
 
-    // === Docling HTTP 错误映射 ===
-
     @Test
-    @DisplayName("Docling 4xx 错误应映射为 DoclingPermanentException（含 HTTP 状态码）")
+    @DisplayName("Docling 4xx 错误应映射为 DoclingPermanentException")
     void parse_shouldThrowPermanentException_when4xxError() {
         var httpError = org.springframework.web.client.HttpClientErrorException.create(
                 org.springframework.http.HttpStatus.BAD_REQUEST,
@@ -165,7 +141,7 @@ class DoclingDocumentParserTest {
                 org.springframework.http.HttpHeaders.EMPTY,
                 new byte[0],
                 StandardCharsets.UTF_8);
-        when(doclingServeApi.chunkSourceWithHybridChunker(any())).thenThrow(httpError);
+        when(doclingServeApi.convertSource(any())).thenThrow(httpError);
 
         DoclingPermanentException ex = assertThrows(
                 DoclingPermanentException.class,
@@ -177,7 +153,7 @@ class DoclingDocumentParserTest {
     }
 
     @Test
-    @DisplayName("Docling 408 错误应映射为 DoclingTransientException（瞬时）")
+    @DisplayName("Docling 408 错误应映射为 DoclingTransientException")
     void parse_shouldThrowTransientException_when408Error() {
         var httpError = org.springframework.web.client.HttpClientErrorException.create(
                 org.springframework.http.HttpStatus.REQUEST_TIMEOUT,
@@ -185,7 +161,7 @@ class DoclingDocumentParserTest {
                 org.springframework.http.HttpHeaders.EMPTY,
                 new byte[0],
                 StandardCharsets.UTF_8);
-        when(doclingServeApi.chunkSourceWithHybridChunker(any())).thenThrow(httpError);
+        when(doclingServeApi.convertSource(any())).thenThrow(httpError);
 
         DoclingTransientException ex = assertThrows(
                 DoclingTransientException.class,
@@ -196,7 +172,7 @@ class DoclingDocumentParserTest {
     }
 
     @Test
-    @DisplayName("Docling 429 错误应映射为 DoclingTransientException（瞬时）")
+    @DisplayName("Docling 429 错误应映射为 DoclingTransientException")
     void parse_shouldThrowTransientException_when429Error() {
         var httpError = org.springframework.web.client.HttpClientErrorException.create(
                 org.springframework.http.HttpStatus.TOO_MANY_REQUESTS,
@@ -204,7 +180,7 @@ class DoclingDocumentParserTest {
                 org.springframework.http.HttpHeaders.EMPTY,
                 new byte[0],
                 StandardCharsets.UTF_8);
-        when(doclingServeApi.chunkSourceWithHybridChunker(any())).thenThrow(httpError);
+        when(doclingServeApi.convertSource(any())).thenThrow(httpError);
 
         DoclingTransientException ex = assertThrows(
                 DoclingTransientException.class,
@@ -223,7 +199,7 @@ class DoclingDocumentParserTest {
                 org.springframework.http.HttpHeaders.EMPTY,
                 new byte[0],
                 StandardCharsets.UTF_8);
-        when(doclingServeApi.chunkSourceWithHybridChunker(any())).thenThrow(httpError);
+        when(doclingServeApi.convertSource(any())).thenThrow(httpError);
 
         DoclingPermanentException ex = assertThrows(
                 DoclingPermanentException.class,
@@ -242,7 +218,7 @@ class DoclingDocumentParserTest {
                 org.springframework.http.HttpHeaders.EMPTY,
                 new byte[0],
                 StandardCharsets.UTF_8);
-        when(doclingServeApi.chunkSourceWithHybridChunker(any())).thenThrow(httpError);
+        when(doclingServeApi.convertSource(any())).thenThrow(httpError);
 
         DoclingTransientException ex = assertThrows(
                 DoclingTransientException.class,
@@ -261,7 +237,7 @@ class DoclingDocumentParserTest {
                 org.springframework.http.HttpHeaders.EMPTY,
                 new byte[0],
                 StandardCharsets.UTF_8);
-        when(doclingServeApi.chunkSourceWithHybridChunker(any())).thenThrow(httpError);
+        when(doclingServeApi.convertSource(any())).thenThrow(httpError);
 
         DoclingTransientException ex = assertThrows(
                 DoclingTransientException.class,
@@ -276,7 +252,7 @@ class DoclingDocumentParserTest {
     void parse_shouldThrowTransientException_whenConnectionTimeout() {
         var timeoutError = new org.springframework.web.client.ResourceAccessException(
                 "I/O error", new java.net.SocketTimeoutException("connect timed out"));
-        when(doclingServeApi.chunkSourceWithHybridChunker(any())).thenThrow(timeoutError);
+        when(doclingServeApi.convertSource(any())).thenThrow(timeoutError);
 
         DoclingTransientException ex = assertThrows(
                 DoclingTransientException.class,
@@ -287,72 +263,44 @@ class DoclingDocumentParserTest {
     }
 
     @Test
-    @DisplayName("未知异常应映射为 DoclingTransientException（保守策略）")
-    void parse_shouldThrowTransientException_whenUnknownError() {
-        var unknownError = new IllegalArgumentException("bad argument from API");
-        when(doclingServeApi.chunkSourceWithHybridChunker(any())).thenThrow(unknownError);
-
-        DoclingTransientException ex = assertThrows(
-                DoclingTransientException.class,
-                () -> parser.parse("unknown.pdf", "data".getBytes(StandardCharsets.UTF_8)));
-
-        assertEquals("unexpected docling error", ex.getMessage());
-        assertEquals(unknownError, ex.getCause());
-    }
-
-    // === 响应校验 ===
-
-    @Test
-    @DisplayName("documents 列表为空应抛出 IllegalStateException")
-    void parse_shouldThrowException_whenDocumentsEmpty() {
-        ChunkDocumentResponse response = ChunkDocumentResponse.builder()
-                .documents(List.of())
-                .chunks(List.of())
+    @DisplayName("document 为空时应抛出 IllegalStateException")
+    void parse_shouldThrowException_whenDocumentNull() {
+        ConvertDocumentResponse response = ConvertDocumentResponse.builder()
+                .status("success")
                 .build();
-        when(doclingServeApi.chunkSourceWithHybridChunker(any())).thenReturn(response);
+        when(doclingServeApi.convertSource(any())).thenReturn(response);
 
         IllegalStateException ex = assertThrows(
                 IllegalStateException.class,
                 () -> parser.parse("empty-doc.pdf", "data".getBytes(StandardCharsets.UTF_8)));
 
-        assertEquals("docling response contains no documents", ex.getMessage());
+        assertEquals("docling response contains no document", ex.getMessage());
     }
 
     @Test
-    @DisplayName("所有内容格式和 chunks 均为空时应抛出含格式信息的 IllegalStateException")
+    @DisplayName("所有内容格式均为空时应抛出含格式信息的 IllegalStateException")
     void parse_shouldThrowException_whenAllContentFormatsNull() {
-        Document doc = Document.builder()
-                .content(ExportDocumentResponse.builder().build())
-                .status("success")
-                .build();
-        ChunkDocumentResponse response = ChunkDocumentResponse.builder()
-                .documents(List.of(doc))
-                .chunks(List.of())
-                .build();
-        when(doclingServeApi.chunkSourceWithHybridChunker(any())).thenReturn(response);
+        ConvertDocumentResponse response = buildResponse(DocumentResponse.builder()
+                .filename("null-md.pdf")
+                .build());
+        when(doclingServeApi.convertSource(any())).thenReturn(response);
 
         IllegalStateException ex = assertThrows(
                 IllegalStateException.class,
                 () -> parser.parse("null-md.pdf", "data".getBytes(StandardCharsets.UTF_8)));
 
-        assertEquals("docling response has no usable content (status=success, md/html/text/doctags all null, chunks=0)",
+        assertEquals("docling response has no usable content (status=success, md/html/text/doctags all null)",
                 ex.getMessage());
     }
 
     @Test
     @DisplayName("md_content 为空时应降级使用 html_content")
-    void parse_shouldFallbackToHtml_whenMarkdownContentNull() throws Exception {
-        Document doc = Document.builder()
-                .content(ExportDocumentResponse.builder()
-                        .htmlContent("<h1>Title</h1><p>正文</p>")
-                        .build())
-                .status("success")
-                .build();
-        ChunkDocumentResponse response = ChunkDocumentResponse.builder()
-                .documents(List.of(doc))
-                .chunks(List.of())
-                .build();
-        when(doclingServeApi.chunkSourceWithHybridChunker(any())).thenReturn(response);
+    void parse_shouldFallbackToHtml_whenMarkdownContentNull() {
+        ConvertDocumentResponse response = buildResponse(DocumentResponse.builder()
+                .filename("no-md.pdf")
+                .htmlContent("<h1>Title</h1><p>正文</p>")
+                .build());
+        when(doclingServeApi.convertSource(any())).thenReturn(response);
 
         DocumentParseResult result = parser.parse("no-md.pdf", "data".getBytes(StandardCharsets.UTF_8));
 
@@ -360,19 +308,13 @@ class DoclingDocumentParserTest {
     }
 
     @Test
-    @DisplayName("md_content/html_content 均为空时应降级使用 text_content")
-    void parse_shouldFallbackToText_whenMarkdownAndHtmlNull() throws Exception {
-        Document doc = Document.builder()
-                .content(ExportDocumentResponse.builder()
-                        .textContent("Title\n\n正文内容")
-                        .build())
-                .status("success")
-                .build();
-        ChunkDocumentResponse response = ChunkDocumentResponse.builder()
-                .documents(List.of(doc))
-                .chunks(List.of())
-                .build();
-        when(doclingServeApi.chunkSourceWithHybridChunker(any())).thenReturn(response);
+    @DisplayName("md_content 和 html_content 均为空时应降级使用 text_content")
+    void parse_shouldFallbackToText_whenMarkdownAndHtmlNull() {
+        ConvertDocumentResponse response = buildResponse(DocumentResponse.builder()
+                .filename("text-only.pdf")
+                .textContent("Title\n\n正文内容")
+                .build());
+        when(doclingServeApi.convertSource(any())).thenReturn(response);
 
         DocumentParseResult result = parser.parse("text-only.pdf", "data".getBytes(StandardCharsets.UTF_8));
 
@@ -380,19 +322,13 @@ class DoclingDocumentParserTest {
     }
 
     @Test
-    @DisplayName("md/html/text 均为空时应降级使用 doctags_content")
-    void parse_shouldFallbackToDoctags_whenMdHtmlTextNull() throws Exception {
-        Document doc = Document.builder()
-                .content(ExportDocumentResponse.builder()
-                        .doctagsContent("<document><title>Test</title></document>")
-                        .build())
-                .status("success")
-                .build();
-        ChunkDocumentResponse response = ChunkDocumentResponse.builder()
-                .documents(List.of(doc))
-                .chunks(List.of())
-                .build();
-        when(doclingServeApi.chunkSourceWithHybridChunker(any())).thenReturn(response);
+    @DisplayName("md html text 均为空时应降级使用 doctags_content")
+    void parse_shouldFallbackToDoctags_whenMdHtmlTextNull() {
+        ConvertDocumentResponse response = buildResponse(DocumentResponse.builder()
+                .filename("doctags-only.pdf")
+                .doctagsContent("<document><title>Test</title></document>")
+                .build());
+        when(doclingServeApi.convertSource(any())).thenReturn(response);
 
         DocumentParseResult result = parser.parse("doctags-only.pdf", "data".getBytes(StandardCharsets.UTF_8));
 
@@ -400,49 +336,16 @@ class DoclingDocumentParserTest {
     }
 
     @Test
-    @DisplayName("所有 content 格式均为空但 chunks 有内容时应降级使用 chunks 文本")
-    void parse_shouldFallbackToChunks_whenAllContentFormatsNullButChunksPresent() throws Exception {
-        Document doc = Document.builder()
-                .content(ExportDocumentResponse.builder().build())
-                .status("success")
-                .build();
-        Chunk chunk1 = Chunk.builder()
-                .text("第一章 概述")
-                .chunkIndex(0)
-                .filename("test.pdf")
-                .build();
-        Chunk chunk2 = Chunk.builder()
-                .text("这是正文内容")
-                .chunkIndex(1)
-                .filename("test.pdf")
-                .build();
-        ChunkDocumentResponse response = ChunkDocumentResponse.builder()
-                .documents(List.of(doc))
-                .chunks(List.of(chunk1, chunk2))
-                .build();
-        when(doclingServeApi.chunkSourceWithHybridChunker(any())).thenReturn(response);
-
-        DocumentParseResult result = parser.parse("chunks-only.pdf", "data".getBytes(StandardCharsets.UTF_8));
-
-        assertEquals("第一章 概述\n\n这是正文内容", result.cleanedMarkdown());
-    }
-
-    // === Docling 文档状态校验 ===
-
-    @Test
-    @DisplayName("文档 status 为 error 时应抛出 IllegalStateException")
-    void parse_shouldThrowException_whenDocumentStatusError() {
-        Document doc = Document.builder()
-                .content(ExportDocumentResponse.builder()
+    @DisplayName("response status 为 error 时应抛出 IllegalStateException")
+    void parse_shouldThrowException_whenResponseStatusError() {
+        ConvertDocumentResponse response = ConvertDocumentResponse.builder()
+                .document(DocumentResponse.builder()
+                        .filename("error-status.pdf")
                         .markdownContent("partial content")
                         .build())
                 .status("error")
                 .build();
-        ChunkDocumentResponse response = ChunkDocumentResponse.builder()
-                .documents(List.of(doc))
-                .chunks(List.of())
-                .build();
-        when(doclingServeApi.chunkSourceWithHybridChunker(any())).thenReturn(response);
+        when(doclingServeApi.convertSource(any())).thenReturn(response);
 
         IllegalStateException ex = assertThrows(
                 IllegalStateException.class,
@@ -452,21 +355,18 @@ class DoclingDocumentParserTest {
     }
 
     @Test
-    @DisplayName("文档 status 为 failure 且 markdownContent 为 null 时应抛出含状态信息的异常")
-    void parse_shouldThrowExceptionWithStatusDetail_whenDocumentStatusFailure() {
+    @DisplayName("response status 为 failure 时应抛出包含错误详情的异常")
+    void parse_shouldThrowExceptionWithStatusDetail_whenResponseStatusFailure() {
         ErrorItem errorItem = org.mockito.Mockito.mock(ErrorItem.class);
         when(errorItem.getComponentType()).thenReturn("pdf_backend");
         when(errorItem.getErrorMessage()).thenReturn("unsupported PDF version");
-        Document doc = Document.builder()
-                .content(ExportDocumentResponse.builder().build())
+
+        ConvertDocumentResponse response = ConvertDocumentResponse.builder()
+                .document(DocumentResponse.builder().filename("failure.pdf").build())
                 .status("failure")
                 .errors(List.of(errorItem))
                 .build();
-        ChunkDocumentResponse response = ChunkDocumentResponse.builder()
-                .documents(List.of(doc))
-                .chunks(List.of())
-                .build();
-        when(doclingServeApi.chunkSourceWithHybridChunker(any())).thenReturn(response);
+        when(doclingServeApi.convertSource(any())).thenReturn(response);
 
         IllegalStateException ex = assertThrows(
                 IllegalStateException.class,
@@ -477,33 +377,28 @@ class DoclingDocumentParserTest {
     }
 
     @Test
-    @DisplayName("文档存在 errors 但 markdownContent 有效时应解析成功（仅记录警告）")
-    void parse_shouldSucceedWithWarning_whenDocumentHasErrors() throws Exception {
+    @DisplayName("response 含 errors 但 markdown 有效时应解析成功")
+    void parse_shouldSucceedWithWarning_whenResponseHasErrors() {
         ErrorItem errorItem = org.mockito.Mockito.mock(ErrorItem.class);
-        Document doc = Document.builder()
-                .content(ExportDocumentResponse.builder()
+        ConvertDocumentResponse response = ConvertDocumentResponse.builder()
+                .document(DocumentResponse.builder()
+                        .filename("partial.pdf")
                         .markdownContent("# Valid Markdown")
                         .build())
-                .status("partial")
+                .status("partial_success")
                 .errors(List.of(errorItem))
                 .build();
-        ChunkDocumentResponse response = ChunkDocumentResponse.builder()
-                .documents(List.of(doc))
-                .chunks(List.of())
-                .build();
-        when(doclingServeApi.chunkSourceWithHybridChunker(any())).thenReturn(response);
+        when(doclingServeApi.convertSource(any())).thenReturn(response);
 
         DocumentParseResult result = parser.parse("partial.pdf", "data".getBytes(StandardCharsets.UTF_8));
 
         assertEquals("# Valid Markdown", result.cleanedMarkdown());
     }
 
-    // === 输入大小校验 ===
-
     @Test
-    @DisplayName("输入字节数超出上限时应抛出 IllegalStateException")
+    @DisplayName("输入字节数超过上限时应抛出 IllegalStateException")
     void parse_shouldThrowException_whenInputExceedsMaxBytes() {
-        byte[] largeContent = new byte[50 * 1024 * 1024 + 1]; // 50MB + 1 byte
+        byte[] largeContent = new byte[50 * 1024 * 1024 + 1];
 
         IllegalStateException ex = assertThrows(
                 IllegalStateException.class,
@@ -512,19 +407,19 @@ class DoclingDocumentParserTest {
         assertTrue(ex.getMessage().startsWith("input file exceeds max size"));
     }
 
-    // === 长度校验 ===
-
     @Test
-    @DisplayName("超出最大文本长度时应抛出 IllegalStateException")
+    @DisplayName("超过最大文本长度时应抛出 IllegalStateException")
     void parse_shouldValidateMaxLength_whenExceedThreshold() {
         IngestProperties shortLimit = new IngestProperties();
         shortLimit.getParser().setMaxTextLength(10);
         DoclingDocumentParser shortParser = new DoclingDocumentParser(
                 doclingServeApi, new ObjectMapper(), shortLimit, textCleaningService, FIXED_CLOCK);
 
-        String longMarkdown = "a".repeat(20);
-        ChunkDocumentResponse response = buildResponse(longMarkdown, List.of());
-        when(doclingServeApi.chunkSourceWithHybridChunker(any())).thenReturn(response);
+        ConvertDocumentResponse response = buildResponse(DocumentResponse.builder()
+                .filename("long.pdf")
+                .markdownContent("a".repeat(20))
+                .build());
+        when(doclingServeApi.convertSource(any())).thenReturn(response);
 
         IllegalStateException ex = assertThrows(
                 IllegalStateException.class,
@@ -533,39 +428,48 @@ class DoclingDocumentParserTest {
         assertEquals("parsed text exceeds max length", ex.getMessage());
     }
 
-    // === 请求参数验证 ===
-
     @Test
-    @DisplayName("应正确构造 HybridChunkDocumentRequest（maxTokens=512, mergePeers=true, includeConvertedDoc=true）")
-    void parse_shouldBuildCorrectRequest_whenCalled() throws Exception {
-        ChunkDocumentResponse response = buildResponse("内容", List.of());
-        when(doclingServeApi.chunkSourceWithHybridChunker(any())).thenReturn(response);
+    @DisplayName("应正确构造 ConvertDocumentRequest")
+    void parse_shouldBuildCorrectRequest_whenCalled() {
+        ConvertDocumentResponse response = buildResponse(DocumentResponse.builder()
+                .filename("test.pdf")
+                .markdownContent("内容")
+                .build());
+        when(doclingServeApi.convertSource(any())).thenReturn(response);
 
         parser.parse("test.pdf", "hello".getBytes(StandardCharsets.UTF_8));
 
         @SuppressWarnings("unchecked")
-        ArgumentCaptor<HybridChunkDocumentRequest> captor =
-                ArgumentCaptor.forClass(HybridChunkDocumentRequest.class);
-        verify(doclingServeApi).chunkSourceWithHybridChunker(captor.capture());
+        ArgumentCaptor<ConvertDocumentRequest> captor =
+                ArgumentCaptor.forClass(ConvertDocumentRequest.class);
+        verify(doclingServeApi).convertSource(captor.capture());
 
-        HybridChunkDocumentRequest request = captor.getValue();
-        assertTrue(request.isIncludeConvertedDoc());
-        assertEquals(Integer.valueOf(512), request.getChunkingOptions().getMaxTokens());
-        assertEquals(Boolean.TRUE, request.getChunkingOptions().getMergePeers());
+        ConvertDocumentRequest request = captor.getValue();
         assertEquals(1, request.getSources().size());
+        assertTrue(request.getSources().getFirst() instanceof FileSource);
+        FileSource source = (FileSource) request.getSources().getFirst();
+        assertEquals("test.pdf", source.getFilename());
+        assertEquals(List.of(
+                OutputFormat.MARKDOWN,
+                OutputFormat.HTML,
+                OutputFormat.TEXT,
+                OutputFormat.DOCTAGS), request.getOptions().getToFormats());
+        assertNotNull(request.getTarget());
+        assertTrue(request.getTarget() instanceof InBodyTarget);
     }
 
-    // === TextCleaningService 集成 ===
-
     @Test
-    @DisplayName("应调用 cleanNativeMarkdown 清洗 Docling 原始输出，返回清洗后内容")
-    void parse_shouldCleanNativeMarkdownBeforeValidation() throws Exception {
+    @DisplayName("应调用 cleanNativeMarkdown 清洗 Docling 原始输出")
+    void parse_shouldCleanNativeMarkdownBeforeValidation() {
         String rawDoclingMarkdown = "# 标题\n\n\r\n正文\r\n\r\n\r\n多余空行";
         String cleanedMarkdown = "# 标题\n\n正文\n\n多余空行";
         when(textCleaningService.cleanNativeMarkdown(rawDoclingMarkdown)).thenReturn(cleanedMarkdown);
 
-        ChunkDocumentResponse response = buildResponse(rawDoclingMarkdown, List.of());
-        when(doclingServeApi.chunkSourceWithHybridChunker(any())).thenReturn(response);
+        ConvertDocumentResponse response = buildResponse(DocumentResponse.builder()
+                .filename("test.md")
+                .markdownContent(rawDoclingMarkdown)
+                .build());
+        when(doclingServeApi.convertSource(any())).thenReturn(response);
 
         DocumentParseResult result = parser.parse("test.md", "data".getBytes(StandardCharsets.UTF_8));
 
@@ -574,13 +478,16 @@ class DoclingDocumentParserTest {
     }
 
     @Test
-    @DisplayName("应将 Docling 原始 Markdown 传递给 TextCleaningService 清洗")
-    void parse_shouldPassRawMarkdownToCleaningService() throws Exception {
-        String rawDoclingMarkdown = "## 原始内容\n\n含控制字符和BOM﻿";
+    @DisplayName("应将 Docling 原始 Markdown 传给 TextCleaningService")
+    void parse_shouldPassRawMarkdownToCleaningService() {
+        String rawDoclingMarkdown = "## 原始内容\n\n含控制字符和 BOM";
         when(textCleaningService.cleanNativeMarkdown(any())).thenReturn("清洗后内容");
 
-        ChunkDocumentResponse response = buildResponse(rawDoclingMarkdown, List.of());
-        when(doclingServeApi.chunkSourceWithHybridChunker(any())).thenReturn(response);
+        ConvertDocumentResponse response = buildResponse(DocumentResponse.builder()
+                .filename("test.md")
+                .markdownContent(rawDoclingMarkdown)
+                .build());
+        when(doclingServeApi.convertSource(any())).thenReturn(response);
 
         parser.parse("test.md", "data".getBytes(StandardCharsets.UTF_8));
 
@@ -589,33 +496,11 @@ class DoclingDocumentParserTest {
         assertEquals(rawDoclingMarkdown, captor.getValue());
     }
 
-    // === Helpers ===
-
-    private ChunkDocumentResponse buildResponse(String markdownContent, List<Chunk> chunks) {
-        ExportDocumentResponse exportDoc = ExportDocumentResponse.builder()
-                .markdownContent(markdownContent)
-                .build();
-        Document doc = Document.builder()
-                .content(exportDoc)
+    private ConvertDocumentResponse buildResponse(DocumentResponse document) {
+        return ConvertDocumentResponse.builder()
+                .document(document)
                 .status("success")
+                .processingTime(0.1)
                 .build();
-        return ChunkDocumentResponse.builder()
-                .documents(List.of(doc))
-                .chunks(chunks)
-                .build();
-    }
-
-    private Chunk buildChunk(String text, List<String> headings, List<Integer> pageNumbers, int chunkIndex) {
-        Chunk.Builder builder = Chunk.builder()
-                .text(text)
-                .chunkIndex(chunkIndex)
-                .filename("test.pdf");
-        if (headings != null) {
-            builder.headings(headings);
-        }
-        if (pageNumbers != null) {
-            builder.pageNumbers(pageNumbers);
-        }
-        return builder.build();
     }
 }

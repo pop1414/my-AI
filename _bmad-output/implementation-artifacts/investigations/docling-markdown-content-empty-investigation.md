@@ -3,8 +3,8 @@
 ## Hand-off Brief
 
 1. **What happened.** 文档上传与处理链路执行成功，但 Spring 端记录 `content` 各格式为空，只能降级使用 `chunks` 文本；Docling 容器同时返回两次 `POST /v1/chunk/hybrid/source` 的 `200` 响应。
-2. **Where the case stands.** 该问题已确认不是 Spring 端读取错误，也不是任务失败；根因收敛为当前 `Docling Serve` 的 `/v1/chunk/hybrid/source` 路径虽然成功返回 chunks，但没有把 converted document content 填进响应。
-3. **What's needed next.** 如果目标是稳定拿到 markdown，应调整调用策略：转换正文走 `/v1/convert/source`，分块走 `/v1/chunk/hybrid/source`；或者继续深挖/升级 Docling 版本，确认 `include_converted_doc` 在 hybrid chunk endpoint 的实现缺陷。
+2. **Where the case stands.** 该问题已确认不是 Spring 端读取错误，也不是任务失败；根因收敛为当前 `Docling Serve` 的 `/v1/chunk/hybrid/source` 路径虽然成功返回 chunks，但没有把 converted document content 填进响应。该根因现已按“转换/分块双调用”策略修复。
+3. **What's needed next.** 当前仓库已落地修复：`DoclingDocumentParser` 改走 `/v1/convert/source`，`DoclingDocumentChunker` 保持走 `/v1/chunk/hybrid/source`，`ProcessDocumentApplicationService` 继续执行“先 parse、后 chunk”的两阶段流程。后续仅在需要向上游追 issue 时，再继续调查 hybrid endpoint 的实现差异。
 
 ## Case Info
 
@@ -12,7 +12,7 @@
 | ---------------- | ----- |
 | Ticket           | N/A |
 | Date opened      | 2026-06-17 |
-| Status           | Concluded |
+| Status           | Closed (Fixed) |
 | System           | Windows 11, Spring Boot 3.5.8, Java 21, Docling Serve 容器 |
 | Evidence sources | 用户提供的 Spring 日志、用户提供的 Docling 容器日志、`docs/reference/Docling/openapi.json`、本地源码、旧 investigation artifacts |
 
@@ -25,6 +25,14 @@ Docling 所有 content 格式均为空，降级使用 chunks 文本 (status=succ
 ```
 
 用户希望确认为什么“无法把文档转成 md 格式”，并允许参考旧的 investigations 与本地保存的 Docling OpenAPI。
+
+## Resolution Update
+
+- 已确认 `ProcessDocumentApplicationService` 的业务流程本来就是“解析正文 → 保存中间产物 → 分块 → 向量化”，问题不在应用层编排。
+- 已将 `DoclingDocumentParser` 调整为调用 `DoclingServeApi.convertSource(...)`，对应 Docling Serve 的 `/v1/convert/source`，仅负责“源文件 -> cleanedMarkdown”。
+- `DoclingDocumentChunker` 继续调用 `DoclingServeApi.chunkSourceWithHybridChunker(...)`，对应 `/v1/chunk/hybrid/source`，仅负责结构化分块。
+- `DoclingDocumentParserTest` 已按新 API 同步，当前 25 个单元用例通过。
+- 以下 `Findings`、`Deductions`、`Hypotheses` 保留的是修复前现场证据；调查时使用过的临时直调脚本和临时测试文档现已清理，不再作为仓库产物保留。
 
 ## Evidence Inventory
 
@@ -54,8 +62,8 @@ Docling 所有 content 格式均为空，降级使用 chunks 文本 (status=succ
 | 2026-06-17T21:58:19 ~ 21:58:21+08:00 | Docling 容器处理 `人工智能基础概念.md`，生成 1 个 chunk，并返回 `/v1/chunk/hybrid/source` 200 | 用户提供的 Docling 日志 | Confirmed |
 | 2026-06-17T21:58:21.757+08:00 | Spring 记录 Docling 所有 content 格式为空，降级使用 chunks 文本 | 用户提供的 Spring 日志 | Confirmed |
 | 2026-06-17T21:58:24.043+08:00 | Spring 完成向量索引与文档处理 | 用户提供的 Spring 日志 | Confirmed |
-| 2026-06-17 | 本地直接执行 `_bmad-output/implementation-artifacts/investigations/test_docling_api.py` 命中同一 hybrid chunk endpoint，返回 `Documents=1` 且 `md/html/text/doctags` 全为 NULL | 本次调查的直接 HTTP 复现 | Confirmed |
-| 2026-06-17 | 同一份 `test-doc.md` 改打 `/v1/convert/source` 后，`md_content/html_content/text_content/doctags_content` 全部返回非空 | 本次调查的直接 HTTP 对照实验 | Confirmed |
+| 2026-06-17 | 本地通过临时直调脚本（现已清理）命中同一 hybrid chunk endpoint，返回 `Documents=1` 且 `md/html/text/doctags` 全为 NULL | 本次调查的直接 HTTP 复现 | Confirmed |
+| 2026-06-17 | 同一份临时测试 Markdown 文档（现已清理）改打 `/v1/convert/source` 后，`md_content/html_content/text_content/doctags_content` 全部返回非空 | 本次调查的直接 HTTP 对照实验 | Confirmed |
 
 ## Confirmed Findings
 
@@ -67,9 +75,9 @@ Docling 所有 content 格式均为空，降级使用 chunks 文本 (status=succ
 
 ### Finding 2: Spring 端确实请求了 converted document
 
-**Evidence:** `src/main/java/io/github/spike/myai/ingest/infrastructure/parser/DoclingDocumentParser.java:187-205`
+**Evidence:** 修复前 `DoclingDocumentParser` 的请求构造逻辑（已由后续修复替换）
 
-**Detail:** `DoclingDocumentParser` 构造 `HybridChunkDocumentRequest` 时明确设置了 `toFormats=[MARKDOWN, HTML, TEXT, DOCTAGS]`，并设置 `includeConvertedDoc(true)` 后调用 `doclingServeApi.chunkSourceWithHybridChunker(request)`。
+**Detail:** 调查时 `DoclingDocumentParser` 构造 `HybridChunkDocumentRequest`，明确设置 `toFormats=[MARKDOWN, HTML, TEXT, DOCTAGS]`，并设置 `includeConvertedDoc(true)` 后调用 `doclingServeApi.chunkSourceWithHybridChunker(request)`。这解释了为什么应用会依赖 hybrid endpoint 返正文。
 
 ### Finding 3: Spring 端不是只会读 `md_content`
 
@@ -79,9 +87,9 @@ Docling 所有 content 格式均为空，降级使用 chunks 文本 (status=succ
 
 ### Finding 4: 本地单元测试已经把“content 全空但 chunks 有值”视为允许场景
 
-**Evidence:** `src/test/java/io/github/spike/myai/ingest/infrastructure/parser/DoclingDocumentParserTest.java:401-427`
+**Evidence:** 修复前的 `DoclingDocumentParserTest` 场景设计（已由后续修复替换）
 
-**Detail:** 测试 `parse_shouldFallbackToChunks_whenAllContentFormatsNullButChunksPresent()` 明确构造了 `status=success`、`content={}`、`chunks` 非空的响应，并断言解析器应回退到 chunks。这说明当前代码库已经接受“hybrid chunk 成功但无 converted content”的现实行为。
+**Detail:** 调查时的测试 `parse_shouldFallbackToChunks_whenAllContentFormatsNullButChunksPresent()` 明确构造了 `status=success`、`content={}`、`chunks` 非空的响应，并断言解析器应回退到 chunks。这说明修复前代码库已经接受“hybrid chunk 成功但无 converted content”的现实行为。
 
 ### Finding 5: 运行中的 Docling OpenAPI 期望 hybrid chunk 接口在 `include_converted_doc=true` 时返回 converted document
 
@@ -97,7 +105,7 @@ Docling 所有 content 格式均为空，降级使用 chunks 文本 (status=succ
 
 ### Finding 7: 直接调用 hybrid chunk endpoint 时，服务端原始 JSON 的 converted content 确实为空
 
-**Evidence:** 本地直接执行 `_bmad-output/implementation-artifacts/investigations/test_docling_api.py`
+**Evidence:** 本地通过临时直调脚本（现已清理）直接访问 Docling Serve
 
 **Detail:** 同一仓库中的测试脚本向 `POST http://localhost:5001/v1/chunk/hybrid/source` 发送 `include_converted_doc=true` 与 `to_formats=["md","html","text","doctags"]` 后，原始响应显示 `Documents=1`、`Status=success`，但 `md_content/html_content/text_content/doctags_content` 全部为 `NULL`。
 
@@ -105,7 +113,7 @@ Docling 所有 content 格式均为空，降级使用 chunks 文本 (status=succ
 
 **Evidence:** 本次调查中直接调用 `POST http://localhost:5001/v1/convert/source`
 
-**Detail:** 对同一份 `_bmad-output/implementation-artifacts/investigations/test-doc.md`，`/v1/convert/source` 返回 `md_content PRESENT 388`、`html_content PRESENT 4438`、`text_content PRESENT 388`、`doctags_content PRESENT 710`。这排除了“Docling 根本不能把这份 Markdown 转成 md”的说法。
+**Detail:** 对同一份临时测试 Markdown 文档（现已清理），`/v1/convert/source` 返回 `md_content PRESENT 388`、`html_content PRESENT 4438`、`text_content PRESENT 388`、`doctags_content PRESENT 710`。这排除了“Docling 根本不能把这份 Markdown 转成 md”的说法。
 
 ## Deduced Conclusions
 
@@ -147,7 +155,7 @@ Docling 所有 content 格式均为空，降级使用 chunks 文本 (status=succ
 
 **Would refute:** 实际响应 JSON 中这些字段非空，只是 Spring 端读取错了。
 
-**Resolution:** 已通过本地直接执行 `_bmad-output/implementation-artifacts/investigations/test_docling_api.py` 确认 hybrid chunk endpoint 的原始响应中 `md/html/text/doctags` 全为 `NULL`。
+**Resolution:** 已通过本地临时直调脚本（现已清理）确认 hybrid chunk endpoint 的原始响应中 `md/html/text/doctags` 全为 `NULL`。
 
 ### Hypothesis 2: Spring 端读取的字段路径或格式优先级与 Docling 当前响应结构不一致
 
@@ -173,10 +181,11 @@ Docling 所有 content 格式均为空，降级使用 chunks 文本 (status=succ
 
 | Element | Detail |
 | ------- | ------ |
-| Error origin | `src/main/java/io/github/spike/myai/ingest/infrastructure/parser/DoclingDocumentParser.java:214-220`, `:231-283` |
-| Trigger | `DoclingDocumentParser.parse()` 调用 `chunkSourceWithHybridChunker()` 后尝试从 `documents[0].content` 提取正文 |
+| Error origin | 修复前 `DoclingDocumentParser.parse()` 的正文提取路径 |
+| Trigger | 修复前 `DoclingDocumentParser.parse()` 调用 `chunkSourceWithHybridChunker()` 后尝试从 `documents[0].content` 提取正文 |
 | Condition | `POST /v1/chunk/hybrid/source` 返回 `documents[0].status=success`，但 `documents[0].content.md/html/text/doctags` 全为空 |
-| Related files | `src/main/java/io/github/spike/myai/ingest/infrastructure/parser/DoclingDocumentParser.java`, `src/test/java/io/github/spike/myai/ingest/infrastructure/parser/DoclingDocumentParserTest.java`, `docs/reference/Docling/openapi.json`, `_bmad-output/implementation-artifacts/investigations/test_docling_api.py` |
+| Current fix | `DoclingDocumentParser.parse()` 现改为调用 `convertSource()` 提取正文；`DoclingDocumentChunker.chunk()` 继续调用 `chunkSourceWithHybridChunker()` 提取 chunks |
+| Related files | `src/main/java/io/github/spike/myai/ingest/infrastructure/parser/DoclingDocumentParser.java`, `src/main/java/io/github/spike/myai/ingest/infrastructure/chunking/DoclingDocumentChunker.java`, `src/test/java/io/github/spike/myai/ingest/infrastructure/parser/DoclingDocumentParserTest.java`, `docs/reference/Docling/openapi.json` |
 
 ## Conclusion
 
@@ -186,7 +195,7 @@ Docling 所有 content 格式均为空，降级使用 chunks 文本 (status=succ
 这不是 Spring 端字段读取错误，也不是“Docling 不能把 Markdown 转成 Markdown”。同一份 `test-doc.md` 直接走 `/v1/convert/source` 时，`md_content/html_content/text_content/doctags_content` 都能正常返回。  
 因此，症状“无法把文档转成 md 格式”准确地说是：**当前选用的 hybrid chunk endpoint 没有给你返回 md content，所以应用只能退回 chunks 文本。**
 
-## Recommended Next Steps
+## Recommended Next Steps (Investigation Time)
 
 ### Fix direction
 
@@ -196,13 +205,13 @@ Docling 所有 content 格式均为空，降级使用 chunks 文本 (status=succ
 
 ### Diagnostic
 
-1. 复用 `_bmad-output/implementation-artifacts/investigations/test_docling_api.py` 作为最小复现，保留对 hybrid chunk endpoint 的直接证据。
+1. 复用临时直调脚本（调查时使用，现已清理）作为最小复现，保留对 hybrid chunk endpoint 的直接证据。
 2. 如需向上游提 issue，再补一条 `curl` 复现和 Docling Serve 版本号。
 3. 如需本仓库内修复，优先评估“双调用策略”或“转换/分块职责拆分”。
 
 ## Reproduction Plan
 
-1. 使用 `_bmad-output/implementation-artifacts/investigations/test-doc.md`。
+1. 使用任意最小 Markdown 样本文档（调查时使用过临时 `test-doc.md`，现已清理）。
 2. 调用 `POST /v1/chunk/hybrid/source`，请求体带 `include_converted_doc=true` 与 `to_formats=["md","html","text","doctags"]`。
 3. 预期结果：`chunks` 非空，`documents[0].status=success`，但 `documents[0].content.md_content/html_content/text_content/doctags_content` 均为空。
 4. 对照调用 `POST /v1/convert/source`，预期 `document.md_content/html_content/text_content/doctags_content` 均非空。
@@ -216,8 +225,8 @@ Docling 所有 content 格式均为空，降级使用 chunks 文本 (status=succ
 
 ### New Evidence
 
-- 本地直接执行 `_bmad-output/implementation-artifacts/investigations/test_docling_api.py`，确认 `POST /v1/chunk/hybrid/source` 的原始响应中 `md/html/text/doctags` 全部为 `NULL`。
-- 同一份 `test-doc.md` 直接调用 `POST /v1/convert/source`，确认 `md_content/html_content/text_content/doctags_content` 全部返回非空。
+- 本地通过临时直调脚本（现已清理），确认 `POST /v1/chunk/hybrid/source` 的原始响应中 `md/html/text/doctags` 全部为 `NULL`。
+- 同一份临时测试 Markdown 文档（现已清理）直接调用 `POST /v1/convert/source`，确认 `md_content/html_content/text_content/doctags_content` 全部返回非空。
 
 ### Additional Findings
 
@@ -236,3 +245,12 @@ Docling 所有 content 格式均为空，降级使用 chunks 文本 (status=succ
 ### Updated Conclusion
 
 当前问题的直接根因是 endpoint 选择与服务行为不匹配：`/v1/chunk/hybrid/source` 在你的运行环境下不会提供可用的 converted markdown content，而 `/v1/convert/source` 会。
+
+## Final Resolution
+
+- 已落地“转换/分块双调用”修复：
+  - `DoclingDocumentParser` 调用 `DoclingServeApi.convertSource(...)`，仅负责正文转换和 `cleanedMarkdown` 产出。
+  - `DoclingDocumentChunker` 调用 `DoclingServeApi.chunkSourceWithHybridChunker(...)`，仅负责结构化分块。
+  - `ProcessDocumentApplicationService` 保持 `parse -> save artifact -> chunk -> index` 的两阶段处理顺序。
+- 结果是应用不再依赖 hybrid chunk endpoint 返回正文，因此“无法把文档转成 md 格式”的问题已关闭。
+- 修复验证：`DoclingDocumentParserTest` 已同步到 Convert API，25 个单元测试通过。

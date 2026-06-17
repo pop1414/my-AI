@@ -1,20 +1,16 @@
 package io.github.spike.myai.ingest.infrastructure.parser;
 
 import ai.docling.serve.api.DoclingServeApi;
-import ai.docling.serve.api.chunk.request.HybridChunkDocumentRequest;
-import ai.docling.serve.api.chunk.request.options.HybridChunkerOptions;
-import ai.docling.serve.api.chunk.response.Chunk;
-import ai.docling.serve.api.chunk.response.ChunkDocumentResponse;
-import ai.docling.serve.api.chunk.response.Document;
-import ai.docling.serve.api.chunk.response.ExportDocumentResponse;
+import ai.docling.serve.api.convert.request.ConvertDocumentRequest;
 import ai.docling.serve.api.convert.request.options.ConvertDocumentOptions;
 import ai.docling.serve.api.convert.request.options.OutputFormat;
 import ai.docling.serve.api.convert.request.source.FileSource;
+import ai.docling.serve.api.convert.request.target.InBodyTarget;
+import ai.docling.serve.api.convert.response.ConvertDocumentResponse;
+import ai.docling.serve.api.convert.response.DocumentResponse;
 import ai.docling.serve.api.convert.response.ErrorItem;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.github.spike.myai.ingest.domain.model.ChunkContentType;
-import io.github.spike.myai.ingest.domain.model.ChunkMetadata;
 import io.github.spike.myai.ingest.domain.model.DoclingPermanentException;
 import io.github.spike.myai.ingest.domain.model.DoclingTransientException;
 import io.github.spike.myai.ingest.domain.model.DocumentParseResult;
@@ -26,7 +22,6 @@ import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -39,12 +34,11 @@ import org.springframework.web.client.HttpServerErrorException;
 import org.springframework.web.client.ResourceAccessException;
 
 /**
- * 基于 Docling Serve 的文档解析实现。
+ * 基于 Docling Serve Convert API 的文档解析实现。
  *
  * <p>通过 Arconia 自动配置的 {@link DoclingServeApi} 调用 Docling Serve 的
- * HybridChunker 接口，一步完成文档转换和分块。所有 Docling 特定逻辑
- * （Base64 编码、请求构造、响应映射）封装在此 adapter 内，
- * {@link DoclingServeApi} 的类型不暴露到本类以外。
+ * {@code /v1/convert/source} 接口，仅负责“源文件 -> cleanedMarkdown”的转换职责；
+ * 分块由 {@code DoclingDocumentChunker} 在后续独立完成。
  *
  * @author spike
  * @since 1.0.0
@@ -52,42 +46,28 @@ import org.springframework.web.client.ResourceAccessException;
 @Component("docling")
 public class DoclingDocumentParser implements DocumentTextParser {
 
-    // === Constants ===
-
     private static final Logger log = LoggerFactory.getLogger(DoclingDocumentParser.class);
 
-    /** HybridChunker 单块最大 token 数，对齐论文最优 faithfulness 97.59 */
-    private static final int DEFAULT_MAX_TOKENS = 512;
-
-    /** 合并过小块，对齐论文最优 faithfulness */
-    private static final boolean DEFAULT_MERGE_PEERS = true;
-
-    /** Markdown heading 正则，用于提取 title_outline_sample */
+    /** 标题提取正则，用于构建 processingMetadata 中的 title_outline_sample。 */
     private static final Pattern MARKDOWN_HEADING = Pattern.compile("(?m)^#{1,6}\\s+(.+)$");
-
-    /** title_outline_sample 最大条目数 */
+    /** title_outline_sample 最大保留条数。 */
     private static final int MAX_TITLE_OUTLINE_SIZE = 3;
-
-    /** 输入文件最大字节数（50MB），防止 Base64 编码时 OOM */
+    /** 输入文件最大字节数（50MB），避免 Base64 编码时占用过高内存。 */
     private static final int MAX_INPUT_BYTES = 50 * 1024 * 1024;
-
-    // === Instance Fields ===
 
     private final DoclingServeApi doclingServeApi;
     private final ObjectMapper objectMapper;
     private final int maxTextLength;
-    /** 文本清洗服务，对 Docling 产出 Markdown 执行最小破坏清洗 */
+    /** 文本清洗服务，对 Docling 输出 Markdown 执行最小破坏清洗。 */
     private final TextCleaningService textCleaningService;
     private final Clock clock;
 
-    // === Constructors ===
-
     /**
-     * 构造器注入：装配 Docling API 客户端、序列化器、清洗服务和配置参数。
+     * 构造器注入：装配 Docling API 客户端、序列化器、清洗服务和 ingest 配置。
      *
-     * @param doclingServeApi    Docling Serve API 客户端（Arconia 自动配置注入）
-     * @param objectMapper       JSON 序列化器
-     * @param ingestProperties   ingest 管道配置属性
+     * @param doclingServeApi Docling Serve API 客户端
+     * @param objectMapper JSON 序列化器
+     * @param ingestProperties ingest 配置属性
      * @param textCleaningService 文本清洗服务
      */
     @Autowired
@@ -113,35 +93,24 @@ public class DoclingDocumentParser implements DocumentTextParser {
         this.clock = clock;
     }
 
-    // === Public API ===
-
     /**
-     * 执行文档解析，通过 Docling Serve 的 HybridChunker 一步完成转换和分块。
+     * 执行文档解析，将原始文件转换为 cleanedMarkdown。
      *
      * <p>解析链路：
      * <ol>
-     *   <li>校验输入内容非空；</li>
-     *   <li>Base64 编码后构造 {@link FileSource}；</li>
-     *   <li>调用 {@link DoclingServeApi#chunkSourceWithHybridChunker}；</li>
-     *   <li>从响应提取原始 Markdown；</li>
-     *   <li>调用 {@link TextCleaningService#cleanNativeMarkdown} 执行最小破坏清洗；</li>
+     *   <li>校验输入内容非空且大小在限制内；</li>
+     *   <li>构造 {@link ConvertDocumentRequest} 并调用 {@link DoclingServeApi#convertSource(ConvertDocumentRequest)}；</li>
+     *   <li>从 Convert 响应中提取可用文本内容；</li>
+     *   <li>调用 {@link TextCleaningService#cleanNativeMarkdown(String)} 执行最小破坏清洗；</li>
      *   <li>校验清洗结果并映射为 {@link DocumentParseResult}。</li>
      * </ol>
      *
-     * <p>异常策略：
-     * <ul>
-     *   <li>输入/响应校验失败 → {@link IllegalStateException}（不可重试的逻辑错误）</li>
-     *   <li>Docling 4xx → {@link DoclingPermanentException}（永久失败，不重试）</li>
-     *   <li>Docling 5xx / 超时 / 网络 → {@link DoclingTransientException}（瞬时错误，可重试）</li>
-     *   <li>其他未知异常 → {@link DoclingTransientException}（保守策略：先尝试重试）</li>
-     * </ul>
-     *
      * @param filename 原始文件名
-     * @param content  文件字节数组
-     * @return 解析结果（cleanedMarkdown + processingMetadata）
-     * @throws IllegalStateException           内容为空或响应校验失败时
-     * @throws DoclingPermanentException       Docling 4xx 客户端错误时
-     * @throws DoclingTransientException       Docling 5xx / 超时 / 网络错误时
+     * @param content 文件字节数组
+     * @return 解析结果，包含 cleanedMarkdown 与 processingMetadata
+     * @throws IllegalStateException 输入为空、响应缺失正文或清洗结果非法时
+     * @throws DoclingPermanentException Docling 返回不可重试的 4xx 时
+     * @throws DoclingTransientException Docling 返回 5xx、超时或其他瞬时错误时
      */
     @Override
     public DocumentParseResult parse(String filename, byte[] content) {
@@ -150,47 +119,38 @@ public class DoclingDocumentParser implements DocumentTextParser {
         }
 
         try {
-            ChunkDocumentResponse response = callDoclingApi(filename, content);
+            ConvertDocumentResponse response = callDoclingApi(filename, content);
             return mapToDocumentParseResult(filename, response);
         } catch (IllegalStateException ex) {
-            // 输入校验/响应校验错误（空内容、空 documents、null markdownContent、超长文本）
-            // 这些是逻辑错误，不可重试
             throw ex;
         } catch (HttpClientErrorException ex) {
             int statusCode = ex.getStatusCode().value();
-            // 408/429 是瞬时性客户端错误，应按瞬时处理（可重试）
             if (statusCode == 408 || statusCode == 429) {
                 throw new DoclingTransientException(
                         "docling returned transient client error: " + ex.getStatusCode(), ex);
             }
-            // 其余 4xx → 永久失败（不重试）
             throw new DoclingPermanentException(
                     "docling returned client error: " + ex.getStatusCode(),
                     statusCode,
                     ex);
         } catch (HttpServerErrorException ex) {
-            // 5xx 服务端错误 → 瞬时错误（可重试）
             throw new DoclingTransientException(
                     "docling returned server error: " + ex.getStatusCode(), ex);
         } catch (ResourceAccessException ex) {
-            // 连接超时 / 读超时 → 瞬时错误（可重试）
             throw new DoclingTransientException("docling connection failed", ex);
         } catch (Exception ex) {
-            // 其他未知异常 → 保守策略：视为瞬时错误（先尝试重试）
             throw new DoclingTransientException("unexpected docling error", ex);
         }
     }
 
-    // === Docling API Call ===
-
     /**
-     * 构造请求并调用 Docling Serve 的 HybridChunker 接口。
+     * 构造 Convert 请求并调用 Docling Serve。
      *
      * @param filename 原始文件名
-     * @param content  文件字节数组
-     * @return Docling 响应
+     * @param content 文件字节数组
+     * @return Docling Convert 响应
      */
-    private ChunkDocumentResponse callDoclingApi(String filename, byte[] content) {
+    private ConvertDocumentResponse callDoclingApi(String filename, byte[] content) {
         if (content.length > MAX_INPUT_BYTES) {
             throw new IllegalStateException("input file exceeds max size: " + content.length);
         }
@@ -207,31 +167,24 @@ public class DoclingDocumentParser implements DocumentTextParser {
                         OutputFormat.TEXT, OutputFormat.DOCTAGS))
                 .build();
 
-        HybridChunkerOptions chunkerOptions = HybridChunkerOptions.builder()
-                .maxTokens(DEFAULT_MAX_TOKENS)
-                .mergePeers(DEFAULT_MERGE_PEERS)
-                .build();
-
-        HybridChunkDocumentRequest request = HybridChunkDocumentRequest.builder()
+        ConvertDocumentRequest request = ConvertDocumentRequest.builder()
                 .source(source)
                 .options(convertOptions)
-                .includeConvertedDoc(true)
-                .chunkingOptions(chunkerOptions)
+                .target(InBodyTarget.builder().build())
                 .build();
 
-        log.debug("调用 Docling Serve HybridChunker, filename={}, contentLength={}", filename, content.length);
-        return doclingServeApi.chunkSourceWithHybridChunker(request);
+        log.debug("调用 Docling Serve Convert API, filename={}, contentLength={}", filename, content.length);
+        return doclingServeApi.convertSource(request);
     }
 
-    // === Response Mapping ===
-
     /**
-     * 将 Docling 响应映射为 {@link DocumentParseResult}。
+     * 将 Docling Convert 响应映射为 {@link DocumentParseResult}。
      *
-     * <p>先从响应提取原始 Markdown，再调用 {@link TextCleaningService#cleanNativeMarkdown}
-     * 执行统一换行符、去除控制字符、压缩连续空行等最小破坏清洗，最后校验并映射。
+     * @param filename 原始文件名
+     * @param response Docling Convert 响应
+     * @return 解析结果
      */
-    private DocumentParseResult mapToDocumentParseResult(String filename, ChunkDocumentResponse response) {
+    private DocumentParseResult mapToDocumentParseResult(String filename, ConvertDocumentResponse response) {
         String rawMarkdown = extractCleanedMarkdown(response);
         String cleanedMarkdown = textCleaningService.cleanNativeMarkdown(rawMarkdown);
         validateCleanedMarkdown(cleanedMarkdown);
@@ -241,110 +194,61 @@ public class DoclingDocumentParser implements DocumentTextParser {
     }
 
     /**
-     * 从 Docling 响应中提取可用内容，支持多格式降级。
+     * 从 Convert 响应中提取可用正文，支持多格式降级。
      *
-     <p>提取优先级：md_content → html_content（转 Markdown）→ text_content
-     * → doctags_content → chunks 文本拼接。
-     * Docling Serve 的 md_content 取决于服务器转换器配置，
-     * 部分部署可能只有 html_content、text_content 或 doctags_content。
-     * 当所有内容格式均不可用时，尝试从 HybridChunker 产出的 chunks
-     * 列表中拼接文本（这是 HybridChunker 的主输出）。
+     * <p>提取优先级：{@code md_content -> html_content -> text_content -> doctags_content}。
      *
-     * @param response Docling chunk 响应（不可为 null）
+     * @param response Docling Convert 响应
      * @return 可用于后续清洗的文本内容
-     * @throws IllegalStateException 当 documents 列表为空时
-     * @throws IllegalStateException 当文档 status 为 error/failure 时（含 errors 详情）
-     * @throws IllegalStateException 当所有内容格式（md/html/text）均为 null 时
      */
-    private String extractCleanedMarkdown(ChunkDocumentResponse response) {
-        java.util.Objects.requireNonNull(response, "response must not be null");
-        if (response.getDocuments() == null || response.getDocuments().isEmpty()) {
-            throw new IllegalStateException("docling response contains no documents");
+    private String extractCleanedMarkdown(ConvertDocumentResponse response) {
+        if (response == null) {
+            throw new IllegalStateException("response must not be null");
         }
 
-        Document document = response.getDocuments().getFirst();
-
-        // status 检查优先：转换失败时内容字段为 null 是预期行为，
-        // 必须先报告真正的失败原因（status + errors 详情），而非含糊的 "no content"
-        String status = document.getStatus();
+        String status = response.getStatus();
         if ("error".equalsIgnoreCase(status) || "failure".equalsIgnoreCase(status)) {
-            String errorDetail = formatDocumentErrors(document);
+            String errorDetail = formatResponseErrors(response.getErrors());
             throw new IllegalStateException(
                     "docling conversion failed (status=%s%s)".formatted(status, errorDetail));
         }
 
-        if (document.getErrors() != null && !document.getErrors().isEmpty()) {
-            log.warn("Docling 文档转换存在错误 (status={}): {}", status, document.getErrors());
+        if (response.getErrors() != null && !response.getErrors().isEmpty()) {
+            log.warn("Docling 文档转换存在错误 (status={}): {}", status, response.getErrors());
         }
 
-        // 多格式降级：md_content → html_content → text_content → doctags_content → chunks 文本
-        // Docling Serve 的 md_content 取决于服务器转换器配置，不一定所有部署都有
-        if (document.getContent() != null) {
-            ExportDocumentResponse content = document.getContent();
-            if (content.getMarkdownContent() != null) {
-                return content.getMarkdownContent();
-            }
-            if (content.getHtmlContent() != null) {
-                log.info("Docling md_content 为空，降级使用 html_content (status={})", status);
-                return content.getHtmlContent();
-            }
-            if (content.getTextContent() != null) {
-                log.info("Docling md_content/html_content 均为空，降级使用 text_content (status={})", status);
-                return content.getTextContent();
-            }
-            if (content.getDoctagsContent() != null) {
-                log.info("Docling md/html/text_content 均为空，降级使用 doctags_content (status={})", status);
-                return content.getDoctagsContent();
-            }
+        DocumentResponse document = response.getDocument();
+        if (document == null) {
+            throw new IllegalStateException("docling response contains no document");
         }
 
-        // Docling 响应的 chunks 是 HybridChunker 主输出，即使 document content 为空也可能有 chunk 文本
-        String fallbackFromChunks = extractTextFromChunks(response);
-        if (fallbackFromChunks != null) {
-            log.info("Docling 所有 content 格式均为空，降级使用 chunks 文本 (status={}, chunks={})",
-                    status, response.getChunks().size());
-            return fallbackFromChunks;
+        if (document.getMarkdownContent() != null) {
+            return document.getMarkdownContent();
+        }
+        if (document.getHtmlContent() != null) {
+            log.info("Docling md_content 为空，降级使用 html_content (status={})", status);
+            return document.getHtmlContent();
+        }
+        if (document.getTextContent() != null) {
+            log.info("Docling md_content/html_content 均为空，降级使用 text_content (status={})", status);
+            return document.getTextContent();
+        }
+        if (document.getDoctagsContent() != null) {
+            log.info("Docling md/html/text_content 均为空，降级使用 doctags_content (status={})", status);
+            return document.getDoctagsContent();
         }
 
         throw new IllegalStateException(
-                "docling response has no usable content (status=%s, md/html/text/doctags all null, chunks=%d)"
-                        .formatted(status,
-                                response.getChunks() != null ? response.getChunks().size() : 0));
+                "docling response has no usable content (status=%s, md/html/text/doctags all null)"
+                        .formatted(status));
     }
-
-    // === ChunkMetadata Mapping ===
-
-    /**
-     * 将 Docling 的 Chunk 响应映射为 {@link ChunkMetadata}。
-     *
-     * <p>使用 {@link ChunkMetadata#of} 工厂方法安全归一化外部输入：
-     * headings 为 null 时归一化为空 list，过滤 null 和空白字符串元素；
-     * pageNumber 取 {@code pageNumbers} 列表第一个元素（若为空则 0）；
-     * contentType 本阶段默认 {@link ChunkContentType#PARAGRAPH}。
-     *
-     * @param doclingChunk Docling 返回的单个 chunk
-     * @return 映射后的 ChunkMetadata
-     */
-    ChunkMetadata mapChunkMetadata(Chunk doclingChunk) {
-        int pageNumber = 0;
-        List<Integer> pageNumbers = doclingChunk.getPageNumbers();
-        if (pageNumbers != null && !pageNumbers.isEmpty()) {
-            pageNumber = pageNumbers.getFirst();
-        }
-
-        // contentType 映射：本阶段默认 PARAGRAPH，后续可从 doclingChunk.getDocItems() 细化
-        ChunkContentType contentType = ChunkContentType.PARAGRAPH;
-
-        return ChunkMetadata.of(doclingChunk.getHeadings(), pageNumber, contentType);
-    }
-
-    // === Processing Metadata ===
 
     /**
      * 构建 processingMetadata JSON。
      *
-     * <p>三层结构：schema_version → stable → conditional → best_effort。
-     * 从 filename 和 Docling 响应中自行提取元数据。
+     * @param filename 原始文件名
+     * @param cleanedMarkdown 清洗后的 Markdown
+     * @return 序列化后的 processingMetadata JSON
      */
     private String buildProcessingMetadata(String filename, String cleanedMarkdown) {
         Map<String, Object> root = new LinkedHashMap<>();
@@ -387,12 +291,10 @@ public class DoclingDocumentParser implements DocumentTextParser {
         return conditional;
     }
 
-    // === Validation ===
-
     /**
      * 校验清洗后的 Markdown 内容有效性。
      *
-     * @throws IllegalStateException 校验失败时
+     * @param cleanedMarkdown 清洗后的 Markdown
      */
     private void validateCleanedMarkdown(String cleanedMarkdown) {
         if (cleanedMarkdown.isBlank()) {
@@ -403,44 +305,14 @@ public class DoclingDocumentParser implements DocumentTextParser {
         }
     }
 
-    // === Utility ===
-
-    /**
-     * 格式化 Docling 文档错误列表，用于异常消息中的诊断信息。
-     *
-     * @param document Docling 响应文档
-     * @return 格式化的错误描述（含 ", errors=[...]" 后缀），无错误时返回空字符串
-     */
-    private static String formatDocumentErrors(Document document) {
-        if (document.getErrors() == null || document.getErrors().isEmpty()) {
+    private static String formatResponseErrors(List<ErrorItem> errors) {
+        if (errors == null || errors.isEmpty()) {
             return "";
         }
-        String details = document.getErrors().stream()
-                .map(e -> e.getComponentType() + ": " + e.getErrorMessage())
-                .collect(java.util.stream.Collectors.joining("; "));
+        String details = errors.stream()
+                .map(error -> error.getComponentType() + ": " + error.getErrorMessage())
+                .collect(Collectors.joining("; "));
         return ", errors=[" + details + "]";
-    }
-
-    /**
-     * 从响应的 chunks 列表中提取文本，作为最后一层降级。
-     *
-     * <p>当 Docling Serve 的所有内容格式（md/html/text/doctags）都为空时，
-     * 尝试从 HybridChunker 产出的 chunk 列表中拼接可用文本。
-     * 这是 HybridChunker 的主输出，即使服务器端 exporter 未配置也可能有内容。
-     *
-     * @param response Docling chunk 响应
-     * @return 拼接后的文本，无可用 chunk 时返回 null
-     */
-    private static String extractTextFromChunks(ChunkDocumentResponse response) {
-        if (response.getChunks() == null || response.getChunks().isEmpty()) {
-            return null;
-        }
-        String text = response.getChunks().stream()
-                .map(Chunk::getText)
-                .filter(Objects::nonNull)
-                .filter(s -> !s.isBlank())
-                .collect(Collectors.joining("\n\n"));
-        return text.isBlank() ? null : text;
     }
 
     private static List<String> extractTitleOutlineSample(String markdown) {

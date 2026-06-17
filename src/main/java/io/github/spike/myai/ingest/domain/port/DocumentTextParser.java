@@ -13,7 +13,7 @@ import io.github.spike.myai.ingest.domain.model.DocumentParseResult;
  *
  * <p>当前实现：
  * <ul>
- *   <li>{@code DoclingDocumentParser} — 通过 Docling Serve 的 HybridChunker 一步完成转换与分块。</li>
+ *   <li>{@code DoclingDocumentParser} — 通过 Docling Serve 的 Convert API 生成 cleanedMarkdown。</li>
  * </ul>
  *
  * @author Spike
@@ -39,4 +39,3 @@ public interface DocumentTextParser {
      */
     DocumentParseResult parse(String filename, byte[] content);
 }
-
