@@ -14,10 +14,12 @@ import io.github.spike.myai.knowledge.application.exception.KnowledgeBaseNotFoun
 import io.github.spike.myai.knowledge.domain.model.KnowledgeBaseStatus;
 import io.github.spike.myai.knowledge.domain.port.KnowledgeBaseRepository;
 import io.github.spike.myai.qa.domain.model.AskableDocumentVersion;
+import io.github.spike.myai.qa.domain.model.QueryType;
 import io.github.spike.myai.qa.domain.model.RetrievedChunk;
 import io.github.spike.myai.qa.domain.port.AskableDocumentVersionPort;
 import io.github.spike.myai.qa.domain.port.AnswerGenerationPort;
 import io.github.spike.myai.qa.domain.port.ChunkRetrievalPort;
+import io.github.spike.myai.qa.domain.port.QueryClassifierPort;
 import io.github.spike.myai.qa.domain.port.RerankingPort;
 import io.github.spike.myai.qa.infrastructure.config.QaRetrievalProperties;
 import java.util.LinkedHashMap;
@@ -32,6 +34,7 @@ import org.springframework.stereotype.Service;
  * <p>该服务编排完整问答流程：
  * <ol>
  *   <li>解析并规范化输入命令；</li>
+ *   <li>通过查询分类端口判断查询意图（CHITCHAT 跳过检索直接调用 LLM）；</li>
  *   <li>执行语义检索并按知识库过滤；</li>
  *   <li>通过可插拔重排序端口对候选结果进行二次排序；</li>
  *   <li>构造提示词并调用回答生成端口；</li>
@@ -57,6 +60,8 @@ public class AskQuestionApplicationService implements AskQuestionUseCase {
     /** 兜底回答文案：无检索命中或模型返回无效结果时使用 */
     private static final String FALLBACK_ANSWER = "未检索到与问题相关的已入库内容，请补充文档后再试。";
 
+    /** 领域端口：查询意图分类（决定是否走检索流程） */
+    private final QueryClassifierPort queryClassifierPort;
     /** 领域端口：向量相似度检索（语义召回） */
     private final ChunkRetrievalPort chunkRetrievalPort;
     /** 领域端口：检索结果重排序（可插拔，默认透传） */
@@ -77,6 +82,7 @@ public class AskQuestionApplicationService implements AskQuestionUseCase {
     /**
      * 构造器注入。
      *
+     * @param queryClassifierPort     查询意图分类端口（决定是否走检索流程）
      * @param chunkRetrievalPort      向量检索端口（语义召回）
      * @param rerankingPort          检索结果重排序端口（可插拔扩展点，默认透传）
      * @param answerGenerationPort    LLM 回答生成端口（调用大模型）
@@ -87,6 +93,7 @@ public class AskQuestionApplicationService implements AskQuestionUseCase {
      * @param properties             检索参数配置（候选下限与放大倍率）
      */
     public AskQuestionApplicationService(
+            QueryClassifierPort queryClassifierPort,
             ChunkRetrievalPort chunkRetrievalPort,
             RerankingPort rerankingPort,
             AnswerGenerationPort answerGenerationPort,
@@ -95,6 +102,7 @@ public class AskQuestionApplicationService implements AskQuestionUseCase {
             AuthorizationService authorizationService,
             AskableDocumentVersionPort askableDocumentVersionPort,
             QaRetrievalProperties properties) {
+        this.queryClassifierPort = queryClassifierPort;
         this.chunkRetrievalPort = chunkRetrievalPort;
         this.rerankingPort = rerankingPort;
         this.answerGenerationPort = answerGenerationPort;
@@ -112,6 +120,7 @@ public class AskQuestionApplicationService implements AskQuestionUseCase {
      * <ol>
      *   <li>规整化输入（问题文本、知识库 ID、topK）；</li>
      *   <li>校验目标知识库存在且启用；</li>
+     *   <li>查询意图分类 — CHITCHAT 跳过检索，直接调用 LLM 返回；</li>
      *   <li>以放大后的 topK 进行向量相似度检索，再按 kbId 精过滤；</li>
      *   <li>通过可插拔重排序端口对候选结果进行二次排序（默认透传）；</li>
      *   <li>无命中时直接返回兜底文案，避免模型幻觉；</li>
@@ -131,6 +140,16 @@ public class AskQuestionApplicationService implements AskQuestionUseCase {
         validateKnowledgeBase(currentUser, kbId);
         authorizationService.requireCanAskKnowledgeBase(currentUser, kbId);
         int topK = command.resolvedTopK();
+
+        // 2. 查询意图分类：CHITCHAT 跳过检索直接调用 LLM
+        QueryType queryType = queryClassifierPort.classify(question);
+        if (queryType == QueryType.CHITCHAT) {
+            String answer = answerGenerationPort.generateAnswer(question);
+            if (answer == null || answer.isBlank()) {
+                answer = FALLBACK_ANSWER;
+            }
+            return new AskQuestionResult(answer, List.of());
+        }
 
         List<AskableDocumentVersion> askableVersionScope =
                 askableDocumentVersionPort.findAskableVersionsForQuestion(currentUser, kbId);

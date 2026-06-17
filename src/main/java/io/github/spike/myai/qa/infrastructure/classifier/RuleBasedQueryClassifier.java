@@ -3,17 +3,20 @@ package io.github.spike.myai.qa.infrastructure.classifier;
 import io.github.spike.myai.qa.domain.model.QueryType;
 import io.github.spike.myai.qa.domain.port.QueryClassifierPort;
 import java.util.regex.Pattern;
+import org.springframework.stereotype.Component;
 
 /**
  * 基于优先级规则的查询分类器。
  *
  * <p>通过正则匹配用户查询中的关键词，按优先级顺序返回首个命中的查询类型。
  * 规则优先级：CHITCHAT &gt; PROCEDURAL &gt; FACTOID &gt; COMPARATIVE &gt; GENERAL。
- * 纯 Java String/Regex 实现，零外部依赖。
+ * 纯 Java String/Regex 实现，逻辑层零外部依赖。
+ * 通过 {@code @Component} 注册为 Spring Bean，由应用层通过端口接口注入使用。
  *
  * @author spike
  * @since 1.0.0
  */
+@Component
 public class RuleBasedQueryClassifier implements QueryClassifierPort {
 
     // === 优先级 1（最高）：CHITCHAT ===
