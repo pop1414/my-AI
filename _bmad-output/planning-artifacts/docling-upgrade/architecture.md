@@ -34,7 +34,7 @@ PRD 定义 13 个 FR，按 5 个特性组组织：
 | 4.1 Docling Serve 基础设施 | FR-1, FR-2, FR-13 | 新增外部 sidecar 容器 + Arconia BOM 依赖 + Actuator health 集成 |
 | 4.2 DoclingDocumentParser 统一解析 | FR-3 | 新 infrastructure adapter 实现 DocumentTextParser 端口，8 种格式统一路径 |
 | 4.3 解析路由与域模型重构 | FR-4, FR-5, FR-6 | DocumentParserRouter 重构 + DocumentParseResult 字段简化 + ChunkMetadata 新值对象 |
-| 4.4 遗留代码清理 | FR-9, FR-10, FR-11 | Tika 全量移除 + Java chunker 全量移除 + DocumentChunker 端口移除 |
+| 4.4 遗留代码清理 | FR-9, FR-10, FR-11 | Tika 全量移除 + Java chunker 全量移除 + DoclingDocumentChunker 替换实现 + DocumentChunker 端口保留 |
 | 4.5 可观测性与配置化 | FR-7, FR-8, FR-12 | HybridChunker 参数配置化 + Micrometer 指标 + 黄金样本重建 |
 
 **Non-Functional Requirements:**
@@ -194,10 +194,11 @@ DoclingParseException
 
 ### D-5: TextCleaningService 处置
 
-**决策：** 保留 `cleanNativeMarkdown`，逐 chunk 清洗，设退出条件
+**决策：** 保留 `cleanNativeMarkdown`，在 DoclingDocumentParser 内部对 convertSource 产出的 Markdown 做最小破坏清洗，设退出条件
 
 **方案：**
-- DoclingDocumentParser 流程：DoclingServeApi → 逐 chunk cleanNativeMarkdown → 映射 DocumentChunk
+- DoclingDocumentParser 流程：DoclingServeApi.convertSource → cleanNativeMarkdown(全文) → 映射 DocumentParseResult
+- DoclingDocumentChunker 流程：DoclingServeApi.chunkSourceWithHybridChunker → 映射 List<DocumentChunk>
 - 清洗内容：统一换行符（CRLF→LF）、去除控制字符、压缩连续空行
 - 退出条件：阶段四验收时，5 个黄金样本的清洗前后 diff 为零差异 → 记录为 no-op，可选移除
 
@@ -223,19 +224,24 @@ D-4（docker-compose）→ D-1（Arconia 依赖）→ D-2（DoclingDocumentParse
 - D-1 依赖 D-4（容器必须先 running，Arconia 才能连接）
 - D-2 依赖 D-1（Parser 依赖 DoclingServeApi）
 - D-3 依赖 D-2（ChunkMetadata 由 Parser 产出）
-- D-5 嵌入 D-2（清洗是 Parser 流程的一部分）
+- D-5 嵌入 D-2（清洗是 DoclingDocumentParser 转换流程的一部分）
 
 ## Implementation Patterns & Consistency Rules
 
 > 现有 162 条 project-context.md 规则继续生效。以下仅定义 Docling 迁移新增的实现模式。
 
-### Pattern 1: Adapter 封装模式（DoclingDocumentParser）
+### Pattern 1: Adapter 封装模式（DoclingDocumentParser + DoclingDocumentChunker）
 
 ```java
 // infrastructure/parser/DoclingDocumentParser.java
 // 实现 DocumentTextParser 端口，注入 DoclingServeApi
+// 调用 convertSource 纯转换，只请求 MARKDOWN 格式
 // 所有 Docling 特定逻辑（Base64 编码、响应映射、异常转换）封装在此
-// DoclingServeApi 的类型不暴露到 DoclingDocumentParser 以外
+
+// infrastructure/chunking/DoclingDocumentChunker.java
+// 实现 DocumentChunker 端口，注入 DoclingServeApi
+// 调用 chunkSourceWithHybridChunker，只用 chunks 输出
+// DoclingServeApi 的类型不暴露到这两个 adapter 以外
 ```
 
 - 遵循六边形架构：infrastructure adapter 实现 domain port
@@ -307,17 +313,17 @@ myai:
 - 遵循 Micrometer 命名约定（小写点分隔）
 - 标签值使用枚举常量的 lowercase
 
-### Pattern 6: 逐 chunk 清洗模式
+### Pattern 6: Markdown 清洗模式
 
 ```java
 // DoclingDocumentParser.parse() 内部流程
-for (DoclingChunk chunk : doclingResponse.getChunks()) {
-    String cleaned = textCleaningService.cleanNativeMarkdown(chunk.getContent());
-    // 映射为 DocumentChunk + ChunkMetadata
-}
+ConvertDocumentResponse response = doclingServeApi.convertSource(request);
+String rawMarkdown = response.getDocument().getMarkdownContent();
+String cleanedMarkdown = textCleaningService.cleanNativeMarkdown(rawMarkdown);
+// 映射为 DocumentParseResult
 ```
 
-- 清洗在 Parser 内部、映射之前执行
+- 清洗在 DoclingDocumentParser 内部、convertSource 返回后执行
 - 不暴露清洗逻辑到 Parser 外部
 - 退出条件：黄金样本清洗前后 diff 为零差异时可移除
 
@@ -325,7 +331,7 @@ for (DoclingChunk chunk : doclingResponse.getChunks()) {
 
 **所有 AI agent 必须：**
 - 新代码遵循上述 6 个模式，不得自行发明替代模式
-- DoclingDocumentParser 是唯一允许引用 DoclingServeApi 的类
+- DoclingDocumentParser 和 DoclingDocumentChunker 是仅有的两个允许引用 DoclingServeApi 的类
 - 异常只能通过 DoclingParseException 层次抛出，不得直接抛 RuntimeException
 - ChunkMetadata 的 headings 必须做防御性拷贝
 - 配置参数必须通过 IngestProperties 读取，不得硬编码
@@ -342,9 +348,9 @@ ingest/
 │   ├── DocumentChunk.java           ← 将修改（sourceHint → chunkMetadata）
 │   ├── DocumentChunkPreview.java    ← 将修改（同上）
 │   ├── DocumentParseResult.java     ← 将修改（删除 rawXhtml/cleanedHtml）
-│   └── DocumentChunker.java         ← 将删除（端口接口）
+│   └── DocumentChunker.java         ← 保留（端口接口，实现切换为 DoclingDocumentChunker）
 ├── domain/port/
-│   └── DocumentChunker.java         ← 将删除
+│   └── DocumentChunker.java         ← 保留
 ├── infrastructure/parser/
 │   ├── DocumentParserRouter.java    ← 将修改（TIKA → DOCLING + REJECT）
 │   ├── TikaDocumentTextParser.java  ← 将删除
@@ -388,7 +394,8 @@ ingest/
 │   └── ProcessingMetadataBuilder.java ← 已修改
 ├── infrastructure/vector/
 │   └── PgVectorDocumentVectorIndexer.java ← 已修改
-└── [chunking/ 目录删除]
+└── infrastructure/chunking/
+    └── DoclingDocumentChunker.java ← 新增（实现 DocumentChunker，注入 DoclingServeApi）
 ```
 
 ### 新增文件清单
@@ -400,14 +407,14 @@ ingest/
 | domain/model | `DoclingParseException.java` | 异常基类 |
 | domain/model | `DoclingPermanentException.java` | 4xx 永久错误 |
 | domain/model | `DoclingTransientException.java` | 5xx/超时瞬时错误 |
-| infrastructure/parser | `DoclingDocumentParser.java` | Docling Serve adapter，实现 DocumentTextParser |
+| infrastructure/parser | `DoclingDocumentParser.java` | Docling Serve adapter，实现 DocumentTextParser（convertSource 纯转换） |
+| infrastructure/chunking | `DoclingDocumentChunker.java` | Docling Serve adapter，实现 DocumentChunker（HybridChunker 分块） |
 
 ### 删除文件清单
 
 | 文件 | 原因 |
 |------|------|
 | `domain/model/SourceHint.java` | 被 ChunkMetadata 替代 |
-| `domain/port/DocumentChunker.java` | chunking 由 Docling Serve server-side 完成 |
 | `infrastructure/parser/TikaDocumentTextParser.java` | Tika 全量移除 |
 | `infrastructure/parser/TikaParseContextFactory.java` | Tika 全量移除 |
 | `infrastructure/parser/NoOpEmbeddedDocumentExtractor.java` | Tika 全量移除 |
@@ -441,8 +448,8 @@ ingest/
 | FR-7 | application.yaml, IngestProperties.java |
 | FR-8 | DoclingDocumentParser.java（指标埋点） |
 | FR-9 | Tika 相关全部删除 + pom.xml |
-| FR-10 | chunking/ 目录全部删除 |
-| FR-11 | DocumentChunker.java（端口删除） |
+| FR-10 | chunking/ 目录删除 + DoclingDocumentChunker.java（新增） |
+| FR-11 | DocumentChunker.java（端口保留）+ DoclingDocumentChunker.java（新增实现） |
 | FR-12 | 黄金样本测试文件重写 |
 | FR-13 | Arconia 自动配置（无需手动编码） |
 
@@ -450,12 +457,13 @@ ingest/
 
 **Docling Serve 集成边界：**
 ```
-Spring Boot 应用 → DoclingDocumentParser → DoclingServeApi → HTTP → Docling Serve 容器
+Spring Boot 应用 → DoclingDocumentParser → DoclingServeApi.convertSource → HTTP → Docling Serve 容器
+                → DoclingDocumentChunker → DoclingServeApi.chunkSourceWithHybridChunker ↗
                                         ↑
-                                   唯一集成点（adapter 封装）
+                              两个集成点（各自 adapter 封装）
 ```
 
-- DoclingServeApi 的类型不暴露到 DoclingDocumentParser 以外
+- DoclingServeApi 的类型不暴露到 DoclingDocumentParser 和 DoclingDocumentChunker 以外
 - 错误通过 DoclingParseException 层次传播到 Worker 层
 
 ## Architecture Validation Results
@@ -475,8 +483,8 @@ Spring Boot 应用 → DoclingDocumentParser → DoclingServeApi → HTTP → Do
 - 异常层次定义在 domain 层（零框架注解），infrastructure 层抛出 — 符合六边形架构
 
 **Structure Alignment:**
-- 新增 6 个文件全部在 ingest 子域范围内，不侵入其他子域
-- 删除 11 个文件（含 5 个测试类），chunking/ 目录整体移除
+- 新增 7 个文件全部在 ingest 子域范围内，不侵入其他子域
+- 删除 10 个文件（含 5 个测试类），旧 chunking/ 类整体移除，新增 DoclingDocumentChunker
 - 不涉及数据库 schema 变更（无 Flyway migration）
 
 ### Requirements Coverage Validation ✅
@@ -495,7 +503,7 @@ Spring Boot 应用 → DoclingDocumentParser → DoclingServeApi → HTTP → Do
 | FR-8 | Pattern 5（Micrometer 指标） | ✅ |
 | FR-9 | 结构变更（Tika 全量删除清单） | ✅ |
 | FR-10 | 结构变更（chunker 全量删除清单） | ✅ |
-| FR-11 | 结构变更（DocumentChunker 端口删除） | ✅ |
+| FR-11 | 结构变更（DocumentChunker 端口保留 + DoclingDocumentChunker 实现） | ✅ |
 | FR-12 | 结构变更（黄金样本重写） | ✅ |
 | FR-13 | D-1（Arconia Actuator 自动配置） | ✅ |
 
@@ -568,7 +576,7 @@ Spring Boot 应用 → DoclingDocumentParser → DoclingServeApi → HTTP → Do
 **AI Agent Guidelines:**
 - 严格遵循本文档的 5 个架构决策和 6 个实现模式
 - 新增/删除/修改文件清单是权威来源，不得自行增减
-- DoclingDocumentParser 是唯一允许引用 DoclingServeApi 的类
+- DoclingDocumentParser 和 DoclingDocumentChunker 是仅有的两个允许引用 DoclingServeApi 的类
 - 异常只能通过 DoclingParseException 层次抛出
 
 **First Implementation Priority:**

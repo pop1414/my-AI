@@ -45,7 +45,7 @@ project_name: my-AI docling-upgrade
 | FR-6 | 4.3 路由+域模型 | ChunkMetadata 值对象：替代 SourceHint，含 headings、pageNumber、contentType | FR-3 |
 | FR-9 | 4.4 遗留清理 | Tika 全量移除：代码 + Maven 依赖 + 配置 | FR-4 |
 | FR-10 | 4.4 遗留清理 | Java 侧 Chunker 全量移除：StructuredFallbackDocumentChunker、MarkdownSegmenter、HeadingContextExtractor、ChunkWindowAssembler | FR-4 |
-| FR-11 | 4.4 遗留清理 | DocumentChunker 端口移除 | FR-10 |
+| FR-11 | 4.4 遗留清理 | DocumentChunker 端口保留，实现切换为 DoclingDocumentChunker | FR-10 |
 | FR-7 | 4.5 可观测 | HybridChunker 参数配置化：max_tokens 和 merge_peers 从 application.yaml 读取 | FR-3 |
 | FR-8 | 4.5 可观测 | 观测指标埋点：docling.parse.duration、docling.parse.errors、docling.chunk.count | FR-3 |
 | FR-12 | 4.5 可观测 | 黄金样本重建：旧 Tika 基线删除，以 Docling 为基线重建 5 个样本 | FR-3 |
@@ -65,7 +65,7 @@ project_name: my-AI docling-upgrade
 ### Additional Requirements
 
 **Success Metrics (SM):**
-- SM-1: 净删 ≥300 行维护代码（Validates FR-9, FR-10, FR-11）
+- SM-1: 净删 ≥300 行维护代码（Validates FR-9, FR-10）
 - SM-2: 全部 8 种格式的 chunk 均携带 headings 数组（Validates FR-6）
 - SM-3: 10 页文本 PDF 解析耗时 ≤ Tika 基线 + 2s（Validates FR-3）
 - SM-4: INDEXED 率不下降（Validates FR-3, FR-4）
@@ -103,7 +103,7 @@ project_name: my-AI docling-upgrade
 | FR-4 | DocumentParserRouter 重构 | Epic 3 | Story 3.1 | ✅ 已覆盖 |
 | FR-9 | Tika 全量移除 | Epic 3 | Story 3.2 | ✅ 已覆盖 |
 | FR-10 | Java 侧 Chunker 全量移除 | Epic 3 | Story 3.3 | ✅ 已覆盖 |
-| FR-11 | DocumentChunker 端口移除 | Epic 3 | Story 3.4 | ✅ 已覆盖 |
+| FR-11 | DocumentChunker 端口保留 + DoclingDocumentChunker 实现 | Epic 3 | Story 3.3 | ✅ 已覆盖 |
 | FR-7 | HybridChunker 参数配置化 | Epic 4 | Story 4.1 | ✅ 已覆盖 |
 | FR-8 | 观测指标埋点 | Epic 4 | Story 4.2 | ✅ 已覆盖 |
 | FR-12 | 黄金样本重建 | Epic 4 | Story 4.3 | ✅ 已覆盖 |
@@ -191,8 +191,8 @@ project_name: my-AI docling-upgrade
 |-------|------|----------------|--------|--------|------|
 | 3.1 | DocumentParserRouter 重构 | ✅ 完整 | ✅ 415 验证 | ⚠️ 依赖 Epic 2 | ✅ |
 | 3.2 | Tika 全部删除 | ✅ 完整 | ✅ grep 零匹配 | ⚠️ 依赖 Epic 2 | ✅ |
-| 3.3 | Java 侧 chunker 删除 | ✅ 完整 | ✅ 编译 + 测试 | ⚠️ 依赖 Epic 2 | ✅ |
-| 3.4 | DocumentChunker 端口移除 | ⚠️ AC 引用外部 Epic | ✅ 编译验证 | ⚠️ 依赖 3.3 | 🟡 |
+| 3.3 | 删除 Java 侧 chunker + 实现 DoclingDocumentChunker | ✅ 完整 | ✅ 编译 + 测试 | ⚠️ 依赖 Epic 2 | ✅ |
+| 3.4 | 清理 Tika 遗留辅助类与废弃方法 | ✅ 完整 | ✅ grep 零匹配 | ⚠️ 依赖 3.2 | ✅ |
 
 #### Epic 4 Stories
 

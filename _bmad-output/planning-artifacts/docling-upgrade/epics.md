@@ -17,7 +17,7 @@ This document provides the complete epic and story breakdown for my-AI, decompos
 
 FR-1: docker-compose 新增 docling-serve 服务，含 health check 和依赖链
 FR-2: 引入 Arconia Docling BOM + starter 依赖
-FR-3: 新建 DoclingDocumentParser，调用 DoclingServeApi 接收 pre-chunked 结果
+FR-3: 新建 DoclingDocumentParser，调用 DoclingServeApi.convertSource 纯转换产出 Markdown（不包含分块）
 FR-3a: FR-3 完成条件：全部 8 种格式可产出非空 `DocumentParseResult`；Docling 超时（≥30s）触发重试（最多 2 次）；Docling 4xx 映射为永久失败（`FAILED`），5xx/网络超时映射为瞬时错误（重试）
 FR-4: DocumentParserRouter 重构：TIKA → DOCLING + REJECT
 FR-5: DocumentParseResult 删除 rawXhtml / cleanedHtml 字段
@@ -25,8 +25,8 @@ FR-6: ChunkMetadata 值对象：headings 面包屑 + pageNumber + contentType
 FR-7: HybridChunker 参数从 application.yaml 读取（max_tokens / merge_peers）
 FR-8: 基本观测指标：docling.parse.duration / docling.parse.errors / docling.chunk.count
 FR-9: Tika 全部依赖和代码删除（TikaDocumentTextParser / pom.xml 依赖 / TikaParseContextFactory 等）
-FR-10: Java 侧 chunker 删除（StructuredFallbackDocumentChunker / MarkdownSegmenter / HeadingContextExtractor / ChunkWindowAssembler）
-FR-11: DocumentChunker 端口移除
+FR-10: Java 侧 chunker 删除（StructuredFallbackDocumentChunker / MarkdownSegmenter / HeadingContextExtractor / ChunkWindowAssembler），替换为 DoclingDocumentChunker
+FR-11: DocumentChunker 端口保留（作为转换与分块的架构边界），实现切换为 DoclingDocumentChunker
 FR-12: 黄金样本重建（Docling 基线，替换旧 Tika 基线）
 FR-13: Actuator health 暴露 Docling 连通性（Arconia 自动配置）
 
@@ -48,8 +48,8 @@ NFR-3: 启动依赖：Docling 不可用时应 fail-fast，不启动 ingest 相�
 
 **技术集成需求：**
 
-- 集成边界：Spring Boot 应用 → DoclingDocumentParser → DoclingServeApi → HTTP → Docling Serve 容器
-- 唯一集成点：DoclingDocumentParser 是唯一允许引用 DoclingServeApi 的类
+- 集成边界：Spring Boot 应用 → DoclingDocumentParser / DoclingDocumentChunker → DoclingServeApi → HTTP → Docling Serve 容器
+- 集成点：DoclingDocumentParser（convertSource）和 DoclingDocumentChunker（chunkSourceWithHybridChunker）是仅有的两个允许引用 DoclingServeApi 的类
 - 异常层次：DoclingParseException 层次定义在 domain 层，infrastructure 层抛出
 
 ### UX Design Requirements
@@ -60,7 +60,7 @@ NFR-3: 启动依赖：Docling 不可用时应 fail-fast，不启动 ingest 相�
 
 FR-1: Epic 1 — docker-compose 新增 docling-serve 服务，含 health check 和依赖链
 FR-2: Epic 1 — 引入 Arconia Docling BOM + starter 依赖
-FR-3: Epic 2 — 新建 DoclingDocumentParser，调用 DoclingServeApi 接收 pre-chunked 结果
+FR-3: Epic 2 — 新建 DoclingDocumentParser，调用 DoclingServeApi.convertSource 纯转换产出 Markdown
 FR-3a: Epic 2 — 全部 8 种格式支持 + 错误处理（4xx 永久失败、5xx/超时重试）
 FR-4: Epic 3 — DocumentParserRouter 重构：TIKA → DOCLING + REJECT
 FR-5: Epic 2 — DocumentParseResult 删除 rawXhtml / cleanedHtml 字段
@@ -68,8 +68,8 @@ FR-6: Epic 2 — ChunkMetadata 值对象：headings 面包屑 + pageNumber + con
 FR-7: Epic 4 — HybridChunker 参数从 application.yaml 读取（max_tokens / merge_peers）
 FR-8: Epic 4 — 基本观测指标：docling.parse.duration / docling.parse.errors / docling.chunk.count
 FR-9: Epic 3 — Tika 全部依赖和代码删除
-FR-10: Epic 3 — Java 侧 chunker 删除
-FR-11: Epic 3 — DocumentChunker 端口移除
+FR-10: Epic 3 — Java 侧 chunker 删除，替换为 DoclingDocumentChunker
+FR-11: Epic 3 — DocumentChunker 端口保留，实现切换为 DoclingDocumentChunker
 FR-12: Epic 4 — 黄金样本重建（Docling 基线，替换旧 Tika 基线）
 FR-13: Epic 1 — Actuator health 暴露 Docling 连通性（Arconia 自动配置）
 
@@ -172,19 +172,21 @@ So that 解析结果只保留 cleanedMarkdown 和 processingMetadata，减少不
 ### Story 2.3: 实现 DoclingDocumentParser 核心解析器
 
 As a 后端开发者，
-I want 实现 DoclingDocumentParser 调用 DoclingServeApi，
-So that 系统能够解析 8 种文档格式并产出 pre-chunked 结果，统一所有格式的解析路径。
+I want 实现 DoclingDocumentParser 调用 DoclingServeApi.convertSource，
+So that 系统能够解析 8 种文档格式并产出 cleanedMarkdown，统一所有格式的解析路径。
 
 **Acceptance Criteria:**
 
 **Given** Arconia Docling BOM 已引入，DoclingServeApi Bean 已注入
 **When** 实现 DoclingDocumentParser（infrastructure adapter）实现 DocumentTextParser 端口
-**Then** 能够接收文件内容，Base64 编码后调用 DoclingServeApi
-**And** 配置 ConvertDocumentOptions（含 HybridChunkerOptions：max_tokens=512, merge_peers=true）
+**Then** 能够接收文件内容，Base64 编码后调用 DoclingServeApi.convertSource（纯转换端点）
+**And** 只请求 OutputFormat.MARKDOWN 一种输出格式（不请求 html/text/doctags）
+**And** 不使用 chunkSourceWithHybridChunker（分块由 DocumentChunker 单独负责）
+**And** 不依赖 includeConvertedDoc 参数（该参数有已知 bug，convertSource 直接返回 document.md_content）
 **And** 映射 Docling 响应为 DocumentParseResult（cleanedMarkdown + processingMetadata）
-**And** 映射 ChunkMetadata（headings / pageNumber / contentType）
 **And** 全部 8 种格式（PDF/DOCX/PPTX/XLSX/图片/MD/HTML/TXT）可产出非空 DocumentParseResult
 **And** DoclingServeApi 的类型不暴露到 DoclingDocumentParser 以外
+**And** 不包含分块逻辑（chunkMetadata 映射移至 DoclingDocumentChunker）
 
 ### Story 2.4: 实现错误处理与重试逻辑
 
@@ -219,9 +221,9 @@ So that Docling 产出的 Markdown 能够统一换行符、去除控制字符、
 **And** 保留 cleanNativeMarkdown 的最小调用
 **And** 退出条件：黄金样本清洗前后 diff 为零差异时可移除（记录为 no-op）
 
-### Epic 3: 遗留解析代码清理
+### Epic 3: 遗留解析代码清理与 Docling 分块器替换
 
-作为后端开发者和质量维护者，我希望 Tika 及其全部依赖、Java 侧 chunker、以及相关端口接口被完整移除，以便减少维护负担和依赖安全风险。
+作为后端开发者和质量维护者，我希望 Tika 及其全部依赖、Java 侧 chunker 被完整移除，DocumentChunker 端口的实现替换为 DoclingDocumentChunker（调用 Docling HybridChunker），以便转换与分块职责清晰分离，同时利用 Docling 的高质量分块能力。
 
 **FRs covered:** FR-4, FR-9, FR-10, FR-11
 **实施周期：** 半日
@@ -260,37 +262,48 @@ So that 项目构建体积减少，依赖安全风险降低，不再维护两套
 **And** 代码中无 `tika` 或 `org.apache.tika` 引用（`grep -r "tika\|org\.apache\.tika" src/ pom.xml` 无匹配）
 **And** 应用编译通过，无类型不匹配错误
 
-### Story 3.3: 删除 Java 侧 chunker
+### Story 3.3: 删除 Java 侧 chunker，实现 DoclingDocumentChunker
 
 As a 后端开发者，
-I want 删除 Java 侧 chunker（StructuredFallbackDocumentChunker / MarkdownSegmenter / HeadingContextExtractor / ChunkWindowAssembler），
-So that chunking 逻辑完全由 Docling Serve server-side 完成，减少测试维护量。
+I want 删除 Java 侧 chunker 并实现 DoclingDocumentChunker 替换，
+So that 分块逻辑由 Docling Serve HybridChunker 完成（论文验证 faithfulness 97.59），同时保持 DocumentChunker 端口作为转换与分块的架构边界。
 
 **Acceptance Criteria:**
 
-**Given** 项目中存在 Java 侧 chunker 代码
+**Given** 项目中存在 Java 侧 chunker 代码（StructuredFallbackDocumentChunker 等）
 **When** 删除 StructuredFallbackDocumentChunker（~260 行）
 **Then** 删除 MarkdownSegmenter
 **And** 删除 HeadingContextExtractor
 **And** 删除 ChunkWindowAssembler
 **And** 删除 infrastructure/chunking/ 目录
-**And** 删除对应的测试类（StructuredFallbackDocumentChunkerTest、SourceHintTest 等）
+**And** 删除对应的测试类（StructuredFallbackDocumentChunkerTest 等）
+**And** 新建 DoclingDocumentChunker 实现 DocumentChunker 端口
+**And** DoclingDocumentChunker 调用 DoclingServeApi.chunkSourceWithHybridChunker
+**And** 请求体中 convert_options.to_formats = [md]，chunking_options.max_tokens = 512, merge_peers = true
+**And** 从 ChunkDocumentResponse.chunks 提取分块结果，映射为 List<DocumentChunk>
+**And** 不使用 includeConvertedDoc 参数（分块端点不需要返回转换文档）
+**And** 映射 ChunkMetadata（headings 面包屑 / pageNumber / contentType）
+**And** 异常处理对齐 DoclingDocumentParser（4xx 永久失败，5xx/超时重试）
+**And** 保留 DocumentChunker 端口接口不变
+**And** ProcessDocumentApplicationService 中的注入点无需修改
 **And** 应用编译通过，无类型不匹配错误
 **And** 存量测试通过
 
-### Story 3.4: 移除 DocumentChunker 端口
+### Story 3.4: 清理 Tika 遗留辅助类与废弃方法
 
 As a 后端开发者，
-I want 移除 DocumentChunker 端口接口，
-So that chunking 由 Docling Serve server-side 完成，不再需要 Java 侧的 chunking 端口定义。
+I want 清理 TextCleaningService 中的废弃方法和 Tika 遗留辅助类，
+So that 代码库中不再存在已废弃的 Tika 相关代码路径，降低维护负担。
 
 **Acceptance Criteria:**
 
-**Given** 项目中存在 DocumentChunker 端口接口
-**When** 删除 domain/port/DocumentChunker.java
-**Then** 删除所有对 DocumentChunker 的引用
-**And** 更新 DocumentChunk、DocumentChunkPreview 中的 SourceHint → ChunkMetadata（已在 Epic 2 完成）
-**And** 更新 PgVectorDocumentVectorIndexer 中的 SourceHint → ChunkMetadata（已在 Epic 2 完成）
+**Given** TikaDocumentTextParser 已删除（Story 3.2），DoclingDocumentChunker 已实现（Story 3.3）
+**When** 清理遗留代码
+**Then** 删除 TextCleaningService 中的 cleanHtml() 和 toMarkdown() 废弃方法
+**And** 删除 NativeTextDecoder（Tika 遗留的编码检测工具）
+**And** 删除 ProcessingMetadataBuilder 中仅 Tika 使用的方法（如有）
+**And** TextCleaningService 仅保留 cleanNativeMarkdown() 方法
+**And** 代码中无 `@Deprecated(since = "2.5", forRemoval = true)` 残留
 **And** 编译通过，无类型不匹配错误
 **And** 存量测试通过
 
@@ -306,16 +319,16 @@ So that chunking 由 Docling Serve server-side 完成，不再需要 Java 侧的
 
 As a 后端开发者，
 I want HybridChunker 参数从 application.yaml 读取（max_tokens / merge_peers），
-So that 按场景（demo/production）区分设置而不需要改代码，参数修改后重启生效。
+So that DoclingDocumentChunker 的分块参数可按场景（demo/production）区分设置，修改后重启生效。
 
 **Acceptance Criteria:**
 
-**Given** HybridChunker 参数当前硬编码在 DoclingDocumentParser 中
-**When** 在 application.yaml 中新增 myai.ingest.chunking 配置域
+**Given** HybridChunker 参数当前硬编码在 DoclingDocumentChunker 中
+**When** 在 application.yaml 中新增 myai.ingest.chunk 配置域（复用现有 ingest.chunk 命名空间）
 **Then** max-tokens 参数可配置，默认值 512
 **And** merge-peers 参数可配置，默认值 true
-**And** IngestProperties 扩展 chunking 配置域
-**And** DoclingDocumentParser 从配置读取参数，而非硬编码
+**And** IngestProperties 扩展 chunk 配置域
+**And** DoclingDocumentChunker 从配置读取参数，而非硬编码
 **And** 修改参数后重启生效，不支持热加载
 
 ### Story 4.2: Micrometer 指标埋点
