@@ -5,6 +5,9 @@ import java.util.regex.Pattern;
 
 /**
  * Markdown/纯文本行级清洗 Module。
+ *
+ * <p>Docling 迁移后仅保留 {@link #cleanNativeMarkdown} 路径，
+ * 用于对 Docling 产出的原生 Markdown 执行最小破坏清洗。
  */
 final class MarkdownTextCleaner {
 
@@ -19,20 +22,11 @@ final class MarkdownTextCleaner {
     private static final Pattern CONTROL_CHARS = Pattern.compile("[\\p{Cntrl}&&[^\n\t]]");
     private static final Pattern IMAGE_FILENAME_LINE =
             Pattern.compile("(?im)^\\s*image\\d+\\.(png|jpg|jpeg|gif|bmp|webp)\\s*$");
-    private static final Pattern IMAGE_URL =
-            Pattern.compile("(?im)https?://\\S+\\.(png|jpg|jpeg|gif|bmp|webp)(\\?\\S*)?");
     private static final Pattern IMAGE_URL_LINE =
             Pattern.compile("(?im)^\\s*https?://\\S+\\.(png|jpg|jpeg|gif|bmp|webp)(\\?\\S*)?\\s*$");
-    private static final Pattern FILE_URL = Pattern.compile("(?im)file:///\\S+");
     private static final Pattern FILE_URL_LINE = Pattern.compile("(?im)^\\s*file:///\\S+\\s*$");
     private static final Pattern PAGE_CHROME_NOISE_LINE =
             Pattern.compile("(?im)^\\s*(内部评审稿|第\\s*\\d+\\s*页\\s*(?:/\\s*质检热线\\s*[-0-9]+)?)\\s*$");
-    private static final Pattern SEPARATOR_LINE = Pattern.compile("(?m)^\\s*[-_=]{3,}\\s*$");
-    private static final Pattern MULTI_SPACE = Pattern.compile("[ \\t]+");
-
-    String cleanConvertedMarkdown(String markdown) {
-        return MarkdownStructureRepairer.repair(cleanText(markdown));
-    }
 
     String cleanNativeMarkdown(String rawMarkdown) {
         if (rawMarkdown == null || rawMarkdown.isBlank()) {
@@ -75,46 +69,6 @@ final class MarkdownTextCleaner {
         }
 
         return cleaned.toString().replaceAll("\\n{3,}", "\n\n").trim();
-    }
-
-    String cleanText(String rawText) {
-        if (rawText == null || rawText.isBlank()) {
-            return "";
-        }
-
-        String text = normalizeCompatibilityChars(rawText.replace("\r\n", "\n").replace("\r", "\n"));
-        text = CONTROL_CHARS.matcher(text).replaceAll("");
-
-        String[] lines = text.split("\n", -1);
-        StringBuilder cleaned = new StringBuilder(text.length());
-        boolean inFencedCodeBlock = false;
-
-        for (int i = 0; i < lines.length; i++) {
-            String line = lines[i];
-            if (isFencedCodeDelimiter(line)) {
-                inFencedCodeBlock = !inFencedCodeBlock;
-                cleaned.append(line);
-            } else if (inFencedCodeBlock || isIndentedCodeLine(line)) {
-                cleaned.append(line);
-            } else {
-                cleaned.append(cleanRegularLine(line));
-            }
-            if (i < lines.length - 1) {
-                cleaned.append('\n');
-            }
-        }
-
-        return cleaned.toString().replaceAll("\\n{3,}", "\n\n").trim();
-    }
-
-    private static String cleanRegularLine(String line) {
-        String cleaned = IMAGE_FILENAME_LINE.matcher(line).replaceAll("");
-        cleaned = IMAGE_URL.matcher(cleaned).replaceAll("");
-        cleaned = FILE_URL.matcher(cleaned).replaceAll("");
-        cleaned = PAGE_CHROME_NOISE_LINE.matcher(cleaned).replaceAll("");
-        cleaned = SEPARATOR_LINE.matcher(cleaned).replaceAll("");
-        cleaned = MULTI_SPACE.matcher(cleaned).replaceAll(" ");
-        return stripTrailingWhitespace(cleaned);
     }
 
     private static String cleanNativeMarkdownLine(String line) {

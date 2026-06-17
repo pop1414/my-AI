@@ -41,13 +41,19 @@ class DoclingDocumentParserTest {
             Instant.parse("2026-06-16T12:00:00Z"), ZoneOffset.UTC);
 
     private DoclingServeApi doclingServeApi;
+    private TextCleaningService textCleaningService;
     private DoclingDocumentParser parser;
 
     @BeforeEach
     void setUp() {
         doclingServeApi = org.mockito.Mockito.mock(DoclingServeApi.class);
+        textCleaningService = org.mockito.Mockito.mock(TextCleaningService.class);
+        // 默认 pass-through：cleanNativeMarkdown 原样返回输入
+        when(textCleaningService.cleanNativeMarkdown(any()))
+                .thenAnswer(invocation -> invocation.getArgument(0));
         IngestProperties properties = new IngestProperties();
-        parser = new DoclingDocumentParser(doclingServeApi, new ObjectMapper(), properties, FIXED_CLOCK);
+        parser = new DoclingDocumentParser(doclingServeApi, new ObjectMapper(), properties,
+                textCleaningService, FIXED_CLOCK);
     }
 
     // === 正常解析 ===
@@ -168,6 +174,44 @@ class DoclingDocumentParserTest {
         assertEquals(400, ex.httpStatusCode());
         assertEquals(httpError, ex.getCause());
         assertTrue(ex.getMessage().contains("400"));
+    }
+
+    @Test
+    @DisplayName("Docling 408 错误应映射为 DoclingTransientException（瞬时）")
+    void parse_shouldThrowTransientException_when408Error() {
+        var httpError = org.springframework.web.client.HttpClientErrorException.create(
+                org.springframework.http.HttpStatus.REQUEST_TIMEOUT,
+                "Request Timeout",
+                org.springframework.http.HttpHeaders.EMPTY,
+                new byte[0],
+                StandardCharsets.UTF_8);
+        when(doclingServeApi.chunkSourceWithHybridChunker(any())).thenThrow(httpError);
+
+        DoclingTransientException ex = assertThrows(
+                DoclingTransientException.class,
+                () -> parser.parse("timeout408.pdf", "data".getBytes(StandardCharsets.UTF_8)));
+
+        assertEquals(httpError, ex.getCause());
+        assertTrue(ex.getMessage().contains("408"));
+    }
+
+    @Test
+    @DisplayName("Docling 429 错误应映射为 DoclingTransientException（瞬时）")
+    void parse_shouldThrowTransientException_when429Error() {
+        var httpError = org.springframework.web.client.HttpClientErrorException.create(
+                org.springframework.http.HttpStatus.TOO_MANY_REQUESTS,
+                "Too Many Requests",
+                org.springframework.http.HttpHeaders.EMPTY,
+                new byte[0],
+                StandardCharsets.UTF_8);
+        when(doclingServeApi.chunkSourceWithHybridChunker(any())).thenThrow(httpError);
+
+        DoclingTransientException ex = assertThrows(
+                DoclingTransientException.class,
+                () -> parser.parse("ratelimit429.pdf", "data".getBytes(StandardCharsets.UTF_8)));
+
+        assertEquals(httpError, ex.getCause());
+        assertTrue(ex.getMessage().contains("429"));
     }
 
     @Test
@@ -362,7 +406,7 @@ class DoclingDocumentParserTest {
         IngestProperties shortLimit = new IngestProperties();
         shortLimit.getParser().setMaxTextLength(10);
         DoclingDocumentParser shortParser = new DoclingDocumentParser(
-                doclingServeApi, new ObjectMapper(), shortLimit, FIXED_CLOCK);
+                doclingServeApi, new ObjectMapper(), shortLimit, textCleaningService, FIXED_CLOCK);
 
         String longMarkdown = "a".repeat(20);
         ChunkDocumentResponse response = buildResponse(longMarkdown, List.of());
@@ -395,6 +439,40 @@ class DoclingDocumentParserTest {
         assertEquals(Integer.valueOf(512), request.getChunkingOptions().getMaxTokens());
         assertEquals(Boolean.TRUE, request.getChunkingOptions().getMergePeers());
         assertEquals(1, request.getSources().size());
+    }
+
+    // === TextCleaningService 集成 ===
+
+    @Test
+    @DisplayName("应调用 cleanNativeMarkdown 清洗 Docling 原始输出，返回清洗后内容")
+    void parse_shouldCleanNativeMarkdownBeforeValidation() throws Exception {
+        String rawDoclingMarkdown = "# 标题\n\n\r\n正文\r\n\r\n\r\n多余空行";
+        String cleanedMarkdown = "# 标题\n\n正文\n\n多余空行";
+        when(textCleaningService.cleanNativeMarkdown(rawDoclingMarkdown)).thenReturn(cleanedMarkdown);
+
+        ChunkDocumentResponse response = buildResponse(rawDoclingMarkdown, List.of());
+        when(doclingServeApi.chunkSourceWithHybridChunker(any())).thenReturn(response);
+
+        DocumentParseResult result = parser.parse("test.md", "data".getBytes(StandardCharsets.UTF_8));
+
+        assertEquals(cleanedMarkdown, result.cleanedMarkdown());
+        verify(textCleaningService).cleanNativeMarkdown(rawDoclingMarkdown);
+    }
+
+    @Test
+    @DisplayName("应将 Docling 原始 Markdown 传递给 TextCleaningService 清洗")
+    void parse_shouldPassRawMarkdownToCleaningService() throws Exception {
+        String rawDoclingMarkdown = "## 原始内容\n\n含控制字符和BOM﻿";
+        when(textCleaningService.cleanNativeMarkdown(any())).thenReturn("清洗后内容");
+
+        ChunkDocumentResponse response = buildResponse(rawDoclingMarkdown, List.of());
+        when(doclingServeApi.chunkSourceWithHybridChunker(any())).thenReturn(response);
+
+        parser.parse("test.md", "data".getBytes(StandardCharsets.UTF_8));
+
+        ArgumentCaptor<String> captor = ArgumentCaptor.forClass(String.class);
+        verify(textCleaningService).cleanNativeMarkdown(captor.capture());
+        assertEquals(rawDoclingMarkdown, captor.getValue());
     }
 
     // === Helpers ===

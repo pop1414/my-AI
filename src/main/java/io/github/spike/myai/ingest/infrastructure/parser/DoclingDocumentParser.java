@@ -5,6 +5,7 @@ import ai.docling.serve.api.chunk.request.HybridChunkDocumentRequest;
 import ai.docling.serve.api.chunk.request.options.HybridChunkerOptions;
 import ai.docling.serve.api.chunk.response.Chunk;
 import ai.docling.serve.api.chunk.response.ChunkDocumentResponse;
+import ai.docling.serve.api.chunk.response.Document;
 import ai.docling.serve.api.convert.request.source.FileSource;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -72,23 +73,27 @@ public class DoclingDocumentParser implements DocumentTextParser {
     private final DoclingServeApi doclingServeApi;
     private final ObjectMapper objectMapper;
     private final int maxTextLength;
+    /** 文本清洗服务，对 Docling 产出 Markdown 执行最小破坏清洗 */
+    private final TextCleaningService textCleaningService;
     private final Clock clock;
 
     // === Constructors ===
 
     /**
-     * 构造器注入：装配 Docling API 客户端、序列化器和配置参数。
+     * 构造器注入：装配 Docling API 客户端、序列化器、清洗服务和配置参数。
      *
-     * @param doclingServeApi  Docling Serve API 客户端（Arconia 自动配置注入）
-     * @param objectMapper     JSON 序列化器
-     * @param ingestProperties ingest 管道配置属性
+     * @param doclingServeApi    Docling Serve API 客户端（Arconia 自动配置注入）
+     * @param objectMapper       JSON 序列化器
+     * @param ingestProperties   ingest 管道配置属性
+     * @param textCleaningService 文本清洗服务
      */
     @Autowired
     public DoclingDocumentParser(
             DoclingServeApi doclingServeApi,
             ObjectMapper objectMapper,
-            IngestProperties ingestProperties) {
-        this(doclingServeApi, objectMapper, ingestProperties, Clock.systemUTC());
+            IngestProperties ingestProperties,
+            TextCleaningService textCleaningService) {
+        this(doclingServeApi, objectMapper, ingestProperties, textCleaningService, Clock.systemUTC());
     }
 
     /** Package-private 构造器，供测试注入 Clock。 */
@@ -96,10 +101,12 @@ public class DoclingDocumentParser implements DocumentTextParser {
             DoclingServeApi doclingServeApi,
             ObjectMapper objectMapper,
             IngestProperties ingestProperties,
+            TextCleaningService textCleaningService,
             Clock clock) {
         this.doclingServeApi = doclingServeApi;
         this.objectMapper = objectMapper;
         this.maxTextLength = ingestProperties.getParser().getMaxTextLength();
+        this.textCleaningService = textCleaningService;
         this.clock = clock;
     }
 
@@ -113,7 +120,9 @@ public class DoclingDocumentParser implements DocumentTextParser {
      *   <li>校验输入内容非空；</li>
      *   <li>Base64 编码后构造 {@link FileSource}；</li>
      *   <li>调用 {@link DoclingServeApi#chunkSourceWithHybridChunker}；</li>
-     *   <li>从响应映射 cleanedMarkdown 和 processingMetadata。</li>
+     *   <li>从响应提取原始 Markdown；</li>
+     *   <li>调用 {@link TextCleaningService#cleanNativeMarkdown} 执行最小破坏清洗；</li>
+     *   <li>校验清洗结果并映射为 {@link DocumentParseResult}。</li>
      * </ol>
      *
      * <p>异常策略：
@@ -145,10 +154,16 @@ public class DoclingDocumentParser implements DocumentTextParser {
             // 这些是逻辑错误，不可重试
             throw ex;
         } catch (HttpClientErrorException ex) {
-            // 4xx 客户端错误 → 永久失败（不重试）
+            int statusCode = ex.getStatusCode().value();
+            // 408/429 是瞬时性客户端错误，应按瞬时处理（可重试）
+            if (statusCode == 408 || statusCode == 429) {
+                throw new DoclingTransientException(
+                        "docling returned transient client error: " + ex.getStatusCode(), ex);
+            }
+            // 其余 4xx → 永久失败（不重试）
             throw new DoclingPermanentException(
                     "docling returned client error: " + ex.getStatusCode(),
-                    ex.getStatusCode().value(),
+                    statusCode,
                     ex);
         } catch (HttpServerErrorException ex) {
             // 5xx 服务端错误 → 瞬时错误（可重试）
@@ -203,9 +218,13 @@ public class DoclingDocumentParser implements DocumentTextParser {
 
     /**
      * 将 Docling 响应映射为 {@link DocumentParseResult}。
+     *
+     * <p>先从响应提取原始 Markdown，再调用 {@link TextCleaningService#cleanNativeMarkdown}
+     * 执行统一换行符、去除控制字符、压缩连续空行等最小破坏清洗，最后校验并映射。
      */
     private DocumentParseResult mapToDocumentParseResult(String filename, ChunkDocumentResponse response) {
-        String cleanedMarkdown = extractCleanedMarkdown(response);
+        String rawMarkdown = extractCleanedMarkdown(response);
+        String cleanedMarkdown = textCleaningService.cleanNativeMarkdown(rawMarkdown);
         validateCleanedMarkdown(cleanedMarkdown);
 
         String processingMetadata = buildProcessingMetadata(filename, cleanedMarkdown);
@@ -222,7 +241,7 @@ public class DoclingDocumentParser implements DocumentTextParser {
             throw new IllegalStateException("docling response contains no documents");
         }
 
-        var document = response.getDocuments().getFirst();
+        Document document = response.getDocuments().getFirst();
         if (document.getContent() == null || document.getContent().getMarkdownContent() == null) {
             throw new IllegalStateException("docling response document has no markdown content");
         }
