@@ -97,6 +97,12 @@ myai:
     schema-check:
       # 启动时检查 ingest_documents 关键结构；不符合预期则拒绝启动
       enabled: ${INGEST_SCHEMA_CHECK_ENABLED:true}
+  qa:
+    retrieval:
+      # 检索候选下限，避免 topK 较小时候选过少导致过滤后无结果
+      min-candidates: ${APP_QA_RETRIEVAL_MIN_CANDIDATES:20}
+      # 检索候选放大倍率：先粗召回 topK×N 条，再按 kbId 精过滤
+      candidate-multiplier: ${APP_QA_RETRIEVAL_CANDIDATE_MULTIPLIER:4}
 
 management:
   endpoint:

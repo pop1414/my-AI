@@ -19,6 +19,7 @@ import io.github.spike.myai.qa.domain.port.AskableDocumentVersionPort;
 import io.github.spike.myai.qa.domain.port.AnswerGenerationPort;
 import io.github.spike.myai.qa.domain.port.ChunkRetrievalPort;
 import io.github.spike.myai.qa.domain.port.RerankingPort;
+import io.github.spike.myai.qa.infrastructure.config.QaRetrievalProperties;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -51,10 +52,6 @@ import org.springframework.stereotype.Service;
 @Service
 public class AskQuestionApplicationService implements AskQuestionUseCase {
 
-    /** 检索候选下限，避免 topK 较小时候选过少导致过滤后无结果 */
-    private static final int MIN_RETRIEVAL_CANDIDATES = 20;
-    /** 检索候选放大倍率：先粗召回 topK×N 条，再按 kbId 精过滤 */
-    private static final int RETRIEVAL_CANDIDATE_MULTIPLIER = 4;
     /** 引用预览最大字符数，防止响应体过大（仅影响展示，不影响检索与生成） */
     private static final int PREVIEW_MAX_LENGTH = 200;
     /** 兜底回答文案：无检索命中或模型返回无效结果时使用 */
@@ -74,6 +71,8 @@ public class AskQuestionApplicationService implements AskQuestionUseCase {
     private final AuthorizationService authorizationService;
     /** 问答可用版本查询端口：用于按文档独立决定当前可问答版本 */
     private final AskableDocumentVersionPort askableDocumentVersionPort;
+    /** 检索参数配置：候选下限与放大倍率 */
+    private final QaRetrievalProperties properties;
 
     /**
      * 构造器注入。
@@ -85,6 +84,7 @@ public class AskQuestionApplicationService implements AskQuestionUseCase {
      * @param currentUserProvider     当前用户上下文提供器（获取登录态与工作区）
      * @param authorizationService    授权服务（知识库问答权限与文档级覆盖过滤）
      * @param askableDocumentVersionPort 问答可用版本查询端口（按文档选择可问答版本）
+     * @param properties             检索参数配置（候选下限与放大倍率）
      */
     public AskQuestionApplicationService(
             ChunkRetrievalPort chunkRetrievalPort,
@@ -93,7 +93,8 @@ public class AskQuestionApplicationService implements AskQuestionUseCase {
             KnowledgeBaseRepository knowledgeBaseRepository,
             CurrentUserProvider currentUserProvider,
             AuthorizationService authorizationService,
-            AskableDocumentVersionPort askableDocumentVersionPort) {
+            AskableDocumentVersionPort askableDocumentVersionPort,
+            QaRetrievalProperties properties) {
         this.chunkRetrievalPort = chunkRetrievalPort;
         this.rerankingPort = rerankingPort;
         this.answerGenerationPort = answerGenerationPort;
@@ -101,6 +102,7 @@ public class AskQuestionApplicationService implements AskQuestionUseCase {
         this.currentUserProvider = currentUserProvider;
         this.authorizationService = authorizationService;
         this.askableDocumentVersionPort = askableDocumentVersionPort;
+        this.properties = properties;
     }
 
     /**
@@ -139,8 +141,8 @@ public class AskQuestionApplicationService implements AskQuestionUseCase {
                 .collect(Collectors.toUnmodifiableMap(AskableDocumentVersion::documentId, java.util.function.Function.identity()));
 
         // 2. 扩大召回数量后在检索端按“已授权 + 当前可问答版本”范围过滤。
-        //    公式：retrievalTopK = max(MIN_CANDIDATES, topK × MULTIPLIER)
-        int retrievalTopK = Math.max(MIN_RETRIEVAL_CANDIDATES, topK * RETRIEVAL_CANDIDATE_MULTIPLIER);
+        //    公式：retrievalTopK = max(minCandidates, topK × candidateMultiplier)
+        int retrievalTopK = Math.max(properties.getMinCandidates(), topK * properties.getCandidateMultiplier());
         List<RetrievedChunk> matchedChunks = chunkRetrievalPort.similaritySearch(question, retrievalTopK, askableVersionScope)
                 .stream()
                 .limit(topK)                                   // 截取实际需要的数量
