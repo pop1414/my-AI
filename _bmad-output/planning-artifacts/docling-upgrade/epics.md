@@ -111,7 +111,7 @@ So that 应用能够通过自动配置连接 Docling Serve，无需手动编写 
 **Then** 应用能够编译通过，无依赖冲突
 **And** application.yaml 中配置 arconia.docling.base-url=http://docling-serve:5001
 **And** Spring 应用上下文启动时，DoclingServeApi Bean 被自动注入
-**And** arconia-dev-services-docling 提供 Testcontainers 支持用于本地开发
+**And** ~~arconia-dev-services-docling 提供 Testcontainers 支持用于本地开发~~ `[intentional deviation]` 已移除 — 项目使用 docker-compose 编排 docling-serve（Story 1.1），模型缓存持久化卷挂载优于 Testcontainers 冷启动，不需要 Testcontainers 自动拉取镜像。决策记录于 Story 1.2 Dev Notes 及 Epic 1 回顾（epic-1-retro-2026-06-17.md）。
 
 ### Story 1.3: Actuator Health 检测 Docling 连通性
 
