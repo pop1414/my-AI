@@ -58,7 +58,7 @@ myai:
       display-name: ${MYAI_AUTH_BOOTSTRAP_ADMIN_DISPLAY_NAME:}
   ingest:
     parser:
-      # Tika 解析最大文本长度，防止异常文档输出过长文本导致内存风险
+      # 文档解析最大文本长度，防止异常文档输出过长文本导致内存风险
       max-text-length: ${INGEST_PARSER_MAX_TEXT_LENGTH:2000000}
       # 是否允许解析嵌入资源（默认关闭，避免图片/附件污染正文）
       parse-embedded-resource: ${INGEST_PARSER_PARSE_EMBEDDED_RESOURCE:false}

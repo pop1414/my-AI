@@ -28,7 +28,7 @@
 - `remove script noise`
 - `https://noise.example.com`
 - `image42.png`
-- `file:///tmp/tika-cache.html`
+- `file:///tmp/cleaner-cache.html`
 - `内部评审稿`
 - `质检热线`
 - `控制台首页`

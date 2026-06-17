@@ -11,10 +11,9 @@ import io.github.spike.myai.ingest.domain.model.DocumentParseResult;
  * <p>解析链路：原始文件 → cleaned.md，
  * 其中 cleaned.md 是后续分块和向量化的唯一输入来源。
  *
- * <p>当前可选实现：
+ * <p>当前实现：
  * <ul>
- *   <li>{@code DoclingDocumentParser} — 通过 Docling Serve 的 HybridChunker 一步完成转换与分块；</li>
- *   <li>{@code TikaDocumentTextParser} — 通过 Apache Tika 解析后经清洗管道产出 Markdown（遗留）。</li>
+ *   <li>{@code DoclingDocumentParser} — 通过 Docling Serve 的 HybridChunker 一步完成转换与分块。</li>
  * </ul>
  *
  * @author Spike

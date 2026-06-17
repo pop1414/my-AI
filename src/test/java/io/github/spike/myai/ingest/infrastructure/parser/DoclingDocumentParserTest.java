@@ -319,8 +319,8 @@ class DoclingDocumentParserTest {
     }
 
     @Test
-    @DisplayName("markdownContent 为 null 应抛出 IllegalStateException")
-    void parse_shouldThrowException_whenMarkdownContentNull() {
+    @DisplayName("所有内容格式和 chunks 均为空时应抛出含格式信息的 IllegalStateException")
+    void parse_shouldThrowException_whenAllContentFormatsNull() {
         Document doc = Document.builder()
                 .content(ExportDocumentResponse.builder().build())
                 .status("success")
@@ -335,7 +335,96 @@ class DoclingDocumentParserTest {
                 IllegalStateException.class,
                 () -> parser.parse("null-md.pdf", "data".getBytes(StandardCharsets.UTF_8)));
 
-        assertEquals("docling response document has no markdown content", ex.getMessage());
+        assertEquals("docling response has no usable content (status=success, md/html/text/doctags all null, chunks=0)",
+                ex.getMessage());
+    }
+
+    @Test
+    @DisplayName("md_content 为空时应降级使用 html_content")
+    void parse_shouldFallbackToHtml_whenMarkdownContentNull() throws Exception {
+        Document doc = Document.builder()
+                .content(ExportDocumentResponse.builder()
+                        .htmlContent("<h1>Title</h1><p>正文</p>")
+                        .build())
+                .status("success")
+                .build();
+        ChunkDocumentResponse response = ChunkDocumentResponse.builder()
+                .documents(List.of(doc))
+                .chunks(List.of())
+                .build();
+        when(doclingServeApi.chunkSourceWithHybridChunker(any())).thenReturn(response);
+
+        DocumentParseResult result = parser.parse("no-md.pdf", "data".getBytes(StandardCharsets.UTF_8));
+
+        assertEquals("<h1>Title</h1><p>正文</p>", result.cleanedMarkdown());
+    }
+
+    @Test
+    @DisplayName("md_content/html_content 均为空时应降级使用 text_content")
+    void parse_shouldFallbackToText_whenMarkdownAndHtmlNull() throws Exception {
+        Document doc = Document.builder()
+                .content(ExportDocumentResponse.builder()
+                        .textContent("Title\n\n正文内容")
+                        .build())
+                .status("success")
+                .build();
+        ChunkDocumentResponse response = ChunkDocumentResponse.builder()
+                .documents(List.of(doc))
+                .chunks(List.of())
+                .build();
+        when(doclingServeApi.chunkSourceWithHybridChunker(any())).thenReturn(response);
+
+        DocumentParseResult result = parser.parse("text-only.pdf", "data".getBytes(StandardCharsets.UTF_8));
+
+        assertEquals("Title\n\n正文内容", result.cleanedMarkdown());
+    }
+
+    @Test
+    @DisplayName("md/html/text 均为空时应降级使用 doctags_content")
+    void parse_shouldFallbackToDoctags_whenMdHtmlTextNull() throws Exception {
+        Document doc = Document.builder()
+                .content(ExportDocumentResponse.builder()
+                        .doctagsContent("<document><title>Test</title></document>")
+                        .build())
+                .status("success")
+                .build();
+        ChunkDocumentResponse response = ChunkDocumentResponse.builder()
+                .documents(List.of(doc))
+                .chunks(List.of())
+                .build();
+        when(doclingServeApi.chunkSourceWithHybridChunker(any())).thenReturn(response);
+
+        DocumentParseResult result = parser.parse("doctags-only.pdf", "data".getBytes(StandardCharsets.UTF_8));
+
+        assertTrue(result.cleanedMarkdown().contains("<document><title>Test</title></document>"));
+    }
+
+    @Test
+    @DisplayName("所有 content 格式均为空但 chunks 有内容时应降级使用 chunks 文本")
+    void parse_shouldFallbackToChunks_whenAllContentFormatsNullButChunksPresent() throws Exception {
+        Document doc = Document.builder()
+                .content(ExportDocumentResponse.builder().build())
+                .status("success")
+                .build();
+        Chunk chunk1 = Chunk.builder()
+                .text("第一章 概述")
+                .chunkIndex(0)
+                .filename("test.pdf")
+                .build();
+        Chunk chunk2 = Chunk.builder()
+                .text("这是正文内容")
+                .chunkIndex(1)
+                .filename("test.pdf")
+                .build();
+        ChunkDocumentResponse response = ChunkDocumentResponse.builder()
+                .documents(List.of(doc))
+                .chunks(List.of(chunk1, chunk2))
+                .build();
+        when(doclingServeApi.chunkSourceWithHybridChunker(any())).thenReturn(response);
+
+        DocumentParseResult result = parser.parse("chunks-only.pdf", "data".getBytes(StandardCharsets.UTF_8));
+
+        assertEquals("第一章 概述\n\n这是正文内容", result.cleanedMarkdown());
     }
 
     // === Docling 文档状态校验 ===
@@ -359,7 +448,32 @@ class DoclingDocumentParserTest {
                 IllegalStateException.class,
                 () -> parser.parse("error-status.pdf", "data".getBytes(StandardCharsets.UTF_8)));
 
-        assertEquals("docling conversion failed: error", ex.getMessage());
+        assertEquals("docling conversion failed (status=error)", ex.getMessage());
+    }
+
+    @Test
+    @DisplayName("文档 status 为 failure 且 markdownContent 为 null 时应抛出含状态信息的异常")
+    void parse_shouldThrowExceptionWithStatusDetail_whenDocumentStatusFailure() {
+        ErrorItem errorItem = org.mockito.Mockito.mock(ErrorItem.class);
+        when(errorItem.getComponentType()).thenReturn("pdf_backend");
+        when(errorItem.getErrorMessage()).thenReturn("unsupported PDF version");
+        Document doc = Document.builder()
+                .content(ExportDocumentResponse.builder().build())
+                .status("failure")
+                .errors(List.of(errorItem))
+                .build();
+        ChunkDocumentResponse response = ChunkDocumentResponse.builder()
+                .documents(List.of(doc))
+                .chunks(List.of())
+                .build();
+        when(doclingServeApi.chunkSourceWithHybridChunker(any())).thenReturn(response);
+
+        IllegalStateException ex = assertThrows(
+                IllegalStateException.class,
+                () -> parser.parse("failure.pdf", "data".getBytes(StandardCharsets.UTF_8)));
+
+        assertEquals("docling conversion failed (status=failure, errors=[pdf_backend: unsupported PDF version])",
+                ex.getMessage());
     }
 
     @Test

@@ -132,7 +132,7 @@ class TextCleaningServiceTest {
                 ```
 
                 image1.png
-                file:///tmp/tika-cache.html
+                file:///tmp/cleaner-cache.html
                 <script>alert("x")</script>
                 """;
 

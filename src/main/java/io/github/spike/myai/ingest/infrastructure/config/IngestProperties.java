@@ -9,7 +9,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  *
  * <p>绑定 {@code myai.ingest} 前缀的 YAML 配置，按功能域拆分为内嵌配置类：
  * <ul>
- *   <li>{@link Parser}：Tika 解析参数</li>
+ *   <li>{@link Parser}：文档解析参数</li>
  *   <li>{@link Storage}：源文件与中间产物存储参数</li>
  *   <li>{@link S3}：S3 兼容对象存储连接参数</li>
  *   <li>{@link Artifacts}：调试产物保留策略</li>
@@ -32,7 +32,7 @@ public class IngestProperties {
     private final SchemaCheck schemaCheck = new SchemaCheck();
 
     /**
-     * Tika 解析器参数配置。
+     * 文档解析器参数配置。
      */
     @Setter
     @Getter

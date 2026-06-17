@@ -12,8 +12,8 @@ import java.util.Locale;
  *   <li>其他扩展名、无扩展名、null/空白文件名 → 抛出 {@link UnsupportedDocumentFormatException}。</li>
  * </ul>
  *
- * <p>{@link #fileExtension(String)} 静态方法供 {@link DoclingDocumentParser} 和
- * {@link ProcessingMetadataBuilder} 提取文件后缀，行为不受路由变更影响。
+ * <p>{@link #fileExtension(String)} 静态方法供 {@link DoclingDocumentParser}
+ * 提取文件后缀，行为不受路由变更影响。
  *
  * @author spike
  * @since 1.0.0

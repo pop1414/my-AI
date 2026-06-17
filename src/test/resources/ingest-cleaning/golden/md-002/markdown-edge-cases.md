@@ -46,7 +46,7 @@ alert("keep script example");
 
 image42.png
 https://static.example.com/diagram.png
-file:///tmp/tika-cache.html
+file:///tmp/cleaner-cache.html
 
 正文中的图片链接 https://static.example.com/manual.png 应保留，因为它是解释性正文的一部分。
 

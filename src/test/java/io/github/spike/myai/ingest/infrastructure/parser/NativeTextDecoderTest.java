@@ -53,7 +53,7 @@ class NativeTextDecoderTest {
     }
 
     @Test
-    @DisplayName("非法 UTF-8 字节应抛出异常以便回退 Tika")
+    @DisplayName("非法 UTF-8 字节应抛出异常")
     void decode_shouldRejectMalformedUtf8() {
         assertThrows(CharacterCodingException.class, () -> decoder.decode(new byte[] {(byte) 0xC3, 0x28}));
     }
