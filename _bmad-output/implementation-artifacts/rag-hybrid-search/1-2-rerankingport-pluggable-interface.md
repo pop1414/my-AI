@@ -4,7 +4,7 @@ baseline_commit: f25f043ec03aef1b3beba8880a985ea3df765941
 
 # Story 1.2: RerankingPort 可插拔接口
 
-Status: ready-for-dev
+Status: done
 
 ## Story
 
@@ -195,6 +195,12 @@ public class NoOpRerankingAdapter implements RerankingPort {
 
 ### Completion Notes List
 
+- RerankingPort 接口定义在 domain/port，零框架注解
+- NoOpRerankingAdapter 透传实现，使用 List.copyOf() 防御性拷贝
+- AskQuestionApplicationService 在检索后、context 拼接前调用 rerankingPort.rerank()
+- 全部 11 个测试通过（AskQuestion: 6, NoOpReranking: 5）
+- 审查修复：Javadoc 补全重排序编排步骤
+
 ### File List
 
 - src/main/java/io/github/spike/myai/qa/domain/port/RerankingPort.java (new)
@@ -206,3 +212,20 @@ public class NoOpRerankingAdapter implements RerankingPort {
 ## Change Log
 
 - feat(qa): RerankingPort 可插拔接口 + NoOpRerankingAdapter + 应用层集成（2026-06-17）
+
+### Review Findings (2026-06-17)
+
+#### decision_needed
+
+- [x] [Review][Decision] **D1: AskQuestionApplicationService Javadoc 未反映新增重排序步骤** → 修复：类级和 handle() 方法级 Javadoc 均补充重排序编排步骤
+
+#### patch
+
+- [x] [Review][Patch] **P1: 类级 Javadoc 缺少重排序步骤** [AskQuestionApplicationService.java:32-37]
+- [x] [Review][Patch] **P2: handle() Javadoc 步骤编号与代码不一致** [AskQuestionApplicationService.java:108-116]
+- [x] [Review][Patch] **P3: 测试类中 mock setup 代码重复** [AskQuestionApplicationServiceTest.java] → 选 B：仅标注不重构，与现有 per-method mock 风格一致
+
+#### defer
+
+- [x] [Review][Defer] **W1: 缺少"检索命中空但 scope 非空"路径的 rerank 验证** [AskQuestionApplicationServiceTest.java] — 预存测试缺口，非本次引入
+- [x] [Review][Defer] **W2: NoOpRerankingAdapter 未防御 topN <= 0** [NoOpRerankingAdapter.java:21] — 当前调用方保证 topK >= 1，风险极低
