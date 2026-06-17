@@ -3,6 +3,7 @@ package io.github.spike.myai.qa.application.service;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
@@ -24,6 +25,7 @@ import io.github.spike.myai.qa.domain.model.RetrievedChunk;
 import io.github.spike.myai.qa.domain.port.AskableDocumentVersionPort;
 import io.github.spike.myai.qa.domain.port.AnswerGenerationPort;
 import io.github.spike.myai.qa.domain.port.ChunkRetrievalPort;
+import io.github.spike.myai.qa.domain.port.RerankingPort;
 import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
@@ -45,9 +47,13 @@ class AskQuestionApplicationServiceTest {
         CurrentUserProvider currentUserProvider = currentUserProvider();
         AuthorizationService authorizationService = Mockito.mock(AuthorizationService.class);
         AskableDocumentVersionPort askableDocumentVersionPort = Mockito.mock(AskableDocumentVersionPort.class);
+        RerankingPort rerankingPort = Mockito.mock(RerankingPort.class);
+        when(rerankingPort.rerank(anyList(), anyString(), anyInt()))
+                .thenAnswer(inv -> inv.getArgument(0));
         AskQuestionApplicationService service =
                 new AskQuestionApplicationService(
                         chunkRetrievalPort,
+                        rerankingPort,
                         answerGenerationPort,
                         knowledgeBaseRepository,
                         currentUserProvider,
@@ -84,6 +90,7 @@ class AskQuestionApplicationServiceTest {
         verify(authorizationService).requireCanAskKnowledgeBase(org.mockito.ArgumentMatchers.any(CurrentUser.class), eq("kb-1"));
         verify(authorizationService, never()).requireCanAskDocument(org.mockito.ArgumentMatchers.any(CurrentUser.class), anyString(), anyString());
         verify(answerGenerationPort).generateAnswer(org.mockito.ArgumentMatchers.anyString());
+        verify(rerankingPort).rerank(anyList(), eq("什么是 RAG"), eq(2));
     }
 
     @Test
@@ -95,9 +102,13 @@ class AskQuestionApplicationServiceTest {
         CurrentUserProvider currentUserProvider = currentUserProvider();
         AuthorizationService authorizationService = Mockito.mock(AuthorizationService.class);
         AskableDocumentVersionPort askableDocumentVersionPort = Mockito.mock(AskableDocumentVersionPort.class);
+        RerankingPort rerankingPort = Mockito.mock(RerankingPort.class);
+        when(rerankingPort.rerank(anyList(), anyString(), anyInt()))
+                .thenAnswer(inv -> inv.getArgument(0));
         AskQuestionApplicationService service =
                 new AskQuestionApplicationService(
                         chunkRetrievalPort,
+                        rerankingPort,
                         answerGenerationPort,
                         knowledgeBaseRepository,
                         currentUserProvider,
@@ -136,6 +147,7 @@ class AskQuestionApplicationServiceTest {
         assertEquals("doc-1", result.staleReferences().documents().get(0).documentId());
         assertEquals(2, result.staleReferences().documents().get(0).sourceVersionNumber());
         assertEquals(3, result.staleReferences().documents().get(0).latestVersionNumber());
+        verify(rerankingPort).rerank(anyList(), eq("版本问题"), eq(5));
     }
 
     @Test
@@ -147,9 +159,13 @@ class AskQuestionApplicationServiceTest {
         CurrentUserProvider currentUserProvider = currentUserProvider();
         AuthorizationService authorizationService = Mockito.mock(AuthorizationService.class);
         AskableDocumentVersionPort askableDocumentVersionPort = Mockito.mock(AskableDocumentVersionPort.class);
+        RerankingPort rerankingPort = Mockito.mock(RerankingPort.class);
+        when(rerankingPort.rerank(anyList(), anyString(), anyInt()))
+                .thenAnswer(inv -> inv.getArgument(0));
         AskQuestionApplicationService service =
                 new AskQuestionApplicationService(
                         chunkRetrievalPort,
+                        rerankingPort,
                         answerGenerationPort,
                         knowledgeBaseRepository,
                         currentUserProvider,
@@ -167,6 +183,7 @@ class AskQuestionApplicationServiceTest {
         assertEquals(0, result.references().size());
         assertEquals(null, result.staleReferences());
         verify(chunkRetrievalPort, never()).similaritySearch(anyString(), anyInt(), org.mockito.ArgumentMatchers.anyList());
+        verify(rerankingPort, never()).rerank(anyList(), anyString(), anyInt());
         verify(answerGenerationPort, never()).generateAnswer(org.mockito.ArgumentMatchers.anyString());
     }
 
@@ -179,9 +196,13 @@ class AskQuestionApplicationServiceTest {
         CurrentUserProvider currentUserProvider = currentUserProvider();
         AuthorizationService authorizationService = Mockito.mock(AuthorizationService.class);
         AskableDocumentVersionPort askableDocumentVersionPort = Mockito.mock(AskableDocumentVersionPort.class);
+        RerankingPort rerankingPort = Mockito.mock(RerankingPort.class);
+        when(rerankingPort.rerank(anyList(), anyString(), anyInt()))
+                .thenAnswer(inv -> inv.getArgument(0));
         AskQuestionApplicationService service =
                 new AskQuestionApplicationService(
                         chunkRetrievalPort,
+                        rerankingPort,
                         answerGenerationPort,
                         knowledgeBaseRepository,
                         currentUserProvider,
@@ -196,6 +217,7 @@ class AskQuestionApplicationServiceTest {
         assertThrows(AccessDeniedException.class, () -> service.handle(new AskQuestionCommand("问题", "kb-1", 2)));
         verify(chunkRetrievalPort, never()).similaritySearch(anyString(), anyInt());
         verify(chunkRetrievalPort, never()).similaritySearch(anyString(), anyInt(), org.mockito.ArgumentMatchers.anyList());
+        verify(rerankingPort, never()).rerank(anyList(), anyString(), anyInt());
         verify(answerGenerationPort, never()).generateAnswer(anyString());
     }
 
@@ -208,9 +230,13 @@ class AskQuestionApplicationServiceTest {
         CurrentUserProvider currentUserProvider = currentUserProvider();
         AuthorizationService authorizationService = Mockito.mock(AuthorizationService.class);
         AskableDocumentVersionPort askableDocumentVersionPort = Mockito.mock(AskableDocumentVersionPort.class);
+        RerankingPort rerankingPort = Mockito.mock(RerankingPort.class);
+        when(rerankingPort.rerank(anyList(), anyString(), anyInt()))
+                .thenAnswer(inv -> inv.getArgument(0));
         AskQuestionApplicationService service =
                 new AskQuestionApplicationService(
                         chunkRetrievalPort,
+                        rerankingPort,
                         answerGenerationPort,
                         knowledgeBaseRepository,
                         currentUserProvider,
@@ -230,9 +256,13 @@ class AskQuestionApplicationServiceTest {
         CurrentUserProvider currentUserProvider = currentUserProvider();
         AuthorizationService authorizationService = Mockito.mock(AuthorizationService.class);
         AskableDocumentVersionPort askableDocumentVersionPort = Mockito.mock(AskableDocumentVersionPort.class);
+        RerankingPort rerankingPort = Mockito.mock(RerankingPort.class);
+        when(rerankingPort.rerank(anyList(), anyString(), anyInt()))
+                .thenAnswer(inv -> inv.getArgument(0));
         AskQuestionApplicationService service =
                 new AskQuestionApplicationService(
                         chunkRetrievalPort,
+                        rerankingPort,
                         answerGenerationPort,
                         knowledgeBaseRepository,
                         currentUserProvider,

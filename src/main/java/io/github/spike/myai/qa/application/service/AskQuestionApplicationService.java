@@ -18,6 +18,7 @@ import io.github.spike.myai.qa.domain.model.RetrievedChunk;
 import io.github.spike.myai.qa.domain.port.AskableDocumentVersionPort;
 import io.github.spike.myai.qa.domain.port.AnswerGenerationPort;
 import io.github.spike.myai.qa.domain.port.ChunkRetrievalPort;
+import io.github.spike.myai.qa.domain.port.RerankingPort;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -31,6 +32,7 @@ import org.springframework.stereotype.Service;
  * <ol>
  *   <li>解析并规范化输入命令；</li>
  *   <li>执行语义检索并按知识库过滤；</li>
+ *   <li>通过可插拔重排序端口对候选结果进行二次排序；</li>
  *   <li>构造提示词并调用回答生成端口；</li>
  *   <li>组装回答与引用片段返回接口层。</li>
  * </ol>
@@ -60,6 +62,8 @@ public class AskQuestionApplicationService implements AskQuestionUseCase {
 
     /** 领域端口：向量相似度检索（语义召回） */
     private final ChunkRetrievalPort chunkRetrievalPort;
+    /** 领域端口：检索结果重排序（可插拔，默认透传） */
+    private final RerankingPort rerankingPort;
     /** 领域端口：LLM 回答生成（调用大模型） */
     private final AnswerGenerationPort answerGenerationPort;
     /** 知识库仓储端口：用于校验目标知识库的存在性与状态 */
@@ -75,6 +79,7 @@ public class AskQuestionApplicationService implements AskQuestionUseCase {
      * 构造器注入。
      *
      * @param chunkRetrievalPort      向量检索端口（语义召回）
+     * @param rerankingPort          检索结果重排序端口（可插拔扩展点，默认透传）
      * @param answerGenerationPort    LLM 回答生成端口（调用大模型）
      * @param knowledgeBaseRepository 知识库仓储端口（校验存在性与状态）
      * @param currentUserProvider     当前用户上下文提供器（获取登录态与工作区）
@@ -83,12 +88,14 @@ public class AskQuestionApplicationService implements AskQuestionUseCase {
      */
     public AskQuestionApplicationService(
             ChunkRetrievalPort chunkRetrievalPort,
+            RerankingPort rerankingPort,
             AnswerGenerationPort answerGenerationPort,
             KnowledgeBaseRepository knowledgeBaseRepository,
             CurrentUserProvider currentUserProvider,
             AuthorizationService authorizationService,
             AskableDocumentVersionPort askableDocumentVersionPort) {
         this.chunkRetrievalPort = chunkRetrievalPort;
+        this.rerankingPort = rerankingPort;
         this.answerGenerationPort = answerGenerationPort;
         this.knowledgeBaseRepository = knowledgeBaseRepository;
         this.currentUserProvider = currentUserProvider;
@@ -104,6 +111,7 @@ public class AskQuestionApplicationService implements AskQuestionUseCase {
      *   <li>规整化输入（问题文本、知识库 ID、topK）；</li>
      *   <li>校验目标知识库存在且启用；</li>
      *   <li>以放大后的 topK 进行向量相似度检索，再按 kbId 精过滤；</li>
+     *   <li>通过可插拔重排序端口对候选结果进行二次排序（默认透传）；</li>
      *   <li>无命中时直接返回兜底文案，避免模型幻觉；</li>
      *   <li>构造提示词并调用 LLM 生成回答；</li>
      *   <li>截断引用预览并组装结果返回。</li>
@@ -138,12 +146,15 @@ public class AskQuestionApplicationService implements AskQuestionUseCase {
                 .limit(topK)                                   // 截取实际需要的数量
                 .toList();
 
+        // 3. 通过可插拔重排序端口对候选结果进行二次排序（默认透传，预留扩展点）
+        matchedChunks = rerankingPort.rerank(matchedChunks, question, topK);
+
         if (matchedChunks.isEmpty()) {
-            // 3. 无依据时直接返回兜底回答，避免调用模型产生幻觉
+            // 4. 无依据时直接返回兜底回答，避免调用模型产生幻觉
             return new AskQuestionResult(FALLBACK_ANSWER, List.of(), null);
         }
 
-        // 4. 构造提示词并调用 LLM 生成回答
+        // 5. 构造提示词并调用 LLM 生成回答
         String prompt = buildPrompt(question, matchedChunks);
         String answer = answerGenerationPort.generateAnswer(prompt);
         if (answer == null || answer.isBlank()) {
@@ -151,12 +162,12 @@ public class AskQuestionApplicationService implements AskQuestionUseCase {
             answer = FALLBACK_ANSWER;
         }
 
-        // 5. 构建引用片段列表（已截断预览长度）
+        // 6. 构建引用片段列表（已截断预览长度）
         List<AskReferenceResult> references = matchedChunks.stream()
                 .map(chunk -> toReferenceResult(chunk, askableVersions.get(chunk.documentId())))
                 .toList();
 
-        // 6. 组装并返回最终结果
+        // 7. 组装并返回最终结果
         return new AskQuestionResult(answer, references, buildStaleReferenceSummary(references));
     }
 
