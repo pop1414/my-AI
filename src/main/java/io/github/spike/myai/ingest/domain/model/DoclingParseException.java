@@ -27,12 +27,6 @@ public class DoclingParseException extends RuntimeException {
         super(message, cause);
     }
 
-    /**
-     * 构造 Docling 解析异常（无 cause）。
-     *
-     * @param message 错误描述
-     */
-    public DoclingParseException(String message) {
-        super(message);
-    }
+    // 注意：暂时不提供无 cause 构造器，保留异常链是契约要求。
+    // 若未来场景确实需要无 cause 构造，请在此添加。
 }

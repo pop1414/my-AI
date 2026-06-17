@@ -234,9 +234,13 @@ public class DoclingDocumentParser implements DocumentTextParser {
     /**
      * 从 Docling 响应中提取 cleanedMarkdown。
      *
+     * @param response Docling chunk 响应（不可为 null）
+     * @return 原始 Markdown 文本
      * @throws IllegalStateException 当 documents 列表为空或 markdownContent 为 null 时
+     * @throws IllegalStateException 当文档 status 为 error 时
      */
     private String extractCleanedMarkdown(ChunkDocumentResponse response) {
+        java.util.Objects.requireNonNull(response, "response must not be null");
         if (response.getDocuments() == null || response.getDocuments().isEmpty()) {
             throw new IllegalStateException("docling response contains no documents");
         }

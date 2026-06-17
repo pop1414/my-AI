@@ -23,6 +23,10 @@ public class DoclingPermanentException extends DoclingParseException {
      */
     public DoclingPermanentException(String message, int httpStatusCode, Throwable cause) {
         super(message, cause);
+        if (httpStatusCode < 400 || httpStatusCode >= 500) {
+            throw new IllegalArgumentException(
+                    "httpStatusCode must be in 4xx range, got: " + httpStatusCode);
+        }
         this.httpStatusCode = httpStatusCode;
     }
 

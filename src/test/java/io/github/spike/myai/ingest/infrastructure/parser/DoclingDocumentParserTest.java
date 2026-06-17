@@ -138,11 +138,11 @@ class DoclingDocumentParserTest {
         assertEquals("empty source content", ex.getMessage());
     }
 
-    // === API 异常 ===
+    // === 未知异常兜底 ===
 
     @Test
-    @DisplayName("Docling API 异常应包装为 DoclingTransientException 并保留 cause")
-    void parse_shouldThrowException_whenApiThrowsException() {
+    @DisplayName("未知 Runtime 异常应包装为 DoclingTransientException 并保留 cause（保守策略）")
+    void parse_shouldThrowTransientException_whenUnknownRuntimeException() {
         RuntimeException apiError = new RuntimeException("connection refused");
         when(doclingServeApi.chunkSourceWithHybridChunker(any())).thenThrow(apiError);
 
