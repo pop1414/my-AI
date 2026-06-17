@@ -63,8 +63,8 @@ class AskQuestionApplicationServiceTest {
                 .thenReturn(scope);
         when(chunkRetrievalPort.similaritySearch(eq("什么是 RAG"), anyInt(), eq(scope)))
                 .thenReturn(List.of(
-                        new RetrievedChunk("doc-1", "kb-1", 0, "RAG 是检索增强生成。", 1, "rag-1.pdf", Instant.parse("2026-05-08T10:00:00Z")),
-                        new RetrievedChunk("doc-3", "kb-1", 2, "它通过外部知识提升回答准确性。", 1, "rag-2.pdf", Instant.parse("2026-05-08T10:05:00Z"))));
+                        new RetrievedChunk("doc-1", "kb-1", 0, "RAG 是检索增强生成。", 1, "rag-1.pdf", Instant.parse("2026-05-08T10:00:00Z"), 0.0),
+                        new RetrievedChunk("doc-3", "kb-1", 2, "它通过外部知识提升回答准确性。", 1, "rag-2.pdf", Instant.parse("2026-05-08T10:05:00Z"), 0.0)));
         when(answerGenerationPort.generateAnswer(org.mockito.ArgumentMatchers.anyString()))
                 .thenReturn("RAG 是检索增强生成方案。");
 
@@ -113,8 +113,8 @@ class AskQuestionApplicationServiceTest {
                 .thenReturn(scope);
         when(chunkRetrievalPort.similaritySearch(eq("版本问题"), anyInt(), eq(scope)))
                 .thenReturn(List.of(
-                        new RetrievedChunk("doc-1", "kb-1", 1, "doc-1 v2 已可问答", 2, "doc-1-v2.pdf", Instant.parse("2026-05-09T10:00:00Z")),
-                        new RetrievedChunk("doc-2", "kb-1", 0, "doc-2 v4 最新可问答", 4, "doc-2-v4.pdf", Instant.parse("2026-05-11T10:00:00Z"))));
+                        new RetrievedChunk("doc-1", "kb-1", 1, "doc-1 v2 已可问答", 2, "doc-1-v2.pdf", Instant.parse("2026-05-09T10:00:00Z"), 0.0),
+                        new RetrievedChunk("doc-2", "kb-1", 0, "doc-2 v4 最新可问答", 4, "doc-2-v4.pdf", Instant.parse("2026-05-11T10:00:00Z"), 0.0)));
         when(answerGenerationPort.generateAnswer(org.mockito.ArgumentMatchers.anyString()))
                 .thenReturn("回答引用了可问答版本。");
 

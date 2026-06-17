@@ -196,6 +196,10 @@ public class PgVectorChunkRetrievalAdapter implements ChunkRetrievalPort {
         Instant sourceUpdatedAt = asInstant(metadata.get(METADATA_SOURCE_UPDATED_AT));
         // 向量文档正文允许为空，统一归一为空字符串，减少上层空值判断分支。
         String content = chunkDocument.getText() == null ? "" : chunkDocument.getText();
+        // Spring AI Document.getScore() 返回 1.0 - cosine_distance（cosine similarity），
+        // @Nullable 防御：理论上调 similaritySearch 后不为 null，但需兜底。
+        Double rawScore = chunkDocument.getScore();
+        double score = (rawScore != null && Double.isFinite(rawScore)) ? rawScore : 0.0;
         return new RetrievedChunk(
                 documentId,
                 kbId,
@@ -203,7 +207,8 @@ public class PgVectorChunkRetrievalAdapter implements ChunkRetrievalPort {
                 content,
                 sourceVersionNumber,
                 sourceFilename,
-                sourceUpdatedAt);
+                sourceUpdatedAt,
+                score);
     }
 
     /**
