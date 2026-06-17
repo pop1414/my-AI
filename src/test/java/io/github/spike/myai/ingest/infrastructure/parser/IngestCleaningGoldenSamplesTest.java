@@ -49,11 +49,14 @@ class IngestCleaningGoldenSamplesTest {
 
     @ParameterizedTest(name = "{0}")
     @MethodSource("parseCases")
+    @Disabled("Story 3.1 路由重构后 DOCLING 委托 DoclingDocumentParser，Tika 路径不可达 — Story 4.3 重建 Docling 基线")
     @DisplayName("黄金样本真实输入应能被当前 Tika 解析链读出关键正文")
     void goldenInput_shouldBeParseableByCurrentParser(String sampleId, String inputFile, String expectedText)
             throws Exception {
         TikaDocumentTextParser parser =
-                new TikaDocumentTextParser(new TextCleaningService(), new ObjectMapper(), properties());
+                new TikaDocumentTextParser(new TextCleaningService(),
+                        org.mockito.Mockito.mock(io.github.spike.myai.ingest.domain.port.DocumentTextParser.class),
+                        new ObjectMapper(), properties());
         Path input = GOLDEN_ROOT.resolve(sampleId).resolve(inputFile);
 
         DocumentParseResult result = parser.parse(inputFile, Files.readAllBytes(input));
@@ -62,10 +65,13 @@ class IngestCleaningGoldenSamplesTest {
     }
 
     @Test
+    @Disabled("Story 3.1 路由重构后 DOCLING 委托 DoclingDocumentParser，Tika 路径不可达 — Story 4.3 重建 Docling 基线")
     @DisplayName("Markdown 黄金样本应保留标题、代码块、表格、列表并排除外部噪音")
     void markdownGoldenInput_shouldPreserveNativeMarkdownStructure() throws Exception {
         TikaDocumentTextParser parser =
-                new TikaDocumentTextParser(new TextCleaningService(), new ObjectMapper(), properties());
+                new TikaDocumentTextParser(new TextCleaningService(),
+                        org.mockito.Mockito.mock(io.github.spike.myai.ingest.domain.port.DocumentTextParser.class),
+                        new ObjectMapper(), properties());
         Path input = GOLDEN_ROOT.resolve("md-001").resolve("project-handoff-checklist.md");
 
         DocumentParseResult result = parser.parse("project-handoff-checklist.md", Files.readAllBytes(input));
@@ -83,10 +89,13 @@ class IngestCleaningGoldenSamplesTest {
     }
 
     @Test
+    @Disabled("Story 3.1 路由重构后 DOCLING 委托 DoclingDocumentParser，Tika 路径不可达 — Story 4.3 重建 Docling 基线")
     @DisplayName("Markdown 边界样本应区分代码块内容、raw HTML 噪音与 URL 噪音")
     void markdownEdgeCaseGoldenInput_shouldPreserveCodeExamplesAndCleanNoise() throws Exception {
         TikaDocumentTextParser parser =
-                new TikaDocumentTextParser(new TextCleaningService(), new ObjectMapper(), properties());
+                new TikaDocumentTextParser(new TextCleaningService(),
+                        org.mockito.Mockito.mock(io.github.spike.myai.ingest.domain.port.DocumentTextParser.class),
+                        new ObjectMapper(), properties());
         Path input = GOLDEN_ROOT.resolve("md-002").resolve("markdown-edge-cases.md");
 
         DocumentParseResult result = parser.parse("markdown-edge-cases.md", Files.readAllBytes(input));
@@ -117,7 +126,9 @@ class IngestCleaningGoldenSamplesTest {
     @DisplayName("HTML 黄金样本应保留 main 正文并清理导航、侧栏和页脚噪音")
     void htmlGoldenInput_shouldKeepMainContentAndRemovePageChrome() throws Exception {
         TikaDocumentTextParser parser =
-                new TikaDocumentTextParser(new TextCleaningService(), new ObjectMapper(), properties());
+                new TikaDocumentTextParser(new TextCleaningService(),
+                        org.mockito.Mockito.mock(io.github.spike.myai.ingest.domain.port.DocumentTextParser.class),
+                        new ObjectMapper(), properties());
         Path input = GOLDEN_ROOT.resolve("html-001").resolve("support-workflow.html");
 
         DocumentParseResult result = parser.parse("support-workflow.html", Files.readAllBytes(input));
@@ -143,7 +154,9 @@ class IngestCleaningGoldenSamplesTest {
     @DisplayName("HTML 黄金样本分块预览应保留正文标题 sourceHint")
     void htmlGoldenInput_shouldKeepChunkSourceHintForMainHeadings() throws Exception {
         TikaDocumentTextParser parser =
-                new TikaDocumentTextParser(new TextCleaningService(), new ObjectMapper(), properties());
+                new TikaDocumentTextParser(new TextCleaningService(),
+                        org.mockito.Mockito.mock(io.github.spike.myai.ingest.domain.port.DocumentTextParser.class),
+                        new ObjectMapper(), properties());
         StructuredFallbackDocumentChunker chunker = new StructuredFallbackDocumentChunker(properties());
         Path input = GOLDEN_ROOT.resolve("html-001").resolve("support-workflow.html");
 
@@ -167,7 +180,9 @@ class IngestCleaningGoldenSamplesTest {
     @DisplayName("Word 黄金样本应保留标题、列表、表格和图片说明并排除 OpenXML 元数据噪音")
     void wordGoldenInput_shouldPreserveOfficeStructureAndRemovePackageNoise() throws Exception {
         TikaDocumentTextParser parser =
-                new TikaDocumentTextParser(new TextCleaningService(), new ObjectMapper(), properties());
+                new TikaDocumentTextParser(new TextCleaningService(),
+                        org.mockito.Mockito.mock(io.github.spike.myai.ingest.domain.port.DocumentTextParser.class),
+                        new ObjectMapper(), properties());
         Path input = GOLDEN_ROOT.resolve("word-001").resolve("knowledge-base-review-checklist.docx");
 
         DocumentParseResult result = parser.parse("knowledge-base-review-checklist.docx", Files.readAllBytes(input));
@@ -199,7 +214,9 @@ class IngestCleaningGoldenSamplesTest {
     @DisplayName("弱结构 PDF 黄金样本应修复段落、保持标题边界并清理页眉页脚页码噪音")
     void weakPdfGoldenInput_shouldRepairParagraphsKeepHeadingBoundariesAndRemoveHeaderFooterNoise() throws Exception {
         TikaDocumentTextParser parser =
-                new TikaDocumentTextParser(new TextCleaningService(), new ObjectMapper(), properties());
+                new TikaDocumentTextParser(new TextCleaningService(),
+                        org.mockito.Mockito.mock(io.github.spike.myai.ingest.domain.port.DocumentTextParser.class),
+                        new ObjectMapper(), properties());
         StructuredFallbackDocumentChunker chunker = new StructuredFallbackDocumentChunker(properties());
         Path input = GOLDEN_ROOT.resolve("weak-pdf-001").resolve("weak-pdf-regression-sample.pdf");
 

@@ -2,6 +2,7 @@ package io.github.spike.myai.ingest.infrastructure.parser;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.spike.myai.ingest.domain.model.DocumentParseResult;
+import io.github.spike.myai.ingest.domain.model.UnsupportedDocumentFormatException;
 import io.github.spike.myai.ingest.domain.port.DocumentTextParser;
 import io.github.spike.myai.ingest.infrastructure.config.IngestProperties;
 import java.io.ByteArrayInputStream;
@@ -13,6 +14,7 @@ import org.apache.tika.metadata.TikaCoreProperties;
 import org.apache.tika.parser.AutoDetectParser;
 import org.apache.tika.parser.ParseContext;
 import org.apache.tika.sax.ToXMLContentHandler;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Primary;
 import org.springframework.stereotype.Component;
 import org.xml.sax.SAXException;
@@ -28,8 +30,12 @@ import org.xml.sax.SAXException;
  *   <li>从 Tika 元数据与 Markdown 内容中提取 processingMetadata。</li>
  * </ol>
  *
+ * <p>Story 3.1 重构后：DOCLING 路由委托 {@link DoclingDocumentParser}，不再走 Tika 路径。
+ * 本类将在 Story 3.2 整体删除。
+ *
  * @author Spike
  * @since 1.0.0
+ * @deprecated Story 3.2 将整体删除 TikaDocumentTextParser，DOCLING 路由已委托给 {@link DoclingDocumentParser}
  */
 @Primary
 @Component
@@ -38,6 +44,8 @@ public class TikaDocumentTextParser implements DocumentTextParser {
 
     /** 文本清洗服务，负责 HTML 语义清洗和 Markdown 转换 */
     private final TextCleaningService textCleaningService;
+    /** Docling 解析器，DOCLING 路由委托目标（Story 3.1 新增注入） */
+    private final DocumentTextParser doclingDocumentParser;
     /** 解析文本最大长度阈值，超过将抛出异常防止 OOM */
     private final int maxTextLength;
     private final DocumentParserRouter router = new DocumentParserRouter();
@@ -48,15 +56,18 @@ public class TikaDocumentTextParser implements DocumentTextParser {
     /**
      * 构造器注入：装配解析链路所需的清洗服务、序列化器和配置参数。
      *
-     * @param textCleaningService 文本清洗服务
-     * @param objectMapper        JSON 序列化器
-     * @param ingestProperties    ingest 管道配置属性
+     * @param textCleaningService   文本清洗服务
+     * @param doclingDocumentParser Docling 解析器（{@code @Qualifier("docling")} 定位）
+     * @param objectMapper          JSON 序列化器
+     * @param ingestProperties      ingest 管道配置属性
      */
     public TikaDocumentTextParser(
             TextCleaningService textCleaningService,
+            @Qualifier("docling") DocumentTextParser doclingDocumentParser,
             ObjectMapper objectMapper,
             IngestProperties ingestProperties) {
         this.textCleaningService = textCleaningService;
+        this.doclingDocumentParser = doclingDocumentParser;
         this.maxTextLength = ingestProperties.getParser().getMaxTextLength();
         this.parseContextFactory = new TikaParseContextFactory(ingestProperties.getParser().isParseEmbeddedResource());
         this.processingMetadataBuilder = new ProcessingMetadataBuilder(objectMapper);
@@ -65,93 +76,59 @@ public class TikaDocumentTextParser implements DocumentTextParser {
     /**
      * 执行文档解析，产出结构化中间产物。
      *
-     * <p>解析链路分为两条路径：
-     * <ol>
-     *   <li><b>原生 Markdown 路径</b>：若文件扩展名为 md/markdown/mdown/mkd，
-     *       跳过 Tika 直接走 {@link #parseNativeMarkdown}；</li>
-     *   <li><b>Tika 通用路径</b>：通过 Apache Tika 自动检测文档类型，
-     *       产出 XHTML → 委托清洗 → 转为 Markdown，最终组装
-     *       {@link DocumentParseResult}。</li>
-     * </ol>
-     *
-     * <p>异常策略：Tika 解析异常和 IO 异常均包装为
-     * {@link IllegalStateException}，由上游统一处理。
+     * <p>Story 3.1 重构后：所有支持格式走 {@link DocumentParseRoute#DOCLING}，
+     * 委托 {@link DoclingDocumentParser} 处理。不支持的格式由
+     * {@link DocumentParserRouter#route(String)} 抛出 {@link UnsupportedDocumentFormatException}。
      *
      * @param filename 原始文件名，用于 MIME 类型推断和元数据
      * @param content  文件原始字节数组
      * @return 结构化解析结果，包含 cleanedMarkdown 和 processingMetadata
-     * @throws IllegalStateException 内容为空或解析失败时抛出
+     * @throws IllegalStateException                  内容为空时抛出
+     * @throws UnsupportedDocumentFormatException     不支持的格式时抛出
      */
     @Override
     public DocumentParseResult parse(String filename, byte[] content) {
-        // 输入校验：内容为空时直接拒绝，避免 Tika 产生无意义输出
+        // 输入校验：内容为空时直接拒绝
         if (content == null || content.length == 0) {
             throw new IllegalStateException("empty source content");
         }
+        // route() 对不支持格式直接抛出 UnsupportedDocumentFormatException
         DocumentParseRoute route = router.route(filename);
-        try {
-            return switch (route) {
-                case NATIVE_MARKDOWN -> parseNativeMarkdown(filename, content);
-                case NATIVE_HTML -> parseNativeHtml(filename, content);
-                case TIKA -> parseWithTika(filename, content);
-            };
-        } catch (CharacterCodingException ignored) {
-            // 原生文本严格解码失败时，回退 Tika 让其执行字符集检测。
-            return parseWithTika(filename, content);
-        }
+        return switch (route) {
+            case DOCLING -> doclingDocumentParser.parse(filename, content);
+            // REJECT 分支实际不可达（route() 已抛异常），保留以满足编译器穷举要求
+            case REJECT -> throw new UnsupportedDocumentFormatException("unknown");
+        };
     }
 
     /**
      * Tika 通用解析路径。
      *
-     * <p>处理非 Markdown 文件（PDF、Word、Excel 等）的完整解析链路：
-     * <ol>
-     *   <li>通过 {@link AutoDetectParser} 自动识别文档类型；</li>
-     *   <li>产出原始 XHTML 并委托 {@link TextCleaningService} 执行
-     *       语义清洗（cleanHtml → toMarkdown）；</li>
-     *   <li>校验清洗结果的有效性；</li>
-     *   <li>组装 {@link DocumentParseResult}（cleanedMarkdown + processingMetadata）。</li>
-     * </ol>
+     * <p>处理非 Markdown 文件（PDF、Word、Excel 等）的完整解析链路。
      *
-     * <p>异常策略：Tika 解析异常（{@link TikaException}、{@link SAXException}）
-     * 和其他运行时异常分别包装为带不同消息的 {@link IllegalStateException}，
-     * 便于排障时区分错误来源。
-     *
-     * @param filename 原始文件名，用于 MIME 类型推断
-     * @param content  文件原始字节数组
-     * @return 结构化解析结果
-     * @throws IllegalStateException 解析失败时抛出
+     * @deprecated Story 3.2 删除 TikaDocumentTextParser 时一并移除
      */
+    @Deprecated
     private DocumentParseResult parseWithTika(String filename, byte[] content) {
-        // 使用 try-with-resources 确保输入流正确关闭
         try (InputStream inputStream = new ByteArrayInputStream(content)) {
-            // 创建 Tika 自动检测解析器，根据文件内容自动识别文档类型
             AutoDetectParser parser = new AutoDetectParser();
-            // 设置 Tika 元数据对象，传入文件名以辅助类型识别
             Metadata metadata = new Metadata();
             metadata.set(TikaCoreProperties.RESOURCE_NAME_KEY, filename);
-            // 构建解析上下文，配置 PDF 解析参数和嵌入资源提取策略
             ParseContext context = parseContextFactory.create(parser);
-            // 使用 ToXMLContentHandler 将解析结果输出为 XHTML 格式
             ToXMLContentHandler handler = new ToXMLContentHandler();
 
-            // 执行 Tika 核心解析，产出原始 XHTML
             parser.parse(inputStream, handler, metadata, context);
 
-            // 获取原始 XHTML 并依次执行语义清洗和 Markdown 转换
             String rawXhtml = handler.toString();
             String cleanedHtml = textCleaningService.cleanHtml(rawXhtml);
             String cleanedMarkdown = textCleaningService.toMarkdown(cleanedHtml);
             validateCleanedMarkdown(cleanedMarkdown);
-            // 组装最终解析结果
             return new DocumentParseResult(
                     cleanedMarkdown,
                     processingMetadataBuilder.build(filename, metadata, cleanedMarkdown));
         } catch (TikaException | SAXException ex) {
-            // Tika 解析异常单独 catch 以提供更精确的错误信息
             throw new IllegalStateException("failed to parse content with tika", ex);
         } catch (Exception ex) {
-            // 兜底异常处理，捕获其他运行时异常（如 IOException）
             throw new IllegalStateException("failed to parse content", ex);
         }
     }
@@ -159,35 +136,30 @@ public class TikaDocumentTextParser implements DocumentTextParser {
     /**
      * 原生 Markdown 文件解析路径。
      *
-     * <p>当文件扩展名为 md/markdown/mdown/mkd 时，跳过 Tika 解析，
-     * 直接读取 UTF-8 文本并委托 {@link TextCleaningService#cleanNativeMarkdown}
-     * 执行最小破坏清洗。此路径避免了 Tika 对纯文本 Markdown 的过度转换
-     * （如将代码块格式打乱），保留了原始 Markdown 的结构语义。
-     *
-     * @param filename 原始文件名
-     * @param content  文件原始字节数组
-     * @return 结构化解析结果
+     * @deprecated Story 3.2 删除 TikaDocumentTextParser 时一并移除
      */
+    @Deprecated
     private DocumentParseResult parseNativeMarkdown(String filename, byte[] content) throws CharacterCodingException {
-        // 第 1 步：按 BOM 或严格 UTF-8 解码为原始 Markdown 文本
         NativeTextDecoder.DecodedText decodedMarkdown = nativeTextDecoder.decode(content);
         String rawMarkdown = decodedMarkdown.text();
-        // 第 2 步：委托 TextCleaningService 执行最小破坏清洗（保留代码块/缩进/表格等结构）
         String cleanedMarkdown = textCleaningService.cleanNativeMarkdown(rawMarkdown);
-        // 第 3 步：校验清洗结果的有效性（非空 + 长度阈值）
         validateCleanedMarkdown(cleanedMarkdown);
 
-        // 第 4 步：构造最小 Tika 元数据（仅包含文件名和 MIME 类型）
         Metadata metadata = new Metadata();
         metadata.set(TikaCoreProperties.RESOURCE_NAME_KEY, filename);
         metadata.set(Metadata.CONTENT_TYPE, "text/markdown; charset=" + decodedMarkdown.charset().name());
 
-        // 第 5 步：组装解析结果
         return new DocumentParseResult(
                 cleanedMarkdown,
                 processingMetadataBuilder.build(filename, metadata, cleanedMarkdown));
     }
 
+    /**
+     * 原生 HTML 文件解析路径。
+     *
+     * @deprecated Story 3.2 删除 TikaDocumentTextParser 时一并移除
+     */
+    @Deprecated
     private DocumentParseResult parseNativeHtml(String filename, byte[] content) throws CharacterCodingException {
         NativeTextDecoder.DecodedText decodedHtml = nativeTextDecoder.decode(content);
         String cleanedHtml = textCleaningService.cleanHtml(decodedHtml.text());
@@ -206,23 +178,13 @@ public class TikaDocumentTextParser implements DocumentTextParser {
     /**
      * 校验清洗后的 Markdown 内容的有效性。
      *
-     * <p>执行两项校验：
-     * <ol>
-     *   <li><b>非空校验</b>：cleanedMarkdown 不能为空白，防止空白文档
-     *       进入下游的分块和向量化流程；</li>
-     *   <li><b>长度校验</b>：不能超过配置的 {@code maxTextLength} 阈值，
-     *       防止超大文档导致下游 OOM。</li>
-     * </ol>
-     *
      * @param cleanedMarkdown 清洗后的 Markdown 内容
      * @throws IllegalStateException 校验失败时抛出
      */
     private void validateCleanedMarkdown(String cleanedMarkdown) {
-        // 结果校验：cleanedMarkdown 不能为空
         if (cleanedMarkdown.isBlank()) {
             throw new IllegalStateException("parsed text is empty");
         }
-        // 长度校验：防止超长文档导致下游 OOM
         if (cleanedMarkdown.length() > maxTextLength) {
             throw new IllegalStateException("parsed text exceeds max length");
         }
