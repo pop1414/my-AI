@@ -28,6 +28,12 @@ final class DocumentParserRouter {
      * @throws UnsupportedDocumentFormatException 不支持的格式、null/空白文件名、无扩展名
      */
     DocumentParseRoute route(String filename) {
+        if (filename == null) {
+            throw new UnsupportedDocumentFormatException("null");
+        }
+        if (filename.isBlank()) {
+            throw new UnsupportedDocumentFormatException("blank");
+        }
         String extension = fileExtension(filename);
         return switch (extension) {
             case "pdf",
