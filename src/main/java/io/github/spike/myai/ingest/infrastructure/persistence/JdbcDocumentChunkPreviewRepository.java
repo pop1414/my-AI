@@ -1,10 +1,13 @@
 package io.github.spike.myai.ingest.infrastructure.persistence;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.spike.myai.ingest.domain.model.ChunkContentType;
 import io.github.spike.myai.ingest.domain.model.ChunkMetadata;
 import io.github.spike.myai.ingest.domain.model.DocumentChunkPreview;
 import io.github.spike.myai.ingest.domain.model.DocumentId;
 import io.github.spike.myai.ingest.domain.port.DocumentChunkPreviewRepository;
+import java.util.ArrayList;
 import java.util.List;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
@@ -164,92 +167,39 @@ public class JdbcDocumentChunkPreviewRepository implements DocumentChunkPreviewR
     }
 
     /**
+     * Jackson ObjectMapper 实例（线程安全），用于序列化与反序列化 chunkMetadata JSON。
+     */
+    private static final ObjectMapper MAPPER = new ObjectMapper();
+
+    /**
      * 从 JSONB 字符串解析 ChunkMetadata。
      *
-     * <p>支持新格式 {@code {"headings":[...],"pageNumber":0,"contentType":"PARAGRAPH"}}。
+     * <p>支持格式 {@code {"headings":["h1","h2"],"pageNumber":0,"contentType":"PARAGRAPH"}}。
      * 格式不合法或为空时返回默认 ChunkMetadata。
      */
     private static ChunkMetadata parseChunkMetadata(String json) {
         if (json == null || json.isBlank() || "{}".equals(json.trim())) {
             return ChunkMetadata.of(null, 0, null);
         }
-        // 简单 JSON 解析：提取 headings、pageNumber、contentType
         try {
-            List<String> headings = extractJsonStringArray(json, "headings");
-            int pageNumber = extractJsonInt(json, "pageNumber", 0);
-            String contentTypeStr = extractJsonString(json, "contentType");
-            ChunkContentType contentType = contentTypeStr != null
-                    ? ChunkContentType.valueOf(contentTypeStr)
+            JsonNode node = MAPPER.readTree(json);
+            List<String> headings = new ArrayList<>();
+            JsonNode headingsNode = node.get("headings");
+            if (headingsNode != null && headingsNode.isArray()) {
+                for (JsonNode h : headingsNode) {
+                    if (h.isTextual()) {
+                        headings.add(h.asText());
+                    }
+                }
+            }
+            int pageNumber = node.has("pageNumber") ? node.get("pageNumber").asInt(0) : 0;
+            String ct = node.has("contentType") ? node.get("contentType").asText() : null;
+            ChunkContentType contentType = ct != null
+                    ? ChunkContentType.valueOf(ct)
                     : ChunkContentType.PARAGRAPH;
             return ChunkMetadata.of(headings, pageNumber, contentType);
         } catch (Exception ex) {
-            // 格式不兼容（如旧版 {"heading":"..."} 格式），返回默认值
             return ChunkMetadata.of(null, 0, null);
         }
-    }
-
-    /** 从 JSON 字符串中提取指定 key 的字符串数组值（简易解析）。 */
-    private static List<String> extractJsonStringArray(String json, String key) {
-        String pattern = "\"" + key + "\":";
-        int start = json.indexOf(pattern);
-        if (start < 0) {
-            return List.of();
-        }
-        start += pattern.length();
-        int arrayStart = json.indexOf('[', start);
-        if (arrayStart < 0) {
-            return List.of();
-        }
-        int arrayEnd = json.indexOf(']', arrayStart);
-        if (arrayEnd < 0) {
-            return List.of();
-        }
-        String arrayContent = json.substring(arrayStart + 1, arrayEnd).trim();
-        if (arrayContent.isEmpty()) {
-            return List.of();
-        }
-        // 按逗号分割，去除引号
-        List<String> result = new java.util.ArrayList<>();
-        for (String item : arrayContent.split(",")) {
-            String trimmed = item.trim();
-            if (trimmed.startsWith("\"") && trimmed.endsWith("\"")) {
-                result.add(trimmed.substring(1, trimmed.length() - 1)
-                        .replace("\\\"", "\"").replace("\\\\", "\\"));
-            }
-        }
-        return List.copyOf(result);
-    }
-
-    /** 从 JSON 字符串中提取指定 key 的 int 值（简易解析）。 */
-    private static int extractJsonInt(String json, String key, int defaultValue) {
-        String pattern = "\"" + key + "\":";
-        int start = json.indexOf(pattern);
-        if (start < 0) {
-            return defaultValue;
-        }
-        start += pattern.length();
-        int end = start;
-        while (end < json.length() && (Character.isDigit(json.charAt(end)) || json.charAt(end) == '-')) {
-            end++;
-        }
-        if (end == start) {
-            return defaultValue;
-        }
-        return Integer.parseInt(json.substring(start, end));
-    }
-
-    /** 从 JSON 字符串中提取指定 key 的字符串值（简易解析）。 */
-    private static String extractJsonString(String json, String key) {
-        String pattern = "\"" + key + "\":\"";
-        int start = json.indexOf(pattern);
-        if (start < 0) {
-            return null;
-        }
-        start += pattern.length();
-        int end = json.indexOf('"', start);
-        if (end < 0) {
-            return null;
-        }
-        return json.substring(start, end);
     }
 }

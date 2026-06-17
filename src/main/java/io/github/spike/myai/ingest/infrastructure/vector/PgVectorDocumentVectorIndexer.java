@@ -1,5 +1,7 @@
 package io.github.spike.myai.ingest.infrastructure.vector;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.spike.myai.ingest.domain.model.ChunkMetadata;
 import io.github.spike.myai.ingest.domain.model.Document;
 import io.github.spike.myai.ingest.domain.model.DocumentChunk;
@@ -39,6 +41,11 @@ import org.springframework.transaction.annotation.Transactional;
 public class PgVectorDocumentVectorIndexer implements DocumentVectorIndexer {
 
     private static final Logger log = LoggerFactory.getLogger(PgVectorDocumentVectorIndexer.class);
+
+    /**
+     * Jackson ObjectMapper 实例（线程安全），用于 chunkMetadata 的 JSON 序列化。
+     */
+    private static final ObjectMapper MAPPER = new ObjectMapper();
 
     /**
      * 按 documentId 和 splitVersion 清理向量的 SQL。
@@ -179,37 +186,14 @@ public class PgVectorDocumentVectorIndexer implements DocumentVectorIndexer {
      * @return JSON 字符串
      */
     private static String serializeChunkMetadata(ChunkMetadata chunkMetadata) {
-        StringBuilder sb = new StringBuilder();
-        sb.append("{\"headings\":[");
-        List<String> headings = chunkMetadata.headings();
-        for (int j = 0; j < headings.size(); j++) {
-            if (j > 0) {
-                sb.append(',');
-            }
-            sb.append('"').append(escapeJson(headings.get(j))).append('"');
+        try {
+            return MAPPER.writeValueAsString(Map.of(
+                    "headings", chunkMetadata.headings(),
+                    "pageNumber", chunkMetadata.pageNumber(),
+                    "contentType", chunkMetadata.contentType().name()));
+        } catch (JsonProcessingException e) {
+            throw new IllegalStateException("Failed to serialize chunk metadata", e);
         }
-        sb.append("],\"pageNumber\":").append(chunkMetadata.pageNumber());
-        sb.append(",\"contentType\":\"").append(chunkMetadata.contentType().name()).append("\"}");
-        return sb.toString();
-    }
-
-    /**
-     * 转义 JSON 字符串中的特殊字符。
-     */
-    private static String escapeJson(String text) {
-        StringBuilder sb = new StringBuilder(text.length());
-        for (int i = 0; i < text.length(); i++) {
-            char c = text.charAt(i);
-            switch (c) {
-                case '"' -> sb.append("\\\"");
-                case '\\' -> sb.append("\\\\");
-                case '\n' -> sb.append("\\n");
-                case '\r' -> sb.append("\\r");
-                case '\t' -> sb.append("\\t");
-                default -> sb.append(c);
-            }
-        }
-        return sb.toString();
     }
 
     /**

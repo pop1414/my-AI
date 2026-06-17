@@ -15,6 +15,7 @@ import io.github.spike.myai.ingest.domain.model.DoclingTransientException;
 import io.github.spike.myai.ingest.domain.model.DocumentChunk;
 import io.github.spike.myai.ingest.domain.port.DocumentChunker;
 import io.github.spike.myai.ingest.infrastructure.config.IngestProperties;
+import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -102,6 +103,9 @@ public class DoclingDocumentChunker implements DocumentChunker {
      */
     @Override
     public List<DocumentChunk> chunk(String text) {
+        if (text == null || text.isBlank()) {
+            return List.of();
+        }
         try {
             ChunkDocumentResponse response = callDoclingChunkApi(text);
             return mapToDocumentChunks(response);
@@ -145,7 +149,7 @@ public class DoclingDocumentChunker implements DocumentChunker {
      * @return Docling 分块响应
      */
     private ChunkDocumentResponse callDoclingChunkApi(String markdown) {
-        String base64Content = Base64.getEncoder().encodeToString(markdown.getBytes());
+        String base64Content = Base64.getEncoder().encodeToString(markdown.getBytes(StandardCharsets.UTF_8));
 
         FileSource source = FileSource.builder()
                 .base64String(base64Content)
