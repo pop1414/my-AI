@@ -13,6 +13,7 @@ import org.apache.tika.metadata.TikaCoreProperties;
 import org.apache.tika.parser.AutoDetectParser;
 import org.apache.tika.parser.ParseContext;
 import org.apache.tika.sax.ToXMLContentHandler;
+import org.springframework.context.annotation.Primary;
 import org.springframework.stereotype.Component;
 import org.xml.sax.SAXException;
 
@@ -30,7 +31,9 @@ import org.xml.sax.SAXException;
  * @author Spike
  * @since 1.0.0
  */
+@Primary
 @Component
+@SuppressWarnings("deprecation")
 public class TikaDocumentTextParser implements DocumentTextParser {
 
     /** 文本清洗服务，负责 HTML 语义清洗和 Markdown 转换 */

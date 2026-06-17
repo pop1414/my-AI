@@ -40,8 +40,8 @@ import org.springframework.web.client.ResourceAccessException;
  * （Base64 编码、请求构造、响应映射）封装在此 adapter 内，
  * {@link DoclingServeApi} 的类型不暴露到本类以外。
  *
- * <p>当前与 {@link TikaDocumentTextParser} 共存（通过 {@code @Qualifier("docling")} 区分），
- * Story 3.1 路由重构后将决定最终的 Bean 注册策略。
+ * <p>当前与 {@link TikaDocumentTextParser} 共存（Tika 标记为 {@code @Primary}，
+ * 保证现有注入点不歧义），Story 3.1 路由重构后将切换为唯一实现。
  *
  * @author spike
  * @since 1.0.0

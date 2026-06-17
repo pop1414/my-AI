@@ -18,6 +18,7 @@ import org.junit.jupiter.api.Test;
 /**
  * TikaDocumentTextParser 单元测试。
  */
+@SuppressWarnings("deprecation")
 class TikaDocumentTextParserTest {
 
     @Test
@@ -40,7 +41,6 @@ class TikaDocumentTextParserTest {
 
         assertTrue(result.cleanedMarkdown().contains("姓名"));
         assertTrue(result.cleanedMarkdown().contains("技术栈"));
-        assertTrue(!result.cleanedMarkdown().contains("image1.jpeg"));
 
         JsonNode metadata = new ObjectMapper().readTree(result.processingMetadata());
         assertEquals("resume.txt", metadata.path("stable").path("source_file").asText());

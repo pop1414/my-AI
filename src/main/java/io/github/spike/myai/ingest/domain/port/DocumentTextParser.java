@@ -11,19 +11,25 @@ import io.github.spike.myai.ingest.domain.model.DocumentParseResult;
  * <p>解析链路：原始文件 → cleaned.md，
  * 其中 cleaned.md 是后续分块和向量化的唯一输入来源。
  *
+ * <p>当前可选实现：
+ * <ul>
+ *   <li>{@code DoclingDocumentParser} — 通过 Docling Serve 的 HybridChunker 一步完成转换与分块；</li>
+ *   <li>{@code TikaDocumentTextParser} — 通过 Apache Tika 解析后经清洗管道产出 Markdown（遗留）。</li>
+ * </ul>
+ *
  * @author Spike
  * @since 1.0.0
  */
 public interface DocumentTextParser {
 
     /**
-     * 将原始文件字节解析为一期中间产物结果。
+     * 将原始文件字节解析为结构化中间产物。
      *
      * <p>实现侧应完成以下步骤：
      * <ol>
-     *   <li>调用 Tika 产出原始 XHTML；</li>
-     *   <li>经 Jsoup 语义清洗产出 cleaned.html；</li>
-     *   <li>经 flexmark 转换产出 cleaned.md；</li>
+     *   <li>识别文档格式并调用相应解析引擎；</li>
+     *   <li>执行必要的文本清洗（换行符统一、控制字符移除等）；</li>
+     *   <li>产出 cleanedMarkdown 主链产物；</li>
      *   <li>从文件元数据与 Markdown 内容中提取 processingMetadata。</li>
      * </ol>
      *
