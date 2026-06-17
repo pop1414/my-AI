@@ -125,7 +125,7 @@
 **决定**: **Option A — Hybrid Search (pgvector Dense + PostgreSQL ts_vector BM25 + RRF 融合)**
 
 - **Dense 路径**：复用现有 pgvector `COSINE_DISTANCE` 向量检索，零改动
-- **Sparse 路径**：新增 `content_tsv tsvector` 生成列 + GIN 索引，`plainto_tsquery` + `ts_rank` 做 BM25 近似全文检索。中文分词依赖 PG 内置 parser（无 jieba），对个人知识库场景够用
+- **Sparse 路径**：新增 `content_tsv tsvector` 生成列 + GIN 索引，`plainto_tsquery` + `ts_rank` 做 BM25 近似全文检索（中文分词策略见下方补充说明）
 - **融合算法**：RRF (Reciprocal Rank Fusion)，k=60，等权重。不做超参调优——等 D17 eval 上线后用数据驱动调整
 - **架构**：`ChunkRetrievalPort` 新增 `hybridSearch()` 方法；`HybridChunkRetrievalAdapter` 组合 Dense + Sparse 适配器，分别调两路后在适配器内做 RRF 融合
 - **score 补齐**：`RetrievedChunk` 新增 `score` 字段（当前缺失），融合排序和 D17 eval 都需要
@@ -140,6 +140,23 @@
 **与 D17 联动**: RRF 的 k 值和 Dense/Sparse 权重配比依赖 D17 eval 系统（Recall@5、MRR）做数据驱动调优。初始用论文默认值，后续 e2e 回归测试验证。
 
 **与 D22 联动**: Chunking 策略决定了 chunk 的文本质量（粒度、重叠、结构感知），直接影响 Dense 和 Sparse 两路的检索输入。D22 的 sentence-level 切分 + 512 token size 会在 Hybrid 检索中放大效果。
+
+**中文分词策略（2026-06-16 补充）**：
+
+初始使用 `to_tsvector('simple', content)` 配置——中文逐字拆分，英文按词拆分。
+
+| 方案 | 效果 | 依赖 | 选择 |
+|------|------|------|------|
+| `'simple'`（PG 内置） | 中文逐字拆分，英文按词 | 零 | **先上** |
+| `'english'`（PG 内置） | 中文整块输出，基本失效 | 零 | 不选 |
+| `zhparser`（PG C 扩展） | 中文按词切分，最准确 | 自定义 Dockerfile + 扩展安装 | eval 数据差时升级 |
+| 应用层 jieba 分词 | 接近 zhparser | Maven 依赖 + 一致性维护 | 不选 |
+
+**选 `'simple'` 的理由**：BM25 在 RAG Hybrid Search 中是辅助路径（Dense 0.5 + Sparse 0.5 起步），中文逐字拆分的 precision 问题被 RRF 融合中的 Dense 语义路径稀释。英文关键词（Spring、Kafka、PGVector 等技术术语）是精确匹配的主要信号源，`'simple'` 处理英文完全正确。
+
+**升级路径**：D17 eval 数据若显示含中文精确术语查询的 Recall@5 显著低于其他类型查询，引入 `zhparser` 扩展（`infra/pgvector/Dockerfile` 基于 `pgvector/pgvector:pg16` 安装 `postgresql-16-zhparser`，Flyway migration 中 `CREATE EXTENSION zhparser` + `CREATE TEXT SEARCH CONFIGURATION chinese (PARSER = zhparser)`）。eval 数据驱动，非拍脑袋。
+
+**不选应用层 jieba 分词的理由**：新增 `jieba-analysis` Maven 依赖 + 索引时/查询时分词一致性维护成本 > 收益。且污染 Java 代码（应在数据库层解决数据库层问题）。
 
 **参考论文**: EMNLP 2024, Table 1 & Table 7 — Hybrid Search avg score 0.429 vs Dense-only 0.383，延迟 1.45s vs 1.44s；论文 Balanced Efficiency Practice 明确推荐 Hybrid 作为检索默认方案。
 
