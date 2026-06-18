@@ -20,6 +20,8 @@ import io.github.spike.myai.ingest.domain.model.DoclingPermanentException;
 import io.github.spike.myai.ingest.domain.model.DoclingTransientException;
 import io.github.spike.myai.ingest.domain.model.DocumentChunk;
 import io.github.spike.myai.ingest.infrastructure.config.IngestProperties;
+import io.micrometer.core.instrument.DistributionSummary;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -36,13 +38,15 @@ import org.springframework.web.client.ResourceAccessException;
 class DoclingDocumentChunkerTest {
 
     private DoclingServeApi doclingServeApi;
+    private SimpleMeterRegistry meterRegistry;
     private DoclingDocumentChunker chunker;
 
     @BeforeEach
     void setUp() {
         doclingServeApi = org.mockito.Mockito.mock(DoclingServeApi.class);
+        meterRegistry = new SimpleMeterRegistry();
         IngestProperties properties = new IngestProperties();
-        chunker = new DoclingDocumentChunker(doclingServeApi, properties);
+        chunker = new DoclingDocumentChunker(doclingServeApi, properties, meterRegistry);
     }
 
     // === 正常分块 ===
@@ -121,7 +125,7 @@ class DoclingDocumentChunkerTest {
         IngestProperties customProps = new IngestProperties();
         customProps.getChunk().setMaxTokens(256);
         customProps.getChunk().setMergePeers(false);
-        DoclingDocumentChunker customChunker = new DoclingDocumentChunker(doclingServeApi, customProps);
+        DoclingDocumentChunker customChunker = new DoclingDocumentChunker(doclingServeApi, customProps, meterRegistry);
 
         ChunkDocumentResponse response = buildResponse(List.of(
                 buildChunk("内容", List.of(), List.of(), 0)));
@@ -209,6 +213,26 @@ class DoclingDocumentChunkerTest {
         when(doclingServeApi.chunkSourceWithHybridChunker(any())).thenReturn(response);
 
         assertThrows(IllegalStateException.class, () -> chunker.chunk("markdown"));
+    }
+
+    // === 指标埋点验证 ===
+
+    @Test
+    @DisplayName("分块成功应记录 chunk.count 指标（DistributionSummary），标签 format=markdown")
+    void chunk_shouldRecordChunkCount_whenSuccessful() {
+        ChunkDocumentResponse response = buildResponse(List.of(
+                buildChunk("第一段", List.of("标题"), List.of(1), 0),
+                buildChunk("第二段", List.of("标题"), List.of(2), 1),
+                buildChunk("第三段", List.of("标题"), List.of(3), 2)));
+        when(doclingServeApi.chunkSourceWithHybridChunker(any())).thenReturn(response);
+
+        chunker.chunk("markdown content");
+
+        DistributionSummary summary = meterRegistry.find("docling.chunk.count")
+                .tag("format", "markdown").summary();
+        assertNotNull(summary, "应注册 docling.chunk.count 指标");
+        assertEquals(1, summary.count());
+        assertEquals(3.0, summary.totalAmount(), "应记录 3 个 chunk");
     }
 
     // === Helpers ===

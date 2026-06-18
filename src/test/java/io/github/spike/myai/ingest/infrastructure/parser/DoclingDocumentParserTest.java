@@ -27,11 +27,15 @@ import io.github.spike.myai.ingest.domain.model.DoclingPermanentException;
 import io.github.spike.myai.ingest.domain.model.DoclingTransientException;
 import io.github.spike.myai.ingest.domain.model.DocumentParseResult;
 import io.github.spike.myai.ingest.infrastructure.config.IngestProperties;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.Timer;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -47,6 +51,7 @@ class DoclingDocumentParserTest {
 
     private DoclingServeApi doclingServeApi;
     private TextCleaningService textCleaningService;
+    private SimpleMeterRegistry meterRegistry;
     private DoclingDocumentParser parser;
 
     @BeforeEach
@@ -55,6 +60,7 @@ class DoclingDocumentParserTest {
         textCleaningService = org.mockito.Mockito.mock(TextCleaningService.class);
         when(textCleaningService.cleanNativeMarkdown(any()))
                 .thenAnswer(invocation -> invocation.getArgument(0));
+        meterRegistry = new SimpleMeterRegistry();
 
         IngestProperties properties = new IngestProperties();
         parser = new DoclingDocumentParser(
@@ -62,7 +68,8 @@ class DoclingDocumentParserTest {
                 new ObjectMapper(),
                 properties,
                 textCleaningService,
-                FIXED_CLOCK);
+                FIXED_CLOCK,
+                meterRegistry);
     }
 
     @Test
@@ -451,7 +458,7 @@ class DoclingDocumentParserTest {
         IngestProperties shortLimit = new IngestProperties();
         shortLimit.getParser().setMaxTextLength(10);
         DoclingDocumentParser shortParser = new DoclingDocumentParser(
-                doclingServeApi, new ObjectMapper(), shortLimit, textCleaningService, FIXED_CLOCK);
+                doclingServeApi, new ObjectMapper(), shortLimit, textCleaningService, FIXED_CLOCK, meterRegistry);
 
         ConvertDocumentResponse response = buildResponse(DocumentResponse.builder()
                 .filename("long.pdf")
@@ -537,6 +544,100 @@ class DoclingDocumentParserTest {
         ArgumentCaptor<String> captor = ArgumentCaptor.forClass(String.class);
         verify(textCleaningService).cleanNativeMarkdown(captor.capture());
         assertEquals(rawDoclingMarkdown, captor.getValue());
+    }
+
+    // === 指标埋点验证 ===
+
+    @Test
+    @DisplayName("解析成功应记录 parse.duration 指标（Timer），标签 format=pdf")
+    void parse_shouldRecordParseDuration_whenSuccessful() {
+        ConvertDocumentResponse response = buildResponse(DocumentResponse.builder()
+                .filename("test.pdf")
+                .markdownContent("内容")
+                .build());
+        when(doclingServeApi.convertSource(any())).thenReturn(response);
+
+        parser.parse("test.pdf", "dummy".getBytes(StandardCharsets.UTF_8));
+
+        Timer timer = meterRegistry.find("docling.parse.duration").tag("format", "pdf").timer();
+        assertNotNull(timer);
+        assertEquals(1, timer.count());
+        assertTrue(timer.totalTime(TimeUnit.NANOSECONDS) > 0);
+    }
+
+    @Test
+    @DisplayName("Docling 永久错误应记录 parse.errors 指标（errorType=permanent）")
+    void parse_shouldRecordParseErrorPermanent_whenDoclingPermanentException() {
+        var httpError = org.springframework.web.client.HttpClientErrorException.create(
+                org.springframework.http.HttpStatus.BAD_REQUEST,
+                "Bad Request",
+                org.springframework.http.HttpHeaders.EMPTY,
+                new byte[0],
+                StandardCharsets.UTF_8);
+        when(doclingServeApi.convertSource(any())).thenThrow(httpError);
+
+        assertThrows(DoclingPermanentException.class,
+                () -> parser.parse("bad.pdf", "data".getBytes(StandardCharsets.UTF_8)));
+
+        Counter counter = meterRegistry.find("docling.parse.errors").tag("errorType", "permanent").counter();
+        assertNotNull(counter);
+        assertEquals(1.0, counter.count());
+    }
+
+    @Test
+    @DisplayName("Docling 瞬时错误应记录 parse.errors 指标（errorType=transient）")
+    void parse_shouldRecordParseErrorTransient_whenDoclingTransientException() {
+        var httpError = org.springframework.web.client.HttpServerErrorException.create(
+                org.springframework.http.HttpStatus.INTERNAL_SERVER_ERROR,
+                "Internal Server Error",
+                org.springframework.http.HttpHeaders.EMPTY,
+                new byte[0],
+                StandardCharsets.UTF_8);
+        when(doclingServeApi.convertSource(any())).thenThrow(httpError);
+
+        assertThrows(DoclingTransientException.class,
+                () -> parser.parse("error.pdf", "data".getBytes(StandardCharsets.UTF_8)));
+
+        Counter counter = meterRegistry.find("docling.parse.errors").tag("errorType", "transient").counter();
+        assertNotNull(counter);
+        assertEquals(1.0, counter.count());
+    }
+
+    @Test
+    @DisplayName("Docling 408 超时应记录 parse.errors 指标（errorType=transient）")
+    void parse_shouldRecordParseErrorTransient_when408Timeout() {
+        var httpError = org.springframework.web.client.HttpClientErrorException.create(
+                org.springframework.http.HttpStatus.REQUEST_TIMEOUT,
+                "Request Timeout",
+                org.springframework.http.HttpHeaders.EMPTY,
+                new byte[0],
+                StandardCharsets.UTF_8);
+        when(doclingServeApi.convertSource(any())).thenThrow(httpError);
+
+        assertThrows(DoclingTransientException.class,
+                () -> parser.parse("timeout.pdf", "data".getBytes(StandardCharsets.UTF_8)));
+
+        Counter counter = meterRegistry.find("docling.parse.errors").tag("errorType", "transient").counter();
+        assertNotNull(counter);
+        assertEquals(1.0, counter.count());
+    }
+
+    @Test
+    @DisplayName("Markdown 短路路径应记录 parse.duration（format=md），不记录 parse.errors")
+    void parse_shouldRecordParseDurationForMarkdownPath_whenMarkdownFile() {
+        String sourceMarkdown = "# 标题\n\n正文";
+        when(textCleaningService.cleanNativeMarkdown(sourceMarkdown)).thenReturn(sourceMarkdown);
+
+        parser.parse("source.md", sourceMarkdown.getBytes(StandardCharsets.UTF_8));
+
+        Timer timer = meterRegistry.find("docling.parse.duration").tag("format", "md").timer();
+        assertNotNull(timer, "Markdown 短路路径应记录 parse.duration (format=md)");
+        assertEquals(1, timer.count());
+
+        Counter permanentCounter = meterRegistry.find("docling.parse.errors").tag("errorType", "permanent").counter();
+        Counter transientCounter = meterRegistry.find("docling.parse.errors").tag("errorType", "transient").counter();
+        assertEquals(0.0, permanentCounter.count(), "Markdown 短路路径不应记录 parse.errors (permanent)");
+        assertEquals(0.0, transientCounter.count(), "Markdown 短路路径不应记录 parse.errors (transient)");
     }
 
     private ConvertDocumentResponse buildResponse(DocumentResponse document) {

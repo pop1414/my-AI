@@ -20,6 +20,9 @@ import io.github.spike.myai.ingest.domain.model.DoclingTransientException;
 import io.github.spike.myai.ingest.domain.model.DocumentParseResult;
 import io.github.spike.myai.ingest.domain.port.DocumentTextParser;
 import io.github.spike.myai.ingest.infrastructure.config.IngestProperties;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
 import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.util.ArrayList;
@@ -68,36 +71,54 @@ public class DoclingDocumentParser implements DocumentTextParser {
     /** 文本清洗服务，对 Docling 输出 Markdown 执行最小破坏清洗。 */
     private final TextCleaningService textCleaningService;
     private final Clock clock;
+    /** Micrometer 注册中心，用于运行时 Timer 动态标签查找。 */
+    private final MeterRegistry meterRegistry;
+    /** Docling 永久性解析错误计数器（4xx，不可重试）。 */
+    private final Counter parseErrorsPermanent;
+    /** Docling 瞬时解析错误计数器（5xx/超时/网络，可重试）。 */
+    private final Counter parseErrorsTransient;
 
     /**
-     * 构造器注入：装配 Docling API 客户端、序列化器、清洗服务和 ingest 配置。
+     * 构造器注入：装配 Docling API 客户端、序列化器、清洗服务、ingest 配置和指标注册中心。
      *
      * @param doclingServeApi Docling Serve API 客户端
      * @param objectMapper JSON 序列化器
      * @param ingestProperties ingest 配置属性
      * @param textCleaningService 文本清洗服务
+     * @param meterRegistry Micrometer 指标注册中心
      */
     @Autowired
     public DoclingDocumentParser(
             DoclingServeApi doclingServeApi,
             ObjectMapper objectMapper,
             IngestProperties ingestProperties,
-            TextCleaningService textCleaningService) {
-        this(doclingServeApi, objectMapper, ingestProperties, textCleaningService, Clock.systemUTC());
+            TextCleaningService textCleaningService,
+            MeterRegistry meterRegistry) {
+        this(doclingServeApi, objectMapper, ingestProperties, textCleaningService, Clock.systemUTC(), meterRegistry);
     }
 
-    /** Package-private 构造器，供测试注入 Clock。 */
+    /** Package-private 构造器，供测试注入 Clock 和 MeterRegistry。 */
     DoclingDocumentParser(
             DoclingServeApi doclingServeApi,
             ObjectMapper objectMapper,
             IngestProperties ingestProperties,
             TextCleaningService textCleaningService,
-            Clock clock) {
+            Clock clock,
+            MeterRegistry meterRegistry) {
         this.doclingServeApi = doclingServeApi;
         this.objectMapper = objectMapper;
         this.maxTextLength = ingestProperties.getParser().getMaxTextLength();
         this.textCleaningService = textCleaningService;
         this.clock = clock;
+        this.meterRegistry = meterRegistry;
+        this.parseErrorsPermanent = Counter.builder("docling.parse.errors")
+                .tag("errorType", "permanent")
+                .description("Docling 永久性解析错误计数（4xx，不可重试）")
+                .register(meterRegistry);
+        this.parseErrorsTransient = Counter.builder("docling.parse.errors")
+                .tag("errorType", "transient")
+                .description("Docling 瞬时解析错误计数（5xx/超时/网络，可重试）")
+                .register(meterRegistry);
     }
 
     /**
@@ -127,32 +148,48 @@ public class DoclingDocumentParser implements DocumentTextParser {
         if (filename == null || filename.isBlank()) {
             throw new IllegalStateException("filename must not be null or empty");
         }
-        if (isMarkdownFilename(filename)) {
-            return mapMarkdownSourceToParseResult(filename, content);
-        }
 
+        boolean isMarkdown = isMarkdownFilename(filename);
+        String format = isMarkdown ? "md" : DocumentParserRouter.fileExtension(filename);
+        Timer.Sample sample = Timer.start(meterRegistry);
         try {
+            if (isMarkdown) {
+                return mapMarkdownSourceToParseResult(filename, content);
+            }
             ConvertDocumentResponse response = callDoclingApi(filename, content);
             return mapToDocumentParseResult(filename, response);
         } catch (IllegalStateException ex) {
             throw ex;
+        } catch (DoclingPermanentException ex) {
+            parseErrorsPermanent.increment();
+            throw ex;
+        } catch (DoclingTransientException ex) {
+            parseErrorsTransient.increment();
+            throw ex;
         } catch (HttpClientErrorException ex) {
             int statusCode = ex.getStatusCode().value();
             if (statusCode == 408 || statusCode == 429) {
+                parseErrorsTransient.increment();
                 throw new DoclingTransientException(
                         "docling returned transient client error: " + ex.getStatusCode(), ex);
             }
+            parseErrorsPermanent.increment();
             throw new DoclingPermanentException(
                     "docling returned client error: " + ex.getStatusCode(),
                     statusCode,
                     ex);
         } catch (HttpServerErrorException ex) {
+            parseErrorsTransient.increment();
             throw new DoclingTransientException(
                     "docling returned server error: " + ex.getStatusCode(), ex);
         } catch (ResourceAccessException ex) {
+            parseErrorsTransient.increment();
             throw new DoclingTransientException("docling connection failed", ex);
         } catch (Exception ex) {
+            parseErrorsTransient.increment();
             throw new DoclingTransientException("unexpected docling error", ex);
+        } finally {
+            sample.stop(meterRegistry.timer("docling.parse.duration", "format", format));
         }
     }
 

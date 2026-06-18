@@ -15,6 +15,8 @@ import io.github.spike.myai.ingest.domain.model.DoclingTransientException;
 import io.github.spike.myai.ingest.domain.model.DocumentChunk;
 import io.github.spike.myai.ingest.domain.port.DocumentChunker;
 import io.github.spike.myai.ingest.infrastructure.config.IngestProperties;
+import io.micrometer.core.instrument.DistributionSummary;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.List;
@@ -58,20 +60,30 @@ public class DoclingDocumentChunker implements DocumentChunker {
     private final int maxTokens;
     /** 是否合并过小块 */
     private final boolean mergePeers;
+    /** 分块数量分布摘要（标签 format=markdown） */
+    private final DistributionSummary chunkCountSummary;
 
     // === Constructors ===
 
     /**
-     * 构造器注入：装配 Docling API 客户端和分块配置参数。
+     * 构造器注入：装配 Docling API 客户端、分块配置参数和指标注册中心。
      *
      * @param doclingServeApi  Docling Serve API 客户端（Arconia 自动配置注入）
      * @param ingestProperties ingest 管道配置属性（读取 chunk.maxTokens / chunk.mergePeers）
+     * @param meterRegistry Micrometer 指标注册中心
      */
     @Autowired
-    public DoclingDocumentChunker(DoclingServeApi doclingServeApi, IngestProperties ingestProperties) {
+    public DoclingDocumentChunker(
+            DoclingServeApi doclingServeApi,
+            IngestProperties ingestProperties,
+            MeterRegistry meterRegistry) {
         this.doclingServeApi = doclingServeApi;
         this.maxTokens = ingestProperties.getChunk().getMaxTokens();
         this.mergePeers = ingestProperties.getChunk().isMergePeers();
+        this.chunkCountSummary = DistributionSummary.builder("docling.chunk.count")
+                .tag("format", "markdown")
+                .description("Number of chunks produced by Docling HybridChunker")
+                .register(meterRegistry);
     }
 
     // === Public API ===
@@ -108,7 +120,9 @@ public class DoclingDocumentChunker implements DocumentChunker {
         }
         try {
             ChunkDocumentResponse response = callDoclingChunkApi(text);
-            return mapToDocumentChunks(response);
+            List<DocumentChunk> chunks = mapToDocumentChunks(response);
+            chunkCountSummary.record(chunks.size());
+            return chunks;
         } catch (HttpClientErrorException ex) {
             int statusCode = ex.getStatusCode().value();
             // 408/429 是瞬时性客户端错误，应按瞬时处理（可重试）
