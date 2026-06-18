@@ -35,7 +35,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: '2026-06-15T22:56:49+08:00'
-last_updated: '2026-06-18T23:30:00+08:00'
+last_updated: '2026-06-18T22:07:00+08:00'
 project: 'my-AI'
 project_key: 'NOKEY'
 tracking_system: 'file-system'
@@ -63,9 +63,9 @@ development_status:
   3-4: done
   epic-3-retrospective: done
 
-  epic-4: in-progress
+  epic-4: done
   4-1: done
   4-1a: done
   4-2: done
-  4-3: backlog
+  4-3: done
   epic-4-retrospective: optional
