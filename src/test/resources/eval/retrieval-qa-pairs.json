@@ -1,0 +1,167 @@
+[
+  {
+    "question": "Spring Boot 如何配置 Flyway 数据库迁移",
+    "query_type": "PROCEDURAL",
+    "relevant_doc_ids": ["doc-flyway-config", "doc-spring-boot-setup"],
+    "relevance_levels": {
+      "doc-flyway-config": "strong",
+      "doc-spring-boot-setup": "weak"
+    }
+  },
+  {
+    "question": "怎么添加新的文档入库流程",
+    "query_type": "PROCEDURAL",
+    "relevant_doc_ids": ["doc-ingest-pipeline", "doc-architecture-overview"],
+    "relevance_levels": {
+      "doc-ingest-pipeline": "strong",
+      "doc-architecture-overview": "weak"
+    }
+  },
+  {
+    "question": "如何在项目中使用 JdbcTemplate 执行 SQL 查询",
+    "query_type": "PROCEDURAL",
+    "relevant_doc_ids": ["doc-jdbc-template", "doc-data-access"],
+    "relevance_levels": {
+      "doc-jdbc-template": "strong",
+      "doc-data-access": "weak"
+    }
+  },
+  {
+    "question": "怎么配置 PGVector 的 HNSW 索引",
+    "query_type": "PROCEDURAL",
+    "relevant_doc_ids": ["doc-pgvector-setup", "doc-vector-store"],
+    "relevance_levels": {
+      "doc-pgvector-setup": "strong",
+      "doc-vector-store": "weak"
+    }
+  },
+  {
+    "question": "什么是 PGVector",
+    "query_type": "FACTOID",
+    "relevant_doc_ids": ["doc-pgvector-intro"],
+    "relevance_levels": {
+      "doc-pgvector-intro": "strong"
+    }
+  },
+  {
+    "question": "Spring AI 的 VectorStore 接口支持哪些操作",
+    "query_type": "FACTOID",
+    "relevant_doc_ids": ["doc-spring-ai-vectorstore"],
+    "relevance_levels": {
+      "doc-spring-ai-vectorstore": "strong"
+    }
+  },
+  {
+    "question": "什么是向量数据库",
+    "query_type": "FACTOID",
+    "relevant_doc_ids": ["doc-vector-db-intro", "doc-pgvector-intro"],
+    "relevance_levels": {
+      "doc-vector-db-intro": "strong",
+      "doc-pgvector-intro": "weak"
+    }
+  },
+  {
+    "question": "my-AI 系统使用了哪些技术栈",
+    "query_type": "FACTOID",
+    "relevant_doc_ids": ["doc-architecture-overview", "doc-tech-stack"],
+    "relevance_levels": {
+      "doc-architecture-overview": "strong",
+      "doc-tech-stack": "weak"
+    }
+  },
+  {
+    "question": "Spring AI 和 LangChain 有什么区别",
+    "query_type": "COMPARATIVE",
+    "relevant_doc_ids": ["doc-spring-ai-overview", "doc-framework-comparison"],
+    "relevance_levels": {
+      "doc-spring-ai-overview": "strong",
+      "doc-framework-comparison": "strong"
+    }
+  },
+  {
+    "question": "JPA 和 JdbcTemplate 哪个更适合这个项目",
+    "query_type": "COMPARATIVE",
+    "relevant_doc_ids": ["doc-jdbc-template", "doc-architecture-overview"],
+    "relevance_levels": {
+      "doc-jdbc-template": "strong",
+      "doc-architecture-overview": "weak"
+    }
+  },
+  {
+    "question": "Dense 检索和 Sparse 检索各有什么优缺点",
+    "query_type": "COMPARATIVE",
+    "relevant_doc_ids": ["doc-hybrid-search", "doc-retrieval-overview"],
+    "relevance_levels": {
+      "doc-hybrid-search": "strong",
+      "doc-retrieval-overview": "weak"
+    }
+  },
+  {
+    "question": "余弦距离和欧氏距离在向量检索中的区别",
+    "query_type": "COMPARATIVE",
+    "relevant_doc_ids": ["doc-pgvector-intro", "doc-vector-db-intro"],
+    "relevance_levels": {
+      "doc-pgvector-intro": "strong",
+      "doc-vector-db-intro": "weak"
+    }
+  },
+  {
+    "question": "你好",
+    "query_type": "CHITCHAT",
+    "relevant_doc_ids": [],
+    "relevance_levels": {}
+  },
+  {
+    "question": "谢谢你的帮助",
+    "query_type": "CHITCHAT",
+    "relevant_doc_ids": [],
+    "relevance_levels": {}
+  },
+  {
+    "question": "今天天气怎么样",
+    "query_type": "CHITCHAT",
+    "relevant_doc_ids": [],
+    "relevance_levels": {}
+  },
+  {
+    "question": "你能做什么",
+    "query_type": "CHITCHAT",
+    "relevant_doc_ids": [],
+    "relevance_levels": {}
+  },
+  {
+    "question": "文档管理",
+    "query_type": "GENERAL",
+    "relevant_doc_ids": ["doc-ingest-pipeline", "doc-knowledge-base"],
+    "relevance_levels": {
+      "doc-ingest-pipeline": "strong",
+      "doc-knowledge-base": "weak"
+    }
+  },
+  {
+    "question": "系统架构设计",
+    "query_type": "GENERAL",
+    "relevant_doc_ids": ["doc-architecture-overview"],
+    "relevance_levels": {
+      "doc-architecture-overview": "strong"
+    }
+  },
+  {
+    "question": "检索优化",
+    "query_type": "GENERAL",
+    "relevant_doc_ids": ["doc-hybrid-search", "doc-retrieval-overview"],
+    "relevance_levels": {
+      "doc-hybrid-search": "strong",
+      "doc-retrieval-overview": "weak"
+    }
+  },
+  {
+    "question": "数据安全和权限控制",
+    "query_type": "GENERAL",
+    "relevant_doc_ids": ["doc-auth-module", "doc-security"],
+    "relevance_levels": {
+      "doc-auth-module": "strong",
+      "doc-security": "weak"
+    }
+  }
+]
