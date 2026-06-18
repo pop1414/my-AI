@@ -108,7 +108,7 @@ ingest/
 
 **文档处理流水线**：
 ```
-上传 → 受理(幂等去重) → Worker 抢占(CAS) → 解析(Tika) → 分块(结构优先)
+上传 → 受理(幂等去重) → Worker 抢占(CAS) → 解析(Docling) → 分块(结构优先)
      → 向量化(PGVector) → 状态收口(INDEXED/FAILED)
 ```
 
