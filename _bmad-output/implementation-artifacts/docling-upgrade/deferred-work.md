@@ -29,4 +29,10 @@
 - 空字符串 markdownContent 阻塞 HTML/text/doctags 降级 — pre-existing，需 `!isBlank()` 检查替代 `!= null` [Story 3.2, DoclingDocumentParser.java:225]
 - `parse()` 未校验 null/空文件名 — pre-existing，null filename 可能产生不一致的 metadata [Story 3.2, DoclingDocumentParser.java:116]
 - Docling jsonContent 未纳入内容降级链 — 需产品决策是否将结构化 Document 树作为降级源 [Story 3.2]
-- jsoup 依赖未清理 — pre-existing，HtmlSemanticCleaner 在 Story 2.5 已删除，需独立 story 验证和清理 [Story 3.2]
+- jsoup 依赖未清理 — pre-existing，HtmlSemanticCleaner 在 Story 2.5 已删除，需独立 story 验证和清理 [Story 3.2] → ✅ 已在 Story 4.1 清理
+
+## Phase 0 调查结论 (2026-06-18)
+
+- **md_content 空值频率：零** — spike 确认近期文档处理记录中无 md_content 为空的情况。降级链删除（D12 决策）无风险，Phase 1 可放心执行。
+- 空字符串 markdownContent 阻塞降级（第 29 行）→ 随降级链删除一并关闭，无需单独修复
+- Docling jsonContent 未纳入降级链（第 31 行）→ 随降级链删除一并关闭
