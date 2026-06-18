@@ -22,6 +22,7 @@ import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -207,8 +208,8 @@ public class DoclingDocumentParser implements DocumentTextParser {
         }
 
         String status = response.getStatus();
-        if ("error".equalsIgnoreCase(status) || "failure".equalsIgnoreCase(status)) {
-            String errorDetail = formatResponseErrors(response.getErrors());
+        if (status == null || "error".equalsIgnoreCase(status) || "failure".equalsIgnoreCase(status)) {
+            String errorDetail = status != null ? formatResponseErrors(response.getErrors()) : "";
             throw new IllegalStateException(
                     "docling conversion failed (status=%s%s)".formatted(status, errorDetail));
         }
@@ -310,6 +311,7 @@ public class DoclingDocumentParser implements DocumentTextParser {
             return "";
         }
         String details = errors.stream()
+                .filter(Objects::nonNull)
                 .map(error -> error.getComponentType() + ": " + error.getErrorMessage())
                 .collect(Collectors.joining("; "));
         return ", errors=[" + details + "]";
