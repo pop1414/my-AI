@@ -11,7 +11,11 @@ import static org.mockito.Mockito.when;
 
 import ai.docling.serve.api.DoclingServeApi;
 import ai.docling.serve.api.convert.request.ConvertDocumentRequest;
+import ai.docling.serve.api.convert.request.options.ImageRefMode;
 import ai.docling.serve.api.convert.request.options.OutputFormat;
+import ai.docling.serve.api.convert.request.options.PdfBackend;
+import ai.docling.serve.api.convert.request.options.ProcessingPipeline;
+import ai.docling.serve.api.convert.request.options.TableFormerMode;
 import ai.docling.serve.api.convert.request.source.FileSource;
 import ai.docling.serve.api.convert.request.target.InBodyTarget;
 import ai.docling.serve.api.convert.response.ConvertDocumentResponse;
@@ -468,10 +472,14 @@ class DoclingDocumentParserTest {
         FileSource source = (FileSource) request.getSources().getFirst();
         assertEquals("test.pdf", source.getFilename());
         assertEquals(List.of(
-                OutputFormat.MARKDOWN,
-                OutputFormat.HTML,
-                OutputFormat.TEXT,
-                OutputFormat.DOCTAGS), request.getOptions().getToFormats());
+                OutputFormat.MARKDOWN), request.getOptions().getToFormats());
+        assertEquals(ImageRefMode.EMBEDDED, request.getOptions().getImageExportMode());
+        assertEquals(Boolean.TRUE, request.getOptions().getDoOcr());
+        assertEquals(ProcessingPipeline.STANDARD, request.getOptions().getPipeline());
+        assertEquals(PdfBackend.DLPARSE_V4, request.getOptions().getPdfBackend());
+        assertEquals(TableFormerMode.ACCURATE, request.getOptions().getTableMode());
+        assertEquals(Boolean.TRUE, request.getOptions().getIncludeImages());
+        assertEquals(Boolean.TRUE, request.getOptions().getDoTableStructure());
         assertNotNull(request.getTarget());
         assertTrue(request.getTarget() instanceof InBodyTarget);
     }

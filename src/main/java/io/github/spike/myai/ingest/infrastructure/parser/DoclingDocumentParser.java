@@ -3,7 +3,11 @@ package io.github.spike.myai.ingest.infrastructure.parser;
 import ai.docling.serve.api.DoclingServeApi;
 import ai.docling.serve.api.convert.request.ConvertDocumentRequest;
 import ai.docling.serve.api.convert.request.options.ConvertDocumentOptions;
+import ai.docling.serve.api.convert.request.options.ImageRefMode;
 import ai.docling.serve.api.convert.request.options.OutputFormat;
+import ai.docling.serve.api.convert.request.options.PdfBackend;
+import ai.docling.serve.api.convert.request.options.ProcessingPipeline;
+import ai.docling.serve.api.convert.request.options.TableFormerMode;
 import ai.docling.serve.api.convert.request.source.FileSource;
 import ai.docling.serve.api.convert.request.target.InBodyTarget;
 import ai.docling.serve.api.convert.response.ConvertDocumentResponse;
@@ -168,10 +172,7 @@ public class DoclingDocumentParser implements DocumentTextParser {
                 .filename(filename)
                 .build();
 
-        ConvertDocumentOptions convertOptions = ConvertDocumentOptions.builder()
-                .toFormats(List.of(OutputFormat.MARKDOWN, OutputFormat.HTML,
-                        OutputFormat.TEXT, OutputFormat.DOCTAGS))
-                .build();
+        ConvertDocumentOptions convertOptions = buildConvertOptions();
 
         ConvertDocumentRequest request = ConvertDocumentRequest.builder()
                 .source(source)
@@ -181,6 +182,33 @@ public class DoclingDocumentParser implements DocumentTextParser {
 
         log.debug("调用 Docling Serve Convert API, filename={}, contentLength={}", filename, content.length);
         return doclingServeApi.convertSource(request);
+    }
+
+    /**
+     * 构建 Docling Convert 选项。
+     *
+     * <p>当前 reader.md 需要保留图片资源，因此显式选择 Embedded 图片导出模式；
+     * cleaned.md 则依赖后续清洗规则移除图片链接与 data URI，避免污染 RAG 主链。
+     *
+     * <p>受限于当前 Java SDK 版本：
+     * <ul>
+     *   <li>{@code ocr_engine=auto} 未暴露为枚举，因此保持未设置，沿用服务端默认 auto；</li>
+     *   <li>{@code pdf_backend=docling_parse} 未暴露为枚举，使用服务端兼容别名 {@code dlparse_v4} 对齐。</li>
+     * </ul>
+     *
+     * @return 对齐 Docling Web UI 关键开关后的 Convert 选项
+     */
+    private ConvertDocumentOptions buildConvertOptions() {
+        return ConvertDocumentOptions.builder()
+                .toFormats(List.of(OutputFormat.MARKDOWN))
+                .imageExportMode(ImageRefMode.EMBEDDED)
+                .doOcr(true)
+                .pipeline(ProcessingPipeline.STANDARD)
+                .pdfBackend(PdfBackend.DLPARSE_V4)
+                .tableMode(TableFormerMode.ACCURATE)
+                .includeImages(true)
+                .doTableStructure(true)
+                .build();
     }
 
     /**
