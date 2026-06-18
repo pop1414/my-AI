@@ -37,6 +37,8 @@ import org.springframework.stereotype.Component;
 @ConditionalOnProperty(prefix = "myai.ingest.storage", name = "type", havingValue = "local", matchIfMissing = true)
 public class LocalDocumentProcessingArtifactStorage implements DocumentProcessingArtifactStorage {
 
+    /** 阅读侧正文 reader.md 文件名（强制写入） */
+    static final String READER_MARKDOWN_FILENAME = READER_MARKDOWN_ARTIFACT_NAME;
     /** 主链产物 cleaned.md 文件名（强制写入） */
     static final String CLEANED_MARKDOWN_FILENAME = "cleaned.md";
     /** processingMetadata 序列化 JSON 文件名 */
@@ -97,6 +99,7 @@ public class LocalDocumentProcessingArtifactStorage implements DocumentProcessin
             // 确保版本级 artifacts 目录存在（已存在时静默跳过）
             Files.createDirectories(artifactDirectory);
             // 强制写入主链产物 cleaned.md，不受任何配置开关控制
+            writeText(artifactDirectory.resolve(READER_MARKDOWN_FILENAME), parseResult.readerMarkdown());
             writeText(artifactDirectory.resolve(CLEANED_MARKDOWN_FILENAME), parseResult.cleanedMarkdown());
             // 可选写入：processingMetadata JSON
             if (keepParseResultJson

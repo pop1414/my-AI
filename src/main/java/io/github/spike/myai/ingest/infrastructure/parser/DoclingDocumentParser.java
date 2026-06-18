@@ -16,11 +16,13 @@ import io.github.spike.myai.ingest.domain.model.DoclingTransientException;
 import io.github.spike.myai.ingest.domain.model.DocumentParseResult;
 import io.github.spike.myai.ingest.domain.port.DocumentTextParser;
 import io.github.spike.myai.ingest.infrastructure.config.IngestProperties;
+import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.regex.Matcher;
@@ -118,6 +120,9 @@ public class DoclingDocumentParser implements DocumentTextParser {
         if (content == null || content.length == 0) {
             throw new IllegalStateException("empty source content");
         }
+        if (isMarkdownFilename(filename)) {
+            return mapMarkdownSourceToParseResult(filename, content);
+        }
 
         try {
             ConvertDocumentResponse response = callDoclingApi(filename, content);
@@ -186,12 +191,29 @@ public class DoclingDocumentParser implements DocumentTextParser {
      * @return 解析结果
      */
     private DocumentParseResult mapToDocumentParseResult(String filename, ConvertDocumentResponse response) {
-        String rawMarkdown = extractCleanedMarkdown(response);
-        String cleanedMarkdown = textCleaningService.cleanNativeMarkdown(rawMarkdown);
+        String readerMarkdown = extractReaderMarkdown(response);
+        validateReaderMarkdown(readerMarkdown);
+        String cleanedMarkdown = textCleaningService.cleanNativeMarkdown(readerMarkdown);
         validateCleanedMarkdown(cleanedMarkdown);
 
         String processingMetadata = buildProcessingMetadata(filename, cleanedMarkdown);
-        return new DocumentParseResult(cleanedMarkdown, processingMetadata);
+        return new DocumentParseResult(readerMarkdown, cleanedMarkdown, processingMetadata);
+    }
+
+    /**
+     * 直接将 Markdown 源文件映射为双轨正文产物。
+     *
+     * @param filename 原始文件名
+     * @param content Markdown 源文件字节
+     * @return 解析结果
+     */
+    private DocumentParseResult mapMarkdownSourceToParseResult(String filename, byte[] content) {
+        String readerMarkdown = new String(content, StandardCharsets.UTF_8);
+        validateReaderMarkdown(readerMarkdown);
+        String cleanedMarkdown = textCleaningService.cleanNativeMarkdown(readerMarkdown);
+        validateCleanedMarkdown(cleanedMarkdown);
+        String processingMetadata = buildProcessingMetadata(filename, cleanedMarkdown);
+        return new DocumentParseResult(readerMarkdown, cleanedMarkdown, processingMetadata);
     }
 
     /**
@@ -202,7 +224,7 @@ public class DoclingDocumentParser implements DocumentTextParser {
      * @param response Docling Convert 响应
      * @return 可用于后续清洗的文本内容
      */
-    private String extractCleanedMarkdown(ConvertDocumentResponse response) {
+    private String extractReaderMarkdown(ConvertDocumentResponse response) {
         if (response == null) {
             throw new IllegalStateException("response must not be null");
         }
@@ -297,6 +319,12 @@ public class DoclingDocumentParser implements DocumentTextParser {
      *
      * @param cleanedMarkdown 清洗后的 Markdown
      */
+    private void validateReaderMarkdown(String readerMarkdown) {
+        if (readerMarkdown == null || readerMarkdown.isBlank()) {
+            throw new IllegalStateException("reader markdown is empty");
+        }
+    }
+
     private void validateCleanedMarkdown(String cleanedMarkdown) {
         if (cleanedMarkdown.isBlank()) {
             throw new IllegalStateException("parsed text is empty");
@@ -324,5 +352,16 @@ public class DoclingDocumentParser implements DocumentTextParser {
             headings.add(matcher.group(1).trim());
         }
         return headings;
+    }
+
+    private static boolean isMarkdownFilename(String filename) {
+        if (filename == null || filename.isBlank()) {
+            return false;
+        }
+        String normalizedFilename = filename.toLowerCase(Locale.ROOT);
+        return normalizedFilename.endsWith(".md")
+                || normalizedFilename.endsWith(".markdown")
+                || normalizedFilename.endsWith(".mdown")
+                || normalizedFilename.endsWith(".mkd");
     }
 }

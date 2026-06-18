@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -71,6 +72,7 @@ class DoclingDocumentParserTest {
 
         DocumentParseResult result = parser.parse("test.pdf", "dummy".getBytes(StandardCharsets.UTF_8));
 
+        assertEquals("# 标题\n\n正文内容", result.readerMarkdown());
         assertEquals("# 标题\n\n正文内容", result.cleanedMarkdown());
 
         JsonNode metadata = new ObjectMapper().readTree(result.processingMetadata());
@@ -85,12 +87,12 @@ class DoclingDocumentParserTest {
     void parse_shouldExtractTitleOutlineSample_whenMarkdownHasHeadings() throws Exception {
         String markdown = "# 主标题\n\n## 节一\n\n正文\n\n## 节二\n\n正文";
         ConvertDocumentResponse response = buildResponse(DocumentResponse.builder()
-                .filename("doc.md")
+                .filename("doc.pdf")
                 .markdownContent(markdown)
                 .build());
         when(doclingServeApi.convertSource(any())).thenReturn(response);
 
-        DocumentParseResult result = parser.parse("doc.md", "dummy".getBytes(StandardCharsets.UTF_8));
+        DocumentParseResult result = parser.parse("doc.pdf", "dummy".getBytes(StandardCharsets.UTF_8));
 
         JsonNode metadata = new ObjectMapper().readTree(result.processingMetadata());
         assertEquals("主标题", metadata.path("conditional").path("primary_title").asText());
@@ -98,6 +100,22 @@ class DoclingDocumentParserTest {
         assertEquals("主标题", metadata.path("conditional").path("title_outline_sample").get(0).asText());
         assertEquals("节一", metadata.path("conditional").path("title_outline_sample").get(1).asText());
         assertEquals("节二", metadata.path("conditional").path("title_outline_sample").get(2).asText());
+    }
+
+    @Test
+    @DisplayName("Markdown 源文件应直接保留原始正文并跳过 Docling 转换")
+    void parse_shouldKeepSourceMarkdown_whenFilenameIsMarkdown() throws Exception {
+        String sourceMarkdown = "# 标题\r\n\r\n![image](https://cdn.example.com/demo.png)\r\n\r\n正文";
+        String cleanedMarkdown = "# 标题\n\n![image](https://cdn.example.com/demo.png)\n\n正文";
+        when(textCleaningService.cleanNativeMarkdown(sourceMarkdown)).thenReturn(cleanedMarkdown);
+
+        DocumentParseResult result = parser.parse("source.md", sourceMarkdown.getBytes(StandardCharsets.UTF_8));
+
+        assertEquals(sourceMarkdown, result.readerMarkdown());
+        assertEquals(cleanedMarkdown, result.cleanedMarkdown());
+        JsonNode metadata = new ObjectMapper().readTree(result.processingMetadata());
+        assertEquals("source.md", metadata.path("stable").path("source_file").asText());
+        verify(doclingServeApi, never()).convertSource(any());
     }
 
     @Test
@@ -466,13 +484,14 @@ class DoclingDocumentParserTest {
         when(textCleaningService.cleanNativeMarkdown(rawDoclingMarkdown)).thenReturn(cleanedMarkdown);
 
         ConvertDocumentResponse response = buildResponse(DocumentResponse.builder()
-                .filename("test.md")
+                .filename("test.pdf")
                 .markdownContent(rawDoclingMarkdown)
                 .build());
         when(doclingServeApi.convertSource(any())).thenReturn(response);
 
-        DocumentParseResult result = parser.parse("test.md", "data".getBytes(StandardCharsets.UTF_8));
+        DocumentParseResult result = parser.parse("test.pdf", "data".getBytes(StandardCharsets.UTF_8));
 
+        assertEquals(rawDoclingMarkdown, result.readerMarkdown());
         assertEquals(cleanedMarkdown, result.cleanedMarkdown());
         verify(textCleaningService).cleanNativeMarkdown(rawDoclingMarkdown);
     }
@@ -484,12 +503,12 @@ class DoclingDocumentParserTest {
         when(textCleaningService.cleanNativeMarkdown(any())).thenReturn("清洗后内容");
 
         ConvertDocumentResponse response = buildResponse(DocumentResponse.builder()
-                .filename("test.md")
+                .filename("test.pdf")
                 .markdownContent(rawDoclingMarkdown)
                 .build());
         when(doclingServeApi.convertSource(any())).thenReturn(response);
 
-        parser.parse("test.md", "data".getBytes(StandardCharsets.UTF_8));
+        parser.parse("test.pdf", "data".getBytes(StandardCharsets.UTF_8));
 
         ArgumentCaptor<String> captor = ArgumentCaptor.forClass(String.class);
         verify(textCleaningService).cleanNativeMarkdown(captor.capture());

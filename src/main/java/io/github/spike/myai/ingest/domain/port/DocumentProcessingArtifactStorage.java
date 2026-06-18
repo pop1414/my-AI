@@ -25,6 +25,9 @@ import java.util.Optional;
  */
 public interface DocumentProcessingArtifactStorage {
 
+    /** 阅读侧正文处理产物名称。 */
+    String READER_MARKDOWN_ARTIFACT_NAME = "reader.md";
+
     /** 主链正文处理产物名称。 */
     String CLEANED_MARKDOWN_ARTIFACT_NAME = "cleaned.md";
 

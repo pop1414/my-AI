@@ -80,6 +80,7 @@ class ProcessDocumentApplicationServiceTest {
         when(repository.findById(anyString(), eq(documentId))).thenReturn(Optional.of(ingesting));
         when(sourceStorage.loadVersion(documentId, 1, "a.txt")).thenReturn(Optional.of("hello world".getBytes()));
         DocumentParseResult parseResult = new DocumentParseResult(
+                "# hello world",
                 "hello world",
                 "{\"schema_version\":\"v1\"}");
         when(parser.parse(eq("a.txt"), any(byte[].class))).thenReturn(parseResult);

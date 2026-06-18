@@ -41,6 +41,7 @@ import software.amazon.awssdk.services.s3.model.S3Object;
 @ConditionalOnProperty(prefix = "myai.ingest.storage", name = "type", havingValue = "s3")
 public class S3DocumentProcessingArtifactStorage implements DocumentProcessingArtifactStorage {
 
+    static final String READER_MARKDOWN_FILENAME = READER_MARKDOWN_ARTIFACT_NAME;
     static final String CLEANED_MARKDOWN_FILENAME = CLEANED_MARKDOWN_ARTIFACT_NAME;
     static final String PARSE_RESULT_FILENAME = "parse-result.json";
 
@@ -63,6 +64,7 @@ public class S3DocumentProcessingArtifactStorage implements DocumentProcessingAr
 
     @Override
     public void saveVersion(String workspaceId, DocumentId documentId, int versionNumber, DocumentParseResult parseResult) {
+        putText(resolveArtifactKey(workspaceId, documentId, versionNumber, READER_MARKDOWN_FILENAME), parseResult.readerMarkdown());
         putText(resolveArtifactKey(workspaceId, documentId, versionNumber, CLEANED_MARKDOWN_FILENAME), parseResult.cleanedMarkdown());
         if (keepParseResultJson
                 && parseResult.processingMetadata() != null

@@ -80,6 +80,7 @@ class S3DocumentStorageSmokeTest {
                 assertThat(storedSource.asByteArray()).isEqualTo(sourceBytes);
 
                 DocumentParseResult parseResult = new DocumentParseResult(
+                        "# RFS05 reader",
                         "# RFS05 cleaned",
                         "{\"schema_version\":\"v1\"}");
                 artifactStorage.saveVersion(workspaceId, documentId, 1, parseResult);

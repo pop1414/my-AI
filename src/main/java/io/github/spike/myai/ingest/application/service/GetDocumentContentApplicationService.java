@@ -15,8 +15,11 @@ import io.github.spike.myai.ingest.domain.model.DocumentVersionArtifactContent;
 import io.github.spike.myai.ingest.domain.model.UploadStatus;
 import io.github.spike.myai.ingest.domain.port.DocumentProcessingArtifactStorage;
 import io.github.spike.myai.ingest.domain.port.DocumentRepository;
+import io.github.spike.myai.ingest.domain.port.DocumentSourceStorage;
 import io.github.spike.myai.ingest.infrastructure.config.IngestProperties;
 import io.github.spike.myai.shared.rest.BusinessException;
+import java.nio.charset.StandardCharsets;
+import java.util.Locale;
 import java.util.Optional;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.AccessDeniedException;
@@ -25,7 +28,7 @@ import org.springframework.stereotype.Service;
 /**
  * 文档正文读取应用服务。
  *
- * <p>该服务按 {@link DocumentContentSource} 选择版本级 {@code cleaned.md}：
+ * <p>该服务按 {@link DocumentContentSource} 选择版本级正文：
  * {@code LATEST} 固定读取当前最新版本；{@code ASKABLE_BASELINE} 读取当前 QA
  * 可问答基线版本；{@code EXPLICIT_VERSION} 读取调用方指定的历史版本。
  * 正文读取只读版本事实和 artifact，不改变后续问答基线。
@@ -35,8 +38,9 @@ public class GetDocumentContentApplicationService implements GetDocumentContentU
 
     /** 文档仓储，用于读取 document latest projection 与 version fact */
     private final DocumentRepository documentRepository;
-    /** 版本处理产物存储，用于读取 cleaned.md */
+    /** 版本处理产物存储，用于读取 reader.md / cleaned.md */
     private final DocumentProcessingArtifactStorage artifactStorage;
+    private final DocumentSourceStorage sourceStorage;
     /** 当前用户提供器 */
     private final CurrentUserProvider currentUserProvider;
     /** 授权服务 */
@@ -56,11 +60,13 @@ public class GetDocumentContentApplicationService implements GetDocumentContentU
     public GetDocumentContentApplicationService(
             DocumentRepository documentRepository,
             DocumentProcessingArtifactStorage artifactStorage,
+            DocumentSourceStorage sourceStorage,
             CurrentUserProvider currentUserProvider,
             AuthorizationService authorizationService,
             IngestProperties ingestProperties) {
         this.documentRepository = documentRepository;
         this.artifactStorage = artifactStorage;
+        this.sourceStorage = sourceStorage;
         this.currentUserProvider = currentUserProvider;
         this.authorizationService = authorizationService;
         this.maxReadBytes = ingestProperties.getStorage().getArtifacts().getMaxReadBytes();
@@ -74,7 +80,7 @@ public class GetDocumentContentApplicationService implements GetDocumentContentU
      *   <li>定位当前用户工作区内的 document；</li>
      *   <li>拒绝已删除 document，并按来源校验正文读取或历史版本读取权限；</li>
      *   <li>根据来源选择 latest、askable baseline 或显式指定版本；</li>
-     *   <li>读取版本级 {@code cleaned.md} 并按来源映射缺失或过大分支。</li>
+     *   <li>按 {@code reader.md -> source markdown -> cleaned.md} 顺序读取正文并映射缺失或过大分支。</li>
      * </ol>
      *
      * @param query 正文读取查询
@@ -201,7 +207,7 @@ public class GetDocumentContentApplicationService implements GetDocumentContentU
     }
 
     /**
-     * 读取目标 version 的 {@code cleaned.md} 并映射稳定业务错误。
+     * 按既定优先级读取目标 version 的正文并映射稳定业务错误。
      *
      * @param currentUser 当前用户
      * @param documentId  文档资产 ID
@@ -215,6 +221,22 @@ public class GetDocumentContentApplicationService implements GetDocumentContentU
             DocumentVersion version,
             DocumentContentSource source) {
         try {
+            Optional<DocumentVersionArtifactContent> readerContent = artifactStorage.loadVersionArtifact(
+                    currentUser.workspaceId(),
+                    documentId,
+                    version.versionNumber(),
+                    DocumentProcessingArtifactStorage.READER_MARKDOWN_ARTIFACT_NAME,
+                    maxReadBytes);
+            if (readerContent.isPresent()) {
+                return readerContent.get();
+            }
+            if (canFallbackToSourceMarkdown(version)) {
+                Optional<DocumentVersionArtifactContent> sourceMarkdown =
+                        loadSourceMarkdown(documentId, version, currentUser.workspaceId());
+                if (sourceMarkdown.isPresent()) {
+                    return sourceMarkdown.get();
+                }
+            }
             Optional<DocumentVersionArtifactContent> content = artifactStorage.loadVersionArtifact(
                     currentUser.workspaceId(),
                     documentId,
@@ -239,6 +261,50 @@ public class GetDocumentContentApplicationService implements GetDocumentContentU
      * @param version 版本事实
      * @return 业务异常
      */
+    private Optional<DocumentVersionArtifactContent> loadSourceMarkdown(
+            DocumentId documentId,
+            DocumentVersion version,
+            String workspaceId) {
+        if (!isMarkdownFilename(version.filename())) {
+            return Optional.empty();
+        }
+        Optional<byte[]> sourceBytes = sourceStorage.loadVersion(
+                documentId,
+                version.versionNumber(),
+                version.filename());
+        if (sourceBytes.isEmpty()) {
+            return Optional.empty();
+        }
+        byte[] contentBytes = sourceBytes.get();
+        if (contentBytes.length > maxReadBytes) {
+            throw new DocumentVersionArtifactTooLargeException(contentBytes.length, maxReadBytes);
+        }
+        return Optional.of(new DocumentVersionArtifactContent(
+                "source-markdown/%s/documents/%s/versions/%d/%s".formatted(
+                        workspaceId,
+                        documentId.value(),
+                        version.versionNumber(),
+                        version.filename()),
+                new String(contentBytes, StandardCharsets.UTF_8),
+                contentBytes.length));
+    }
+
+    private static boolean canFallbackToSourceMarkdown(DocumentVersion version) {
+        return version.status() != UploadStatus.UPLOADED
+                && version.status() != UploadStatus.INGESTING;
+    }
+
+    private static boolean isMarkdownFilename(String filename) {
+        if (filename == null || filename.isBlank()) {
+            return false;
+        }
+        String normalizedFilename = filename.toLowerCase(Locale.ROOT);
+        return normalizedFilename.endsWith(".md")
+                || normalizedFilename.endsWith(".markdown")
+                || normalizedFilename.endsWith(".mdown")
+                || normalizedFilename.endsWith(".mkd");
+    }
+
     private static BusinessException missingContent(DocumentVersion version) {
         if (version.status() == UploadStatus.UPLOADED
                 || version.status() == UploadStatus.INGESTING) {

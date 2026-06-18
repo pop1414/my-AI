@@ -42,21 +42,23 @@ import software.amazon.awssdk.services.s3.model.S3Object;
 class S3DocumentProcessingArtifactStorageTest {
 
     @Test
-    @DisplayName("保存版本产物时应强制写入 cleaned.md 和可选 parse-result.json")
+    @DisplayName("保存版本产物时应强制写入 reader.md、cleaned.md 和可选 parse-result.json")
     void saveVersion_shouldWriteCleanedMarkdownAndConfiguredArtifacts() {
         S3Client s3Client = org.mockito.Mockito.mock(S3Client.class);
         S3DocumentProcessingArtifactStorage storage = storage(s3Client, true);
         when(s3Client.putObject(any(PutObjectRequest.class), any(RequestBody.class)))
                 .thenReturn(PutObjectResponse.builder().build());
         DocumentParseResult parseResult = new DocumentParseResult(
+                "# reader",
                 "# title",
                 "{\"schema_version\":\"v1\"}");
 
         storage.saveVersion("workspace-1", new DocumentId("doc-artifact-s3-1"), 2, parseResult);
 
         ArgumentCaptor<PutObjectRequest> requestCaptor = ArgumentCaptor.forClass(PutObjectRequest.class);
-        verify(s3Client, org.mockito.Mockito.times(2)).putObject(requestCaptor.capture(), any(RequestBody.class));
+        verify(s3Client, org.mockito.Mockito.times(3)).putObject(requestCaptor.capture(), any(RequestBody.class));
         List<String> keys = requestCaptor.getAllValues().stream().map(PutObjectRequest::key).toList();
+        assertTrue(keys.contains("artifacts/workspace-1/documents/doc-artifact-s3-1/versions/2/reader.md"));
         assertTrue(keys.contains("artifacts/workspace-1/documents/doc-artifact-s3-1/versions/2/cleaned.md"));
         assertTrue(keys.contains("artifacts/workspace-1/documents/doc-artifact-s3-1/versions/2/parse-result.json"));
     }
