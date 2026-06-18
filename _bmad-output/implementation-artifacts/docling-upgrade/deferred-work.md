@@ -23,3 +23,10 @@
 - mapChunkMetadata()未被主流程调用 — 将移至 DoclingDocumentChunker（Story 3.3），当前为 package-private dead code [Story 2.3]
 - contentType硬编码为PARAGRAPH — Docling 原始类型映射由 DoclingDocumentChunker（Story 3.3）的 chunk pipeline 完成 [Story 2.3]
 - Markdown heading正则匹配代码块内注释行 — title_outline_sample可能含噪声，当前影响仅为metadata质量，非关键路径 [Story 2.3]
+
+## Deferred from: code review of Story 3.2 (2026-06-17)
+
+- 空字符串 markdownContent 阻塞 HTML/text/doctags 降级 — pre-existing，需 `!isBlank()` 检查替代 `!= null` [Story 3.2, DoclingDocumentParser.java:225]
+- `parse()` 未校验 null/空文件名 — pre-existing，null filename 可能产生不一致的 metadata [Story 3.2, DoclingDocumentParser.java:116]
+- Docling jsonContent 未纳入内容降级链 — 需产品决策是否将结构化 Document 树作为降级源 [Story 3.2]
+- jsoup 依赖未清理 — pre-existing，HtmlSemanticCleaner 在 Story 2.5 已删除，需独立 story 验证和清理 [Story 3.2]
