@@ -353,26 +353,62 @@ EMNLP 2024（Fudan University, Table 1 消融实验）：
 
 ### 4.4 评估体系
 
-#### FR-11：EvalRunner 检索质量评估（Layer 1）
+#### FR-11：EvalRunner 检索质量评估（三模式对比 + 分层报告）
 
 **需求**：
-- 新增 `EvalRunner`（独立组件，不在主 QA 流程中）
-- Layer 1 指标：`Recall@5`（top-5 中命中相关文档的比例）和 `MRR`（第一个相关结果排名的倒数）
-- 测试数据：20 个手写 QA pairs，每个包含 question + 相关 documentId 列表
-- 数据格式：JSON 或 YAML，放在 `src/test/resources/eval/` 下
-- 执行方式：直接调用 `ChunkRetrievalPort`（不经过 LLM）
-- 输出：JSON 报告（Recall@5、MRR、每条 query 的命中详情）
+- 新增 4 个 test-only 组件（`src/test/java/` 下），职责单一、可独立测试：
+  1. `RetrievalEvalDatasetLoader`：加载、校验、解析 JSON 测试数据集
+  2. `RetrievalEvalExecutor`：封装检索调用逻辑，支持批量执行，隔离评测逻辑与业务检索接口
+  3. `EvalMetricsCalculator`：纯工具类，无状态、无 Spring 依赖，所有指标计算均为 static 纯函数
+  4. `EvalReportGenerator`：结构化组装评测结果，统一输出 JSON 报告
+
+- **指标体系**：
+  - `Recall@5`：top-5 中命中 strong 相关文档的比例
+  - `MRR`：第一个 strong 相关结果排名的倒数的均值
+  - `HitRate@5`：top-5 中至少命中 1 条 strong 相关文档的查询占比
+  - `NDCG@K`：预留扩展接口（`ndcgAtK()` 方法签名 + `UnsupportedOperationException`），本期不实现
+
+- **数据集格式**：
+  - 每条样本扩展字段：`query_type`（QueryType 枚举值）、`relevance_levels`（documentId → strong/weak 映射）
+  - 基础指标仅统计 `strong` 强相关文档，`weak` 预留用于 NDCG 加权
+  - 缺失必填字段时抛出语义明确的 `IllegalArgumentException`，禁止静默失败
+
+- **三模式对比**：
+  - 纯向量检索模式：注入 `PgVectorChunkRetrievalAdapter`
+  - 纯关键词检索模式：注入 `SparseRetrievalAdapter`
+  - 混合检索模式（默认）：注入 `HybridChunkRetrievalAdapter`
+  - 三种模式通过 Java 21 虚拟线程并行执行（`Executors.newVirtualThreadPerTaskExecutor()`），共享同一份数据集
+
+- **三级报告结构**：
+  1. 整体汇总层：Recall@5、MRR、HitRate@5、总查询数、单条平均检索耗时
+  2. 分类型统计层：按 `query_type` 分组统计各类型的三项指标均值
+  3. 单条详情层：查询内容、query_type、检索返回 ID 列表、标注相关 ID 列表、命中标记、单条指标得分
+
+- **边界情况**：相关文档列表为空 → Recall/HitRate 默认 1.0；无命中 → MRR 返回 0.0；严格避免除零
+
+- **实现分阶段交付**：
+  - 3.1a：数据模型 + DatasetLoader + 校验 + 单元测试
+  - 3.1b：MetricsCalculator（含 NDCG 扩展接口）+ Executor + 单模式可跑
+  - 3.1c：三模式对比 + ReportGenerator 三级报告 + EvalRunnerTest 集成
 
 **验收标准**：
-- [ ] 20 条 QA pairs 覆盖 5 种 QueryType（每种至少 3 条）
-- [ ] Recall@5 和 MRR 计算正确（手工验证 1-2 条）
-- [ ] 输出 JSON 可读，包含每条 query 的检索结果和命中判断
-- [ ] 执行时间 < 30 秒（不含网络延迟）
+- [ ] 20 条 QA pairs 覆盖 5 种 QueryType（每种至少 3 条），含 query_type 和 relevance_levels 字段
+- [ ] Recall@5、MRR、HitRate@5 计算正确（手工验证 + 单元测试覆盖边界场景）
+- [ ] 三模式对比可通过 `EvalRunnerTest` 一键触发，报告含三模式独立汇总 + 对比
+- [ ] 单模式 ≤ 5 秒，三模式对比 ≤ 15 秒（20 条样本）
+- [ ] 输出 JSON 可读，三级结构（汇总 / 分类型 / 单条详情）
+- [ ] 全程不调用大模型、无外部网络请求
+- [ ] 所有组件仅在 test 作用域生效，不侵入生产代码
+- [ ] `mvn test -Dtest=EvalRunnerTest` 可触发完整评测
 
 **影响文件**：
-- `src/main/java/io/github/spike/myai/qa/infrastructure/eval/EvalRunner.java`（新增）
+- `src/test/java/io/github/spike/myai/qa/infrastructure/eval/RetrievalEvalDatasetLoader.java`（新增）
+- `src/test/java/io/github/spike/myai/qa/infrastructure/eval/RetrievalEvalExecutor.java`（新增）
+- `src/test/java/io/github/spike/myai/qa/infrastructure/eval/EvalMetricsCalculator.java`（新增）
+- `src/test/java/io/github/spike/myai/qa/infrastructure/eval/EvalReportGenerator.java`（新增）
+- `src/test/java/io/github/spike/myai/qa/infrastructure/eval/EvalRunnerTest.java`（新增）
+- `src/test/java/io/github/spike/myai/qa/infrastructure/eval/EvalMetricsCalculatorTest.java`（新增）
 - `src/test/resources/eval/retrieval-qa-pairs.json`（新增 — 20 条 QA pairs）
-- 对应测试文件（新增）
 
 ---
 
@@ -426,7 +462,7 @@ EMNLP 2024（Fudan University, Table 1 消融实验）：
 | NG-3 | QueryType 驱动的 Dense/Sparse 权重调整 | 需要 eval 基线数据后再调优，当前阶段使用等权重 RRF |
 | NG-4 | ES/Jieba/zhparser 等外部依赖引入 | 先用 PG 内置 `'simple'` 配置，eval 数据驱动升级决策 |
 | NG-5 | 合成 QA 对生成 | D17 Layer 3 可选扩展，当前用手写 QA pairs |
-| NG-6 | NDCG@K 排名质量指标 | D17 Layer 3 可选扩展，当前用 Recall@5 + MRR |
+| NG-6 | NDCG@K 完整实现 | 本期预留扩展接口，核心逻辑延后到 Phase 2，当前用 Recall@5 + MRR + HitRate@5 |
 | NG-7 | 对抗 QA 对（刻意设计会出错的查询） | D17 Layer 3 可选扩展 |
 | NG-8 | Streaming 输出 | 当前 `AnswerGenerationPort` 为同步调用，streaming 是独立优化项 |
 | NG-9 | Prompt 模板优化 | D14 已有独立决策，不在本 PRD 范围内 |
@@ -447,7 +483,7 @@ EMNLP 2024（Fudan University, Table 1 消融实验）：
 8. FR-8：SparseRetrievalAdapter — BM25 检索能力
 9. FR-9：HybridChunkRetrievalAdapter RRF 融合 — 多路检索核心
 10. FR-10：应用层切换到 Hybrid Search — 端到端链路打通
-11. FR-11：Layer 1 检索质量评估 — Recall@5 + MRR 基线
+11. FR-11：检索质量评估 — Recall@5 + MRR + HitRate@5，三模式对比，分层报告
 
 ### 6.2 MVP 范围外（Phase 2 迭代）
 
@@ -463,6 +499,7 @@ EMNLP 2024（Fudan University, Table 1 消融实验）：
 | 编号 | 指标 | 目标值 | 验证方法 |
 |------|------|--------|---------|
 | SM-1 | Hybrid Search 检索质量提升 | Recall@5 ≥ 0.70（vs 纯 Dense 基线） | FR-11 EvalRunner |
+| SM-1a | 检索命中覆盖率 | HitRate@5 ≥ 0.85（≥85% 的查询至少命中 1 条） | FR-11 EvalRunner |
 | SM-2 | CHITCHAT 拦截延迟降低 | 闲聊响应延迟降低 ≥ 50% | 手动计时对比 |
 | SM-3 | 代码净增可控 | 净增 ≤ 800 LOC（含测试） | `git diff --stat` |
 | SM-4 | 现有功能零回归 | 所有现有 QA 测试通过 | `mvn test -Dtest="*Qa*Test"` |
@@ -545,9 +582,14 @@ Hybrid Search 的端到端延迟增量（相比纯 Dense）不超过 **200ms**�
 | `NoOpRerankingAdapter.java` | 新增 | FR-2 |
 | `SparseRetrievalAdapter.java` | 新增 | FR-8 |
 | `HybridChunkRetrievalAdapter.java` | 新增 | FR-9 |
-| `EvalRunner.java` | 新增 | FR-11, FR-12 |
+| `RetrievalEvalDatasetLoader.java` | 新增（test） | FR-11 |
+| `RetrievalEvalExecutor.java` | 新增（test） | FR-11 |
+| `EvalMetricsCalculator.java` | 新增（test） | FR-11 |
+| `EvalReportGenerator.java` | 新增（test） | FR-11 |
+| `EvalRunnerTest.java` | 新增（test） | FR-11 |
+| `EvalMetricsCalculatorTest.java` | 新增（test） | FR-11 |
 
-**总计**：5 修改 + 9 新增 = 14 文件
+**总计**：5 修改 + 14 新增 = 19 文件（其中 8 个 test-only）
 
 ---
 
@@ -572,5 +614,5 @@ Hybrid Search 的端到端延迟增量（相比纯 Dense）不超过 **200ms**�
 | Phase 1：基础准备 | FR-1, FR-2, FR-3 | ~半天 | 无 |
 | Phase 2：查询分类 | FR-4, FR-5, FR-6 | ~1 天 | Phase 1（FR-1 score） |
 | Phase 3：混合检索 | FR-7, FR-8, FR-9, FR-10 | ~2 天 | Phase 1 + Phase 2 |
-| Phase 4：评估体系 | FR-11, FR-12, FR-13 | ~1.5 天 | Phase 3 |
-| **总计** | 13 个 FR | **~5 天** | — |
+| Phase 4：评估体系 | FR-11（三模式对比 + 分层报告）, FR-12, FR-13 | ~2 天 | Phase 3 |
+| **总计** | 13 个 FR | **~5.5 天** | — |

@@ -48,6 +48,7 @@ AD-8: Flyway V9 对象命名严格一致 — 列名 content_tsv、索引名 idx_
 AD-9: RRF 常量（RRF_K=60, DENSE_WEIGHT=0.5, SPARSE_WEIGHT=0.5）作为 HybridChunkRetrievalAdapter 的 private static final 常量，不放配置文件
 AD-10: RetrievedChunk.score 语义由调用链决定，不引入 RetrievalMethod 枚举标识检索路径
 AD-11: 代码净增 ≤ 800 LOC（含测试）
+AD-12: EvalRunner 三模式对比并行执行使用 Java 21 虚拟线程（`Executors.newVirtualThreadPerTaskExecutor()`），不引入额外线程池配置
 
 ### UX Design Requirements
 
@@ -287,23 +288,85 @@ AD-11: 代码净增 ≤ 800 LOC（含测试）
 
 ## Epic 3: RAG 检索质量评估体系
 
-开发者有量化工具（Recall@5、MRR）验证检索参数调优效果，从"靠直觉"升级为"数据驱动"。
+开发者有量化工具（Recall@5、MRR、HitRate@5）验证检索参数调优效果，并支持 Dense/Sparse/Hybrid 三模式对比，从"靠直觉"升级为"数据驱动"。
 
-### Story 3.1: EvalRunner Layer 1 检索质量评估
+### Story 3.1: EvalRunner 检索质量评估（三模式对比 + 分层报告）
 
 作为开发者，
-我希望有量化工具衡量检索质量（Recall@5、MRR），
-以便修改检索参数后能数据驱动地验证效果变化。
+我希望有量化工具衡量检索质量，并能对比 Dense、Sparse、Hybrid 三种检索模式的效果差异，
+以便精准定位检索链路瓶颈，数据驱动地验证参数调优效果。
+
+**实现分阶段交付（3.1a → 3.1b → 3.1c），每阶段有独立可验证交付物。**
+
+#### 阶段 3.1a：数据模型 + DatasetLoader + 校验
 
 **Acceptance Criteria:**
 
-**Given** Hybrid Search 已上线，`ChunkRetrievalPort` 可用
-**When** 新增 `EvalRunner`（`src/test/java/` 下，AD-5 test-only 组件）
-**Then** 通过 `@SpringBootTest` 按需加载，直接调用 `ChunkRetrievalPort`（不经过 LLM）
-**And** Layer 1 指标：`Recall@5`（top-5 中命中相关文档的比例）和 `MRR`（第一个相关结果排名的倒数）
-**And** 新增 `EvalMetrics` 辅助类计算 Recall@5 和 MRR
+**Given** 需要标准化的评测数据集格式
+**When** 新增 `RetrievalEvalDatasetLoader`（`src/test/java/` 下，AD-5 test-only 组件）
+**Then** QA pairs JSON 格式扩展，每条样本包含以下字段：
+
+```json
+{
+  "question": "Spring Boot 如何配置 Flyway",
+  "query_type": "PROCEDURAL",
+  "relevant_doc_ids": ["doc-001", "doc-003"],
+  "relevance_levels": {
+    "doc-001": "strong",
+    "doc-003": "weak"
+  }
+}
+```
+
+**And** `query_type` 取值必须为 `QueryType` 枚举的 5 个值之一
+**And** `relevance_levels` 中每个 `relevant_doc_ids` 中的 ID 必须有对应的 relevance 标注
+**And** 基础指标（Recall@5、MRR、HitRate@5）仅统计 `strong` 强相关文档，`weak` 预留用于后续 NDCG 加权
+**And** 加载器包含格式校验 — 缺失必填字段（question / query_type / relevant_doc_ids）时抛出语义明确的 `IllegalArgumentException`，禁止静默失败
 **And** 测试数据：20 条手写 QA pairs（`src/test/resources/eval/retrieval-qa-pairs.json`），每种 QueryType 至少 3 条
-**And** QA pairs 格式：question + 相关 documentId 列表
-**And** 输出 JSON 报告（Recall@5、MRR、每条 query 的检索结果和命中详情）
-**And** 执行时间 < 30 秒（不含网络延迟）
-**And** `mvn test -Dtest=EvalRunnerTest` 可触发评估
+**And** `RetrievalEvalDatasetLoaderTest` 覆盖正常加载和格式校验异常场景
+
+#### 阶段 3.1b：MetricsCalculator + Executor + 单模式可跑
+
+**Acceptance Criteria:**
+
+**Given** 数据集加载器就位
+**When** 新增 `EvalMetricsCalculator` 和 `RetrievalEvalExecutor`
+**Then** `EvalMetricsCalculator` 为纯工具类 — 无状态、零 Spring 依赖，所有指标计算均为 **static 纯函数**
+**And** 核心指标：
+- `Recall@5`：top-5 中命中 strong 相关文档的比例
+- `MRR`：第一个 strong 相关结果排名的倒数的均值
+- `HitRate@5`：top-5 中至少命中 1 条 strong 相关文档的查询占比
+
+**And** 预留 NDCG@K 扩展接口 — `EvalMetricsCalculator` 中定义 `ndcgAtK(results, relevanceLevels, k)` 方法签名，返回 `double`，本期抛 `UnsupportedOperationException("NDCG@K: Phase 2")`，后续实现无需重构现有代码
+**And** 边界情况处理：
+- 相关文档列表为空 → Recall 默认返回 1.0，HitRate 默认返回 1.0
+- 无任何命中 → MRR 返回 0.0
+- 严格避免除零异常
+
+**And** `RetrievalEvalExecutor` 封装检索调用逻辑 — 支持批量执行，隔离评测逻辑与业务检索接口
+**And** `EvalMetricsCalculatorTest` 单元测试覆盖：正常用例、全部命中、零命中、空相关文档列表、单条结果等边界场景
+
+#### 阶段 3.1c：三模式对比 + ReportGenerator + 集成
+
+**Acceptance Criteria:**
+
+**Given** MetricsCalculator 和 Executor 就位
+**When** 扩展 Executor 支持三种检索模式
+**Then** 三种模式通过直接注入具体 adapter 类实现（非 Port 接口多态）：
+- **纯向量检索模式**：注入 `PgVectorChunkRetrievalAdapter`
+- **纯关键词检索模式**：注入 `SparseRetrievalAdapter`
+- **混合检索模式（默认）**：注入 `HybridChunkRetrievalAdapter`
+
+**And** 三模式对比使用 **Java 21 虚拟线程**并行执行（`Executors.newVirtualThreadPerTaskExecutor()`），三种模式共享同一份数据集同时跑（AD-12）
+**And** 性能约束：单模式 ≤ 5 秒，三模式对比 ≤ 15 秒（20 条样本）
+
+**When** 新增 `EvalReportGenerator` 结构化组装评测结果
+**Then** JSON 报告为三级结构：
+1. **整体汇总层**：Recall@5、MRR、HitRate@5、总查询数、单条平均检索耗时
+2. **分类型统计层**：按 `query_type` 分组统计各类型的三项指标均值，快速定位哪类查询效果最差
+3. **单条详情层**：查询内容、query_type、检索返回的 ID 列表、标注的相关 ID 列表、命中标记、单条指标得分
+
+**And** 三模式对比时，报告包含三个模式的独立汇总 + 对比表
+**And** `mvn test -Dtest=EvalRunnerTest` 可触发完整混合检索评测（保留原有触发方式）
+**And** 全程不调用大模型、无外部网络请求
+**And** 所有组件仅在 test 作用域生效，不侵入任何生产代码、不影响主业务打包
