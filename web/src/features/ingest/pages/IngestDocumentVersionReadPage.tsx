@@ -1,3 +1,10 @@
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { Button, Segmented, Select, type SelectProps, Space, Tag, Tooltip, Skeleton, Result, Spin } from "antd";
+import ReactMarkdown from "react-markdown";
+import type { Components } from "react-markdown";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import remarkGfm from "remark-gfm";
 import {
 	ArrowLeftOutlined,
 	ExpandAltOutlined,
@@ -6,15 +13,198 @@ import {
   FolderOpenOutlined,
   LoadingOutlined,
 } from "@ant-design/icons";
-import { Button, Segmented, Select, Space, Tag, Tooltip, Skeleton, Result, Spin } from "antd";
-import { useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
 import { getDocumentVersionHistory, getDocumentStatus, getDocumentContent, type DocumentVersionHistoryItem } from "../../../shared/api/ingestApi";
 import { listKnowledgeBases } from "../../../shared/api/knowledgeApi";
 import { ApiErrorAlert } from "../../../shared/ui/ApiErrorAlert";
 import "./IngestDocumentVersionReadPage.css";
 
 type ReadMode = "single" | "compare";
+type VersionOption = NonNullable<SelectProps<number>["options"]>[number];
+type ContentSection =
+	| { kind: "markdown"; content: string }
+	| { kind: "html"; content: string };
+type MathRendererOptions = {
+	delimiters: Array<{
+		left: string;
+		right: string;
+		display: boolean;
+	}>;
+	throwOnError?: boolean;
+};
+
+declare global {
+	interface Window {
+		renderMathInElement?: (element: HTMLElement, options: MathRendererOptions) => void;
+	}
+}
+
+type DocumentImageProps = {
+	alt?: string;
+	src?: string;
+	title?: string;
+};
+
+const HTML_SECTION_PATTERN =
+	/<(table|figure|div|p|h[1-6]|blockquote|pre|ul|ol)[^>]*>[\s\S]*?<\/\1>|<img\b[^>]*\/?>|<hr\b[^>]*\/?>|<br\s*\/?>/gi;
+const ALLOWED_HTML_TAGS = new Set([
+	"a",
+	"blockquote",
+	"br",
+	"code",
+	"div",
+	"em",
+	"figure",
+	"h1",
+	"h2",
+	"h3",
+	"h4",
+	"h5",
+	"h6",
+	"hr",
+	"img",
+	"li",
+	"ol",
+	"p",
+	"pre",
+	"strong",
+	"table",
+	"tbody",
+	"td",
+	"th",
+	"thead",
+	"tr",
+	"ul",
+]);
+const ALLOWED_HTML_ATTRIBUTES = new Map<string, Set<string>>([
+	["a", new Set(["href", "title"])],
+	["img", new Set(["src", "alt", "title", "width", "height"])],
+	["td", new Set(["colspan", "rowspan"])],
+	["th", new Set(["colspan", "rowspan"])],
+]);
+const EQ_TAG_PATTERN = /<eq>([\s\S]*?)<\/eq>/gi;
+function normalizeSourceContent(content: string): string {
+	return content.replace(EQ_TAG_PATTERN, (_, formula: string) => `\\(${formula.trim()}\\)`);
+}
+
+function DocumentImage({ alt, src, title }: DocumentImageProps) {
+	const [hasError, setHasError] = useState(false);
+
+	if (!src || hasError) {
+		return (
+			<span className="read-image read-image--fallback">
+				{alt || "图片加载失败"}
+				{src ? (
+					<>
+						{" "}
+						<a href={src} target="_blank" rel="noreferrer">
+							打开原图
+						</a>
+					</>
+				) : null}
+			</span>
+		);
+	}
+
+	return (
+		<img
+			alt={alt ?? ""}
+			src={src}
+			title={title}
+			loading="lazy"
+			referrerPolicy="no-referrer"
+			onError={() => setHasError(true)}
+		/>
+	);
+}
+
+function isSafeHtmlUrl(value: string): boolean {
+	const trimmed = value.trim();
+	if (trimmed.length === 0) {
+		return false;
+	}
+	if (/^(javascript|vbscript|file):/i.test(trimmed)) {
+		return false;
+	}
+	if (/^data:/i.test(trimmed)) {
+		return /^data:image\//i.test(trimmed);
+	}
+	return true;
+}
+
+function sanitizeHtmlFragment(fragment: string): string {
+	if (typeof DOMParser === "undefined") {
+		return "";
+	}
+
+	const parser = new DOMParser();
+	const document = parser.parseFromString(`<body>${fragment}</body>`, "text/html");
+	const elements = Array.from(document.body.querySelectorAll("*"));
+
+	for (const element of elements) {
+		const tagName = element.tagName.toLowerCase();
+		if (!ALLOWED_HTML_TAGS.has(tagName)) {
+			element.replaceWith(...Array.from(element.childNodes));
+			continue;
+		}
+
+		for (const attribute of Array.from(element.attributes)) {
+			const attributeName = attribute.name.toLowerCase();
+			const allowedAttributes = ALLOWED_HTML_ATTRIBUTES.get(tagName) ?? new Set<string>();
+			if (!allowedAttributes.has(attributeName)) {
+				element.removeAttribute(attribute.name);
+				continue;
+			}
+			if ((attributeName === "href" || attributeName === "src")
+				&& !isSafeHtmlUrl(attribute.value)) {
+				element.removeAttribute(attribute.name);
+			}
+		}
+		if (tagName === "img") {
+			element.setAttribute("loading", "lazy");
+			element.setAttribute("referrerpolicy", "no-referrer");
+		}
+	}
+
+	return document.body.innerHTML;
+}
+
+function splitContentSections(content: string): ContentSection[] {
+	if (!content) {
+		return [{ kind: "markdown", content: "" }];
+	}
+
+	const normalizedContent = normalizeSourceContent(content);
+	const sections: ContentSection[] = [];
+	let lastIndex = 0;
+	HTML_SECTION_PATTERN.lastIndex = 0;
+	let match = HTML_SECTION_PATTERN.exec(normalizedContent);
+
+	while (match) {
+		const [htmlFragment] = match;
+		if (match.index > lastIndex) {
+			const markdownFragment = normalizedContent.slice(lastIndex, match.index);
+			if (markdownFragment.trim().length > 0) {
+				sections.push({ kind: "markdown", content: markdownFragment });
+			}
+		}
+		sections.push({
+			kind: "html",
+			content: sanitizeHtmlFragment(htmlFragment),
+		});
+		lastIndex = match.index + htmlFragment.length;
+		match = HTML_SECTION_PATTERN.exec(normalizedContent);
+	}
+
+	if (lastIndex < normalizedContent.length) {
+		const markdownFragment = normalizedContent.slice(lastIndex);
+		if (markdownFragment.trim().length > 0 || sections.length === 0) {
+			sections.push({ kind: "markdown", content: markdownFragment });
+		}
+	}
+
+	HTML_SECTION_PATTERN.lastIndex = 0;
+	return sections;
+}
 
 function ReaderPane({
 	version,
@@ -29,10 +219,16 @@ function ReaderPane({
 	isLatest: boolean;
 	isAskable: boolean;
   onVersionChange: (v: number) => void;
-  versionOptions: any[];
+  versionOptions: VersionOption[];
   documentId: string;
   source?: "LATEST" | "ASKABLE_BASELINE" | "EXPLICIT_VERSION";
 }) {
+  const markdownComponents = useMemo<Components>(
+    () => ({
+      img: ({ node: _node, ...props }) => <DocumentImage {...props} />,
+    }),
+    [],
+  );
   const contentQuery = useQuery({
     queryKey: ["document-content", documentId, version.versionNumber],
     queryFn: () => getDocumentContent({
@@ -42,6 +238,48 @@ function ReaderPane({
     }),
     enabled: documentId.length > 0 && version.versionNumber > 0,
   });
+  const contentContainerRef = useRef<HTMLElement | null>(null);
+  const contentSections = useMemo(
+    () => splitContentSections(contentQuery.data?.contentMarkdown ?? ""),
+    [contentQuery.data?.contentMarkdown],
+  );
+
+  useEffect(() => {
+    let retryTimer: number | undefined;
+    let retryCount = 0;
+
+    const renderMath = () => {
+      const container = contentContainerRef.current;
+      const renderMathInElement = window.renderMathInElement;
+      if (!container) {
+        return;
+      }
+      if (!renderMathInElement) {
+        if (retryCount < 10) {
+          retryCount += 1;
+          retryTimer = window.setTimeout(renderMath, 200);
+        }
+        return;
+      }
+
+      renderMathInElement(container, {
+        delimiters: [
+          { left: "$$", right: "$$", display: true },
+          { left: "\\[", right: "\\]", display: true },
+          { left: "$", right: "$", display: false },
+          { left: "\\(", right: "\\)", display: false },
+        ],
+        throwOnError: false,
+      });
+    };
+
+    renderMath();
+    return () => {
+      if (retryTimer !== undefined) {
+        window.clearTimeout(retryTimer);
+      }
+    };
+  }, [contentSections]);
 
 	return (
 		<div className="read-pane">
@@ -68,8 +306,23 @@ function ReaderPane({
         ) : contentQuery.isError ? (
           <div style={{ padding: 48 }}><ApiErrorAlert error={contentQuery.error} /></div>
         ) : (
-				  <article className="read-content">
-            <section dangerouslySetInnerHTML={{ __html: contentQuery.data?.contentMarkdown.replace(/\n/g, '<br/>').replace(/# (.*?)<br\/>/, '<h1>$1</h1>').replace(/## (.*?)<br\/>/g, '<h2>$1</h2>').replace(/> (.*?)<br\/>/g, '<blockquote>$1</blockquote>').replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>').replace(/`([^`]+)`/g, '<code>$1</code>') ?? "" }} />
+				  <article className="read-content" ref={contentContainerRef}>
+            {contentSections.map((section, index) =>
+              section.kind === "html" ? (
+                <div
+                  key={`html-${index}`}
+                  dangerouslySetInnerHTML={{ __html: section.content }}
+                />
+              ) : (
+                <ReactMarkdown
+                  key={`markdown-${index}`}
+                  remarkPlugins={[remarkGfm]}
+                  components={markdownComponents}
+                >
+                  {section.content}
+                </ReactMarkdown>
+              ),
+            )}
 				  </article>
         )}
 			</div>
