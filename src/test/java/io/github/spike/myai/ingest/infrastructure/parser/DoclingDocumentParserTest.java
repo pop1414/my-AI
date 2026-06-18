@@ -141,6 +141,33 @@ class DoclingDocumentParserTest {
     }
 
     @Test
+    @DisplayName("null 文件名应抛出 IllegalStateException")
+    void parse_shouldThrowException_whenFilenameNull() {
+        IllegalStateException ex = assertThrows(
+                IllegalStateException.class,
+                () -> parser.parse(null, "data".getBytes(StandardCharsets.UTF_8)));
+        assertEquals("filename must not be null or empty", ex.getMessage());
+    }
+
+    @Test
+    @DisplayName("空字符串文件名应抛出 IllegalStateException")
+    void parse_shouldThrowException_whenFilenameEmpty() {
+        IllegalStateException ex = assertThrows(
+                IllegalStateException.class,
+                () -> parser.parse("", "data".getBytes(StandardCharsets.UTF_8)));
+        assertEquals("filename must not be null or empty", ex.getMessage());
+    }
+
+    @Test
+    @DisplayName("纯空白文件名应抛出 IllegalStateException")
+    void parse_shouldThrowException_whenFilenameBlank() {
+        IllegalStateException ex = assertThrows(
+                IllegalStateException.class,
+                () -> parser.parse("   ", "data".getBytes(StandardCharsets.UTF_8)));
+        assertEquals("filename must not be null or empty", ex.getMessage());
+    }
+
+    @Test
     @DisplayName("未知 Runtime 异常应包装为 DoclingTransientException")
     void parse_shouldThrowTransientException_whenUnknownRuntimeException() {
         RuntimeException apiError = new RuntimeException("connection refused");
@@ -300,7 +327,7 @@ class DoclingDocumentParserTest {
     }
 
     @Test
-    @DisplayName("所有内容格式均为空时应抛出含格式信息的 IllegalStateException")
+    @DisplayName("所有内容格式均为空时应抛出含 md_content 信息的 IllegalStateException")
     void parse_shouldThrowException_whenAllContentFormatsNull() {
         ConvertDocumentResponse response = buildResponse(DocumentResponse.builder()
                 .filename("null-md.pdf")
@@ -311,50 +338,39 @@ class DoclingDocumentParserTest {
                 IllegalStateException.class,
                 () -> parser.parse("null-md.pdf", "data".getBytes(StandardCharsets.UTF_8)));
 
-        assertEquals("docling response has no usable content (status=success, md/html/text/doctags all null)",
-                ex.getMessage());
+        assertTrue(ex.getMessage().contains("md_content"), "异常消息应包含 md_content 关键字");
     }
 
     @Test
-    @DisplayName("md_content 为空时应降级使用 html_content")
-    void parse_shouldFallbackToHtml_whenMarkdownContentNull() {
+    @DisplayName("md_content 为 null 时应抛出 IllegalStateException（不降级）")
+    void parse_shouldThrowException_whenMarkdownContentNull() {
         ConvertDocumentResponse response = buildResponse(DocumentResponse.builder()
                 .filename("no-md.pdf")
                 .htmlContent("<h1>Title</h1><p>正文</p>")
                 .build());
         when(doclingServeApi.convertSource(any())).thenReturn(response);
 
-        DocumentParseResult result = parser.parse("no-md.pdf", "data".getBytes(StandardCharsets.UTF_8));
+        IllegalStateException ex = assertThrows(
+                IllegalStateException.class,
+                () -> parser.parse("no-md.pdf", "data".getBytes(StandardCharsets.UTF_8)));
 
-        assertEquals("<h1>Title</h1><p>正文</p>", result.cleanedMarkdown());
+        assertTrue(ex.getMessage().contains("md_content"), "异常消息应包含 md_content 关键字");
     }
 
     @Test
-    @DisplayName("md_content 和 html_content 均为空时应降级使用 text_content")
-    void parse_shouldFallbackToText_whenMarkdownAndHtmlNull() {
+    @DisplayName("md_content 为空白字符串时应抛出 IllegalStateException")
+    void parse_shouldThrowException_whenMarkdownContentBlank() {
         ConvertDocumentResponse response = buildResponse(DocumentResponse.builder()
-                .filename("text-only.pdf")
-                .textContent("Title\n\n正文内容")
+                .filename("blank-md.pdf")
+                .markdownContent("   \n  ")
                 .build());
         when(doclingServeApi.convertSource(any())).thenReturn(response);
 
-        DocumentParseResult result = parser.parse("text-only.pdf", "data".getBytes(StandardCharsets.UTF_8));
+        IllegalStateException ex = assertThrows(
+                IllegalStateException.class,
+                () -> parser.parse("blank-md.pdf", "data".getBytes(StandardCharsets.UTF_8)));
 
-        assertEquals("Title\n\n正文内容", result.cleanedMarkdown());
-    }
-
-    @Test
-    @DisplayName("md html text 均为空时应降级使用 doctags_content")
-    void parse_shouldFallbackToDoctags_whenMdHtmlTextNull() {
-        ConvertDocumentResponse response = buildResponse(DocumentResponse.builder()
-                .filename("doctags-only.pdf")
-                .doctagsContent("<document><title>Test</title></document>")
-                .build());
-        when(doclingServeApi.convertSource(any())).thenReturn(response);
-
-        DocumentParseResult result = parser.parse("doctags-only.pdf", "data".getBytes(StandardCharsets.UTF_8));
-
-        assertTrue(result.cleanedMarkdown().contains("<document><title>Test</title></document>"));
+        assertTrue(ex.getMessage().contains("md_content"), "异常消息应包含 md_content 关键字");
     }
 
     @Test

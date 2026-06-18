@@ -124,6 +124,9 @@ public class DoclingDocumentParser implements DocumentTextParser {
         if (content == null || content.length == 0) {
             throw new IllegalStateException("empty source content");
         }
+        if (filename == null || filename.isBlank()) {
+            throw new IllegalStateException("filename must not be null or empty");
+        }
         if (isMarkdownFilename(filename)) {
             return mapMarkdownSourceToParseResult(filename, content);
         }
@@ -245,12 +248,15 @@ public class DoclingDocumentParser implements DocumentTextParser {
     }
 
     /**
-     * 从 Convert 响应中提取可用正文，支持多格式降级。
+     * 从 Convert 响应中提取 Markdown 正文。
      *
-     * <p>提取优先级：{@code md_content -> html_content -> text_content -> doctags_content}。
+     * <p>仅接受 {@code md_content} 作为唯一内容源。
+     * 当 md_content 为 null 或空白时直接抛出异常，不静默降级到其他格式
+     * （Phase 0 调查确认 md_content 空值频率为零，降级链已无存在价值）。
      *
      * @param response Docling Convert 响应
-     * @return 可用于后续清洗的文本内容
+     * @return Markdown 正文内容
+     * @throws IllegalStateException 响应状态异常、document 为空或 md_content 为空时
      */
     private String extractReaderMarkdown(ConvertDocumentResponse response) {
         if (response == null) {
@@ -273,25 +279,13 @@ public class DoclingDocumentParser implements DocumentTextParser {
             throw new IllegalStateException("docling response contains no document");
         }
 
-        if (document.getMarkdownContent() != null) {
-            return document.getMarkdownContent();
-        }
-        if (document.getHtmlContent() != null) {
-            log.info("Docling md_content 为空，降级使用 html_content (status={})", status);
-            return document.getHtmlContent();
-        }
-        if (document.getTextContent() != null) {
-            log.info("Docling md_content/html_content 均为空，降级使用 text_content (status={})", status);
-            return document.getTextContent();
-        }
-        if (document.getDoctagsContent() != null) {
-            log.info("Docling md/html/text_content 均为空，降级使用 doctags_content (status={})", status);
-            return document.getDoctagsContent();
+        String mdContent = document.getMarkdownContent();
+        if (mdContent != null && !mdContent.isBlank()) {
+            return mdContent;
         }
 
         throw new IllegalStateException(
-                "docling response has no usable content (status=%s, md/html/text/doctags all null)"
-                        .formatted(status));
+                "docling response md_content is null/empty (status=%s)".formatted(status));
     }
 
     /**
