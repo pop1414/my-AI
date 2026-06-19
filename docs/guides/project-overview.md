@@ -14,10 +14,9 @@ my-AI 是一个基于 Spring Boot + Spring AI 的 **AI 知识管理平台**，�
 | Spring AI Alibaba | 1.1.2.x | DashScope 适配 + Agent Framework |
 | PostgreSQL + PGVector | pg16 | 关系数据 + 向量存储 |
 | Flyway | — | 数据库迁移 |
-| Apache Tika | 2.9.2 | 文档解析（PDF/Word/HTML 等） |
+| Docling Serve | latest | 文档解析（PDF/Word/HTML 等，支持表格/图片/公式结构化提取） |
+| Arconia Docling Starter | 0.20.0 | Spring Boot 集成 Docling Serve |
 | AWS S3 SDK v2 | 2.42.14 | 对象存储（兼容 MinIO/RustFS） |
-| jsoup | 1.18.3 | HTML 清洗 |
-| flexmark | 0.64.8 | HTML 转 Markdown |
 | Maven Wrapper | — | 构建工具 |
 
 > **依赖说明**：项目同时依赖 `spring-ai-alibaba-extensions 1.1.2.1`，提供 DashScope Agent Framework 等扩展能力。
@@ -50,14 +49,15 @@ my-AI 是一个基于 Spring Boot + Spring AI 的 **AI 知识管理平台**，�
 ### 前置条件
 
 - JDK 21
-- Docker（用于 PostgreSQL + RustFS）
+- Docker（用于 PostgreSQL + RustFS + Docling Serve）
 - DashScope API Key
 
 ### 启动步骤
 
 ```bash
-# 1. 启动基础设施（PostgreSQL + RustFS）
+# 1. 启动基础设施（PostgreSQL + RustFS + Docling Serve）
 cd infra && docker compose up -d
+# 首次启动 Docling Serve 会自动下载模型，通常在 5 分钟内完成
 
 # 2. 启动后端
 .\mvnw.cmd spring-boot:run   # Windows
@@ -100,4 +100,4 @@ cd web && npm install && npm run dev
 
 ---
 
-_生成时间: 2026-06-15 | 扫描模式: 深度扫描_
+_最后更新: 2026-06-19 | 扫描模式: 深度扫描 | 变更: Tika→Docling 技术栈更新_

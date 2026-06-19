@@ -212,10 +212,10 @@ vector_store ←→ ingest_documents（通过元数据 documentId 关联）
 |---|---|---|
 | PostgreSQL + PGVector | 一个数据库同时满足业务存储和向量检索 | Milvus/Pinecone（专用向量库） |
 | DashScope | 阿里云百炼，国内网络可达、中文优化 | OpenAI、Anthropic |
-| Tika | 业界标准文档解析，支持 100+ 格式 | 自研解析器 |
+| Docling Serve | IBM 开源文档解析，支持表格/图片/公式结构化提取，Docker 部署 | Apache Tika（已迁移）、Unstructured.io |
 | Flyway | Java 原生、SQL 文件直观 | Liquibase |
 | Session 认证 | V1 最简方案，无需 JWT 刷新机制 | JWT + Refresh Token |
 
 ---
 
-_生成时间: 2026-06-15 | 扫描模式: 深度扫描_
+_最后更新: 2026-06-19 | 扫描模式: 深度扫描 | 变更: Tika→Docling 技术选型更新_

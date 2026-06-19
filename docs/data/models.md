@@ -312,4 +312,6 @@ vector_store（独立，通过 metadata.documentId 关联 ingest_documents）
 
 ---
 
-_生成时间: 2026-06-15 | 扫描模式: 深度扫描（Flyway V1-V8 源码级提取）_
+_最后更新: 2026-06-19 | 扫描模式: 深度扫描（Flyway V1-V8 源码级提取） | 表总数: 12_
+
+> **Docling 集成说明**: 文档解析已从 Apache Tika 迁移至 Docling Serve，`ingest_documents.processing_metadata` 字段存储 Docling 解析结果（含文档结构、表格、图片等元数据）。

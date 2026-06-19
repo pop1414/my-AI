@@ -1,45 +1,136 @@
 {
   "workflow_version": "1.2.0",
   "timestamps": {
-    "started": "2026-06-15T09:00:00+08:00",
-    "last_updated": "2026-06-15T09:30:00+08:00",
-    "completed": "2026-06-15T09:30:00+08:00"
+    "started": "2026-06-19T10:00:00+08:00",
+    "last_updated": "2026-06-19T10:45:00+08:00",
+    "completed": "2026-06-19T10:45:00+08:00"
   },
-  "mode": "initial_scan",
+  "mode": "full_rescan",
   "scan_level": "deep",
-  "project_root": "D:/01_Workspace/Code/Project/my-AI-bmad-method",
-  "project_knowledge": "D:/01_Workspace/Code/Project/my-AI-bmad-method/docs",
+  "project_root": "D:/01_Workspace/Code/Project/my-AI",
+  "project_knowledge": "D:/01_Workspace/Code/Project/my-AI/docs",
   "completed_steps": [
-    {"step": "step_1", "status": "completed", "timestamp": "2026-06-15T09:02:00+08:00", "summary": "Classified as monolith, project_type=backend (pom.xml, Java 21, Spring Boot 3.5.8)"},
-    {"step": "step_2", "status": "completed", "timestamp": "2026-06-15T09:03:00+08:00", "summary": "Found README.md + DESIGN.md as existing docs; docs/ dir was empty"},
-    {"step": "step_3", "status": "completed", "timestamp": "2026-06-15T09:05:00+08:00", "summary": "Tech stack: Java 21 + Spring Boot 3.5.8 + Spring AI 1.1.2 + PostgreSQL/PGVector + DashScope"},
-    {"step": "step_4", "status": "completed", "timestamp": "2026-06-15T09:20:00+08:00", "summary": "Deep scan: 4 subdomains scanned (auth/ingest/knowledge/qa), 40+ API endpoints, 14 tables, Flyway V1-V8 analyzed"},
-    {"step": "step_5", "status": "completed", "timestamp": "2026-06-15T09:22:00+08:00", "summary": "Source tree documented with annotated directory structure"},
-    {"step": "step_6", "status": "completed", "timestamp": "2026-06-15T09:24:00+08:00", "summary": "Development guide written (env vars, startup, build, test, code conventions)"},
-    {"step": "step_8", "status": "completed", "timestamp": "2026-06-15T09:26:00+08:00", "summary": "Architecture documentation written (DDD-Lite, 4 subdomains, cross-domain relations)"},
-    {"step": "step_9", "status": "completed", "timestamp": "2026-06-15T09:28:00+08:00", "summary": "All supporting docs written (overview, api-contracts, data-models, source-tree, dev-guide)"},
-    {"step": "step_10", "status": "completed", "timestamp": "2026-06-15T09:29:00+08:00", "summary": "Master index generated"},
-    {"step": "step_12", "status": "completed", "timestamp": "2026-06-15T09:30:00+08:00", "summary": "Workflow complete"}
+    {
+      "step": "step_1",
+      "status": "completed",
+      "timestamp": "2026-06-19T10:05:00+08:00",
+      "summary": "Classified as monorepo with 2 parts: backend (Java 21 + Spring Boot 3.5.8) + frontend (React 19 + TypeScript + Vite)"
+    },
+    {
+      "step": "step_2",
+      "status": "completed",
+      "timestamp": "2026-06-19T10:10:00+08:00",
+      "summary": "Found 28+ existing docs in docs/, plus README.md, DESIGN.md, CLAUDE.md. User highlighted docling-upgrade artifacts as recently completed focus area."
+    },
+    {
+      "step": "step_3",
+      "status": "completed",
+      "timestamp": "2026-06-19T10:15:00+08:00",
+      "summary": "Tech stack analyzed: Backend (Java 21 + Spring Boot 3.5.8 + Spring AI 1.1.2 + DashScope + PGVector + Docling), Frontend (React 19 + TypeScript 6 + Vite 8 + Ant Design 6), Infra (PGVector 16 + RustFS + Docling Serve)"
+    },
+    {
+      "step": "step_4",
+      "status": "completed",
+      "timestamp": "2026-06-19T10:25:00+08:00",
+      "summary": "Deep scan complete: 34 API endpoints (10 controllers), 12 database tables, frontend structure mapped (6 feature modules, 5 API clients). Updated contracts.md and models.md with docling integration notes."
+    },
+    {
+      "step": "step_5",
+      "status": "completed",
+      "timestamp": "2026-06-19T10:30:00+08:00",
+      "summary": "Source tree updated: project name corrected, Tika→Docling migration noted, frontend structure added (6 feature modules, shared API/auth/UI layers)"
+    },
+    {
+      "step": "step_6",
+      "status": "completed",
+      "timestamp": "2026-06-19T10:32:00+08:00",
+      "summary": "Development guide updated: Tika→Docling reference corrected, timestamp updated"
+    },
+    {
+      "step": "step_8",
+      "status": "completed",
+      "timestamp": "2026-06-19T10:35:00+08:00",
+      "summary": "Architecture overview updated: Tika→Docling technical selection rationale updated"
+    },
+    {
+      "step": "step_9",
+      "status": "completed",
+      "timestamp": "2026-06-19T10:38:00+08:00",
+      "summary": "Project overview updated: Tika→Docling tech stack, quick start includes Docling Serve"
+    },
+    {
+      "step": "step_10",
+      "status": "completed",
+      "timestamp": "2026-06-19T10:40:00+08:00",
+      "summary": "Master index updated: Docling Serve added to project overview table, timestamp refreshed"
+    },
+    {
+      "step": "step_11",
+      "status": "completed",
+      "timestamp": "2026-06-19T10:42:00+08:00",
+      "summary": "Validation complete: 8 documents updated, no incomplete markers found, user confirmed finalization"
+    },
+    {
+      "step": "step_12",
+      "status": "completed",
+      "timestamp": "2026-06-19T10:45:00+08:00",
+      "summary": "Workflow complete: Full rescan finished, all documents updated with Docling migration"
+    }
   ],
   "current_step": "completed",
   "findings": {
-    "project_classification": "monolith, backend, Java 21 + Spring Boot 3.5.8",
-    "technology_stack": "Spring Boot 3.5.8, Spring AI 1.1.2, PostgreSQL 16 + PGVector, DashScope, Tika, AWS S3 SDK",
-    "subdomains": ["auth", "ingest", "knowledge", "qa"],
-    "api_endpoint_count": 37,
-    "table_count": 14,
-    "migration_count": 8,
-    "test_file_count": 78
+    "project_classification": "monorepo, backend + frontend, Java 21 + Spring Boot 3.5.8 + React 19 + TypeScript",
+    "project_types": [
+      {"part_id": "backend", "project_type_id": "backend", "display_name": "Backend (Java/Spring Boot)"},
+      {"part_id": "frontend", "project_type_id": "web", "display_name": "Frontend (React/TypeScript)"}
+    ],
+    "subdomains": ["auth", "ingest", "knowledge", "qa", "shared"],
+    "existing_docs_count": 28,
+    "user_context": "Recently completed docling-upgrade: _bmad-output/implementation-artifacts/docling-upgrade and _bmad-output/planning-artifacts/docling-upgrade",
+    "technology_stack": {
+      "backend": {
+        "language": "Java 21",
+        "framework": "Spring Boot 3.5.8",
+        "ai": "Spring AI 1.1.2 + Spring AI Alibaba 1.1.2.0 (DashScope)",
+        "database": "PostgreSQL 16 + PGVector (1024维, HNSW, 余弦距离)",
+        "migration": "Flyway V1-V8",
+        "orm": "JdbcTemplate (无 JPA/Hibernate)",
+        "document_parser": "Docling Serve (arconia-docling-spring-boot-starter 0.20.0)",
+        "storage": "AWS SDK 2.42.14 (S3 兼容 - RustFS)"
+      },
+      "frontend": {
+        "language": "TypeScript ~6.0.2",
+        "framework": "React 19.2.4",
+        "bundler": "Vite 8.0.4 (dev port 55555)",
+        "ui": "Ant Design 6.3.5",
+        "state": "TanStack React Query 5.96.2",
+        "router": "React Router 7.14.0",
+        "validation": "Zod 4.3.6",
+        "testing": "Playwright 1.56.1 (E2E)"
+      },
+      "infrastructure": {
+        "database": "PGVector 16 (port 5432)",
+        "storage": "RustFS S3 (port 9000/9001)",
+        "document_parser": "Docling Serve CPU (port 5001)"
+      }
+    },
+    "architecture_pattern": "DDD-Lite (六边形架构简化版)",
+    "api_endpoints": {
+      "total": 34,
+      "controllers": 10,
+      "by_subdomain": {
+        "auth": 18,
+        "ingest": 11,
+        "knowledge": 4,
+        "qa": 1
+      }
+    },
+    "database_tables": {
+      "total": 12,
+      "migrations": 8,
+      "database_functions": 2
+    }
   },
-  "outputs_generated": [
-    "project-scan-report.json",
-    "index.md",
-    "project-overview.md",
-    "architecture.md",
-    "api-contracts.md",
-    "data-models.md",
-    "source-tree-analysis.md",
-    "development-guide.md"
-  ],
+  "outputs_generated": ["project-scan-report.json", "docs/api/contracts.md", "docs/data/models.md", "docs/guides/source-tree.md", "docs/guides/development.md", "docs/architecture/overview.md", "docs/guides/project-overview.md", "docs/index.md"],
   "resume_instructions": "Workflow completed. No resume needed."
 }

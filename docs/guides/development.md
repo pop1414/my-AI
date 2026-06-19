@@ -40,7 +40,7 @@
 | `INGEST_CHUNK_SIZE` | `500` | 分块大小（字符） |
 | `INGEST_CHUNK_OVERLAP` | `100` | 分块重叠（字符） |
 | `INGEST_SCHEMA_CHECK_ENABLED` | `true` | 启动时 schema 自检 |
-| `INGEST_PARSER_MAX_TEXT_LENGTH` | `2000000` | Tika 解析最大文本长度 |
+| `INGEST_PARSER_MAX_TEXT_LENGTH` | `2000000` | 文档解析最大文本长度 |
 | `INGEST_PARSER_PARSE_EMBEDDED_RESOURCE` | `false` | 是否允许解析嵌入资源 |
 | `INGEST_STORAGE_ROOT_DIR` | `data/ingest` | local 模式本地落盘目录 |
 | `INGEST_STORAGE_S3_REGION` | `us-east-1` | S3 region |
@@ -193,4 +193,4 @@ curl http://localhost:8080/actuator/metrics/myai.ingest.delete.conflict.total
 
 ---
 
-_生成时间: 2026-06-15 | 扫描模式: 深度扫描_
+_最后更新: 2026-06-19 | 扫描模式: 深度扫描 | 变更: Tika→Docling 引用修正_

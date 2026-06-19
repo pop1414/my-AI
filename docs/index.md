@@ -12,6 +12,7 @@
 | 主要语言 | Java 21 |
 | 框架 | Spring Boot 3.5.8 + Spring AI 1.1.2 |
 | 数据库 | PostgreSQL 16 + PGVector |
+| 文档解析 | Docling Serve（arconia-docling-spring-boot-starter） |
 | 子域 | auth / ingest / knowledge / qa |
 
 ## 文档目录结构
@@ -92,4 +93,4 @@ docs/
 
 ---
 
-_生成时间: 2026-06-15 | 扫描模式: 深度扫描 | 最后更新: 目录结构重组_
+_最后更新: 2026-06-19 | 扫描模式: 深度扫描 | 变更: Tika→Docling 迁移完成_
