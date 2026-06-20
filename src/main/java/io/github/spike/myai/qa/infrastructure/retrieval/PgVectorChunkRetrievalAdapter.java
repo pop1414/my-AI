@@ -5,7 +5,6 @@ import io.github.spike.myai.qa.domain.model.AskableDocumentVersion;
 import io.github.spike.myai.qa.domain.port.ChunkRetrievalPort;
 import java.time.Instant;
 import java.time.format.DateTimeParseException;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -14,7 +13,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.ai.vectorstore.SearchRequest;
 import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.ai.vectorstore.filter.Filter;
-import org.springframework.ai.vectorstore.filter.FilterExpressionBuilder;
 import org.springframework.stereotype.Component;
 
 /**
@@ -57,10 +55,6 @@ public class PgVectorChunkRetrievalAdapter implements ChunkRetrievalPort {
     private static final String METADATA_SOURCE_UPDATED_AT = "sourceUpdatedAt";
     /** 向量文档元数据中“分块版本”字段名。 */
     private static final String METADATA_SPLIT_VERSION = "splitVersion";
-    /** 初始文档版本号。 */
-    private static final int INITIAL_DOCUMENT_VERSION_NUMBER = 1;
-    /** 历史初始向量使用的分块版本号。 */
-    private static final String LEGACY_INITIAL_SPLIT_VERSION = "v1";
 
     /** Spring AI 向量存储抽象，底层可由 PGVector 等实现。 */
     private final VectorStore vectorStore;
@@ -113,7 +107,7 @@ public class PgVectorChunkRetrievalAdapter implements ChunkRetrievalPort {
         SearchRequest.Builder searchRequestBuilder = SearchRequest.builder()
                 .query(question)
                 .topK(Math.max(1, topK));
-        Filter.Expression scopeFilter = buildScopeFilter(scope);
+        Filter.Expression scopeFilter = ScopeFilterBuilder.toFilterExpression(scope);
         if (scopeFilter != null) {
             searchRequestBuilder.filterExpression(scopeFilter);
         }
@@ -124,55 +118,6 @@ public class PgVectorChunkRetrievalAdapter implements ChunkRetrievalPort {
                 .map(this::toRetrievedChunk)
                 .filter(Objects::nonNull)
                 .toList();
-    }
-
-    /**
-     * 构造可问答版本范围过滤表达式。
-     *
-     * <p>每个 document 的可问答版本可能不同，因此必须构造成成对条件：
-     * {@code (documentId = A AND version = 2) OR (documentId = B AND version = 4)}。</p>
-     *
-     * <p>PGVector 转换器不支持 {@code ISNULL}，因此初始版本的历史向量兼容通过
-     * {@code splitVersion = v1} 表达，避免问答检索在底层过滤转换阶段抛出异常。</p>
-     *
-     * @param scope 可问答文档版本范围
-     * @return 过滤表达式；scope 为空时返回 null
-     */
-    private static Filter.Expression buildScopeFilter(List<AskableDocumentVersion> scope) {
-        if (scope == null || scope.isEmpty()) {
-            return null;
-        }
-        FilterExpressionBuilder builder = new FilterExpressionBuilder();
-        List<FilterExpressionBuilder.Op> documentVersionFilters = new ArrayList<>();
-        for (AskableDocumentVersion item : scope) {
-            documentVersionFilters.add(builder.and(
-                    builder.eq(METADATA_DOCUMENT_ID, item.documentId()),
-                    builder.group(buildVersionFilter(builder, item.askableVersionNumber()))));
-        }
-        FilterExpressionBuilder.Op result = documentVersionFilters.getFirst();
-        for (int i = 1; i < documentVersionFilters.size(); i++) {
-            result = builder.or(result, documentVersionFilters.get(i));
-        }
-        return result.build();
-    }
-
-    /**
-     * 构造单个文档版本的向量元数据过滤条件。
-     *
-     * @param builder 过滤表达式构造器
-     * @param askableVersionNumber 当前可问答版本号
-     * @return 可被 PGVector 转换器处理的版本过滤条件
-     */
-    private static FilterExpressionBuilder.Op buildVersionFilter(
-            FilterExpressionBuilder builder,
-            int askableVersionNumber) {
-        FilterExpressionBuilder.Op versionFilter = builder.or(
-                builder.eq(METADATA_DOCUMENT_VERSION_NUMBER, askableVersionNumber),
-                builder.eq(METADATA_SPLIT_VERSION, "version-" + askableVersionNumber + "-v1"));
-        if (askableVersionNumber == INITIAL_DOCUMENT_VERSION_NUMBER) {
-            versionFilter = builder.or(versionFilter, builder.eq(METADATA_SPLIT_VERSION, LEGACY_INITIAL_SPLIT_VERSION));
-        }
-        return versionFilter;
     }
 
     /**
@@ -196,6 +141,10 @@ public class PgVectorChunkRetrievalAdapter implements ChunkRetrievalPort {
         Instant sourceUpdatedAt = asInstant(metadata.get(METADATA_SOURCE_UPDATED_AT));
         // 向量文档正文允许为空，统一归一为空字符串，减少上层空值判断分支。
         String content = chunkDocument.getText() == null ? "" : chunkDocument.getText();
+        // Spring AI Document.getScore() 返回 1.0 - cosine_distance（cosine similarity），
+        // @Nullable 防御：理论上调 similaritySearch 后不为 null，但需兜底。
+        Double rawScore = chunkDocument.getScore();
+        double score = (rawScore != null && Double.isFinite(rawScore)) ? rawScore : 0.0;
         return new RetrievedChunk(
                 documentId,
                 kbId,
@@ -203,7 +152,8 @@ public class PgVectorChunkRetrievalAdapter implements ChunkRetrievalPort {
                 content,
                 sourceVersionNumber,
                 sourceFilename,
-                sourceUpdatedAt);
+                sourceUpdatedAt,
+                score);
     }
 
     /**

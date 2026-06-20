@@ -3,6 +3,7 @@ package io.github.spike.myai.qa.application.service;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
@@ -20,14 +21,19 @@ import io.github.spike.myai.knowledge.domain.model.KnowledgeBase;
 import io.github.spike.myai.knowledge.domain.model.KnowledgeBaseStatus;
 import io.github.spike.myai.knowledge.domain.port.KnowledgeBaseRepository;
 import io.github.spike.myai.qa.domain.model.AskableDocumentVersion;
+import io.github.spike.myai.qa.domain.model.QueryType;
 import io.github.spike.myai.qa.domain.model.RetrievedChunk;
 import io.github.spike.myai.qa.domain.port.AskableDocumentVersionPort;
 import io.github.spike.myai.qa.domain.port.AnswerGenerationPort;
 import io.github.spike.myai.qa.domain.port.ChunkRetrievalPort;
+import io.github.spike.myai.qa.domain.port.QueryClassifierPort;
+import io.github.spike.myai.qa.domain.port.RerankingPort;
+import io.github.spike.myai.qa.domain.port.RetrievalConfigPort;
 import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 import org.springframework.security.access.AccessDeniedException;
 
@@ -45,14 +51,23 @@ class AskQuestionApplicationServiceTest {
         CurrentUserProvider currentUserProvider = currentUserProvider();
         AuthorizationService authorizationService = Mockito.mock(AuthorizationService.class);
         AskableDocumentVersionPort askableDocumentVersionPort = Mockito.mock(AskableDocumentVersionPort.class);
+        RerankingPort rerankingPort = Mockito.mock(RerankingPort.class);
+        when(rerankingPort.rerank(anyList(), anyString(), anyInt()))
+                .thenAnswer(inv -> inv.getArgument(0));
+        QueryClassifierPort queryClassifierPort = Mockito.mock(QueryClassifierPort.class);
+        when(queryClassifierPort.classify(anyString())).thenReturn(QueryType.GENERAL);
+        RetrievalConfigPort properties = defaultRetrievalConfig();
         AskQuestionApplicationService service =
                 new AskQuestionApplicationService(
+                        queryClassifierPort,
                         chunkRetrievalPort,
+                        rerankingPort,
                         answerGenerationPort,
                         knowledgeBaseRepository,
                         currentUserProvider,
                         authorizationService,
-                        askableDocumentVersionPort);
+                        askableDocumentVersionPort,
+                        properties);
         when(knowledgeBaseRepository.findByKbId(eq("workspace-a"), eq("kb-1")))
                 .thenReturn(java.util.Optional.of(new KnowledgeBase("kb-1", "workspace-a", "知识库1", "", KnowledgeBaseStatus.ACTIVE, java.time.Instant.now(), java.time.Instant.now())));
 
@@ -63,8 +78,8 @@ class AskQuestionApplicationServiceTest {
                 .thenReturn(scope);
         when(chunkRetrievalPort.similaritySearch(eq("什么是 RAG"), anyInt(), eq(scope)))
                 .thenReturn(List.of(
-                        new RetrievedChunk("doc-1", "kb-1", 0, "RAG 是检索增强生成。", 1, "rag-1.pdf", Instant.parse("2026-05-08T10:00:00Z")),
-                        new RetrievedChunk("doc-3", "kb-1", 2, "它通过外部知识提升回答准确性。", 1, "rag-2.pdf", Instant.parse("2026-05-08T10:05:00Z"))));
+                        new RetrievedChunk("doc-1", "kb-1", 0, "RAG 是检索增强生成。", 1, "rag-1.pdf", Instant.parse("2026-05-08T10:00:00Z"), 0.0),
+                        new RetrievedChunk("doc-3", "kb-1", 2, "它通过外部知识提升回答准确性。", 1, "rag-2.pdf", Instant.parse("2026-05-08T10:05:00Z"), 0.0)));
         when(answerGenerationPort.generateAnswer(org.mockito.ArgumentMatchers.anyString()))
                 .thenReturn("RAG 是检索增强生成方案。");
 
@@ -84,6 +99,7 @@ class AskQuestionApplicationServiceTest {
         verify(authorizationService).requireCanAskKnowledgeBase(org.mockito.ArgumentMatchers.any(CurrentUser.class), eq("kb-1"));
         verify(authorizationService, never()).requireCanAskDocument(org.mockito.ArgumentMatchers.any(CurrentUser.class), anyString(), anyString());
         verify(answerGenerationPort).generateAnswer(org.mockito.ArgumentMatchers.anyString());
+        verify(rerankingPort).rerank(anyList(), eq("什么是 RAG"), eq(20));
     }
 
     @Test
@@ -95,14 +111,23 @@ class AskQuestionApplicationServiceTest {
         CurrentUserProvider currentUserProvider = currentUserProvider();
         AuthorizationService authorizationService = Mockito.mock(AuthorizationService.class);
         AskableDocumentVersionPort askableDocumentVersionPort = Mockito.mock(AskableDocumentVersionPort.class);
+        RerankingPort rerankingPort = Mockito.mock(RerankingPort.class);
+        when(rerankingPort.rerank(anyList(), anyString(), anyInt()))
+                .thenAnswer(inv -> inv.getArgument(0));
+        QueryClassifierPort queryClassifierPort = Mockito.mock(QueryClassifierPort.class);
+        when(queryClassifierPort.classify(anyString())).thenReturn(QueryType.GENERAL);
+        RetrievalConfigPort properties = defaultRetrievalConfig();
         AskQuestionApplicationService service =
                 new AskQuestionApplicationService(
+                        queryClassifierPort,
                         chunkRetrievalPort,
+                        rerankingPort,
                         answerGenerationPort,
                         knowledgeBaseRepository,
                         currentUserProvider,
                         authorizationService,
-                        askableDocumentVersionPort);
+                        askableDocumentVersionPort,
+                        properties);
         when(knowledgeBaseRepository.findByKbId(eq("workspace-a"), eq("kb-1")))
                 .thenReturn(java.util.Optional.of(new KnowledgeBase("kb-1", "workspace-a", "知识库1", "", KnowledgeBaseStatus.ACTIVE, java.time.Instant.now(), java.time.Instant.now())));
 
@@ -113,8 +138,8 @@ class AskQuestionApplicationServiceTest {
                 .thenReturn(scope);
         when(chunkRetrievalPort.similaritySearch(eq("版本问题"), anyInt(), eq(scope)))
                 .thenReturn(List.of(
-                        new RetrievedChunk("doc-1", "kb-1", 1, "doc-1 v2 已可问答", 2, "doc-1-v2.pdf", Instant.parse("2026-05-09T10:00:00Z")),
-                        new RetrievedChunk("doc-2", "kb-1", 0, "doc-2 v4 最新可问答", 4, "doc-2-v4.pdf", Instant.parse("2026-05-11T10:00:00Z"))));
+                        new RetrievedChunk("doc-1", "kb-1", 1, "doc-1 v2 已可问答", 2, "doc-1-v2.pdf", Instant.parse("2026-05-09T10:00:00Z"), 0.0),
+                        new RetrievedChunk("doc-2", "kb-1", 0, "doc-2 v4 最新可问答", 4, "doc-2-v4.pdf", Instant.parse("2026-05-11T10:00:00Z"), 0.0)));
         when(answerGenerationPort.generateAnswer(org.mockito.ArgumentMatchers.anyString()))
                 .thenReturn("回答引用了可问答版本。");
 
@@ -136,6 +161,7 @@ class AskQuestionApplicationServiceTest {
         assertEquals("doc-1", result.staleReferences().documents().get(0).documentId());
         assertEquals(2, result.staleReferences().documents().get(0).sourceVersionNumber());
         assertEquals(3, result.staleReferences().documents().get(0).latestVersionNumber());
+        verify(rerankingPort).rerank(anyList(), eq("版本问题"), eq(20));
     }
 
     @Test
@@ -147,14 +173,23 @@ class AskQuestionApplicationServiceTest {
         CurrentUserProvider currentUserProvider = currentUserProvider();
         AuthorizationService authorizationService = Mockito.mock(AuthorizationService.class);
         AskableDocumentVersionPort askableDocumentVersionPort = Mockito.mock(AskableDocumentVersionPort.class);
+        RerankingPort rerankingPort = Mockito.mock(RerankingPort.class);
+        when(rerankingPort.rerank(anyList(), anyString(), anyInt()))
+                .thenAnswer(inv -> inv.getArgument(0));
+        QueryClassifierPort queryClassifierPort = Mockito.mock(QueryClassifierPort.class);
+        when(queryClassifierPort.classify(anyString())).thenReturn(QueryType.GENERAL);
+        RetrievalConfigPort properties = defaultRetrievalConfig();
         AskQuestionApplicationService service =
                 new AskQuestionApplicationService(
+                        queryClassifierPort,
                         chunkRetrievalPort,
+                        rerankingPort,
                         answerGenerationPort,
                         knowledgeBaseRepository,
                         currentUserProvider,
                         authorizationService,
-                        askableDocumentVersionPort);
+                        askableDocumentVersionPort,
+                        properties);
         when(knowledgeBaseRepository.findByKbId(eq("workspace-a"), eq("default")))
                 .thenReturn(java.util.Optional.of(new KnowledgeBase("default", "workspace-a", "default", "", KnowledgeBaseStatus.ACTIVE, java.time.Instant.now(), java.time.Instant.now())));
 
@@ -167,6 +202,7 @@ class AskQuestionApplicationServiceTest {
         assertEquals(0, result.references().size());
         assertEquals(null, result.staleReferences());
         verify(chunkRetrievalPort, never()).similaritySearch(anyString(), anyInt(), org.mockito.ArgumentMatchers.anyList());
+        verify(rerankingPort, never()).rerank(anyList(), anyString(), anyInt());
         verify(answerGenerationPort, never()).generateAnswer(org.mockito.ArgumentMatchers.anyString());
     }
 
@@ -179,14 +215,23 @@ class AskQuestionApplicationServiceTest {
         CurrentUserProvider currentUserProvider = currentUserProvider();
         AuthorizationService authorizationService = Mockito.mock(AuthorizationService.class);
         AskableDocumentVersionPort askableDocumentVersionPort = Mockito.mock(AskableDocumentVersionPort.class);
+        RerankingPort rerankingPort = Mockito.mock(RerankingPort.class);
+        when(rerankingPort.rerank(anyList(), anyString(), anyInt()))
+                .thenAnswer(inv -> inv.getArgument(0));
+        QueryClassifierPort queryClassifierPort = Mockito.mock(QueryClassifierPort.class);
+        when(queryClassifierPort.classify(anyString())).thenReturn(QueryType.GENERAL);
+        RetrievalConfigPort properties = defaultRetrievalConfig();
         AskQuestionApplicationService service =
                 new AskQuestionApplicationService(
+                        queryClassifierPort,
                         chunkRetrievalPort,
+                        rerankingPort,
                         answerGenerationPort,
                         knowledgeBaseRepository,
                         currentUserProvider,
                         authorizationService,
-                        askableDocumentVersionPort);
+                        askableDocumentVersionPort,
+                        properties);
         when(knowledgeBaseRepository.findByKbId(eq("workspace-a"), eq("kb-1")))
                 .thenReturn(java.util.Optional.of(new KnowledgeBase("kb-1", "workspace-a", "知识库1", "", KnowledgeBaseStatus.ACTIVE, java.time.Instant.now(), java.time.Instant.now())));
         Mockito.doThrow(new AccessDeniedException("knowledge base ask access denied"))
@@ -196,6 +241,7 @@ class AskQuestionApplicationServiceTest {
         assertThrows(AccessDeniedException.class, () -> service.handle(new AskQuestionCommand("问题", "kb-1", 2)));
         verify(chunkRetrievalPort, never()).similaritySearch(anyString(), anyInt());
         verify(chunkRetrievalPort, never()).similaritySearch(anyString(), anyInt(), org.mockito.ArgumentMatchers.anyList());
+        verify(rerankingPort, never()).rerank(anyList(), anyString(), anyInt());
         verify(answerGenerationPort, never()).generateAnswer(anyString());
     }
 
@@ -208,14 +254,23 @@ class AskQuestionApplicationServiceTest {
         CurrentUserProvider currentUserProvider = currentUserProvider();
         AuthorizationService authorizationService = Mockito.mock(AuthorizationService.class);
         AskableDocumentVersionPort askableDocumentVersionPort = Mockito.mock(AskableDocumentVersionPort.class);
+        RerankingPort rerankingPort = Mockito.mock(RerankingPort.class);
+        when(rerankingPort.rerank(anyList(), anyString(), anyInt()))
+                .thenAnswer(inv -> inv.getArgument(0));
+        QueryClassifierPort queryClassifierPort = Mockito.mock(QueryClassifierPort.class);
+        when(queryClassifierPort.classify(anyString())).thenReturn(QueryType.GENERAL);
+        RetrievalConfigPort properties = defaultRetrievalConfig();
         AskQuestionApplicationService service =
                 new AskQuestionApplicationService(
+                        queryClassifierPort,
                         chunkRetrievalPort,
+                        rerankingPort,
                         answerGenerationPort,
                         knowledgeBaseRepository,
                         currentUserProvider,
                         authorizationService,
-                        askableDocumentVersionPort);
+                        askableDocumentVersionPort,
+                        properties);
         when(knowledgeBaseRepository.findByKbId(eq("workspace-a"), eq("kb-missing"))).thenReturn(java.util.Optional.empty());
 
         assertThrows(KnowledgeBaseNotFoundException.class, () -> service.handle(new AskQuestionCommand("问题", "kb-missing", 1)));
@@ -230,18 +285,250 @@ class AskQuestionApplicationServiceTest {
         CurrentUserProvider currentUserProvider = currentUserProvider();
         AuthorizationService authorizationService = Mockito.mock(AuthorizationService.class);
         AskableDocumentVersionPort askableDocumentVersionPort = Mockito.mock(AskableDocumentVersionPort.class);
+        RerankingPort rerankingPort = Mockito.mock(RerankingPort.class);
+        when(rerankingPort.rerank(anyList(), anyString(), anyInt()))
+                .thenAnswer(inv -> inv.getArgument(0));
+        QueryClassifierPort queryClassifierPort = Mockito.mock(QueryClassifierPort.class);
+        when(queryClassifierPort.classify(anyString())).thenReturn(QueryType.GENERAL);
+        RetrievalConfigPort properties = defaultRetrievalConfig();
         AskQuestionApplicationService service =
                 new AskQuestionApplicationService(
+                        queryClassifierPort,
                         chunkRetrievalPort,
+                        rerankingPort,
                         answerGenerationPort,
                         knowledgeBaseRepository,
                         currentUserProvider,
                         authorizationService,
-                        askableDocumentVersionPort);
+                        askableDocumentVersionPort,
+                        properties);
         when(knowledgeBaseRepository.findByKbId(eq("workspace-a"), eq("kb-inactive")))
                 .thenReturn(java.util.Optional.of(new KnowledgeBase("kb-inactive", "workspace-a", "禁用库", "", KnowledgeBaseStatus.INACTIVE, java.time.Instant.now(), java.time.Instant.now())));
 
         assertThrows(KnowledgeBaseInactiveException.class, () -> service.handle(new AskQuestionCommand("问题", "kb-inactive", 1)));
+    }
+
+    @Test
+    @DisplayName("自定义检索配置应影响候选集放大计算")
+    void handle_shouldUseCustomRetrievalProperties_whenConfigured() {
+        ChunkRetrievalPort chunkRetrievalPort = Mockito.mock(ChunkRetrievalPort.class);
+        AnswerGenerationPort answerGenerationPort = Mockito.mock(AnswerGenerationPort.class);
+        KnowledgeBaseRepository knowledgeBaseRepository = Mockito.mock(KnowledgeBaseRepository.class);
+        CurrentUserProvider currentUserProvider = currentUserProvider();
+        AuthorizationService authorizationService = Mockito.mock(AuthorizationService.class);
+        AskableDocumentVersionPort askableDocumentVersionPort = Mockito.mock(AskableDocumentVersionPort.class);
+        RerankingPort rerankingPort = Mockito.mock(RerankingPort.class);
+        when(rerankingPort.rerank(anyList(), anyString(), anyInt()))
+                .thenAnswer(inv -> inv.getArgument(0));
+        QueryClassifierPort queryClassifierPort = Mockito.mock(QueryClassifierPort.class);
+        when(queryClassifierPort.classify(anyString())).thenReturn(QueryType.GENERAL);
+        // 自定义配置：minCandidates=10, candidateMultiplier=2
+        RetrievalConfigPort properties = new RetrievalConfigPort() {
+            @Override public int getMinCandidates() { return 10; }
+            @Override public int getCandidateMultiplier() { return 2; }
+        };
+        AskQuestionApplicationService service =
+                new AskQuestionApplicationService(
+                        queryClassifierPort,
+                        chunkRetrievalPort,
+                        rerankingPort,
+                        answerGenerationPort,
+                        knowledgeBaseRepository,
+                        currentUserProvider,
+                        authorizationService,
+                        askableDocumentVersionPort,
+                        properties);
+        when(knowledgeBaseRepository.findByKbId(eq("workspace-a"), eq("kb-1")))
+                .thenReturn(java.util.Optional.of(new KnowledgeBase("kb-1", "workspace-a", "知识库1", "", KnowledgeBaseStatus.ACTIVE, java.time.Instant.now(), java.time.Instant.now())));
+        List<AskableDocumentVersion> scope = List.of(
+                new AskableDocumentVersion("doc-1", 1, 1, "rag-1.pdf", Instant.parse("2026-05-08T10:00:00Z")));
+        when(askableDocumentVersionPort.findAskableVersionsForQuestion(org.mockito.ArgumentMatchers.any(CurrentUser.class), eq("kb-1")))
+                .thenReturn(scope);
+        // topK=3, retrievalTopK = max(10, 3*2) = 10
+        when(chunkRetrievalPort.similaritySearch(eq("测试问题"), eq(10), eq(scope)))
+                .thenReturn(List.of(
+                        new RetrievedChunk("doc-1", "kb-1", 0, "测试内容", 1, "rag-1.pdf", Instant.parse("2026-05-08T10:00:00Z"), 0.0)));
+        when(answerGenerationPort.generateAnswer(org.mockito.ArgumentMatchers.anyString()))
+                .thenReturn("测试回答。");
+
+        var result = service.handle(new AskQuestionCommand("测试问题", "kb-1", 3));
+
+        assertEquals("测试回答。", result.answer());
+        // 使用 ArgumentCaptor 验证公式计算的 retrievalTopK，避免硬编码耦合公式
+        ArgumentCaptor<Integer> topKCaptor = ArgumentCaptor.forClass(Integer.class);
+        verify(chunkRetrievalPort).similaritySearch(eq("测试问题"), topKCaptor.capture(), eq(scope));
+        assertEquals(Integer.valueOf(10), topKCaptor.getValue(), "minCandidates=10,topK=3,multiplier=2 → max(10,6)=10");
+    }
+
+    @Test
+    @DisplayName("放大倍率主导时 retrievalTopK 应为 topK×multiplier")
+    void handle_shouldUseMultiplierDrivenTopK_whenProductExceedsMinCandidates() {
+        ChunkRetrievalPort chunkRetrievalPort = Mockito.mock(ChunkRetrievalPort.class);
+        AnswerGenerationPort answerGenerationPort = Mockito.mock(AnswerGenerationPort.class);
+        KnowledgeBaseRepository knowledgeBaseRepository = Mockito.mock(KnowledgeBaseRepository.class);
+        CurrentUserProvider currentUserProvider = currentUserProvider();
+        AuthorizationService authorizationService = Mockito.mock(AuthorizationService.class);
+        AskableDocumentVersionPort askableDocumentVersionPort = Mockito.mock(AskableDocumentVersionPort.class);
+        RerankingPort rerankingPort = Mockito.mock(RerankingPort.class);
+        when(rerankingPort.rerank(anyList(), anyString(), anyInt()))
+                .thenAnswer(inv -> inv.getArgument(0));
+        QueryClassifierPort queryClassifierPort = Mockito.mock(QueryClassifierPort.class);
+        when(queryClassifierPort.classify(anyString())).thenReturn(QueryType.GENERAL);
+        // 默认配置 minCandidates=20, candidateMultiplier=4 → topK=10 时 retrievalTopK = max(20, 40) = 40
+        RetrievalConfigPort properties = defaultRetrievalConfig();
+        AskQuestionApplicationService service =
+                new AskQuestionApplicationService(
+                        queryClassifierPort,
+                        chunkRetrievalPort,
+                        rerankingPort,
+                        answerGenerationPort,
+                        knowledgeBaseRepository,
+                        currentUserProvider,
+                        authorizationService,
+                        askableDocumentVersionPort,
+                        properties);
+        when(knowledgeBaseRepository.findByKbId(eq("workspace-a"), eq("kb-1")))
+                .thenReturn(java.util.Optional.of(new KnowledgeBase("kb-1", "workspace-a", "知识库1", "", KnowledgeBaseStatus.ACTIVE, java.time.Instant.now(), java.time.Instant.now())));
+        List<AskableDocumentVersion> scope = List.of(
+                new AskableDocumentVersion("doc-1", 1, 1, "rag-1.pdf", Instant.parse("2026-05-08T10:00:00Z")));
+        when(askableDocumentVersionPort.findAskableVersionsForQuestion(org.mockito.ArgumentMatchers.any(CurrentUser.class), eq("kb-1")))
+                .thenReturn(scope);
+        // topK=10, retrievalTopK = max(20, 10*4) = 40
+        when(chunkRetrievalPort.similaritySearch(eq("乘数测试"), eq(40), eq(scope)))
+                .thenReturn(List.of(
+                        new RetrievedChunk("doc-1", "kb-1", 0, "乘数测试内容", 1, "rag-1.pdf", Instant.parse("2026-05-08T10:00:00Z"), 0.0)));
+        when(answerGenerationPort.generateAnswer(org.mockito.ArgumentMatchers.anyString()))
+                .thenReturn("乘数回答。");
+
+        var result = service.handle(new AskQuestionCommand("乘数测试", "kb-1", 10));
+
+        assertEquals("乘数回答。", result.answer());
+        ArgumentCaptor<Integer> topKCaptor = ArgumentCaptor.forClass(Integer.class);
+        verify(chunkRetrievalPort).similaritySearch(eq("乘数测试"), topKCaptor.capture(), eq(scope));
+        assertEquals(Integer.valueOf(40), topKCaptor.getValue(), "minCandidates=20,topK=10,multiplier=4 → max(20,40)=40");
+    }
+
+    @Test
+    @DisplayName("CHITCHAT 查询应跳过检索直接调用模型并返回空引用")
+    void handle_shouldSkipRetrievalAndReturnEmptyReferences_whenQueryIsChitchat() {
+        ChunkRetrievalPort chunkRetrievalPort = Mockito.mock(ChunkRetrievalPort.class);
+        AnswerGenerationPort answerGenerationPort = Mockito.mock(AnswerGenerationPort.class);
+        KnowledgeBaseRepository knowledgeBaseRepository = Mockito.mock(KnowledgeBaseRepository.class);
+        CurrentUserProvider currentUserProvider = currentUserProvider();
+        AuthorizationService authorizationService = Mockito.mock(AuthorizationService.class);
+        AskableDocumentVersionPort askableDocumentVersionPort = Mockito.mock(AskableDocumentVersionPort.class);
+        RerankingPort rerankingPort = Mockito.mock(RerankingPort.class);
+        QueryClassifierPort queryClassifierPort = Mockito.mock(QueryClassifierPort.class);
+        when(queryClassifierPort.classify("你好")).thenReturn(QueryType.CHITCHAT);
+        RetrievalConfigPort properties = defaultRetrievalConfig();
+        AskQuestionApplicationService service =
+                new AskQuestionApplicationService(
+                        queryClassifierPort,
+                        chunkRetrievalPort,
+                        rerankingPort,
+                        answerGenerationPort,
+                        knowledgeBaseRepository,
+                        currentUserProvider,
+                        authorizationService,
+                        askableDocumentVersionPort,
+                        properties);
+        when(knowledgeBaseRepository.findByKbId(eq("workspace-a"), eq("kb-1")))
+                .thenReturn(java.util.Optional.of(new KnowledgeBase("kb-1", "workspace-a", "知识库1", "", KnowledgeBaseStatus.ACTIVE, java.time.Instant.now(), java.time.Instant.now())));
+        when(answerGenerationPort.generateAnswer("你好"))
+                .thenReturn("你好！有什么可以帮你的吗？");
+
+        var result = service.handle(new AskQuestionCommand("你好", "kb-1", 5));
+
+        assertEquals("你好！有什么可以帮你的吗？", result.answer());
+        assertEquals(0, result.references().size());
+        assertEquals(null, result.staleReferences());
+        verify(chunkRetrievalPort, never()).similaritySearch(anyString(), anyInt(), org.mockito.ArgumentMatchers.anyList());
+        verify(rerankingPort, never()).rerank(anyList(), anyString(), anyInt());
+        verify(askableDocumentVersionPort, never()).findAskableVersionsForQuestion(org.mockito.ArgumentMatchers.any(CurrentUser.class), anyString());
+        verify(answerGenerationPort).generateAnswer("你好");
+    }
+
+    @Test
+    @DisplayName("CHITCHAT 查询模型返回空时应返回兜底回答")
+    void handle_shouldReturnFallback_whenChitchatAndModelReturnsBlank() {
+        ChunkRetrievalPort chunkRetrievalPort = Mockito.mock(ChunkRetrievalPort.class);
+        AnswerGenerationPort answerGenerationPort = Mockito.mock(AnswerGenerationPort.class);
+        KnowledgeBaseRepository knowledgeBaseRepository = Mockito.mock(KnowledgeBaseRepository.class);
+        CurrentUserProvider currentUserProvider = currentUserProvider();
+        AuthorizationService authorizationService = Mockito.mock(AuthorizationService.class);
+        AskableDocumentVersionPort askableDocumentVersionPort = Mockito.mock(AskableDocumentVersionPort.class);
+        RerankingPort rerankingPort = Mockito.mock(RerankingPort.class);
+        QueryClassifierPort queryClassifierPort = Mockito.mock(QueryClassifierPort.class);
+        when(queryClassifierPort.classify("你好")).thenReturn(QueryType.CHITCHAT);
+        RetrievalConfigPort properties = defaultRetrievalConfig();
+        AskQuestionApplicationService service =
+                new AskQuestionApplicationService(
+                        queryClassifierPort,
+                        chunkRetrievalPort,
+                        rerankingPort,
+                        answerGenerationPort,
+                        knowledgeBaseRepository,
+                        currentUserProvider,
+                        authorizationService,
+                        askableDocumentVersionPort,
+                        properties);
+        when(knowledgeBaseRepository.findByKbId(eq("workspace-a"), eq("kb-1")))
+                .thenReturn(java.util.Optional.of(new KnowledgeBase("kb-1", "workspace-a", "知识库1", "", KnowledgeBaseStatus.ACTIVE, java.time.Instant.now(), java.time.Instant.now())));
+        when(answerGenerationPort.generateAnswer("你好")).thenReturn("");
+
+        var result = service.handle(new AskQuestionCommand("你好", "kb-1", 5));
+
+        assertEquals("未检索到与问题相关的已入库内容，请补充文档后再试。", result.answer());
+        assertEquals(0, result.references().size());
+        assertEquals(null, result.staleReferences());
+    }
+
+    @Test
+    @DisplayName("非 CHITCHAT 查询应走完整检索流程且分类不影响结果")
+    void handle_shouldFollowFullRetrievalFlow_whenQueryIsNotChitchat() {
+        ChunkRetrievalPort chunkRetrievalPort = Mockito.mock(ChunkRetrievalPort.class);
+        AnswerGenerationPort answerGenerationPort = Mockito.mock(AnswerGenerationPort.class);
+        KnowledgeBaseRepository knowledgeBaseRepository = Mockito.mock(KnowledgeBaseRepository.class);
+        CurrentUserProvider currentUserProvider = currentUserProvider();
+        AuthorizationService authorizationService = Mockito.mock(AuthorizationService.class);
+        AskableDocumentVersionPort askableDocumentVersionPort = Mockito.mock(AskableDocumentVersionPort.class);
+        RerankingPort rerankingPort = Mockito.mock(RerankingPort.class);
+        when(rerankingPort.rerank(anyList(), anyString(), anyInt()))
+                .thenAnswer(inv -> inv.getArgument(0));
+        QueryClassifierPort queryClassifierPort = Mockito.mock(QueryClassifierPort.class);
+        when(queryClassifierPort.classify("什么是 RAG")).thenReturn(QueryType.FACTOID);
+        RetrievalConfigPort properties = defaultRetrievalConfig();
+        AskQuestionApplicationService service =
+                new AskQuestionApplicationService(
+                        queryClassifierPort,
+                        chunkRetrievalPort,
+                        rerankingPort,
+                        answerGenerationPort,
+                        knowledgeBaseRepository,
+                        currentUserProvider,
+                        authorizationService,
+                        askableDocumentVersionPort,
+                        properties);
+        when(knowledgeBaseRepository.findByKbId(eq("workspace-a"), eq("kb-1")))
+                .thenReturn(java.util.Optional.of(new KnowledgeBase("kb-1", "workspace-a", "知识库1", "", KnowledgeBaseStatus.ACTIVE, java.time.Instant.now(), java.time.Instant.now())));
+        List<AskableDocumentVersion> scope = List.of(
+                new AskableDocumentVersion("doc-1", 1, 1, "rag-1.pdf", Instant.parse("2026-05-08T10:00:00Z")));
+        when(askableDocumentVersionPort.findAskableVersionsForQuestion(org.mockito.ArgumentMatchers.any(CurrentUser.class), eq("kb-1")))
+                .thenReturn(scope);
+        when(chunkRetrievalPort.similaritySearch(eq("什么是 RAG"), anyInt(), eq(scope)))
+                .thenReturn(List.of(
+                        new RetrievedChunk("doc-1", "kb-1", 0, "RAG 是检索增强生成。", 1, "rag-1.pdf", Instant.parse("2026-05-08T10:00:00Z"), 0.0)));
+        when(answerGenerationPort.generateAnswer(org.mockito.ArgumentMatchers.anyString()))
+                .thenReturn("RAG 是检索增强生成方案。");
+
+        var result = service.handle(new AskQuestionCommand("什么是 RAG", "kb-1", 5));
+
+        assertEquals("RAG 是检索增强生成方案。", result.answer());
+        assertEquals(1, result.references().size());
+        verify(queryClassifierPort).classify("什么是 RAG");
+        verify(chunkRetrievalPort).similaritySearch(eq("什么是 RAG"), anyInt(), eq(scope));
+        verify(rerankingPort).rerank(anyList(), eq("什么是 RAG"), eq(20));
+        verify(answerGenerationPort).generateAnswer(org.mockito.ArgumentMatchers.anyString());
     }
 
     private static CurrentUserProvider currentUserProvider() {
@@ -249,5 +536,15 @@ class AskQuestionApplicationServiceTest {
         when(provider.requireCurrentUser()).thenReturn(
                 new CurrentUser("user-1", "alice", "workspace-a", WorkspaceRole.WORKSPACE_MEMBER));
         return provider;
+    }
+
+    /** 默认检索配置（minCandidates=20, candidateMultiplier=4），与 QaRetrievalProperties 默认值一致。 */
+    private static RetrievalConfigPort defaultRetrievalConfig() {
+        return new RetrievalConfigPort() {
+            @Override
+            public int getMinCandidates() { return 20; }
+            @Override
+            public int getCandidateMultiplier() { return 4; }
+        };
     }
 }

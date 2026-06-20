@@ -41,6 +41,7 @@ class PgVectorChunkRetrievalAdapterTest {
                                 "documentVersionNumber", 2,
                                 "sourceFile", "doc-1-v2.pdf",
                                 "sourceUpdatedAt", "2026-05-09T10:00:00Z"))
+                        .score(0.85)
                         .build()));
 
         var result = adapter.similaritySearch("what is rag", 7);
@@ -58,6 +59,99 @@ class PgVectorChunkRetrievalAdapterTest {
         assertEquals(2, result.get(0).sourceVersionNumber());
         assertEquals("doc-1-v2.pdf", result.get(0).sourceFilename());
         assertEquals(java.time.Instant.parse("2026-05-09T10:00:00Z"), result.get(0).sourceUpdatedAt());
+        assertEquals(0.85, result.get(0).score(), 0.0001);
+    }
+
+    @Test
+    @DisplayName("similaritySearch 应将 Document.getScore() 映射到 RetrievedChunk.score")
+    void similaritySearch_shouldMapScoreFromDocument() {
+        VectorStore vectorStore = Mockito.mock(VectorStore.class);
+        PgVectorChunkRetrievalAdapter adapter = new PgVectorChunkRetrievalAdapter(vectorStore);
+
+        when(vectorStore.similaritySearch(any(SearchRequest.class))).thenReturn(List.of(
+                org.springframework.ai.document.Document.builder()
+                        .id("chunk-scored")
+                        .text("scored content")
+                        .metadata(Map.of(
+                                "documentId", "doc-s1",
+                                "kbId", "default",
+                                "chunkIndex", 0))
+                        .score(0.92)
+                        .build()));
+
+        var result = adapter.similaritySearch("scored query", 5);
+
+        assertEquals(1, result.size());
+        assertEquals(0.92, result.get(0).score(), 0.0001);
+    }
+
+    @Test
+    @DisplayName("similaritySearch 应将 Document.getScore() 为 null 时安全回退为 0.0")
+    void similaritySearch_shouldFallbackScoreToZero_whenDocumentScoreIsNull() {
+        VectorStore vectorStore = Mockito.mock(VectorStore.class);
+        PgVectorChunkRetrievalAdapter adapter = new PgVectorChunkRetrievalAdapter(vectorStore);
+
+        when(vectorStore.similaritySearch(any(SearchRequest.class))).thenReturn(List.of(
+                org.springframework.ai.document.Document.builder()
+                        .id("chunk-null-score")
+                        .text("no score")
+                        .metadata(Map.of(
+                                "documentId", "doc-ns",
+                                "kbId", "default",
+                                "chunkIndex", 1))
+                        // score 未设置，getScore() 返回 null
+                        .build()));
+
+        var result = adapter.similaritySearch("null score query", 3);
+
+        assertEquals(1, result.size());
+        assertEquals(0.0, result.get(0).score());
+    }
+
+    @Test
+    @DisplayName("similaritySearch 应将 Document.getScore() 为 NaN 时安全回退为 0.0")
+    void similaritySearch_shouldFallbackScoreToZero_whenDocumentScoreIsNaN() {
+        VectorStore vectorStore = Mockito.mock(VectorStore.class);
+        PgVectorChunkRetrievalAdapter adapter = new PgVectorChunkRetrievalAdapter(vectorStore);
+
+        when(vectorStore.similaritySearch(any(SearchRequest.class))).thenReturn(List.of(
+                org.springframework.ai.document.Document.builder()
+                        .id("chunk-nan-score")
+                        .text("nan score")
+                        .metadata(Map.of(
+                                "documentId", "doc-nan",
+                                "kbId", "default",
+                                "chunkIndex", 0))
+                        .score(Double.NaN)
+                        .build()));
+
+        var result = adapter.similaritySearch("nan query", 3);
+
+        assertEquals(1, result.size());
+        assertEquals(0.0, result.get(0).score());
+    }
+
+    @Test
+    @DisplayName("similaritySearch 应将 Document.getScore() 为 Infinity 时安全回退为 0.0")
+    void similaritySearch_shouldFallbackScoreToZero_whenDocumentScoreIsInfinity() {
+        VectorStore vectorStore = Mockito.mock(VectorStore.class);
+        PgVectorChunkRetrievalAdapter adapter = new PgVectorChunkRetrievalAdapter(vectorStore);
+
+        when(vectorStore.similaritySearch(any(SearchRequest.class))).thenReturn(List.of(
+                org.springframework.ai.document.Document.builder()
+                        .id("chunk-inf-score")
+                        .text("inf score")
+                        .metadata(Map.of(
+                                "documentId", "doc-inf",
+                                "kbId", "default",
+                                "chunkIndex", 0))
+                        .score(Double.POSITIVE_INFINITY)
+                        .build()));
+
+        var result = adapter.similaritySearch("inf query", 3);
+
+        assertEquals(1, result.size());
+        assertEquals(0.0, result.get(0).score());
     }
 
     @Test

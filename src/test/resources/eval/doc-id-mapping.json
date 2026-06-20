@@ -1,0 +1,54 @@
+{
+  "doc-embedding-003.md": {
+    "documentId": "e83ffd96-9435-4d48-8fcc-af16179a5c39",
+    "status": "INDEXED"
+  },
+  "doc-embedding-002.md": {
+    "documentId": "004a8908-972d-4ad4-b4f7-0239dc32b93e",
+    "status": "INDEXED"
+  },
+  "doc-embedding-004.md": {
+    "documentId": "55bff994-3e2c-4181-94dc-72343bed5f95",
+    "status": "INDEXED"
+  },
+  "doc-rank-001.md": {
+    "documentId": "10104d3a-8538-4325-9444-ea5a6f648bfe",
+    "status": "INDEXED"
+  },
+  "doc-embedding-005.md": {
+    "documentId": "73615d1f-2090-4b1c-9ada-08b648930c24",
+    "status": "INDEXED"
+  },
+  "doc-rank-003.md": {
+    "documentId": "33c5c6d9-e4ef-4641-bcda-a825ae4e352f",
+    "status": "INDEXED"
+  },
+  "doc-dense-001.md": {
+    "documentId": "97887163-3673-48f8-8f21-c92747aac24e",
+    "status": "INDEXED"
+  },
+  "2307.03172v3.pdf": {
+    "documentId": "9fcd09df-1957-448c-9669-7425b51a6ef9",
+    "status": "INDEXED"
+  },
+  "doc-rag-base-002.md": {
+    "documentId": "1be79668-a9f6-47c1-8ec3-c36191870d5e",
+    "status": "INDEXED"
+  },
+  "doc-rag-base-001.md": {
+    "documentId": "8f9c39e9-4a46-4ae5-a7f2-3fe80c6bcb4f",
+    "status": "INDEXED"
+  },
+  "doc-env-001.md": {
+    "documentId": "62b4dea7-b0a4-4c76-b923-9886e86a3553",
+    "status": "INDEXED"
+  },
+  "Embedding 嵌入模型.md": {
+    "documentId": "0b12442f-28b6-4e27-80f2-96d6007b20f8",
+    "status": "INDEXED"
+  },
+  "doc-embedding-001.md": {
+    "documentId": "c88089f6-2bb1-4889-b01e-07594b2b3a01",
+    "status": "INDEXED"
+  }
+}

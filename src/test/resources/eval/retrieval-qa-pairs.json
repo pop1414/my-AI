@@ -1,0 +1,221 @@
+[
+  {
+    "question": "PGVector到底是什么技术",
+    "query_type": "FACTOID",
+    "relevant_doc_ids": ["doc-vector-001"],
+    "relevance_levels": {
+      "doc-vector-001": "strong"
+    }
+  },
+  {
+    "question": "向量检索的核心原理是什么",
+    "query_type": "FACTOID",
+    "relevant_doc_ids": ["doc-vector-002"],
+    "relevance_levels": {
+      "doc-vector-002": "strong"
+    }
+  },
+  {
+    "question": "RAG检索系统主要由哪些模块组成",
+    "query_type": "FACTOID",
+    "relevant_doc_ids": ["doc-rag-base-001"],
+    "relevance_levels": {
+      "doc-rag-base-001": "strong"
+    }
+  },
+  {
+    "question": "Embedding模型的作用是什么",
+    "query_type": "FACTOID",
+    "relevant_doc_ids": ["doc-embedding-001"],
+    "relevance_levels": {
+      "doc-embedding-001": "strong"
+    }
+  },
+
+  {
+    "question": "我该怎么配置PGVector数据库环境",
+    "query_type": "PROCEDURAL",
+    "relevant_doc_ids": ["doc-vector-003", "doc-env-001"],
+    "relevance_levels": {
+      "doc-vector-003": "strong",
+      "doc-env-001": "weak"
+    }
+  },
+  {
+    "question": "如何搭建一套基础的RAG检索服务",
+    "query_type": "PROCEDURAL",
+    "relevant_doc_ids": ["doc-rag-build-001", "doc-rag-base-002"],
+    "relevance_levels": {
+      "doc-rag-build-001": "strong",
+      "doc-rag-base-002": "weak"
+    }
+  },
+  {
+    "question": "怎么对文档进行切片和向量化处理",
+    "query_type": "PROCEDURAL",
+    "relevant_doc_ids": ["doc-split-001", "doc-embedding-002"],
+    "relevance_levels": {
+      "doc-split-001": "strong",
+      "doc-embedding-002": "weak"
+    }
+  },
+  {
+    "question": "RAG系统检索结果怎么优化排序",
+    "query_type": "PROCEDURAL",
+    "relevant_doc_ids": ["doc-rank-001"],
+    "relevance_levels": {
+      "doc-rank-001": "strong"
+    }
+  },
+  {
+    "question": "如何测试RAG系统的召回率指标",
+    "query_type": "PROCEDURAL",
+    "relevant_doc_ids": ["doc-eval-001", "doc-metric-001"],
+    "relevance_levels": {
+      "doc-eval-001": "strong",
+      "doc-metric-001": "weak"
+    }
+  },
+  {
+    "question": "向量数据库的数据怎么批量导入",
+    "query_type": "PROCEDURAL",
+    "relevant_doc_ids": ["doc-vector-004"],
+    "relevance_levels": {
+      "doc-vector-004": "strong"
+    }
+  },
+
+  {
+    "question": "稠密检索和稀疏检索有什么不一样的地方",
+    "query_type": "COMPARATIVE",
+    "relevant_doc_ids": ["doc-dense-001", "doc-sparse-001"],
+    "relevance_levels": {
+      "doc-dense-001": "strong",
+      "doc-sparse-001": "strong"
+    }
+  },
+  {
+    "question": "PGVector和FAISS向量数据库哪个更好用",
+    "query_type": "COMPARATIVE",
+    "relevant_doc_ids": ["doc-vector-001", "doc-faiss-001"],
+    "relevance_levels": {
+      "doc-vector-001": "strong",
+      "doc-faiss-001": "strong"
+    }
+  },
+  {
+    "question": "小模型和大模型做Embedding各有什么优缺点",
+    "query_type": "COMPARATIVE",
+    "relevant_doc_ids": ["doc-embedding-003", "doc-embedding-004"],
+    "relevance_levels": {
+      "doc-embedding-003": "strong",
+      "doc-embedding-004": "strong"
+    }
+  },
+  {
+    "question": "关键词检索和向量检索的适用场景区别",
+    "query_type": "COMPARATIVE",
+    "relevant_doc_ids": ["doc-keyword-001", "doc-vector-005"],
+    "relevance_levels": {
+      "doc-keyword-001": "strong",
+      "doc-vector-005": "strong"
+    }
+  },
+  {
+    "question": "RAG增量更新和全量更新有什么差异",
+    "query_type": "COMPARATIVE",
+    "relevant_doc_ids": ["doc-update-001", "doc-update-002"],
+    "relevance_levels": {
+      "doc-update-001": "strong",
+      "doc-update-002": "weak"
+    }
+  },
+  {
+    "question": "召回阶段和重排阶段的工作逻辑区别",
+    "query_type": "COMPARATIVE",
+    "relevant_doc_ids": ["doc-recall-001", "doc-rank-002"],
+    "relevance_levels": {
+      "doc-recall-001": "strong",
+      "doc-rank-002": "strong"
+    }
+  },
+
+  {
+    "question": "想了解下RAG系统的整体架构",
+    "query_type": "GENERAL",
+    "relevant_doc_ids": ["doc-rag-base-001", "doc-rag-build-002"],
+    "relevance_levels": {
+      "doc-rag-base-001": "strong",
+      "doc-rag-build-002": "weak"
+    }
+  },
+  {
+    "question": "向量检索技术的相关知识",
+    "query_type": "GENERAL",
+    "relevant_doc_ids": ["doc-vector-002", "doc-vector-006"],
+    "relevance_levels": {
+      "doc-vector-002": "strong",
+      "doc-vector-006": "weak"
+    }
+  },
+  {
+    "question": "RAG系统优化的相关方法",
+    "query_type": "GENERAL",
+    "relevant_doc_ids": ["doc-optimize-001", "doc-rank-003"],
+    "relevance_levels": {
+      "doc-optimize-001": "strong",
+      "doc-rank-003": "weak"
+    }
+  },
+  {
+    "question": "文档向量化处理的相关流程",
+    "query_type": "GENERAL",
+    "relevant_doc_ids": ["doc-split-002", "doc-embedding-005"],
+    "relevance_levels": {
+      "doc-split-002": "strong",
+      "doc-embedding-005": "weak"
+    }
+  },
+  {
+    "question": "RAG评测的相关指标体系",
+    "query_type": "GENERAL",
+    "relevant_doc_ids": ["doc-metric-001", "doc-eval-002"],
+    "relevance_levels": {
+      "doc-metric-001": "strong",
+      "doc-eval-002": "weak"
+    }
+  },
+  {
+    "question": "智能检索系统的搭建要点",
+    "query_type": "GENERAL",
+    "relevant_doc_ids": ["doc-rag-build-003"],
+    "relevance_levels": {
+      "doc-rag-build-003": "strong"
+    }
+  },
+
+  {
+    "question": "你好",
+    "query_type": "CHITCHAT",
+    "relevant_doc_ids": [],
+    "relevance_levels": {}
+  },
+  {
+    "question": "谢谢",
+    "query_type": "CHITCHAT",
+    "relevant_doc_ids": [],
+    "relevance_levels": {}
+  },
+  {
+    "question": "再见",
+    "query_type": "CHITCHAT",
+    "relevant_doc_ids": [],
+    "relevance_levels": {}
+  },
+  {
+    "question": "辛苦了",
+    "query_type": "CHITCHAT",
+    "relevant_doc_ids": [],
+    "relevance_levels": {}
+  }
+]
