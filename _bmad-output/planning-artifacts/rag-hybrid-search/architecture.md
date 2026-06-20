@@ -18,15 +18,15 @@ user_name: 'spike'
 date: '2026-06-16'
 ---
 
-# Architecture Decision Document
+# 架构决策文档（Architecture Decision Document）
 
-_This document builds collaboratively through step-by-step discovery. Sections are appended as we work through each architectural decision together._
+_本文档通过逐步协作发现的方式构建。每个架构决策完成后，对应章节会被追加到文档中。_
 
-## Project Context Analysis
+## 项目上下文分析（Project Context Analysis）
 
-### Requirements Overview
+### 需求概览（Requirements Overview）
 
-**Functional Requirements:**
+**功能需求（Functional Requirements）：**
 
 13 个 FR 分为 4 个功能组，覆盖 RAG 检索链路的三个结构性缺陷：
 
@@ -39,7 +39,7 @@ _This document builds collaboratively through step-by-step discovery. Sections a
 
 MVP 范围：FR-1 到 FR-11（FR-12/13 推迟到 Phase 2）。
 
-**Non-Functional Requirements:**
+**非功能需求（Non-Functional Requirements）：**
 
 | NFR | 约束 | 影响 |
 |-----|------|------|
@@ -47,14 +47,14 @@ MVP 范围：FR-1 到 FR-11（FR-12/13 推迟到 Phase 2）。
 | NFR-2 零新依赖 | 不引入新 Maven 依赖和 Docker 容器 | BM25 必须用 PG 原生 tsvector + GIN |
 | NFR-3 六边形合规 | domain 层零框架注解，adapter 不互相引用 | QueryClassifierPort/RerankingPort 定义在 domain 层 |
 
-**Scale & Complexity:**
+**规模与复杂度（Scale & Complexity）：**
 
 - 主要技术领域：后端 API（Spring Boot + PGVector）
 - 复杂度：中等（个人知识库 Portfolio 项目）
 - 预估架构组件：5 个新组件 + 4 个修改组件 = 9 个架构构件
 - 估计净增代码：≤ 800 LOC（含测试）
 
-### Technical Constraints & Dependencies
+### 技术约束与依赖（Technical Constraints & Dependencies）
 
 - **数据库**：PostgreSQL 16 + PGVector 已就位，BM25 用 PG 原生 tsvector + GIN 索引，零新基础设施
 - **迁移纪律**：Flyway V9 不可修改已执行的 V1-V8，PGVector 维度硬编码
@@ -65,7 +65,7 @@ MVP 范围：FR-1 到 FR-11（FR-12/13 推迟到 Phase 2）。
 - **5 个决策已锁定**：D3（Hybrid Search）、D4（Reranking 仅留接口）、D5（规则分类器）、D6（维持截断+配置化）、D17（轻量 Eval 体系）
 - **OQ-1 待定**：`ChunkRetrievalPort` 新增方法 vs 新建独立端口 — 本架构核心决策点
 
-### Cross-Cutting Concerns Identified
+### 已识别的跨切面关注点（Cross-Cutting Concerns Identified）
 
 1. **score 字段贯穿**：RetrievedChunk.score 在 Dense/Sparse/RRF 三路都需要正确填充，是所有后续功能的基础
 2. **Scope 过滤逻辑复用**：Dense 和 Sparse 路径都需要 scope 过滤（只检索 askable 版本的 chunk），必须提取共享工具类避免重复（R3 风险）
@@ -73,28 +73,28 @@ MVP 范围：FR-1 到 FR-11（FR-12/13 推迟到 Phase 2）。
 4. **QueryType 驱动的检索策略**：D5 分类结果影响 D3 的 Dense/Sparse 权重配比，需在应用层而非适配器层做路由
 5. **配置外部化**：检索参数（min-candidates、candidate-multiplier）需通过 `@ConfigurationProperties` 暴露，为后续 QueryType 驱动权重调整预留扩展点
 
-## Starter Template Evaluation
+## 启动模板评估（Starter Template Evaluation）
 
 **不适用 — Brownfield 项目。**
 
 my-AI 技术栈已完全确立（Java 21 + Spring Boot 3.5.8 + PostgreSQL 16 + PGVector + React 19），架构为 DDD-Lite 六边形。本次 RAG Hybrid Search 是在现有 `qa/` 子域上做功能增强，不需要（也不应该）引入 starter template。
 
-## Core Architectural Decisions
+## 核心架构决策（Core Architectural Decisions）
 
-### Decision Priority Analysis
+### 决策优先级分析（Decision Priority Analysis）
 
-**Critical Decisions (Block Implementation):**
+**关键决策（阻塞实现，Critical Decisions）：**
 
 - AD-1: ChunkRetrievalPort 接口扩展 → 不改端口接口，新增实现者（Option C）
 - AD-2: RRF 融合位置 → HybridChunkRetrievalAdapter 内部透明完成
 
-**Important Decisions (Shape Architecture):**
+**重要决策（影响架构结构，Important Decisions）：**
 
 - AD-3: Dense/Sparse 并行执行 → CompletableFuture 并行 + 降级
 - AD-4: Scope 过滤复用 → ScopeFilterBuilder 工具类
 - AD-5: EvalRunner 定位 → Test-only 组件
 
-**Deferred Decisions (Post-MVP):**
+**可推迟的决策（MVP 之后，Deferred Decisions）：**
 
 - AD-6: QueryType 驱动权重 → 依赖 D17 eval 基线数据
 - AD-7: zhparser 中文分词 → 依赖 eval 数据证明 'simple' 不足
@@ -198,7 +198,7 @@ src/test/resources/eval/
   └── generation-qa-pairs.json   // 10 条 QA pairs (Layer 2, Phase 2)
 ```
 
-### Implementation Sequence
+### 实施顺序（Implementation Sequence）
 
 **Phase 1 — 基础准备（FR-1, FR-2, FR-3）：**
 
@@ -224,20 +224,20 @@ src/test/resources/eval/
 
 12. EvalRunner + QA pairs 数据集
 
-### Cross-Component Dependencies
+### 跨组件依赖（Cross-Component Dependencies）
 
 - AD-1 → AD-2 → AD-3 是线性依赖链：端口决定 → 融合位置决定 → 并行策略决定
 - AD-4 被 AD-2 依赖（HybridChunkRetrievalAdapter 内部的 Sparse 路径需要 ScopeFilterBuilder）
 - AD-5 独立于其他决策，但依赖 AD-1 的"注入具体 adapter"能力
 - FR-1 score 字段是 Phase 2/3/4 的前置条件（所有检索路径都需要填充 score）
 
-## Implementation Patterns & Consistency Rules
+## 实现模式与一致性规则（Implementation Patterns & Consistency Rules）
 
-### Scope
+### 范围（Scope）
 
 通用编码模式已在 `docs/project-context.md`（162 条规则）中定义。本节仅覆盖 RAG Hybrid Search 特有的实现一致性规则，防止 AI agent 在共享决策点做出不同选择。
 
-### Critical Conflict Points Identified
+### 已识别的关键冲突点（Critical Conflict Points Identified）
 
 7 个领域存在 agent 分歧风险。
 
@@ -346,7 +346,7 @@ CREATE INDEX idx_vector_store_fts
 
 **理由：** Flyway 迁移不可修改已执行版本。命名必须一次到位。
 
-### Enforcement Guidelines
+### 强制执行指南（Enforcement Guidelines）
 
 **所有 AI Agent 实现 RAG Hybrid Search 时 MUST：**
 
@@ -361,7 +361,7 @@ CREATE INDEX idx_vector_store_fts
 
 **验证方式：** ArchUnit 规则已覆盖 domain→infrastructure 依赖检查（D19）。新增的实现一致性规则通过 code review 验证。
 
-## Project Structure & Boundaries
+## 项目结构与边界（Project Structure & Boundaries）
 
 ### RAG Hybrid Search — 变更文件清单
 
@@ -444,7 +444,7 @@ src/test/resources/eval/
   retrieval-qa-pairs.json                       [新增] 20 条 QA pairs
 ```
 
-### Architectural Boundaries
+### 架构边界（Architectural Boundaries）
 
 **六边形分层边界：**
 
@@ -475,7 +475,7 @@ infrastructure (Adapters)
 - `RuleBasedQueryClassifier` 零外部依赖，纯 Java，但仍放 infrastructure 层（实现端口）
 - `QaRetrievalProperties` 带 `@ConfigurationProperties` + `@Validated`，放在 infrastructure/config/
 
-### Requirements to Structure Mapping
+### 需求到结构映射（Requirements to Structure Mapping）
 
 | FR | 主要变更文件 | 测试文件 |
 |----|-------------|---------|
@@ -491,7 +491,7 @@ infrastructure (Adapters)
 | FR-10 | AskQuestionApplicationService.java | AskQuestionApplicationServiceTest.java |
 | FR-11 | EvalRunnerTest.java, EvalMetrics.java, retrieval-qa-pairs.json | EvalRunnerTest.java |
 
-### Data Flow
+### 数据流（Data Flow）
 
 ```
 用户提问
@@ -516,15 +516,15 @@ AskQuestionApplicationService
   └── 6. 返回 AskQuestionResult
 ```
 
-### Integration Points
+### 集成点（Integration Points）
 
 **内部通信：** 全部通过 domain port 接口，adapter 之间不互相引用。唯一例外：`HybridChunkRetrievalAdapter` 内部注入 `PgVectorChunkRetrievalAdapter` 和 `SparseRetrievalAdapter`（同层 adapter 组合，不跨层）。
 
 **外部集成：** 无新外部服务。复用已有的 PostgreSQL（tsvector + GIN）、DashScope（LLM）、Spring AI VectorStore（Dense 检索）。
 
-## Architecture Validation Results
+## 架构验证结果（Architecture Validation Results）
 
-### Coherence Validation ✅
+### 一致性验证 ✅（Coherence Validation）
 
 **决策兼容性：**
 
@@ -545,7 +545,7 @@ AskQuestionApplicationService
 - `ScopeFilterBuilder` 在 infrastructure 层（依赖 Spring AI 类型）— 正确
 - `QueryType` 在 domain 层 — 零框架注解 — 正确
 
-### Requirements Coverage Validation ✅
+### 需求覆盖验证 ✅（Requirements Coverage Validation）
 
 **FR 覆盖：** 11 个 MVP FR 全部有对应的架构支持和文件映射。
 
@@ -571,7 +571,7 @@ AskQuestionApplicationService
 | NFR-2 零新依赖 | PG 原生 tsvector + GIN | ✅ |
 | NFR-3 六边形合规 | port 在 domain，adapter 在 infrastructure | ✅ |
 
-### Implementation Readiness Validation ✅
+### 实施就绪验证 ✅（Implementation Readiness Validation）
 
 **决策完整性：** 5 个关键决策全部有选项对比、选择、理由。
 
@@ -579,77 +579,77 @@ AskQuestionApplicationService
 
 **模式完整性：** 7 个实现模式有具体代码示例和禁止项。
 
-### Gap Analysis Results
+### 差距分析结果（Gap Analysis Results）
 
-**Critical Gaps：** 无。
+**关键差距（Critical Gaps）：** 无。
 
-**Important Gaps（2 项）：**
+**重要差距（Important Gaps，2 项）：**
 
 | # | Gap | 影响 | 建议 |
 |---|-----|------|------|
 | G-1 | SparseRetrievalAdapter 实现 ChunkRetrievalPort 的 similaritySearch 语义 | BM25 检索不是"相似度搜索"，但 AD-1 要求它实现同一端口 | 方法名保持 similaritySearch（端口契约），内部实现用 ts_rank — 语义由 adapter 解释 |
 | G-2 | @Primary vs @ConditionalOnProperty 的最终选择 | PRD 未明确是否需要配置切换 | MVP 用 @Primary（Hybrid 默认），不加 @ConditionalOnProperty — 保持简单，需要时再加 |
 
-**Nice-to-Have Gaps：** 无。
+**锦上添花的差距（Nice-to-Have Gaps）：** 无。
 
-### Architecture Completeness Checklist
+### 架构完整性检查清单（Architecture Completeness Checklist）
 
-**Requirements Analysis**
+**需求分析（Requirements Analysis）**
 
-- [x] Project context thoroughly analyzed
-- [x] Scale and complexity assessed
-- [x] Technical constraints identified
-- [x] Cross-cutting concerns mapped
+- [x] 项目上下文已深入分析（Project context thoroughly analyzed）
+- [x] 规模与复杂度已评估（Scale and complexity assessed）
+- [x] 技术约束已识别（Technical constraints identified）
+- [x] 跨切面关注点已映射（Cross-cutting concerns mapped）
 
-**Architectural Decisions**
+**架构决策（Architectural Decisions）**
 
-- [x] Critical decisions documented with versions
-- [x] Technology stack fully specified
-- [x] Integration patterns defined
-- [x] Performance considerations addressed
+- [x] 关键决策已文档化并含版本信息（Critical decisions documented with versions）
+- [x] 技术栈已完整指定（Technology stack fully specified）
+- [x] 集成模式已定义（Integration patterns defined）
+- [x] 性能考虑已纳入（Performance considerations addressed）
 
-**Implementation Patterns**
+**实现模式（Implementation Patterns）**
 
-- [x] Naming conventions established
-- [x] Structure patterns defined
-- [x] Communication patterns specified
-- [x] Process patterns documented
+- [x] 命名规范已建立（Naming conventions established）
+- [x] 结构模式已定义（Structure patterns defined）
+- [x] 通信模式已指定（Communication patterns specified）
+- [x] 流程模式已文档化（Process patterns documented）
 
-**Project Structure**
+**项目结构（Project Structure）**
 
-- [x] Complete directory structure defined
-- [x] Component boundaries established
-- [x] Integration points mapped
-- [x] Requirements to structure mapping complete
+- [x] 完整目录结构已定义（Complete directory structure defined）
+- [x] 组件边界已建立（Component boundaries established）
+- [x] 集成点已映射（Integration points mapped）
+- [x] 需求到结构映射已完成（Requirements to structure mapping complete）
 
-### Architecture Readiness Assessment
+### 架构就绪评估（Architecture Readiness Assessment）
 
-**Overall Status：READY FOR IMPLEMENTATION**
+**总体状态（Overall Status）：READY FOR IMPLEMENTATION（可以开始实现）**
 
-**Confidence Level：** high
+**置信度（Confidence Level）：** high（高）
 
-**Key Strengths：**
+**核心优势（Key Strengths）：**
 
 1. 5 个决策全部基于论文数据 + 代码调研，无拍脑袋
 2. AD-1（不改端口）大幅降低了改动面和回归风险
 3. 实现模式有具体代码示例，AI agent 可直接参照
 4. 162 条 project-context 规则 + 7 条 feature-specific 规则，双层约束
 
-**Areas for Future Enhancement：**
+**未来增强方向（Areas for Future Enhancement）：**
 
 1. AD-6 QueryType 驱动权重（需 eval 基线数据）
 2. AD-7 zhparser 中文分词（需 eval 数据证明 'simple' 不足）
 3. G-2 @ConditionalOnProperty（需要运行时切换时再加）
 
-### Implementation Handoff
+### 实施交接（Implementation Handoff）
 
-**AI Agent Guidelines：**
+**AI Agent 实施指南（AI Agent Guidelines）：**
 
-- Follow all architectural decisions exactly as documented
-- Use implementation patterns consistently across all components
-- Respect project structure and boundaries
-- Refer to this document for all architectural questions
+- 严格遵循本文档中的所有架构决策
+- 在所有组件中一致地使用实现模式
+- 尊重项目结构和边界
+- 所有架构问题参考本文档
 
-**First Implementation Priority：**
+**首个实施优先级（First Implementation Priority）：**
 
 Phase 1 — 基础准备：FR-1（RetrievedChunk score 字段）→ FR-2（RerankingPort）→ FR-3（配置外部化）
