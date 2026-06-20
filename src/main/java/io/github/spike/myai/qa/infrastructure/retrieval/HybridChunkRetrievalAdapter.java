@@ -10,6 +10,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Primary;
 import org.springframework.stereotype.Component;
 
@@ -72,7 +73,7 @@ public class HybridChunkRetrievalAdapter implements ChunkRetrievalPort {
     public HybridChunkRetrievalAdapter(
             PgVectorChunkRetrievalAdapter denseAdapter,
             SparseRetrievalAdapter sparseAdapter,
-            Executor executor) {
+            @Qualifier("virtualThreadExecutor") Executor executor) {
         this.denseAdapter = denseAdapter;
         this.sparseAdapter = sparseAdapter;
         this.executor = executor;

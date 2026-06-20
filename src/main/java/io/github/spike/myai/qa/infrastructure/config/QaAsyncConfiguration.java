@@ -4,6 +4,7 @@ import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Primary;
 
 /**
  * QA 子域异步执行器配置。
@@ -27,6 +28,7 @@ public class QaAsyncConfiguration {
      * @return 虚拟线程 per-task 执行器
      */
     @Bean
+    @Primary
     public Executor virtualThreadExecutor() {
         return Executors.newVirtualThreadPerTaskExecutor();
     }
