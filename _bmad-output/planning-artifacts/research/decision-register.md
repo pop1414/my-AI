@@ -19,18 +19,24 @@
 | C | Spring @Async + 固定线程池 | **低** — 传统方案 | 对 Virtual Threads 有顾虑时 |
 | D | 维持现状 (MVP 够用) | 零 | 暂无多人使用 |
 
-**状态**: [x] 已决定 — 2026-06-05
+**状态**: [x] 已决定 — 2026-06-05（2026-06-20 修订：方案细化为 Poll-and-Submit 模式）
 
-**决定**: **Virtual Threads + claim-then-submit + Semaphore 组合方案**
+**决定**: **Poll-and-Submit 模式 — `Executors.newVirtualThreadPerTaskExecutor()` + `Semaphore`**
 
-- `@Scheduled` 轮询保持作为任务发现机制，pollAndClaim() CAS 抢占后立即提交 Virtual Thread 执行并返回，轮询间隔变成"注水速率"而非"处理速率"
-- `Semaphore(parallelism)` 控制并发槽位上限，防止 PDF/OCR 同时解析炸内存
-- 可配置 `batch-size`：每轮 claim 最多 N 条
-- 三个硬性条件：超时熔断（单文档 10min 超时 + 下游调用超时）、幂等性保证（文档 hash + PENDING→PROCESSING→DONE 状态机）、dead letter 模式（失败记录到 failure 表）
-- `worker.enabled` 默认改为 true，配合 health check endpoint
-- Java 升级到 21（改 pom.xml + CI JDK 版本）
+- `@Scheduled` 轮询保持作为任务发现机制，每轮 claim 最多 `batchSize` 条文档
+- CAS 抢占成功后立即通过 `executor.submit()` 提交到 Virtual Thread 执行，`@Scheduled` 线程立即返回
+- `Semaphore(parallelism)` 控制并发槽位上限（`tryAcquire` / `finally release`），防止 PDF/OCR 同时解析炸内存
+- `@PreDestroy` 优雅关闭：`executor.shutdown()` + `awaitTermination(5, MINUTES)`
+- MDC `documentId` 注入保证日志链路可追踪
+- `worker.enabled` 默认改为 true
+- 超时不在 Worker 层处理——由 Docling client `read-timeout`（30s）+ `RetryPolicy`（瞬时错误 → 指数退避重试）覆盖
+- 三个可配参数：`parallelism`（默认 3）、`batchSize`（默认 3）、`pollDelayMs`（默认 5000）
 
-**理由**: CAS 抢占天然支持未来多实例竞争（分布式锁），届时若表锁成瓶颈再考虑 MQ。VIP 0 virtual threads 是 JDK 自带，零外部依赖，适应 Docling OCR 耗时波动大的场景。
+**排除的方案**：
+- D1 原方案（裸 `Thread.ofVirtual().start()`）：无线程池生命周期管理，容器关闭时无法优雅等待任务完成
+- Worker-Supervisor 模式（常驻 worker + `BlockingQueue`）：claim 和 enqueue 两步操作有状态不一致窗口（INGESTING 但无 worker 处理），Virtual Thread 创建成本接近零，"常驻"无实际性能收益
+
+**理由**: Poll-and-Submit 是最简方案（~60 LOC），零竞态，完整的 Virtual Thread 生命周期管理。JEP 444 推荐 "use semaphores to limit concurrency, not pool size"，本方案完全对齐。升级到 MQ 多实例时只改任务来源（poll → MQ consume），`ProcessDocumentUseCase.handle()` 和背压逻辑零改动。CAS 抢占天然支持未来多实例竞争。
 
 ---
 
