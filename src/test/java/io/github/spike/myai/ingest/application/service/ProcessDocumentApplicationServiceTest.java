@@ -10,10 +10,10 @@ import static org.mockito.Mockito.when;
 
 import io.github.spike.myai.ingest.application.monitoring.IngestMetrics;
 import io.github.spike.myai.ingest.domain.model.Document;
+import io.github.spike.myai.ingest.domain.model.ChunkMetadata;
 import io.github.spike.myai.ingest.domain.model.DocumentChunk;
 import io.github.spike.myai.ingest.domain.model.DocumentId;
 import io.github.spike.myai.ingest.domain.model.DocumentParseResult;
-import io.github.spike.myai.ingest.domain.model.SourceHint;
 import io.github.spike.myai.ingest.domain.model.UploadStatus;
 import io.github.spike.myai.ingest.domain.port.DocumentChunker;
 import io.github.spike.myai.ingest.domain.port.DocumentProcessingArtifactStorage;
@@ -80,12 +80,11 @@ class ProcessDocumentApplicationServiceTest {
         when(repository.findById(anyString(), eq(documentId))).thenReturn(Optional.of(ingesting));
         when(sourceStorage.loadVersion(documentId, 1, "a.txt")).thenReturn(Optional.of("hello world".getBytes()));
         DocumentParseResult parseResult = new DocumentParseResult(
-                "<html><body><p>hello world</p></body></html>",
-                "<p>hello world</p>",
+                "# hello world",
                 "hello world",
                 "{\"schema_version\":\"v1\"}");
         when(parser.parse(eq("a.txt"), any(byte[].class))).thenReturn(parseResult);
-        when(chunker.chunk("hello world")).thenReturn(List.of(new DocumentChunk("hello world", SourceHint.none())));
+        when(chunker.chunk("hello world")).thenReturn(List.of(new DocumentChunk("hello world", ChunkMetadata.of(null, 0, null))));
         when(repository.markIndexed(
                         anyString(),
                         eq(documentId),
@@ -96,7 +95,7 @@ class ProcessDocumentApplicationServiceTest {
 
         service.handle(documentId);
 
-        verify(vectorIndexer, times(1)).index(eq(ingesting), eq(List.of(new DocumentChunk("hello world", SourceHint.none()))));
+        verify(vectorIndexer, times(1)).index(eq(ingesting), eq(List.of(new DocumentChunk("hello world", ChunkMetadata.of(null, 0, null)))));
         verify(artifactStorage, times(1)).saveVersion(eq("default"), eq(documentId), eq(1), eq(parseResult));
         verify(repository, times(1))
                 .markIndexed(

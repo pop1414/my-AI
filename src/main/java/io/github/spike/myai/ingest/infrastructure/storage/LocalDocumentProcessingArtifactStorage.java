@@ -27,8 +27,6 @@ import org.springframework.stereotype.Component;
  * <p>写入策略：
  * <ul>
  *   <li><b>cleaned.md</b>：主链产物，<em>强制写入</em>，不受配置控制；</li>
- *   <li><b>raw.xhtml</b>：Tika 原始输出，受 {@code keepRawXhtml} 控制；</li>
- *   <li><b>cleaned.html</b>：Jsoup 清洗后 HTML，受 {@code keepCleanedHtml} 控制；</li>
  *   <li><b>parse-result.json</b>：processingMetadata 文件化载体，受 {@code keepParseResultJson} 控制。</li>
  * </ul>
  *
@@ -39,10 +37,8 @@ import org.springframework.stereotype.Component;
 @ConditionalOnProperty(prefix = "myai.ingest.storage", name = "type", havingValue = "local", matchIfMissing = true)
 public class LocalDocumentProcessingArtifactStorage implements DocumentProcessingArtifactStorage {
 
-    /** Tika 原始 XHTML 输出文件名 */
-    static final String RAW_XHTML_FILENAME = "raw.xhtml";
-    /** Jsoup 语义清洗后的 HTML 文件名 */
-    static final String CLEANED_HTML_FILENAME = "cleaned.html";
+    /** 阅读侧正文 reader.md 文件名（强制写入） */
+    static final String READER_MARKDOWN_FILENAME = READER_MARKDOWN_ARTIFACT_NAME;
     /** 主链产物 cleaned.md 文件名（强制写入） */
     static final String CLEANED_MARKDOWN_FILENAME = "cleaned.md";
     /** processingMetadata 序列化 JSON 文件名 */
@@ -52,10 +48,6 @@ public class LocalDocumentProcessingArtifactStorage implements DocumentProcessin
     private final Path rootDirectory;
     /** 源文件与处理产物逻辑 key 解析器 */
     private final DocumentStorageKeyResolver keyResolver = new DocumentStorageKeyResolver();
-    /** 是否保留 Tika 原始 XHTML（调试用） */
-    private final boolean keepRawXhtml;
-    /** 是否保留 Jsoup 清洗后的 HTML（调试用） */
-    private final boolean keepCleanedHtml;
     /** 是否保留 processingMetadata 的 JSON 文件载体 */
     private final boolean keepParseResultJson;
 
@@ -66,8 +58,6 @@ public class LocalDocumentProcessingArtifactStorage implements DocumentProcessin
      */
     public LocalDocumentProcessingArtifactStorage(IngestProperties ingestProperties) {
         this.rootDirectory = Path.of(ingestProperties.getStorage().getRootDir());
-        this.keepRawXhtml = ingestProperties.getStorage().getArtifacts().isKeepRawXhtml();
-        this.keepCleanedHtml = ingestProperties.getStorage().getArtifacts().isKeepCleanedHtml();
         this.keepParseResultJson = ingestProperties.getStorage().getArtifacts().isKeepParseResultJson();
     }
 
@@ -109,15 +99,8 @@ public class LocalDocumentProcessingArtifactStorage implements DocumentProcessin
             // 确保版本级 artifacts 目录存在（已存在时静默跳过）
             Files.createDirectories(artifactDirectory);
             // 强制写入主链产物 cleaned.md，不受任何配置开关控制
+            writeText(artifactDirectory.resolve(READER_MARKDOWN_FILENAME), parseResult.readerMarkdown());
             writeText(artifactDirectory.resolve(CLEANED_MARKDOWN_FILENAME), parseResult.cleanedMarkdown());
-            // 可选写入：Tika 原始 XHTML
-            if (keepRawXhtml && parseResult.rawXhtml() != null && !parseResult.rawXhtml().isBlank()) {
-                writeText(artifactDirectory.resolve(RAW_XHTML_FILENAME), parseResult.rawXhtml());
-            }
-            // 可选写入：Jsoup 清洗后的 HTML
-            if (keepCleanedHtml && parseResult.cleanedHtml() != null && !parseResult.cleanedHtml().isBlank()) {
-                writeText(artifactDirectory.resolve(CLEANED_HTML_FILENAME), parseResult.cleanedHtml());
-            }
             // 可选写入：processingMetadata JSON
             if (keepParseResultJson
                     && parseResult.processingMetadata() != null

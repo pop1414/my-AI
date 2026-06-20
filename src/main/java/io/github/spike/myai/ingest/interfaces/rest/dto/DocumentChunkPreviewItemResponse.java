@@ -1,5 +1,7 @@
 package io.github.spike.myai.ingest.interfaces.rest.dto;
 
+import io.github.spike.myai.ingest.domain.model.ChunkMetadata;
+
 /**
  * 分块预览项响应 DTO。
  *
@@ -10,7 +12,7 @@ package io.github.spike.myai.ingest.interfaces.rest.dto;
  * @param sourceFile 源文件名
  * @param contentHash 分块哈希
  * @param splitVersion 分块版本
- * @param sourceHint 来源提示
+ * @param chunkMetadata 分块结构化元数据
  */
 public record DocumentChunkPreviewItemResponse(
         int chunkIndex,
@@ -20,5 +22,5 @@ public record DocumentChunkPreviewItemResponse(
         String sourceFile,
         String contentHash,
         String splitVersion,
-        String sourceHint) {
+        ChunkMetadata chunkMetadata) {
 }

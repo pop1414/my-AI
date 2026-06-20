@@ -49,10 +49,11 @@ const columns: ColumnsType<DocumentChunksPreviewResponse["chunks"][number]> = [
 	{ title: "contentPreview", dataIndex: "contentPreview" },
 	{ title: "sourceFile", dataIndex: "sourceFile", width: 180 },
 	{
-		title: "sourceHint",
-		dataIndex: "sourceHint",
+		title: "chunkMetadata",
+		dataIndex: "chunkMetadata",
 		width: 220,
-		render: (value?: string | null) => value ?? "-",
+		render: (value?: { headings: string[]; pageNumber: number; contentType: string } | null) =>
+			value?.headings?.length ? value.headings.join(" > ") : "-",
 	},
 	{ title: "splitVersion", dataIndex: "splitVersion", width: 120 },
 	{ title: "contentHash", dataIndex: "contentHash", width: 260 },

@@ -85,21 +85,12 @@ ingest/
 
 | 子目录 | 文件 | 职责 |
 |---|---|---|
-| `parser/` | DocumentParserRouter | 路由策略：.md → MarkdownTextCleaner 原生解析，.html → HtmlSemanticCleaner + HtmlToMarkdownRenderer 原生解析，其他格式 → TikaDocumentTextParser |
-| | TikaDocumentTextParser | Tika 文本提取 |
-| | TikaParseContextFactory | Tika 解析上下文工厂 |
-| | HtmlSemanticCleaner | HTML 语义清洗 |
-| | HtmlToMarkdownRenderer | HTML → Markdown 渲染 |
+| `parser/` | DocumentParserRouter | 路由策略：8 种支持格式 → DOCLING，不支持格式 → REJECT (415) |
+| | DoclingDocumentParser | Docling Serve 转换 adapter（convertSource 纯转换 → Markdown） |
 | | MarkdownTextCleaner | Markdown 文本清洗 |
 | | MarkdownStructureRepairer | Markdown 结构修复 |
-| | NativeTextDecoder | 原生文本解码 |
-| | TextCleaningService | 多步清洗编排器 |
-| | NoOpEmbeddedDocumentExtractor | 嵌入文档提取（NoOp 实现） |
-| | ProcessingMetadataBuilder | 处理元数据构建 |
-| `chunking/` | StructuredFallbackDocumentChunker | 分块编排器 |
-| | MarkdownSegmenter | 按 Markdown 标题分段 |
-| | HeadingContextExtractor | 提取标题上下文 → sourceHint |
-| | ChunkWindowAssembler | 滑动窗口 500 字符 / 100 重叠 |
+| | TextCleaningService | Markdown 最小破坏清洗 facade |
+| `chunking/` | DoclingDocumentChunker | Docling Serve 分块 adapter（HybridChunker → List&lt;DocumentChunk&gt;） |
 | `storage/` | DocumentDocumentStorageKeyResolver | 路由逻辑：Source 文件 vs 处理产物使用 SEPARATE 存储接口 |
 | | LocalDocumentSourceStorage | Source 文件本地存储 |
 | | S3DocumentSourceStorage | Source 文件 S3 存储 |
@@ -117,7 +108,7 @@ ingest/
 
 **文档处理流水线**：
 ```
-上传 → 受理(幂等去重) → Worker 抢占(CAS) → 解析(Tika) → 分块(结构优先)
+上传 → 受理(幂等去重) → Worker 抢占(CAS) → 解析(Docling) → 分块(结构优先)
      → 向量化(PGVector) → 状态收口(INDEXED/FAILED)
 ```
 
@@ -221,10 +212,10 @@ vector_store ←→ ingest_documents（通过元数据 documentId 关联）
 |---|---|---|
 | PostgreSQL + PGVector | 一个数据库同时满足业务存储和向量检索 | Milvus/Pinecone（专用向量库） |
 | DashScope | 阿里云百炼，国内网络可达、中文优化 | OpenAI、Anthropic |
-| Tika | 业界标准文档解析，支持 100+ 格式 | 自研解析器 |
+| Docling Serve | IBM 开源文档解析，支持表格/图片/公式结构化提取，Docker 部署 | Apache Tika（已迁移）、Unstructured.io |
 | Flyway | Java 原生、SQL 文件直观 | Liquibase |
 | Session 认证 | V1 最简方案，无需 JWT 刷新机制 | JWT + Refresh Token |
 
 ---
 
-_生成时间: 2026-06-15 | 扫描模式: 深度扫描_
+_最后更新: 2026-06-19 | 扫描模式: 深度扫描 | 变更: Tika→Docling 技术选型更新_

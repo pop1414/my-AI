@@ -24,7 +24,11 @@ const documentChunkPreviewItemSchema = z.object({
 	sourceFile: z.string(),
 	contentHash: z.string(),
 	splitVersion: z.string(),
-	sourceHint: z.string().nullable().optional(),
+	chunkMetadata: z.object({
+		headings: z.array(z.string()),
+		pageNumber: z.number().int(),
+		contentType: z.string(),
+	}).nullable().optional(),
 });
 
 const documentChunksPreviewResponseSchema = z.object({

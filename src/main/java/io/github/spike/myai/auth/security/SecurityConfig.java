@@ -86,7 +86,7 @@ public class SecurityConfig {
                         // POST /api/v1/auth/login —— 登录接口，允许匿名访问
                         .requestMatchers(HttpMethod.POST, "/api/v1/auth/login").permitAll()
                         // Actuator 健康检查和信息端点 —— 供监控系统使用，允许匿名访问
-                        .requestMatchers("/actuator/health", "/actuator/info").permitAll()
+                        .requestMatchers("/actuator/health/**", "/actuator/info").permitAll()
                         // 其余所有请求必须经过认证
                         .anyRequest().authenticated())
                 // 在授权过滤器之前插入自定义 CSRF 头校验过滤器，实现轻量级 CSRF 防护

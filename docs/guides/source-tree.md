@@ -3,9 +3,9 @@
 ## 顶层目录
 
 ```
-my-AI-bmad-method/
+my-AI/
 ├── src/                    # Java 后端源码（主项目）
-├── web/                    # React 前端 SPA（本次未扫描）
+├── web/                    # React 前端 SPA
 ├── infra/                  # 基础设施配置（Docker Compose）
 ├── docs/                   # 项目文档（本文件所在）
 ├── _bmad/                  # BMad Method 配置（.gitignore）
@@ -13,7 +13,7 @@ my-AI-bmad-method/
 ├── design-artifacts/       # 设计产物（WDS）
 ├── .claude/                # Claude Code 配置（.gitignore）
 ├── .agents/                # Agent 配置（.gitignore）
-├── .github/                # GitHub 配置（modernize/java-upgrade hooks）
+├── .github/                # GitHub 配置
 ├── .mvn/                   # Maven Wrapper 配置
 ├── .mcp.json               # MCP 服务器配置
 ├── target/                 # Maven 构建输出（.gitignore）
@@ -83,7 +83,7 @@ src/main/java/io/github/spike/myai/
 │   │
 │   └── infrastructure/
 │       ├── config/                     # IngestProperties + S3StorageConfiguration（2 个文件）
-│       ├── parser/                     # Tika 解析 + HTML 清洗 + Markdown 转换（11 个文件）
+│       ├── parser/                     # Docling 解析 + HTML 清洗 + Markdown 转换（11 个文件）
 │       ├── chunking/                   # 结构优先分块器（4 个文件）
 │       ├── storage/                    # Local/S3 双实现（源文件 + 处理产物）（5 个文件）
 │       ├── vector/                     # PGVector 向量索引（1 个文件）
@@ -175,9 +175,30 @@ src/test/java/io/github/spike/myai/
 
 ```
 infra/
-└── docker-compose.yml            # PostgreSQL (pgvector/pgvector:pg16) + RustFS (S3 兼容)
+└── docker-compose.yml            # PostgreSQL (pgvector/pgvector:pg16) + RustFS (S3 兼容) + Docling Serve (文档解析)
+```
+
+## Web 前端结构
+
+```
+web/src/
+├── main.tsx                      # 应用引导：QueryClient, BrowserRouter, Antd ConfigProvider, AuthProvider
+├── app/
+│   ├── AppRoutes.tsx             # 路由定义（懒加载），基于 capability 的守卫
+│   └── ConsoleLayout.tsx         # Shell 布局：可调侧边栏、头部、面包屑、活动中心
+├── features/                     # 功能模块（按后端子域划分）
+│   ├── admin/                    # 管理后台（账户、成员、授权、审计）
+│   ├── auth/                     # 登录页
+│   ├── ingest/                   # 文档管理（列表、上传、详情、版本、分块预览）
+│   ├── knowledge/                # 知识库管理（卡片布局、CRUD）
+│   ├── member/                   # 成员视图（可读基线、阅读器）
+│   └── qa/                       # RAG 问答（对话界面 + 检查面板）
+└── shared/
+    ├── api/                      # API 客户端层（5 个模块：auth/ingest/knowledge/qa/admin）
+    ├── auth/                     # AuthContext + RouteGuards（3 级守卫）
+    └── ui/                       # 共享 UI 组件（ApiErrorAlert, ConsolePageFrame 等）
 ```
 
 ---
 
-_生成时间: 2026-06-15 | 扫描模式: 深度扫描_
+_最后更新: 2026-06-19 | 扫描模式: 深度扫描 | 变更: Docling 迁移 + 前端结构补充_

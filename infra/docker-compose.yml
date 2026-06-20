@@ -1,11 +1,12 @@
 services:
+
   postgres:
     image: pgvector/pgvector:pg16
     container_name: myai-pg
     environment:
       POSTGRES_DB: myai
       POSTGRES_USER: admin
-      POSTGRES_PASSWORD: admin
+      POSTGRES_PASSWORD: admin  # 建议在实际生产环境部署时替换为强密码
       TZ: Asia/Shanghai
     ports:
       - "5432:5432"
@@ -16,6 +17,7 @@ services:
       interval: 5s
       timeout: 3s
       retries: 20
+    restart: unless-stopped  # 优化：补充服务异常退出或宿主机重启时的自启策略
 
   rustfs:
     image: rustfs/rustfs:latest
@@ -23,14 +25,59 @@ services:
     environment:
       RUSTFS_ACCESS_KEY: admin
       RUSTFS_SECRET_KEY: Admin@123
+      RUSTFS_CONSOLE_ENABLE: "true"  # 优化：显式启用 Web 控制台（默认端口为 9001）
       TZ: Asia/Shanghai
     ports:
       - "9000:9000"
       - "9001:9001"
     volumes:
       - rustfs_data:/data
-    restart: always
+    healthcheck:                      # 优化：为轻量对象存储补充健康检查
+      test: ["CMD", "sh", "-c", "curl -f http://127.0.0.1:9000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped           # 优化：调整为标准的 unless-stopped
+
+  docling-serve:
+    image: quay.io/docling-project/docling-serve-cpu:latest
+    container_name: myai-docling-serve
+    environment:
+      DOCLING_SERVE_LOAD_MODELS_AT_BOOT: "true"
+      DOCLING_SERVE_SHOW_VERSION_INFO: "true"
+
+      # 优化：补充进阶能力开关（如 UI、允许联网调用外部 VLM、加载第三方插件）
+      DOCLING_SERVE_ENABLE_UI: "true"
+      DOCLING_SERVE_ENABLE_REMOTE_SERVICES: "true"
+      DOCLING_SERVE_ALLOW_EXTERNAL_PLUGINS: "true"
+
+      # 优化：补充 API 自定义底层组件配置的参数（需带有统一的 DOCLING_SERVE_ 前缀才能被读取）
+      DOCLING_SERVE_ALLOW_CUSTOM_VLM_CONFIG: "true"
+      DOCLING_SERVE_ALLOW_CUSTOM_PICTURE_DESCRIPTION_CONFIG: "true"
+      DOCLING_SERVE_ALLOW_CUSTOM_CODE_FORMULA_CONFIG: "true"
+
+      TZ: Asia/Shanghai
+    ports:
+      - "5001:5001"
+    volumes:
+      # 优化：修正容器内部的模型/资源缓存路径。
+      # 该路径可同时保留 Hugging Face、EasyOCR 及 Docling 模型，确保模型能够被挂载卷持久化
+      - docling_model_cache:/opt/app-root/src/.cache
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5001/version', timeout=5)",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 5m
+    restart: unless-stopped
 
 volumes:
   pgdata:
   rustfs_data:
+  docling_model_cache:

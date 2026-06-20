@@ -25,7 +25,7 @@ graph LR
         direction TB
         I["interfaces<br/>REST Controllers + DTO"] --> A["application<br/>Service 编排 + 授权"]
         A --> D["domain<br/>纯 Java 领域模型 + Port 接口"]
-        D --> Infra["infrastructure<br/>JDBC / PGVector / S3 / Tika"]
+        D --> Infra["infrastructure<br/>JDBC / PGVector / S3 / Docling"]
     end
 
     subgraph 外部服务["外部服务 (Docker)"]
@@ -64,8 +64,10 @@ graph LR
 ### 三步跑起来
 
 ```bash
-# 1. 启动基础设施（PostgreSQL + RustFS）
+# 1. 启动基础设施（PostgreSQL + RustFS + Docling Serve）
 cd infra && docker compose up -d
+# 首次启动 Docling Serve 会自动下载模型，通常在 5 分钟内完成
+# 用 docker compose ps 确认 docling-serve 进入 healthy 状态后再继续
 
 # 2. 启动后端（Flyway 自动建表）
 export DASHSCOPE_API_KEY="sk-xxx"
@@ -89,15 +91,15 @@ cd web && npm run test:e2e                  # Playwright E2E（需前后端运�
 
 ```
 用户上传文件
-  → [ingest] 受理 + Tika 解析 → 结构分块 → PGVector 向量化
+  → [ingest] 受理 + Docling 解析 → 结构分块 → PGVector 向量化
   → [knowledge] 知识库聚合已索引文档
   → [qa] 语义检索 + LLM 生成 → 答案 + 引用溯源
 ```
 
 | 子域 | API 前缀 | 端点数 | 职责 |
 |---|---|---|---|
-| **auth** | `/api/v1/auth` · `/api/v1/admin/*` | 22 | 认证、授权、治理、审计 |
-| **ingest** | `/api/v1/documents` | 10 | 文档入库生命周期 |
+| **auth** | `/api/v1/auth` · `/api/v1/admin/*` | 18 | 认证、授权、治理、审计 |
+| **ingest** | `/api/v1/documents` | 11 | 文档入库生命周期 |
 | **knowledge** | `/api/v1/knowledge-bases` | 4 | 知识库主数据管理 |
 | **qa** | `/api/v1/qa` | 1 | RAG 检索 + 回答生成 |
 
@@ -113,9 +115,9 @@ cd web && npm run test:e2e                  # Playwright E2E（需前后端运�
 | Spring AI Alibaba | 1.1.2.x | DashScope 适配 + Agent Framework |
 | PostgreSQL + PGVector | 16 | 关系数据 + HNSW 向量索引 |
 | Flyway | — | 数据库版本迁移 |
-| Apache Tika | 2.9.2 | 文档解析 |
+| Docling Serve | latest | 文档解析（PDF/Word/HTML，表格/图片/公式结构化） |
+| Arconia Docling Starter | 0.20.0 | Spring Boot 集成 Docling Serve |
 | AWS SDK v2 | 2.42.14 | S3 兼容对象存储 |
-| jsoup + flexmark | 1.18.3 / 0.64.8 | HTML 清洗 + Markdown 渲染 |
 
 ### 前端
 
@@ -134,7 +136,7 @@ cd web && npm run test:e2e                  # Playwright E2E（需前后端运�
 | 文档 | 说明 |
 |---|---|
 | [架构设计](./docs/architecture/overview.md) | DDD-Lite 分层、四子域详解、技术选型 |
-| [API 契约](./docs/api/contracts.md) | 37 个 `/api/v1` REST API 端点清单 |
+| [API 契约](./docs/api/contracts.md) | 34 个 `/api/v1` REST API 端点清单 |
 | [数据模型](./docs/data/models.md) | 12 张表结构 + Flyway 迁移历史 |
 | [ADR 索引](./docs/adr/index.md) | 7 篇架构决策记录 + 决策演化图 |
 | [开发指南](./docs/guides/development.md) | 环境变量、启动、构建、测试 |
@@ -155,7 +157,7 @@ my-AI/
 │   └── shared/        # 共享工具
 ├── src/main/resources/db/migration/   # Flyway 迁移脚本
 ├── web/               # React 前端
-├── infra/             # Docker Compose（PGVector + RustFS）
+├── infra/             # Docker Compose（PGVector + RustFS + Docling Serve）
 ├── docs/              # 项目文档
 └── _bmad-output/      # BMad 工作流产物
 ```

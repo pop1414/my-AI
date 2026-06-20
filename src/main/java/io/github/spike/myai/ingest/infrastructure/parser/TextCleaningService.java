@@ -5,58 +5,29 @@ import org.springframework.stereotype.Component;
 /**
  * 文本清洗 facade。
  *
- * <p>对外保留 parser 当前需要学习的最小 Interface；具体 HTML 清洗、Markdown 行级清洗和
- * 结构修复规则收敛到内部 Module，避免调用方感知清洗规则的组织细节。
+ * <p>Docling 迁移后仅保留原生 Markdown 最小破坏清洗能力。
+ * 具体清洗规则收敛到 {@link MarkdownTextCleaner}，避免调用方感知清洗规则的组织细节。
+ *
+ * <p>退出条件：黄金样本清洗前后 diff 为零差异时可移除（记录为 no-op）。
+ *
+ * @author spike
+ * @since 1.0.0
  */
 @Component
 public class TextCleaningService {
 
-    private final HtmlSemanticCleaner htmlSemanticCleaner = new HtmlSemanticCleaner();
-    private final HtmlToMarkdownRenderer htmlToMarkdownRenderer = new HtmlToMarkdownRenderer();
     private final MarkdownTextCleaner markdownTextCleaner = new MarkdownTextCleaner();
 
     /**
-     * 清洗原始 XHTML，输出语义更稳定的 HTML。
-     *
-     * @param rawXhtml Tika 输出的 XHTML
-     * @return cleaned.html 内容
-     */
-    public String cleanHtml(String rawXhtml) {
-        return htmlSemanticCleaner.clean(rawXhtml);
-    }
-
-    /**
-     * 将 cleaned.html 转换为 Markdown。
-     *
-     * @param cleanedHtml 语义清洗后的 HTML
-     * @return cleaned.md 内容
-     */
-    public String toMarkdown(String cleanedHtml) {
-        if (cleanedHtml == null || cleanedHtml.isBlank()) {
-            return "";
-        }
-        String markdown = htmlToMarkdownRenderer.render(cleanedHtml);
-        return markdownTextCleaner.cleanConvertedMarkdown(markdown);
-    }
-
-    /**
      * 对原生 Markdown 执行最小破坏清洗。
+     *
+     * <p>清洗内容：统一换行符（CRLF→LF）、去除控制字符、压缩连续空行。
      *
      * @param rawMarkdown 原生 Markdown 文本
      * @return 最小规整后的 Markdown
      */
     public String cleanNativeMarkdown(String rawMarkdown) {
         return markdownTextCleaner.cleanNativeMarkdown(rawMarkdown);
-    }
-
-    /**
-     * 对 Markdown/纯文本执行轻量规整。
-     *
-     * @param rawText 原始文本
-     * @return 规整后的文本
-     */
-    public String cleanText(String rawText) {
-        return markdownTextCleaner.cleanText(rawText);
     }
 
     static String repairMarkdownStructure(String markdown) {

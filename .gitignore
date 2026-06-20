@@ -35,6 +35,8 @@ build/
 ### Data ###
 .agents/
 skills-lock.json
+docs/report/images
+docs/report/diagrams
 
 ### Claude Code ###
 .claude/
@@ -42,5 +44,11 @@ skills-lock.json
 ### Codex ###
 .codex/
 
+### OpenCode ###
+.opencode
+
 ### BMAD METHOD ###
 _bmad/
+
+### MCP ###
+.mcp.json

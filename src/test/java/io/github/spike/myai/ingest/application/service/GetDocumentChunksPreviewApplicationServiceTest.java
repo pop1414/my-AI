@@ -14,6 +14,7 @@ import io.github.spike.myai.auth.domain.model.WorkspaceRole;
 import io.github.spike.myai.ingest.application.exception.DocumentNotFoundException;
 import io.github.spike.myai.ingest.application.query.GetDocumentChunksPreviewQuery;
 import io.github.spike.myai.ingest.application.result.DocumentChunksPreviewResult;
+import io.github.spike.myai.ingest.domain.model.ChunkMetadata;
 import io.github.spike.myai.ingest.domain.model.Document;
 import io.github.spike.myai.ingest.domain.model.DocumentChunkPreview;
 import io.github.spike.myai.ingest.domain.model.DocumentId;
@@ -78,7 +79,7 @@ class GetDocumentChunksPreviewApplicationServiceTest {
                         "sample.txt",
                         "hash-c-1",
                         "v1",
-                        "{\"heading\":\"Intro\"}")));
+                        ChunkMetadata.of(List.of("Intro"), 0, null))));
 
         DocumentChunksPreviewResult result =
                 service.handle(new GetDocumentChunksPreviewQuery("doc-500", 10, 0, 20));

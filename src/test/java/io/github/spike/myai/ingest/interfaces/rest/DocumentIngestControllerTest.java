@@ -27,6 +27,7 @@ import io.github.spike.myai.ingest.application.query.ListDocumentsQuery;
 import io.github.spike.myai.ingest.application.result.DocumentChunkPreviewItemResult;
 import io.github.spike.myai.ingest.application.result.DocumentChunksPreviewResult;
 import io.github.spike.myai.ingest.application.result.DocumentContentResult;
+import io.github.spike.myai.ingest.domain.model.ChunkMetadata;
 import io.github.spike.myai.ingest.application.result.DocumentListItemResult;
 import io.github.spike.myai.ingest.application.result.DocumentListPageResult;
 import io.github.spike.myai.ingest.application.result.DocumentStatusResult;
@@ -587,7 +588,7 @@ class DocumentIngestControllerTest {
                                 "demo.txt",
                                 "hash-chunk-1",
                                 "v1",
-                                "{\"heading\":\"Intro\"}"))));
+                                ChunkMetadata.of(java.util.List.of("Intro"), 0, null)))));
 
         mockMvc.perform(get("/api/v1/documents/{documentId}/chunks/preview", "doc-300")
                         .param("limit", "10")

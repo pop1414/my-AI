@@ -9,7 +9,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  *
  * <p>绑定 {@code myai.ingest} 前缀的 YAML 配置，按功能域拆分为内嵌配置类：
  * <ul>
- *   <li>{@link Parser}：Tika 解析参数</li>
+ *   <li>{@link Parser}：文档解析参数</li>
  *   <li>{@link Storage}：源文件与中间产物存储参数</li>
  *   <li>{@link S3}：S3 兼容对象存储连接参数</li>
  *   <li>{@link Artifacts}：调试产物保留策略</li>
@@ -32,7 +32,7 @@ public class IngestProperties {
     private final SchemaCheck schemaCheck = new SchemaCheck();
 
     /**
-     * Tika 解析器参数配置。
+     * 文档解析器参数配置。
      */
     @Setter
     @Getter
@@ -100,8 +100,6 @@ public class IngestProperties {
      *
      * <p>控制处理链路中调试产物的文件化保留行为：
      * <ul>
-     *   <li>{@code keepRawXhtml}：是否保留 Tika 原始 XHTML（默认 false）</li>
-     *   <li>{@code keepCleanedHtml}：是否保留 Jsoup 清洗后的 HTML（默认 false）</li>
      *   <li>{@code keepParseResultJson}：是否保留 processing_metadata 文件化载体（默认 true）</li>
      * </ul>
      *
@@ -112,8 +110,6 @@ public class IngestProperties {
     public static class Artifacts {
         /** 正文读取允许的最大 artifact 字节数，超过时拒绝返回完整正文 */
         private long maxReadBytes = 2_000_000L;
-        private boolean keepRawXhtml = false;
-        private boolean keepCleanedHtml = false;
         private boolean keepParseResultJson = true;
 
     }
@@ -128,6 +124,10 @@ public class IngestProperties {
         private int chunkSize = 500;
         /** chunk 之间的重叠大小（字符数），默认 100，用于保持语义连续性 */
         private int overlapSize = 100;
+        /** HybridChunker 单块最大 token 数，默认 512（对齐论文最优 faithfulness 97.59） */
+        private int maxTokens = 512;
+        /** 是否合并过小块，默认 true（对齐论文最优 faithfulness） */
+        private boolean mergePeers = true;
 
     }
 

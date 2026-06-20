@@ -1,8 +1,13 @@
 package io.github.spike.myai.ingest.infrastructure.persistence;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.spike.myai.ingest.domain.model.ChunkContentType;
+import io.github.spike.myai.ingest.domain.model.ChunkMetadata;
 import io.github.spike.myai.ingest.domain.model.DocumentChunkPreview;
 import io.github.spike.myai.ingest.domain.model.DocumentId;
 import io.github.spike.myai.ingest.domain.port.DocumentChunkPreviewRepository;
+import java.util.ArrayList;
 import java.util.List;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
@@ -19,7 +24,7 @@ import org.springframework.stereotype.Repository;
  *   <li>通过 {@code JOIN ingest_documents} 关联文档表，
  *       利用文档表的 {@code workspace_id} 实现工作区隔离；</li>
  *   <li>从 {@code vector_store} 表的 JSONB {@code metadata} 字段中
- *       提取 {@code chunkIndex / sourceFile / contentHash / splitVersion / sourceHint}
+ *       提取 {@code chunkIndex / sourceFile / contentHash / splitVersion / chunkMetadata}
  *       等分块元信息；</li>
  *   <li>使用 {@code COALESCE} 处理 JSONB 字段可能为 {@code NULL} 的边界情况；</li>
  *   <li>按 {@code chunkIndex} 升序排列，保证预览顺序与原文一致。</li>
@@ -42,7 +47,8 @@ public class JdbcDocumentChunkPreviewRepository implements DocumentChunkPreviewR
      * <ul>
      *   <li>{@code chunkIndex} —— 默认 0，保证排序不报错；</li>
      *   <li>{@code content} —— 默认空字符串；</li>
-     *   <li>{@code sourceFile / contentHash / splitVersion / sourceHint} —— 默认空字符串。</li>
+     *   <li>{@code sourceFile / contentHash / splitVersion} —— 默认空字符串；</li>
+     *   <li>{@code chunkMetadata} —— 默认空 JSON 对象。</li>
      * </ul>
      */
     private static final String FIND_BY_DOCUMENT_ID_SQL = """
@@ -53,7 +59,7 @@ public class JdbcDocumentChunkPreviewRepository implements DocumentChunkPreviewR
               COALESCE(metadata->>'sourceFile', '') AS source_file,
               COALESCE(metadata->>'contentHash', '') AS content_hash,
               COALESCE(metadata->>'splitVersion', '') AS split_version,
-              COALESCE(metadata->>'sourceHint', '') AS source_hint
+              COALESCE(metadata->>'chunkMetadata', '{}') AS chunk_metadata
             FROM vector_store vs
             JOIN ingest_documents doc
               ON doc.document_id = vs.metadata->>'documentId'
@@ -85,6 +91,7 @@ public class JdbcDocumentChunkPreviewRepository implements DocumentChunkPreviewR
      * {@link DocumentChunkPreview} 读模型的 JDBC 行映射器。
      *
      * <p>将向量存储表的分块元数据映射为领域读模型对象。
+     * chunkMetadata 从 JSONB 字符串反序列化为 {@link ChunkMetadata}。
      */
     private static final RowMapper<DocumentChunkPreview> ROW_MAPPER = (rs, rowNum) -> new DocumentChunkPreview(
             rs.getInt("chunk_index"),
@@ -93,7 +100,7 @@ public class JdbcDocumentChunkPreviewRepository implements DocumentChunkPreviewR
             rs.getString("source_file"),
             rs.getString("content_hash"),
             rs.getString("split_version"),
-            rs.getString("source_hint"));
+            parseChunkMetadata(rs.getString("chunk_metadata")));
 
     /** Spring JDBC 模板，用于执行所有数据库操作 */
     private final JdbcTemplate jdbcTemplate;
@@ -157,5 +164,42 @@ public class JdbcDocumentChunkPreviewRepository implements DocumentChunkPreviewR
                 documentId.value(),
                 splitVersion);
         return count == null ? 0 : count;
+    }
+
+    /**
+     * Jackson ObjectMapper 实例（线程安全），用于序列化与反序列化 chunkMetadata JSON。
+     */
+    private static final ObjectMapper MAPPER = new ObjectMapper();
+
+    /**
+     * 从 JSONB 字符串解析 ChunkMetadata。
+     *
+     * <p>支持格式 {@code {"headings":["h1","h2"],"pageNumber":0,"contentType":"PARAGRAPH"}}。
+     * 格式不合法或为空时返回默认 ChunkMetadata。
+     */
+    private static ChunkMetadata parseChunkMetadata(String json) {
+        if (json == null || json.isBlank() || "{}".equals(json.trim())) {
+            return ChunkMetadata.of(null, 0, null);
+        }
+        try {
+            JsonNode node = MAPPER.readTree(json);
+            List<String> headings = new ArrayList<>();
+            JsonNode headingsNode = node.get("headings");
+            if (headingsNode != null && headingsNode.isArray()) {
+                for (JsonNode h : headingsNode) {
+                    if (h.isTextual()) {
+                        headings.add(h.asText());
+                    }
+                }
+            }
+            int pageNumber = node.has("pageNumber") ? node.get("pageNumber").asInt(0) : 0;
+            String ct = node.has("contentType") ? node.get("contentType").asText() : null;
+            ChunkContentType contentType = ct != null
+                    ? ChunkContentType.valueOf(ct)
+                    : ChunkContentType.PARAGRAPH;
+            return ChunkMetadata.of(headings, pageNumber, contentType);
+        } catch (Exception ex) {
+            return ChunkMetadata.of(null, 0, null);
+        }
     }
 }

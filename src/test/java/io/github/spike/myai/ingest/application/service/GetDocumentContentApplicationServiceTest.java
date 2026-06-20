@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -28,8 +29,10 @@ import io.github.spike.myai.ingest.domain.model.DocumentVersionOriginType;
 import io.github.spike.myai.ingest.domain.model.UploadStatus;
 import io.github.spike.myai.ingest.domain.port.DocumentProcessingArtifactStorage;
 import io.github.spike.myai.ingest.domain.port.DocumentRepository;
+import io.github.spike.myai.ingest.domain.port.DocumentSourceStorage;
 import io.github.spike.myai.ingest.infrastructure.config.IngestProperties;
 import io.github.spike.myai.shared.rest.BusinessException;
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
@@ -67,7 +70,7 @@ class GetDocumentContentApplicationServiceTest {
                 "workspace-a",
                 documentId,
                 2,
-                DocumentProcessingArtifactStorage.CLEANED_MARKDOWN_ARTIFACT_NAME,
+                DocumentProcessingArtifactStorage.READER_MARKDOWN_ARTIFACT_NAME,
                 1024L))
                 .thenReturn(Optional.of(new DocumentVersionArtifactContent("key", "# 正文", 9L)));
 
@@ -81,11 +84,85 @@ class GetDocumentContentApplicationServiceTest {
         assertTrue(result.isAskableVersion());
         assertEquals("LATEST", result.source());
         assertEquals("INDEXED", result.status());
-        assertEquals("demo-v2.md", result.filename());
+        assertEquals("demo-v2.pdf", result.filename());
         assertEquals("# 正文", result.contentMarkdown());
         assertEquals(9L, result.contentLength());
         assertFalse(result.truncated());
         verify(fixture.authorizationService).requireCanReadDocument(any(CurrentUser.class), eq("doc-content-1"), eq("kb-1"));
+    }
+
+    @Test
+    @DisplayName("Markdown 婧愭枃浠跺彲鍥炴簮鏃讹紝搴旇繑鍥炲師濮?Markdown")
+    void handle_shouldReturnSourceMarkdown_whenVersionFileIsMarkdown() {
+        Fixture fixture = new Fixture();
+        DocumentId documentId = new DocumentId("doc-markdown-source");
+        Document document = document(documentId, 2, UploadStatus.INDEXED, "demo-v2.md");
+        DocumentVersion version = version(documentId, 2, UploadStatus.INDEXED, "demo-v2.md");
+        String sourceMarkdown = "# 标题\n\n![image](https://cdn-mineru.openxlab.org.cn/result/demo.jpg)\n\n正文";
+        when(fixture.documentRepository.findById("workspace-a", documentId)).thenReturn(Optional.of(document));
+        when(fixture.documentRepository.findVersionByNumber("workspace-a", documentId, 2)).thenReturn(Optional.of(version));
+        when(fixture.documentRepository.findLatestIndexedVersionNumber("workspace-a", documentId)).thenReturn(2);
+        when(fixture.sourceStorage.loadVersion(documentId, 2, "demo-v2.md"))
+                .thenReturn(Optional.of(sourceMarkdown.getBytes(StandardCharsets.UTF_8)));
+
+        DocumentContentResult result = fixture.service.handle(
+                new GetDocumentContentQuery("doc-markdown-source", DocumentContentSource.LATEST));
+
+        assertEquals(sourceMarkdown, result.contentMarkdown());
+        assertEquals(sourceMarkdown.getBytes(StandardCharsets.UTF_8).length, result.contentLength());
+        verify(fixture.artifactStorage, never()).loadVersionArtifact(
+                "workspace-a",
+                documentId,
+                2,
+                DocumentProcessingArtifactStorage.CLEANED_MARKDOWN_ARTIFACT_NAME,
+                1024L);
+    }
+
+    @Test
+    @DisplayName("Markdown 婧愭枃浠跺洖婧愬け璐ユ椂锛屽簲閫€鍥炶鍙?cleaned.md")
+    void handle_shouldFallbackToArtifact_whenMarkdownSourceMissing() {
+        Fixture fixture = new Fixture();
+        DocumentId documentId = new DocumentId("doc-markdown-fallback");
+        Document document = document(documentId, 2, UploadStatus.INDEXED, "demo-v2.md");
+        DocumentVersion version = version(documentId, 2, UploadStatus.INDEXED, "demo-v2.md");
+        when(fixture.documentRepository.findById("workspace-a", documentId)).thenReturn(Optional.of(document));
+        when(fixture.documentRepository.findVersionByNumber("workspace-a", documentId, 2)).thenReturn(Optional.of(version));
+        when(fixture.documentRepository.findLatestIndexedVersionNumber("workspace-a", documentId)).thenReturn(2);
+        when(fixture.sourceStorage.loadVersion(documentId, 2, "demo-v2.md")).thenReturn(Optional.empty());
+        when(fixture.artifactStorage.loadVersionArtifact(
+                "workspace-a",
+                documentId,
+                2,
+                DocumentProcessingArtifactStorage.CLEANED_MARKDOWN_ARTIFACT_NAME,
+                1024L))
+                .thenReturn(Optional.of(new DocumentVersionArtifactContent("key", "# cleaned", 9L)));
+
+        DocumentContentResult result = fixture.service.handle(
+                new GetDocumentContentQuery("doc-markdown-fallback", DocumentContentSource.LATEST));
+
+        assertEquals("# cleaned", result.contentMarkdown());
+    }
+
+    @Test
+    @DisplayName("Markdown latest 仍在处理中且缺少 reader.md 时，应返回 CONTENT_NOT_READY")
+    void handle_shouldThrowContentNotReady_whenMarkdownLatestIsProcessingWithoutReaderArtifact() {
+        Fixture fixture = new Fixture();
+        DocumentId documentId = new DocumentId("doc-markdown-ingesting");
+        Document document = document(documentId, 3, UploadStatus.INGESTING, "demo-v3.md");
+        DocumentVersion version = version(documentId, 3, UploadStatus.INGESTING, "demo-v3.md");
+        when(fixture.documentRepository.findById("workspace-a", documentId)).thenReturn(Optional.of(document));
+        when(fixture.documentRepository.findVersionByNumber("workspace-a", documentId, 3)).thenReturn(Optional.of(version));
+        when(fixture.sourceStorage.loadVersion(documentId, 3, "demo-v3.md"))
+                .thenReturn(Optional.of("# raw markdown".getBytes(StandardCharsets.UTF_8)));
+
+        BusinessException ex = assertThrows(
+                BusinessException.class,
+                () -> fixture.service.handle(
+                        new GetDocumentContentQuery("doc-markdown-ingesting", DocumentContentSource.LATEST)));
+
+        assertEquals(HttpStatus.CONFLICT, ex.status());
+        assertEquals("CONTENT_NOT_READY", ex.code());
+        verify(fixture.sourceStorage, never()).loadVersion(documentId, 3, "demo-v3.md");
     }
 
     @Test
@@ -127,7 +204,7 @@ class GetDocumentContentApplicationServiceTest {
                 "workspace-a",
                 documentId,
                 4,
-                DocumentProcessingArtifactStorage.CLEANED_MARKDOWN_ARTIFACT_NAME,
+                DocumentProcessingArtifactStorage.READER_MARKDOWN_ARTIFACT_NAME,
                 1024L))
                 .thenReturn(Optional.of(new DocumentVersionArtifactContent("key", "失败版本正文", 15L)));
 
@@ -242,7 +319,7 @@ class GetDocumentContentApplicationServiceTest {
                 "workspace-a",
                 documentId,
                 5,
-                DocumentProcessingArtifactStorage.CLEANED_MARKDOWN_ARTIFACT_NAME,
+                DocumentProcessingArtifactStorage.READER_MARKDOWN_ARTIFACT_NAME,
                 1024L))
                 .thenReturn(Optional.of(new DocumentVersionArtifactContent("key", "askable latest", 15L)));
 
@@ -272,7 +349,7 @@ class GetDocumentContentApplicationServiceTest {
                 "workspace-a",
                 documentId,
                 4,
-                DocumentProcessingArtifactStorage.CLEANED_MARKDOWN_ARTIFACT_NAME,
+                DocumentProcessingArtifactStorage.READER_MARKDOWN_ARTIFACT_NAME,
                 1024L))
                 .thenReturn(Optional.of(new DocumentVersionArtifactContent("key", "old indexed", 11L)));
 
@@ -307,7 +384,7 @@ class GetDocumentContentApplicationServiceTest {
                 "workspace-a",
                 documentId,
                 3,
-                DocumentProcessingArtifactStorage.CLEANED_MARKDOWN_ARTIFACT_NAME,
+                DocumentProcessingArtifactStorage.READER_MARKDOWN_ARTIFACT_NAME,
                 1024L))
                 .thenReturn(Optional.of(new DocumentVersionArtifactContent("key", "stable baseline", 15L)));
 
@@ -384,7 +461,7 @@ class GetDocumentContentApplicationServiceTest {
                 "workspace-a",
                 documentId,
                 1,
-                DocumentProcessingArtifactStorage.CLEANED_MARKDOWN_ARTIFACT_NAME,
+                DocumentProcessingArtifactStorage.READER_MARKDOWN_ARTIFACT_NAME,
                 1024L))
                 .thenReturn(Optional.of(new DocumentVersionArtifactContent("key", "历史版本正文", 18L)));
 
@@ -570,6 +647,14 @@ class GetDocumentContentApplicationServiceTest {
     }
 
     private static Document document(DocumentId documentId, int latestVersionNumber, UploadStatus status) {
+        return document(documentId, latestVersionNumber, status, "demo-v" + latestVersionNumber + ".pdf");
+    }
+
+    private static Document document(
+            DocumentId documentId,
+            int latestVersionNumber,
+            UploadStatus status,
+            String filename) {
         Instant now = Instant.parse("2026-05-15T08:00:00Z");
         return new Document(
                 documentId,
@@ -578,7 +663,7 @@ class GetDocumentContentApplicationServiceTest {
                 latestVersionNumber,
                 DocumentVersionOriginType.UPLOAD,
                 "hash-" + latestVersionNumber,
-                "demo-v" + latestVersionNumber + ".md",
+                filename,
                 128,
                 status,
                 status == UploadStatus.FAILED ? "parse failed" : null,
@@ -597,6 +682,14 @@ class GetDocumentContentApplicationServiceTest {
     }
 
     private static DocumentVersion version(DocumentId documentId, int versionNumber, UploadStatus status) {
+        return version(documentId, versionNumber, status, "demo-v" + versionNumber + ".pdf");
+    }
+
+    private static DocumentVersion version(
+            DocumentId documentId,
+            int versionNumber,
+            UploadStatus status,
+            String filename) {
         Instant createdAt = Instant.parse("2026-05-15T08:00:00Z");
         Instant updatedAt = Instant.parse("2026-05-15T08:05:00Z");
         return new DocumentVersion(
@@ -605,7 +698,7 @@ class GetDocumentContentApplicationServiceTest {
                 DocumentVersionOriginType.UPLOAD,
                 null,
                 "hash-" + versionNumber,
-                "demo-v" + versionNumber + ".md",
+                filename,
                 128,
                 status,
                 status == UploadStatus.FAILED ? "parse failed" : null,
@@ -628,6 +721,7 @@ class GetDocumentContentApplicationServiceTest {
         private final DocumentRepository documentRepository = Mockito.mock(DocumentRepository.class);
         private final DocumentProcessingArtifactStorage artifactStorage =
                 Mockito.mock(DocumentProcessingArtifactStorage.class);
+        private final DocumentSourceStorage sourceStorage = Mockito.mock(DocumentSourceStorage.class);
         private final CurrentUserProvider currentUserProvider = Mockito.mock(CurrentUserProvider.class);
         private final AuthorizationService authorizationService = Mockito.mock(AuthorizationService.class);
         private final GetDocumentContentApplicationService service;
@@ -635,11 +729,16 @@ class GetDocumentContentApplicationServiceTest {
         private Fixture() {
             when(currentUserProvider.requireCurrentUser()).thenReturn(
                     new CurrentUser("user-1", "alice", "workspace-a", WorkspaceRole.WORKSPACE_MEMBER));
+            when(artifactStorage.loadVersionArtifact(any(), any(), anyInt(), any(), anyLong()))
+                    .thenReturn(Optional.empty());
+            when(sourceStorage.loadVersion(any(), anyInt(), any()))
+                    .thenReturn(Optional.empty());
             IngestProperties ingestProperties = new IngestProperties();
             ingestProperties.getStorage().getArtifacts().setMaxReadBytes(1024L);
             this.service = new GetDocumentContentApplicationService(
                     documentRepository,
                     artifactStorage,
+                    sourceStorage,
                     currentUserProvider,
                     authorizationService,
                     ingestProperties);

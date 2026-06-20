@@ -1,4 +1,7 @@
 ﻿const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "";
+const NORMALIZED_API_BASE_URL = API_BASE_URL.endsWith("/")
+	? API_BASE_URL.slice(0, -1)
+	: API_BASE_URL;
 
 export class ApiError extends Error {
 	status: number;
@@ -21,6 +24,11 @@ export type AuthPolicy = "redirect-on-401" | "ignore-401";
 
 export interface RequestJsonOptions {
 	authPolicy?: AuthPolicy;
+}
+
+export function buildApiUrl(path: string): string {
+	const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+	return `${NORMALIZED_API_BASE_URL}${normalizedPath}`;
 }
 
 function isWriteMethod(method?: string): boolean {
@@ -59,7 +67,7 @@ export async function requestJson<T>(
 		headers.set("X-MYAI-CSRF", "1");
 	}
 
-	const response = await fetch(`${API_BASE_URL}${path}`, {
+	const response = await fetch(buildApiUrl(path), {
 		...init,
 		credentials: "include",
 		headers,

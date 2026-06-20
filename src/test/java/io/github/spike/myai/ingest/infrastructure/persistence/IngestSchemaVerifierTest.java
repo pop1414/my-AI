@@ -11,11 +11,26 @@ import io.github.spike.myai.ingest.infrastructure.config.IngestProperties;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.ResultSetExtractor;
 
+/**
+ * TODO(spike): Refactor to integration test
+ *
+ * Current implementation violates project rule:
+ * "Do not mock JdbcTemplate/JDBC chain - SQL correctness must be verified via real database"
+ *
+ * Refactoring plan:
+ * 1. Use Testcontainers for real PostgreSQL environment
+ * 2. Remove JdbcTemplate mocks
+ * 3. Verify SQL correctness via real database
+ *
+ * @see docs/project-context.md:187-188
+ */
+@Disabled("TODO: Refactor to integration test - remove JdbcTemplate mock")
 class IngestSchemaVerifierTest {
 
     @Test

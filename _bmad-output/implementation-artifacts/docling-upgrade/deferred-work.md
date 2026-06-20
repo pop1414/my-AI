@@ -1,0 +1,38 @@
+# Deferred Work
+
+## Deferred from: code review of Epic 1 stories 1-1, 1-2, 1-3 (2026-06-16)
+
+- docker-compose docling-serve 缺少显式 bridge 网络声明 — 默认 bridge 网络满足需求，仅需补充注释说明 [Story 1.1]
+- arconia.version 0.20.0 版本兼容性验证 — 已验证编译通过，长期需关注升级 [Story 1.2]
+- SmartLifecycle PHASE 值可能与其他 bean 冲突 — 当前无冲突，未来新增高 phase bean 时检查 [Story 1.3]
+- 12 个基础设施测试被 @Disabled 无跟踪 — scope 外，需独立 story 跟进重构 [Story 1.3]
+- spring.factories FailureAnalyzer 注册机制 — 当前功能正常，Spring Boot 4.x 可能移除支持 [Story 1.3]
+- SmartLifecycle stop(Runnable callback) 未重写 — 当前 stop() 已满足需求 [Story 1.3]
+
+## Deferred from: code review of Story 2.2 (2026-06-16)
+
+- 外部部署环境变量 `INGEST_STORAGE_KEEP_RAW_XHTML` / `INGEST_STORAGE_KEEP_CLEANED_HTML` 需同步清理运维文档，否则 Spring Boot 启动会报 unknown property [Story 2.2]
+- `docs/architecture/domain/ingest.md:270-271, :458` 数据模型表/实体关系图仍列出已删除字段 `rawXhtml` / `cleanedHtml`，需同步更新架构文档 [Story 2.2]
+- `ProcessDocumentApplicationService.java:135` parseResult null 初始化模式，未来扩展时需注意 NPE 风险 [Story 2.2]
+- `ProcessDocumentApplicationService.markFailed()` null processingMetadata 测试覆盖缺失 [Story 2.2]
+- `DocumentParseResult` 失去 rawXhtml/cleanedHtml 中间产物审计能力 — 设计取舍 [Story 2.2]
+
+## Deferred from: code review of Story 2.3 (2026-06-16)
+
+- MIME type硬编码为"application/octet-stream" — Docling API不提供精确MIME，设计取舍。如有更高精度需求，可在Story 4.1配置化时通过file_ext映射 [Story 2.3]
+- mapChunkMetadata()未被主流程调用 — 将移至 DoclingDocumentChunker（Story 3.3），当前为 package-private dead code [Story 2.3]
+- contentType硬编码为PARAGRAPH — Docling 原始类型映射由 DoclingDocumentChunker（Story 3.3）的 chunk pipeline 完成 [Story 2.3]
+- Markdown heading正则匹配代码块内注释行 — title_outline_sample可能含噪声，当前影响仅为metadata质量，非关键路径 [Story 2.3]
+
+## Deferred from: code review of Story 3.2 (2026-06-17)
+
+- 空字符串 markdownContent 阻塞 HTML/text/doctags 降级 — pre-existing，需 `!isBlank()` 检查替代 `!= null` [Story 3.2, DoclingDocumentParser.java:225]
+- `parse()` 未校验 null/空文件名 — pre-existing，null filename 可能产生不一致的 metadata [Story 3.2, DoclingDocumentParser.java:116]
+- Docling jsonContent 未纳入内容降级链 — 需产品决策是否将结构化 Document 树作为降级源 [Story 3.2]
+- jsoup 依赖未清理 — pre-existing，HtmlSemanticCleaner 在 Story 2.5 已删除，需独立 story 验证和清理 [Story 3.2] → ✅ 已在 Story 4.1 清理
+
+## Phase 0 调查结论 (2026-06-18)
+
+- **md_content 空值频率：零** — spike 确认近期文档处理记录中无 md_content 为空的情况。降级链删除（D12 决策）无风险，Phase 1 可放心执行。
+- 空字符串 markdownContent 阻塞降级（第 29 行）→ 随降级链删除一并关闭，无需单独修复
+- Docling jsonContent 未纳入降级链（第 31 行）→ 随降级链删除一并关闭

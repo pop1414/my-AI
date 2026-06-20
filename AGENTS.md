@@ -26,23 +26,32 @@ my-AI 是一个基于 Spring Boot + Spring AI 的 RAG 文档入库与检索系�
 
 ## 常用命令
 
-### 后端 (始终用 `./mvnw`，不要用系统 `mvn`)
+### 后端
+
+- 默认使用本机已安装的 `mvn`，不要默认使用项目内 Maven Wrapper（`./mvnw` / `mvnw.cmd`）。
+- 如果本机 `mvn` 无法运行、版本异常或环境缺失，先告知用户并等待用户修复；不要自行切换到 `mvnw`、下载其他 Maven，或绕过问题继续开发。
+- 只有用户明确要求验证 Maven Wrapper 时，才使用 `./mvnw`。
+- **Maven 环境**:
+  - Maven Home: `D:\02_Scoop\Scoop\apps\maven\current` (或你的实际路径)
+  - 本地仓库: `D:\Administrator\.m2\repo` (或你的实际路径)
+  - 配置文件: `D:\02_Scoop\Scoop\apps\maven\current\conf\settings.xml`
+  - 如果命令失败，先检查 `mvn -version` 确认环境正常
 
 ```bash
 # 编译
-./mvnw clean compile
+mvn clean compile
 
 # 启动（端口 8080，Flyway 自动迁移）
-./mvnw spring-boot:run
+mvn spring-boot:run
 
 # 纯单元测试（无外部依赖，日常开发推荐）
-./mvnw "-Dtest=!MyAiApplicationTests" test
+mvn "-Dtest=!MyAiApplicationTests" test
 
 # 完整测试（需要本地 PostgreSQL）
-./mvnw test
+mvn test
 
 # 构建
-./mvnw clean package -DskipTests
+mvn clean package -DskipTests
 ```
 
 ### 前端 (`web/`)
@@ -65,8 +74,8 @@ cd infra && docker compose up -d   # 启动 PGVector 16 (5432) + RustFS S3 (9000
 ### 运行单个测试
 
 ```bash
-./mvnw test "-Dtest=LoginApplicationServiceTest"                 # 单个测试类
-./mvnw test "-Dtest=LoginApplicationServiceTest#testMethod"      # 单个测试方法
+mvn test "-Dtest=LoginApplicationServiceTest"                 # 单个测试类
+mvn test "-Dtest=LoginApplicationServiceTest#testMethod"      # 单个测试方法
 ```
 
 ## 架构核心规则
@@ -132,10 +141,15 @@ cd infra && docker compose up -d   # 启动 PGVector 16 (5432) + RustFS S3 (9000
 - scope: `auth`、`ingest`、`knowledge`、`qa`、`web`
 - 一次提交只做一件事，依赖变更独立提交
 
-### 文档语言约定
+### 文档语言约定（遵循阿里巴巴规范）
 
-- Java: 中文 Javadoc，类级别含 `@author spike` + `@since 1.0.0`
-- TypeScript: `//` 行内注释用中文，`/** */` JSDoc 用英文
+- **Java 注释**（详见 `docs/project-context.md`）：
+  - 类/接口/枚举：中文 Javadoc + `@author spike` + `@since 1.0.0`，说明职责和设计意图
+  - 方法：中文 Javadoc + `@param` + `@return` + `@throws`，不加 `@author`
+  - 字段：注入依赖必须有单行注释说明职责归属；常量说明业务含义
+  - 行内：复杂逻辑关键节点必须有中文注释，解释决策原因
+  - 禁止空洞注释（如 `// 获取用户信息`）、禁止注释掉的代码
+- **TypeScript**：`//` 行内注释用中文，`/** */` JSDoc 用英文
 
 ## 子域快速索引
 
@@ -154,6 +168,7 @@ cd infra && docker compose up -d   # 启动 PGVector 16 (5432) + RustFS S3 (9000
 - 方法命名 `method_shouldExpectedBehavior_whenCondition`
 - **禁止 mock JdbcTemplate/JDBC 链路** — SQL 正确性只能靠真实 DB 验证
 - `MyAiApplicationTests` 是集成测试，需要完整 Spring 上下文 + 本地 PG
+- **验证改动时，只运行与修改代码相关的测试类**（用 `mvn test "-Dtest=XxxTest"` 指定），不要跑全量测试套件。不确定哪些测试相关时，先用 Glob 查找对应测试文件再运行
 
 ## 认证与安全
 

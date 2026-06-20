@@ -526,7 +526,7 @@ public class DocumentIngestController {
                 item.sourceFile(),
                 item.contentHash(),
                 item.splitVersion(),
-                item.sourceHint());
+                item.chunkMetadata());
     }
 
     /**

@@ -5,7 +5,7 @@
 | 依赖 | 版本要求 | 说明 |
 |---|---|---|
 | JDK | 21（LTS） | 不可使用 22+ 特性 |
-| Docker | 最新版 | 用于 PostgreSQL + RustFS |
+| Docker | 最新版 | 用于 PostgreSQL + RustFS + Docling Serve |
 | Node.js | — | 仅前端开发需要（`web/` 目录） |
 | DashScope API Key | — | 阿里云百炼平台申请 |
 
@@ -40,14 +40,12 @@
 | `INGEST_CHUNK_SIZE` | `500` | 分块大小（字符） |
 | `INGEST_CHUNK_OVERLAP` | `100` | 分块重叠（字符） |
 | `INGEST_SCHEMA_CHECK_ENABLED` | `true` | 启动时 schema 自检 |
-| `INGEST_PARSER_MAX_TEXT_LENGTH` | `2000000` | Tika 解析最大文本长度 |
+| `INGEST_PARSER_MAX_TEXT_LENGTH` | `2000000` | 文档解析最大文本长度 |
 | `INGEST_PARSER_PARSE_EMBEDDED_RESOURCE` | `false` | 是否允许解析嵌入资源 |
 | `INGEST_STORAGE_ROOT_DIR` | `data/ingest` | local 模式本地落盘目录 |
 | `INGEST_STORAGE_S3_REGION` | `us-east-1` | S3 region |
 | `INGEST_STORAGE_S3_PATH_STYLE_ACCESS` | `true` | S3 path-style access（本地 MinIO/RustFS 用 true） |
 | `INGEST_STORAGE_ARTIFACT_MAX_READ_BYTES` | `2000000` | 正文读取单次最大字节数 |
-| `INGEST_STORAGE_KEEP_RAW_XHTML` | `false` | 是否保留 Tika 原始 XHTML 调试产物 |
-| `INGEST_STORAGE_KEEP_CLEANED_HTML` | `false` | 是否保留 cleaned.html 调试产物 |
 | `INGEST_STORAGE_KEEP_PARSE_RESULT_JSON` | `true` | 是否保留 parse-result.json |
 
 ## 本地开发启动
@@ -55,8 +53,10 @@
 ### 启动步骤
 
 ```bash
-# 1. 启动基础设施（PostgreSQL + RustFS）
+# 1. 启动基础设施（PostgreSQL + RustFS + Docling Serve）
 cd infra && docker compose up -d
+# 首次启动 Docling Serve 会自动下载模型，通常在 5 分钟内完成
+# 用 docker compose ps 确认 docling-serve 进入 healthy 状态后再启动应用
 
 # 2. 设置环境变量
 export DASHSCOPE_API_KEY=your-api-key
@@ -179,9 +179,12 @@ curl http://localhost:8080/actuator/metrics/myai.ingest.delete.conflict.total
 |---|---|---|---|
 | postgres | `pgvector/pgvector:pg16` | 5432 | 数据库 + 向量扩展 |
 | rustfs | `rustfs/rustfs:latest` | 9000 (API), 9001 (Console) | S3 兼容对象存储 |
+| docling-serve | `quay.io/docling-project/docling-serve-cpu:latest` | 5001 | Docling Serve API，首次启动自动下载模型并写入持久化缓存 |
 
 - 数据库：`myai`，用户/密码：`admin/admin`
 - RustFS 凭证：`admin/Admin@123`
+- Docling Serve：服务地址 `http://localhost:5001`，健康检查使用 `/version`
+- Docling 模型缓存：Docker volume `docling_model_cache`
 - 时区：`Asia/Shanghai`
 
 ## CI/CD
@@ -190,4 +193,4 @@ curl http://localhost:8080/actuator/metrics/myai.ingest.delete.conflict.total
 
 ---
 
-_生成时间: 2026-06-15 | 扫描模式: 深度扫描_
+_最后更新: 2026-06-19 | 扫描模式: 深度扫描 | 变更: Tika→Docling 引用修正_

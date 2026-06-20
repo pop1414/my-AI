@@ -8,7 +8,7 @@ Ingest 子域负责文档从上传到向量索引的完整生命周期管理。�
 
 **文档处理流水线**：
 ```
-上传 → 受理(幂等去重) → Worker 抢占(CAS) → 解析(Tika) → 分块(结构优先)
+上传 → 受理(幂等去重) → Worker 抢占(CAS) → 解析(Docling) → 分块(结构优先)
      → 向量化(PGVector) → 状态收口(INDEXED/FAILED)
 ```
 
@@ -202,29 +202,25 @@ UPLOADED → INGESTING → INDEXED（成功）
 |------|------|------|
 | `value` | `String` | 文档 ID 字符串 |
 
-### SourceHint
+### ChunkMetadata
 
-分块来源上下文。外部序列化为 `{"heading":"..."}` 字符串；内部通过此值对象管理字段名、转义规则和 null 语义。
+分块结构化元数据。由 Docling Serve 的 HybridChunker 在 server-side 产出后映射到此值对象。携带面包屑标题链、源页码和内容类型三个结构化信号，供下游向量索引和检索使用。
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
-| `heading` | `String` | 标题文本（blank 归一化为 null） |
-| `rawValue` | `String` | 原始存储值（blank 归一化为 null） |
+| `headings` | `List<String>` | 面包屑标题链（不可变，禁止 null） |
+| `pageNumber` | `int` | 源页码（0 表示未知，禁止负数） |
+| `contentType` | `ChunkContentType` | 内容类型（禁止 null，如 PARAGRAPH） |
+
+**紧凑构造函数**：校验 + 防御性拷贝，不做默认值填充。headings 为 null 抛 NPE，pageNumber 为负抛 IAE，contentType 为 null 抛 NPE。
 
 **工厂方法**：
 
 | 方法 | 说明 |
 |------|------|
-| `none()` | 返回单例 EMPTY 实例 |
-| `heading(heading)` | 从标题字符串创建（blank 返回 EMPTY） |
-| `fromStorageValue(value)` | 从存储字符串反序列化；尝试 JSON heading 解码，回退到 rawValue |
+| `of(headings, pageNumber, contentType)` | 安全构造：headings 为 null → 空 list，过滤 null 和空白字符串；pageNumber 仍拒绝负数；contentType 为 null → PARAGRAPH |
 
-**实例方法**：
-
-| 方法 | 返回类型 | 说明 |
-|------|----------|------|
-| `isEmpty()` | `boolean` | heading 和 rawValue 都为 null 时返回 true |
-| `toStorageValue()` | `String` | 序列化为存储字符串 |
+**设计约束**：TXT 等无结构标记的格式——headings 为空 list、pageNumber 为 0、contentType 为 PARAGRAPH，下游代码不可假定三个字段为非空/非默认值。
 
 ### SplitVersion
 
@@ -245,7 +241,7 @@ UPLOADED → INGESTING → INDEXED（成功）
 | 字段 | 类型 | 说明 |
 |------|------|------|
 | `content` | `String` | 分块正文 |
-| `sourceHint` | `SourceHint` | 来源提示（null 时默认 `SourceHint.none()`） |
+| `chunkMetadata` | `ChunkMetadata` | 分块结构化元数据（null 时归一化为默认值） |
 
 ### DocumentChunkPreview
 
@@ -259,18 +255,16 @@ UPLOADED → INGESTING → INDEXED（成功）
 | `sourceFile` | `String` | 源文件名 |
 | `contentHash` | `String` | 分块内容哈希 |
 | `splitVersion` | `String` | 分块版本 |
-| `sourceHint` | `SourceHint` | 来源提示 |
+| `chunkMetadata` | `ChunkMetadata` | 分块结构化元数据 |
 
 ### DocumentParseResult
 
-文档解析结果。携带第一阶段处理的中间产物：Tika 原始 XHTML、Jsoup 清洗后的 HTML、清洗后的 Markdown（主管线输出），以及处理元数据 JSON 字符串。
+文档解析结果。携带清洗后的 Markdown（主管线输出）和处理元数据 JSON 字符串。
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
-| `rawXhtml` | `String` | Tika 产出的原始 XHTML（用于调试和审计） |
-| `cleanedHtml` | `String` | Jsoup 清洗后的 HTML（去除样式/脚本/噪声标签） |
-| `cleanedMarkdown` | `String` | flexmark 转换的 Markdown 主管线输出，作为分块输入 |
-| `processingMetadata` | `String` | 文档级处理结果元数据 JSON 字符串 |
+| `cleanedMarkdown` | `String` | 清洗后经转换的 Markdown 主管线输出，作为分块输入 |
+| `processingMetadata` | `String` | 文档级处理结果元数据 JSON 字符串，在终态回填到 ingest_documents.processing_metadata |
 
 ---
 
@@ -454,8 +448,8 @@ Document ──(聚合根)──→ DocumentId, UploadStatus, DocumentVersionOri
 DocumentVersion ──(版本事实)──→ DocumentId, UploadStatus, DocumentVersionOriginType
 DocumentVersionHistory ──(版本链)──→ List<DocumentVersionHistoryItem>
 DocumentVersionHistoryItem ──(版本项)──→ DocumentId, UploadStatus, DocumentVersionOriginType
-DocumentChunk ──(分块结果)──→ SourceHint
-DocumentParseResult ──(解析产物)──→ rawXhtml, cleanedHtml, cleanedMarkdown
+DocumentChunk ──(分块结果)──→ ChunkMetadata
+DocumentParseResult ──(解析产物)──→ cleanedMarkdown, processingMetadata
 UploadTicket ──(受理票据)──→ DocumentId, UploadStatus
 
 跨子域关联：
@@ -475,4 +469,4 @@ ingest_documents.kb_id ──→ knowledge_bases.kb_id
 
 ---
 
-_生成时间: 2026-06-15 | 扫描模式: 深度扫描_
+_生成时间: 2026-06-15 | 扫描模式: 深度扫描 | 最后更新: 2026-06-18 (SourceHint→ChunkMetadata 对齐)_

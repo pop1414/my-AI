@@ -43,6 +43,12 @@ spring:
         # 是否删除旧表
         remove-existing-vector-store-table: false
 
+arconia:
+  docling:
+    base-url: ${ARCONIA_DOCLING_BASE_URL:http://localhost:5001}
+    connect-timeout: 5s
+    read-timeout: 30s
+
 myai:
   auth:
     bootstrap-admin:
@@ -52,7 +58,7 @@ myai:
       display-name: ${MYAI_AUTH_BOOTSTRAP_ADMIN_DISPLAY_NAME:}
   ingest:
     parser:
-      # Tika 解析最大文本长度，防止异常文档输出过长文本导致内存风险
+      # 文档解析最大文本长度，防止异常文档输出过长文本导致内存风险
       max-text-length: ${INGEST_PARSER_MAX_TEXT_LENGTH:2000000}
       # 是否允许解析嵌入资源（默认关闭，避免图片/附件污染正文）
       parse-embedded-resource: ${INGEST_PARSER_PARSE_EMBEDDED_RESOURCE:false}
@@ -77,10 +83,6 @@ myai:
       artifacts:
         # 正文读取单次最大字节数；超出时返回 CONTENT_TOO_LARGE，不静默截断
         max-read-bytes: ${INGEST_STORAGE_ARTIFACT_MAX_READ_BYTES:2000000}
-        # 是否保留 Tika 原始 XHTML 调试产物
-        keep-raw-xhtml: ${INGEST_STORAGE_KEEP_RAW_XHTML:false}
-        # 是否保留 cleaned.html 调试产物
-        keep-cleaned-html: ${INGEST_STORAGE_KEEP_CLEANED_HTML:false}
         # 是否保留 processing_metadata 的文件化载体 parse-result.json
         keep-parse-result-json: ${INGEST_STORAGE_KEEP_PARSE_RESULT_JSON:true}
     chunk:
@@ -97,6 +99,9 @@ myai:
       enabled: ${INGEST_SCHEMA_CHECK_ENABLED:true}
 
 management:
+  endpoint:
+    health:
+      show-details: when_authorized
   endpoints:
     web:
       exposure:

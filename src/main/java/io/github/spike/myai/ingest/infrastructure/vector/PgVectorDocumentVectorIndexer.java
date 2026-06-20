@@ -1,9 +1,11 @@
 package io.github.spike.myai.ingest.infrastructure.vector;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.spike.myai.ingest.domain.model.ChunkMetadata;
 import io.github.spike.myai.ingest.domain.model.Document;
 import io.github.spike.myai.ingest.domain.model.DocumentChunk;
 import io.github.spike.myai.ingest.domain.model.DocumentId;
-import io.github.spike.myai.ingest.domain.model.SourceHint;
 import io.github.spike.myai.ingest.domain.port.DocumentVectorIndexer;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -39,6 +41,11 @@ import org.springframework.transaction.annotation.Transactional;
 public class PgVectorDocumentVectorIndexer implements DocumentVectorIndexer {
 
     private static final Logger log = LoggerFactory.getLogger(PgVectorDocumentVectorIndexer.class);
+
+    /**
+     * Jackson ObjectMapper 实例（线程安全），用于 chunkMetadata 的 JSON 序列化。
+     */
+    private static final ObjectMapper MAPPER = new ObjectMapper();
 
     /**
      * 按 documentId 和 splitVersion 清理向量的 SQL。
@@ -112,10 +119,10 @@ public class PgVectorDocumentVectorIndexer implements DocumentVectorIndexer {
             metadata.put("sourceUpdatedAt", document.updatedAt().toString()); // 来源版本更新时间
             metadata.put("contentHash", sha256(chunkText));         // 文本指纹（去重/校验）
             metadata.put("splitVersion", splitVersion);             // 逻辑版本锁
-            SourceHint sourceHint = chunk.sourceHint();
-            if (!sourceHint.isEmpty()) {
-                // 存储来自解析器的额外提示（如 PDF 页码、章节标题等 JSON 信息）。
-                metadata.put("sourceHint", sourceHint.toStorageValue());
+            ChunkMetadata chunkMetadata = chunk.chunkMetadata();
+            if (!chunkMetadata.headings().isEmpty() || chunkMetadata.pageNumber() > 0) {
+                // 存储分块的结构化元数据（headings 面包屑、页码、内容类型）。
+                metadata.put("chunkMetadata", serializeChunkMetadata(chunkMetadata));
             }
 
             // 构建 Spring AI 标准的 Document 对象（包含文本、元数据和 ID）。
@@ -168,6 +175,25 @@ public class PgVectorDocumentVectorIndexer implements DocumentVectorIndexer {
     public void deleteByDocumentId(DocumentId documentId) {
         // 删除指定文档的所有版本向量，用于文档资产下线。
         jdbcTemplate.update(DELETE_BY_DOCUMENT_SQL, documentId.value());
+    }
+
+    /**
+     * 序列化 ChunkMetadata 为 JSON 字符串。
+     *
+     * <p>格式：{@code {"headings":["h1","h2"],"pageNumber":3,"contentType":"PARAGRAPH"}}
+     *
+     * @param chunkMetadata 分块结构化元数据
+     * @return JSON 字符串
+     */
+    private static String serializeChunkMetadata(ChunkMetadata chunkMetadata) {
+        try {
+            return MAPPER.writeValueAsString(Map.of(
+                    "headings", chunkMetadata.headings(),
+                    "pageNumber", chunkMetadata.pageNumber(),
+                    "contentType", chunkMetadata.contentType().name()));
+        } catch (JsonProcessingException e) {
+            throw new IllegalStateException("Failed to serialize chunk metadata", e);
+        }
     }
 
     /**
