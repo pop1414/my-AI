@@ -31,7 +31,8 @@ class HybridChunkRetrievalAdapterTest {
     void setUp() {
         denseAdapter = Mockito.mock(PgVectorChunkRetrievalAdapter.class);
         sparseAdapter = Mockito.mock(SparseRetrievalAdapter.class);
-        adapter = new HybridChunkRetrievalAdapter(denseAdapter, sparseAdapter);
+        // 同步执行器：测试中直接在调用线程执行，确保确定性
+        adapter = new HybridChunkRetrievalAdapter(denseAdapter, sparseAdapter, Runnable::run);
     }
 
     @Test

@@ -28,7 +28,7 @@ import io.github.spike.myai.qa.domain.port.AnswerGenerationPort;
 import io.github.spike.myai.qa.domain.port.ChunkRetrievalPort;
 import io.github.spike.myai.qa.domain.port.QueryClassifierPort;
 import io.github.spike.myai.qa.domain.port.RerankingPort;
-import io.github.spike.myai.qa.infrastructure.config.QaRetrievalProperties;
+import io.github.spike.myai.qa.domain.port.RetrievalConfigPort;
 import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
@@ -56,7 +56,7 @@ class AskQuestionApplicationServiceTest {
                 .thenAnswer(inv -> inv.getArgument(0));
         QueryClassifierPort queryClassifierPort = Mockito.mock(QueryClassifierPort.class);
         when(queryClassifierPort.classify(anyString())).thenReturn(QueryType.GENERAL);
-        QaRetrievalProperties properties = new QaRetrievalProperties();
+        RetrievalConfigPort properties = defaultRetrievalConfig();
         AskQuestionApplicationService service =
                 new AskQuestionApplicationService(
                         queryClassifierPort,
@@ -99,7 +99,7 @@ class AskQuestionApplicationServiceTest {
         verify(authorizationService).requireCanAskKnowledgeBase(org.mockito.ArgumentMatchers.any(CurrentUser.class), eq("kb-1"));
         verify(authorizationService, never()).requireCanAskDocument(org.mockito.ArgumentMatchers.any(CurrentUser.class), anyString(), anyString());
         verify(answerGenerationPort).generateAnswer(org.mockito.ArgumentMatchers.anyString());
-        verify(rerankingPort).rerank(anyList(), eq("什么是 RAG"), eq(2));
+        verify(rerankingPort).rerank(anyList(), eq("什么是 RAG"), eq(20));
     }
 
     @Test
@@ -116,7 +116,7 @@ class AskQuestionApplicationServiceTest {
                 .thenAnswer(inv -> inv.getArgument(0));
         QueryClassifierPort queryClassifierPort = Mockito.mock(QueryClassifierPort.class);
         when(queryClassifierPort.classify(anyString())).thenReturn(QueryType.GENERAL);
-        QaRetrievalProperties properties = new QaRetrievalProperties();
+        RetrievalConfigPort properties = defaultRetrievalConfig();
         AskQuestionApplicationService service =
                 new AskQuestionApplicationService(
                         queryClassifierPort,
@@ -161,7 +161,7 @@ class AskQuestionApplicationServiceTest {
         assertEquals("doc-1", result.staleReferences().documents().get(0).documentId());
         assertEquals(2, result.staleReferences().documents().get(0).sourceVersionNumber());
         assertEquals(3, result.staleReferences().documents().get(0).latestVersionNumber());
-        verify(rerankingPort).rerank(anyList(), eq("版本问题"), eq(5));
+        verify(rerankingPort).rerank(anyList(), eq("版本问题"), eq(20));
     }
 
     @Test
@@ -178,7 +178,7 @@ class AskQuestionApplicationServiceTest {
                 .thenAnswer(inv -> inv.getArgument(0));
         QueryClassifierPort queryClassifierPort = Mockito.mock(QueryClassifierPort.class);
         when(queryClassifierPort.classify(anyString())).thenReturn(QueryType.GENERAL);
-        QaRetrievalProperties properties = new QaRetrievalProperties();
+        RetrievalConfigPort properties = defaultRetrievalConfig();
         AskQuestionApplicationService service =
                 new AskQuestionApplicationService(
                         queryClassifierPort,
@@ -220,7 +220,7 @@ class AskQuestionApplicationServiceTest {
                 .thenAnswer(inv -> inv.getArgument(0));
         QueryClassifierPort queryClassifierPort = Mockito.mock(QueryClassifierPort.class);
         when(queryClassifierPort.classify(anyString())).thenReturn(QueryType.GENERAL);
-        QaRetrievalProperties properties = new QaRetrievalProperties();
+        RetrievalConfigPort properties = defaultRetrievalConfig();
         AskQuestionApplicationService service =
                 new AskQuestionApplicationService(
                         queryClassifierPort,
@@ -259,7 +259,7 @@ class AskQuestionApplicationServiceTest {
                 .thenAnswer(inv -> inv.getArgument(0));
         QueryClassifierPort queryClassifierPort = Mockito.mock(QueryClassifierPort.class);
         when(queryClassifierPort.classify(anyString())).thenReturn(QueryType.GENERAL);
-        QaRetrievalProperties properties = new QaRetrievalProperties();
+        RetrievalConfigPort properties = defaultRetrievalConfig();
         AskQuestionApplicationService service =
                 new AskQuestionApplicationService(
                         queryClassifierPort,
@@ -290,7 +290,7 @@ class AskQuestionApplicationServiceTest {
                 .thenAnswer(inv -> inv.getArgument(0));
         QueryClassifierPort queryClassifierPort = Mockito.mock(QueryClassifierPort.class);
         when(queryClassifierPort.classify(anyString())).thenReturn(QueryType.GENERAL);
-        QaRetrievalProperties properties = new QaRetrievalProperties();
+        RetrievalConfigPort properties = defaultRetrievalConfig();
         AskQuestionApplicationService service =
                 new AskQuestionApplicationService(
                         queryClassifierPort,
@@ -323,9 +323,10 @@ class AskQuestionApplicationServiceTest {
         QueryClassifierPort queryClassifierPort = Mockito.mock(QueryClassifierPort.class);
         when(queryClassifierPort.classify(anyString())).thenReturn(QueryType.GENERAL);
         // 自定义配置：minCandidates=10, candidateMultiplier=2
-        QaRetrievalProperties properties = new QaRetrievalProperties();
-        properties.setMinCandidates(10);
-        properties.setCandidateMultiplier(2);
+        RetrievalConfigPort properties = new RetrievalConfigPort() {
+            @Override public int getMinCandidates() { return 10; }
+            @Override public int getCandidateMultiplier() { return 2; }
+        };
         AskQuestionApplicationService service =
                 new AskQuestionApplicationService(
                         queryClassifierPort,
@@ -374,7 +375,7 @@ class AskQuestionApplicationServiceTest {
         QueryClassifierPort queryClassifierPort = Mockito.mock(QueryClassifierPort.class);
         when(queryClassifierPort.classify(anyString())).thenReturn(QueryType.GENERAL);
         // 默认配置 minCandidates=20, candidateMultiplier=4 → topK=10 时 retrievalTopK = max(20, 40) = 40
-        QaRetrievalProperties properties = new QaRetrievalProperties();
+        RetrievalConfigPort properties = defaultRetrievalConfig();
         AskQuestionApplicationService service =
                 new AskQuestionApplicationService(
                         queryClassifierPort,
@@ -419,7 +420,7 @@ class AskQuestionApplicationServiceTest {
         RerankingPort rerankingPort = Mockito.mock(RerankingPort.class);
         QueryClassifierPort queryClassifierPort = Mockito.mock(QueryClassifierPort.class);
         when(queryClassifierPort.classify("你好")).thenReturn(QueryType.CHITCHAT);
-        QaRetrievalProperties properties = new QaRetrievalProperties();
+        RetrievalConfigPort properties = defaultRetrievalConfig();
         AskQuestionApplicationService service =
                 new AskQuestionApplicationService(
                         queryClassifierPort,
@@ -459,7 +460,7 @@ class AskQuestionApplicationServiceTest {
         RerankingPort rerankingPort = Mockito.mock(RerankingPort.class);
         QueryClassifierPort queryClassifierPort = Mockito.mock(QueryClassifierPort.class);
         when(queryClassifierPort.classify("你好")).thenReturn(QueryType.CHITCHAT);
-        QaRetrievalProperties properties = new QaRetrievalProperties();
+        RetrievalConfigPort properties = defaultRetrievalConfig();
         AskQuestionApplicationService service =
                 new AskQuestionApplicationService(
                         queryClassifierPort,
@@ -496,7 +497,7 @@ class AskQuestionApplicationServiceTest {
                 .thenAnswer(inv -> inv.getArgument(0));
         QueryClassifierPort queryClassifierPort = Mockito.mock(QueryClassifierPort.class);
         when(queryClassifierPort.classify("什么是 RAG")).thenReturn(QueryType.FACTOID);
-        QaRetrievalProperties properties = new QaRetrievalProperties();
+        RetrievalConfigPort properties = defaultRetrievalConfig();
         AskQuestionApplicationService service =
                 new AskQuestionApplicationService(
                         queryClassifierPort,
@@ -526,7 +527,7 @@ class AskQuestionApplicationServiceTest {
         assertEquals(1, result.references().size());
         verify(queryClassifierPort).classify("什么是 RAG");
         verify(chunkRetrievalPort).similaritySearch(eq("什么是 RAG"), anyInt(), eq(scope));
-        verify(rerankingPort).rerank(anyList(), eq("什么是 RAG"), eq(5));
+        verify(rerankingPort).rerank(anyList(), eq("什么是 RAG"), eq(20));
         verify(answerGenerationPort).generateAnswer(org.mockito.ArgumentMatchers.anyString());
     }
 
@@ -535,5 +536,15 @@ class AskQuestionApplicationServiceTest {
         when(provider.requireCurrentUser()).thenReturn(
                 new CurrentUser("user-1", "alice", "workspace-a", WorkspaceRole.WORKSPACE_MEMBER));
         return provider;
+    }
+
+    /** 默认检索配置（minCandidates=20, candidateMultiplier=4），与 QaRetrievalProperties 默认值一致。 */
+    private static RetrievalConfigPort defaultRetrievalConfig() {
+        return new RetrievalConfigPort() {
+            @Override
+            public int getMinCandidates() { return 20; }
+            @Override
+            public int getCandidateMultiplier() { return 4; }
+        };
     }
 }

@@ -7,6 +7,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Primary;
@@ -58,17 +59,23 @@ public class HybridChunkRetrievalAdapter implements ChunkRetrievalPort {
     /** Sparse 检索适配器（BM25 全文检索）。 */
     private final SparseRetrievalAdapter sparseAdapter;
 
+    /** 异步执行器：用于并行调度 Dense/Sparse 两路阻塞 JDBC 调用，避免 ForkJoinPool 线程饥饿。 */
+    private final Executor executor;
+
     /**
      * 构造混合检索适配器。
      *
      * @param denseAdapter Dense 检索适配器，由 Spring 容器注入
      * @param sparseAdapter Sparse 检索适配器，由 Spring 容器注入
+     * @param executor 异步执行器，推荐使用虚拟线程（{@code Executors.newVirtualThreadPerTaskExecutor()}）
      */
     public HybridChunkRetrievalAdapter(
             PgVectorChunkRetrievalAdapter denseAdapter,
-            SparseRetrievalAdapter sparseAdapter) {
+            SparseRetrievalAdapter sparseAdapter,
+            Executor executor) {
         this.denseAdapter = denseAdapter;
         this.sparseAdapter = sparseAdapter;
+        this.executor = executor;
     }
 
     /**
@@ -108,14 +115,14 @@ public class HybridChunkRetrievalAdapter implements ChunkRetrievalPort {
         int effectiveTopK = Math.max(1, topK);
 
         CompletableFuture<List<RetrievedChunk>> denseFuture = CompletableFuture
-                .supplyAsync(() -> denseAdapter.similaritySearch(question, effectiveTopK, scope))
+                .supplyAsync(() -> denseAdapter.similaritySearch(question, effectiveTopK, scope), executor)
                 .exceptionally(ex -> {
                     log.warn("Dense retrieval failed, degrading to sparse-only", ex);
                     return List.of();
                 });
 
         CompletableFuture<List<RetrievedChunk>> sparseFuture = CompletableFuture
-                .supplyAsync(() -> sparseAdapter.similaritySearch(question, effectiveTopK, scope))
+                .supplyAsync(() -> sparseAdapter.similaritySearch(question, effectiveTopK, scope), executor)
                 .exceptionally(ex -> {
                     log.warn("Sparse retrieval failed, degrading to dense-only", ex);
                     return List.of();

@@ -2,6 +2,7 @@ package io.github.spike.myai.qa.infrastructure.config;
 
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
+import io.github.spike.myai.qa.domain.port.RetrievalConfigPort;
 import lombok.Getter;
 import lombok.Setter;
 import org.springframework.boot.context.properties.ConfigurationProperties;
@@ -23,7 +24,7 @@ import org.springframework.validation.annotation.Validated;
 @Setter
 @Validated
 @ConfigurationProperties(prefix = "myai.qa.retrieval")
-public class QaRetrievalProperties {
+public class QaRetrievalProperties implements RetrievalConfigPort {
 
     /** 检索候选下限，避免 topK 较小时候选过少导致过滤后无结果 */
     @Min(1)

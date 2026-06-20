@@ -21,7 +21,7 @@ import io.github.spike.myai.qa.domain.port.AnswerGenerationPort;
 import io.github.spike.myai.qa.domain.port.ChunkRetrievalPort;
 import io.github.spike.myai.qa.domain.port.QueryClassifierPort;
 import io.github.spike.myai.qa.domain.port.RerankingPort;
-import io.github.spike.myai.qa.infrastructure.config.QaRetrievalProperties;
+import io.github.spike.myai.qa.domain.port.RetrievalConfigPort;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -76,8 +76,8 @@ public class AskQuestionApplicationService implements AskQuestionUseCase {
     private final AuthorizationService authorizationService;
     /** 问答可用版本查询端口：用于按文档独立决定当前可问答版本 */
     private final AskableDocumentVersionPort askableDocumentVersionPort;
-    /** 检索参数配置：候选下限与放大倍率 */
-    private final QaRetrievalProperties properties;
+    /** 检索参数配置端口：候选下限与放大倍率 */
+    private final RetrievalConfigPort properties;
 
     /**
      * 构造器注入。
@@ -90,7 +90,7 @@ public class AskQuestionApplicationService implements AskQuestionUseCase {
      * @param currentUserProvider     当前用户上下文提供器（获取登录态与工作区）
      * @param authorizationService    授权服务（知识库问答权限与文档级覆盖过滤）
      * @param askableDocumentVersionPort 问答可用版本查询端口（按文档选择可问答版本）
-     * @param properties             检索参数配置（候选下限与放大倍率）
+     * @param properties             检索参数配置端口（候选下限与放大倍率）
      */
     public AskQuestionApplicationService(
             QueryClassifierPort queryClassifierPort,
@@ -101,7 +101,7 @@ public class AskQuestionApplicationService implements AskQuestionUseCase {
             CurrentUserProvider currentUserProvider,
             AuthorizationService authorizationService,
             AskableDocumentVersionPort askableDocumentVersionPort,
-            QaRetrievalProperties properties) {
+            RetrievalConfigPort properties) {
         this.queryClassifierPort = queryClassifierPort;
         this.chunkRetrievalPort = chunkRetrievalPort;
         this.rerankingPort = rerankingPort;
@@ -159,23 +159,26 @@ public class AskQuestionApplicationService implements AskQuestionUseCase {
         Map<String, AskableDocumentVersion> askableVersions = askableVersionScope.stream()
                 .collect(Collectors.toUnmodifiableMap(AskableDocumentVersion::documentId, java.util.function.Function.identity()));
 
-        // 2. 扩大召回数量后在检索端按“已授权 + 当前可问答版本”范围过滤。
+        // 2. 扩大召回数量后在检索端按”已授权 + 当前可问答版本”范围过滤。
         //    公式：retrievalTopK = max(minCandidates, topK × candidateMultiplier)
         int retrievalTopK = Math.max(properties.getMinCandidates(), topK * properties.getCandidateMultiplier());
-        List<RetrievedChunk> matchedChunks = chunkRetrievalPort.similaritySearch(question, retrievalTopK, askableVersionScope)
-                .stream()
-                .limit(topK)                                   // 截取实际需要的数量
+        List<RetrievedChunk> matchedChunks = chunkRetrievalPort.similaritySearch(question, retrievalTopK, askableVersionScope);
+
+        // 3. 通过可插拔重排序端口对候选结果进行二次排序（默认透传，预留扩展点）。
+        //    传入 retrievalTopK 让 reranker 看到完整候选池，reranking 后再 limit(topK) 截断。
+        matchedChunks = rerankingPort.rerank(matchedChunks, question, retrievalTopK);
+
+        // 4. 截取实际需要的数量（reranking 后再截断，避免提前丢失潜在高排名候选）
+        matchedChunks = matchedChunks.stream()
+                .limit(topK)
                 .toList();
 
-        // 3. 通过可插拔重排序端口对候选结果进行二次排序（默认透传，预留扩展点）
-        matchedChunks = rerankingPort.rerank(matchedChunks, question, topK);
-
         if (matchedChunks.isEmpty()) {
-            // 4. 无依据时直接返回兜底回答，避免调用模型产生幻觉
+            // 5. 无依据时直接返回兜底回答，避免调用模型产生幻觉
             return new AskQuestionResult(FALLBACK_ANSWER, List.of(), null);
         }
 
-        // 5. 构造提示词并调用 LLM 生成回答
+        // 6. 构造提示词并调用 LLM 生成回答
         String prompt = buildPrompt(question, matchedChunks);
         String answer = answerGenerationPort.generateAnswer(prompt);
         if (answer == null || answer.isBlank()) {
@@ -183,12 +186,12 @@ public class AskQuestionApplicationService implements AskQuestionUseCase {
             answer = FALLBACK_ANSWER;
         }
 
-        // 6. 构建引用片段列表（已截断预览长度）
+        // 7. 构建引用片段列表（已截断预览长度）
         List<AskReferenceResult> references = matchedChunks.stream()
                 .map(chunk -> toReferenceResult(chunk, askableVersions.get(chunk.documentId())))
                 .toList();
 
-        // 7. 组装并返回最终结果
+        // 8. 组装并返回最终结果
         return new AskQuestionResult(answer, references, buildStaleReferenceSummary(references));
     }
 
