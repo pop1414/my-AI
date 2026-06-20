@@ -1,0 +1,74 @@
+# generated: 2026-06-20
+# last_updated: 2026-06-20
+# project: my-AI
+# project_key: NOKEY
+# tracking_system: file-system
+# story_location: _bmad-output/implementation-artifacts/ingest-concurrent-processing
+
+# STATUS DEFINITIONS:
+# ==================
+# Epic Status:
+#   - backlog: Epic not yet started
+#   - in-progress: Epic actively being worked on
+#   - done: All stories in epic completed
+#
+# Epic Status Transitions:
+#   - backlog → in-progress: Automatically when first story is created (via create-story)
+#   - in-progress → done: Manually when all stories reach 'done' status
+#
+# Story Status:
+#   - backlog: Story only exists in epic file
+#   - ready-for-dev: Story file created in stories folder
+#   - in-progress: Developer actively working on implementation
+#   - review: Ready for code review (via Dev's code-review workflow)
+#   - done: Story completed
+#
+# Retrospective Status:
+#   - optional: Can be completed but not required
+#   - done: Retrospective has been completed
+#
+# WORKFLOW NOTES:
+# ===============
+# - Epic transitions to 'in-progress' automatically when first story is created
+# - Stories can be worked in parallel if team capacity allows
+# - Developer typically creates next story after previous one is 'done' to incorporate learnings
+# - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
+
+generated: 2026-06-20
+last_updated: 2026-06-20
+project: my-AI
+project_key: NOKEY
+tracking_system: file-system
+story_location: _bmad-output/implementation-artifacts/ingest-concurrent-processing
+
+development_status:
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  # Epic 1: Worker 并发文档处理
+  # 将文档处理从串行改为 Virtual Thread 并发模式，吞吐量提升 3-5 倍
+  # FRs: FR-1.1 ~ FR-1.9 | NFRs: NFR-1 ~ NFR-5
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  epic-1: backlog
+  1-1-worker-core-concurrency: backlog          # Story 1.1: Worker 核心并发改造
+  1-2-observability-graceful-shutdown: backlog   # Story 1.2: 可观测性与优雅关闭
+  1-3-concurrency-unit-tests: backlog            # Story 1.3: 并发处理单元测试
+  epic-1-retrospective: optional
+
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  # Epic 2: 批量文件上传
+  # 支持一次拖入/选择多个文件，队列化并发提交
+  # FRs: FR-2.1 ~ FR-2.8
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  epic-2: backlog
+  2-1-multi-file-upload-queue-ui: backlog        # Story 2.1: 多文件选择与上传队列 UI
+  2-2-concurrent-upload-feedback: backlog        # Story 2.2: 并发上传控制与状态反馈
+  epic-2-retrospective: optional
+
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  # Epic 3: 文档状态面板升级
+  # 实时状态刷新、摘要栏、快速重试、INGESTING 动画
+  # FRs: FR-3.1 ~ FR-3.6
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  epic-3: backlog
+  3-1-auto-refresh-summary-bar: backlog          # Story 3.1: 状态自动刷新与摘要栏
+  3-2-quick-actions-doc-id: backlog              # Story 3.2: 快速操作与文档标识
+  epic-3-retrospective: optional
