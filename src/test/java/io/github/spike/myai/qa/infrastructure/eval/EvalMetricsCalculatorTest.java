@@ -208,14 +208,284 @@ class EvalMetricsCalculatorTest {
         }
     }
 
-    // === NDCG@K（Phase 2 预留） ===
+    // === NDCG@K ===
 
-    @Test
-    @DisplayName("NDCG@K — Phase 2 预留，当前抛 UnsupportedOperationException")
-    void ndcgAtK_shouldThrowUnsupportedOperationException() {
-        assertThatThrownBy(() ->
-                EvalMetricsCalculator.ndcgAtK(List.of("doc-a"), Map.of(), 5))
-                .isInstanceOf(UnsupportedOperationException.class)
-                .hasMessageContaining("NDCG@K: Phase 2");
+    @Nested
+    @DisplayName("NDCG@K")
+    class NdcgAtKTests {
+
+        @Test
+        @DisplayName("理想排序 — STRONG 文档排在最前，NDCG@5 = 1.0")
+        void ndcgAtK_shouldReturnOne_whenIdealOrder() {
+            List<String> retrieved = List.of("doc-a", "doc-b", "doc-c");
+            Map<String, RelevanceLevel> levels = Map.of(
+                    "doc-a", RelevanceLevel.STRONG,
+                    "doc-b", RelevanceLevel.STRONG,
+                    "doc-c", RelevanceLevel.WEAK);
+
+            double ndcg = EvalMetricsCalculator.ndcgAtK(retrieved, levels, 5);
+
+            assertThat(ndcg).isEqualTo(1.0);
+        }
+
+        @Test
+        @DisplayName("非理想排序 — WEAK 排在 STRONG 前面，NDCG@5 < 1.0")
+        void ndcgAtK_shouldBeLessThanOne_whenSuboptimalOrder() {
+            // 理想排序：doc-a(STRONG=2), doc-b(WEAK=1)
+            // 实际排序：doc-b(WEAK=1), doc-a(STRONG=2)
+            List<String> retrieved = List.of("doc-b", "doc-a");
+            Map<String, RelevanceLevel> levels = Map.of(
+                    "doc-a", RelevanceLevel.STRONG,
+                    "doc-b", RelevanceLevel.WEAK);
+
+            double ndcg = EvalMetricsCalculator.ndcgAtK(retrieved, levels, 5);
+
+            assertThat(ndcg).isLessThan(1.0).isGreaterThan(0.0);
+        }
+
+        @Test
+        @DisplayName("零命中 — 所有返回文档均无标注，NDCG@5 = 0.0")
+        void ndcgAtK_shouldReturnZero_whenNoHit() {
+            List<String> retrieved = List.of("doc-a", "doc-b");
+            Map<String, RelevanceLevel> levels = Map.of(
+                    "doc-x", RelevanceLevel.STRONG);
+
+            double ndcg = EvalMetricsCalculator.ndcgAtK(retrieved, levels, 5);
+
+            assertThat(ndcg).isEqualTo(0.0);
+        }
+
+        @Test
+        @DisplayName("相关文档列表为空 — NDCG@5 = 1.0（CHITCHAT 兜底）")
+        void ndcgAtK_shouldReturnOne_whenNoRelevantDocs() {
+            List<String> retrieved = List.of("doc-a", "doc-b");
+
+            double ndcg = EvalMetricsCalculator.ndcgAtK(retrieved, Map.of(), 5);
+
+            assertThat(ndcg).isEqualTo(1.0);
+        }
+
+        @Test
+        @DisplayName("K 截断 — 排在第 4 位的 STRONG 文档不影响 NDCG@3")
+        void ndcgAtK_shouldRespectKLimit() {
+            // top-3: doc-x(无标注), doc-x(无标注), doc-x(无标注)
+            // 第4位才是 doc-a(STRONG)
+            List<String> retrieved = List.of("doc-x1", "doc-x2", "doc-x3", "doc-a");
+            Map<String, RelevanceLevel> levels = Map.of("doc-a", RelevanceLevel.STRONG);
+
+            double ndcg3 = EvalMetricsCalculator.ndcgAtK(retrieved, levels, 3);
+            double ndcg5 = EvalMetricsCalculator.ndcgAtK(retrieved, levels, 5);
+
+            assertThat(ndcg3).isEqualTo(0.0);
+            assertThat(ndcg5).isGreaterThan(0.0);
+        }
+
+        @Test
+        @DisplayName("检索结果为空 — NDCG@5 = 0.0")
+        void ndcgAtK_shouldReturnZero_whenEmptyResults() {
+            Map<String, RelevanceLevel> levels = Map.of("doc-a", RelevanceLevel.STRONG);
+
+            double ndcg = EvalMetricsCalculator.ndcgAtK(List.of(), levels, 5);
+
+            assertThat(ndcg).isEqualTo(0.0);
+        }
+
+        @Test
+        @DisplayName("混合相关度 — STRONG + WEAK 组合验证")
+        void ndcgAtK_shouldHandleMixedRelevanceLevels() {
+            // 理想排序：doc-a(S=2), doc-b(S=2), doc-c(W=1)
+            // 实际排序：doc-c(W=1), doc-a(S=2), doc-b(S=2)
+            // DCG  = 1/log2(2) + 2/log2(3) + 2/log2(4) = 1.0 + 1.262 + 1.0 = 3.262
+            // IDCG = 2/log2(2) + 2/log2(3) + 1/log2(4) = 2.0 + 1.262 + 0.5 = 3.762
+            // NDCG = 3.262 / 3.762 ≈ 0.867
+            List<String> retrieved = List.of("doc-c", "doc-a", "doc-b");
+            Map<String, RelevanceLevel> levels = Map.of(
+                    "doc-a", RelevanceLevel.STRONG,
+                    "doc-b", RelevanceLevel.STRONG,
+                    "doc-c", RelevanceLevel.WEAK);
+
+            double ndcg = EvalMetricsCalculator.ndcgAtK(retrieved, levels, 5);
+
+            assertThat(ndcg).isCloseTo(3.262 / 3.762, org.assertj.core.data.Offset.offset(0.01));
+        }
+
+        @Test
+        @DisplayName("k < 0 — 抛出 IllegalArgumentException")
+        void ndcgAtK_shouldThrow_whenNegativeK() {
+            assertThatThrownBy(() ->
+                    EvalMetricsCalculator.ndcgAtK(List.of("doc-a"), Map.of(), -1))
+                    .isInstanceOf(IllegalArgumentException.class);
+        }
+    }
+
+    // === MAP@K ===
+
+    @Nested
+    @DisplayName("MAP@K")
+    class MapAtKTests {
+
+        @Test
+        @DisplayName("正常用例 — 第1、3位命中2个strong文档")
+        void mapAtK_shouldCalculateCorrectly_whenPartialHit() {
+            // 位置1命中: Precision@1 = 1/1 = 1.0
+            // 位置3命中: Precision@3 = 2/3 ≈ 0.667
+            // MAP = (1.0 + 0.667) / 2（strong总数）= 0.833
+            List<String> retrieved = List.of("doc-a", "doc-x", "doc-b", "doc-y", "doc-z");
+            Set<String> relevant = Set.of("doc-a", "doc-b");
+
+            double map = EvalMetricsCalculator.mapAtK(retrieved, relevant, 5);
+
+            assertThat(map).isCloseTo((1.0 + 2.0 / 3.0) / 2.0, org.assertj.core.data.Offset.offset(1e-9));
+        }
+
+        @Test
+        @DisplayName("全部命中且排在最前 — MAP@5 = 1.0")
+        void mapAtK_shouldReturnOne_whenAllHitAtTop() {
+            List<String> retrieved = List.of("doc-a", "doc-b", "doc-c");
+            Set<String> relevant = Set.of("doc-a", "doc-b", "doc-c");
+
+            double map = EvalMetricsCalculator.mapAtK(retrieved, relevant, 5);
+
+            assertThat(map).isEqualTo(1.0);
+        }
+
+        @Test
+        @DisplayName("零命中 — MAP@5 = 0.0")
+        void mapAtK_shouldReturnZero_whenNoHit() {
+            List<String> retrieved = List.of("doc-a", "doc-b");
+            Set<String> relevant = Set.of("doc-x", "doc-y");
+
+            double map = EvalMetricsCalculator.mapAtK(retrieved, relevant, 5);
+
+            assertThat(map).isEqualTo(0.0);
+        }
+
+        @Test
+        @DisplayName("相关文档列表为空 — MAP@5 = 1.0（默认值）")
+        void mapAtK_shouldReturnOne_whenNoRelevantDocs() {
+            List<String> retrieved = List.of("doc-a", "doc-b");
+
+            double map = EvalMetricsCalculator.mapAtK(retrieved, Set.of(), 5);
+
+            assertThat(map).isEqualTo(1.0);
+        }
+
+        @Test
+        @DisplayName("K 截断 — 第 6 位命中的不算入 MAP@5")
+        void mapAtK_shouldRespectKLimit() {
+            List<String> retrieved = List.of("doc-a", "doc-x", "doc-x", "doc-x", "doc-x", "doc-b");
+            Set<String> relevant = Set.of("doc-a", "doc-b");
+
+            double map5 = EvalMetricsCalculator.mapAtK(retrieved, relevant, 5);
+            double map10 = EvalMetricsCalculator.mapAtK(retrieved, relevant, 10);
+
+            // MAP@5: 只有 doc-a 命中，(1/1) / 2 = 0.5
+            assertThat(map5).isCloseTo(0.5, org.assertj.core.data.Offset.offset(1e-9));
+            // MAP@10: doc-a@1 + doc-b@6，(1/1 + 2/6) / 2 ≈ 0.667
+            assertThat(map10).isGreaterThan(map5);
+        }
+
+        @Test
+        @DisplayName("检索结果为空 — MAP@5 = 0.0")
+        void mapAtK_shouldReturnZero_whenEmptyResults() {
+            double map = EvalMetricsCalculator.mapAtK(List.of(), Set.of("doc-a"), 5);
+
+            assertThat(map).isEqualTo(0.0);
+        }
+    }
+
+    // === Precision@K ===
+
+    @Nested
+    @DisplayName("Precision@K")
+    class PrecisionAtKTests {
+
+        @Test
+        @DisplayName("正常用例 — top-5 中 2 个相关，Precision@5 = 0.4")
+        void precisionAtK_shouldCalculateCorrectly() {
+            List<String> retrieved = List.of("doc-a", "doc-x", "doc-b", "doc-y", "doc-z");
+            Set<String> relevant = Set.of("doc-a", "doc-b");
+
+            double precision = EvalMetricsCalculator.precisionAtK(retrieved, relevant, 5);
+
+            assertThat(precision).isCloseTo(0.4, org.assertj.core.data.Offset.offset(1e-9));
+        }
+
+        @Test
+        @DisplayName("全部命中 — Precision@5 = 1.0")
+        void precisionAtK_shouldReturnOne_whenAllHit() {
+            List<String> retrieved = List.of("doc-a", "doc-b", "doc-c");
+            Set<String> relevant = Set.of("doc-a", "doc-b", "doc-c");
+
+            double precision = EvalMetricsCalculator.precisionAtK(retrieved, relevant, 3);
+
+            assertThat(precision).isEqualTo(1.0);
+        }
+
+        @Test
+        @DisplayName("零命中 — Precision@5 = 0.0")
+        void precisionAtK_shouldReturnZero_whenNoHit() {
+            List<String> retrieved = List.of("doc-a", "doc-b");
+            Set<String> relevant = Set.of("doc-x");
+
+            double precision = EvalMetricsCalculator.precisionAtK(retrieved, relevant, 5);
+
+            assertThat(precision).isEqualTo(0.0);
+        }
+
+        @Test
+        @DisplayName("相关文档列表为空 — Precision@5 = 1.0（默认值）")
+        void precisionAtK_shouldReturnOne_whenNoRelevantDocs() {
+            List<String> retrieved = List.of("doc-a", "doc-b");
+
+            double precision = EvalMetricsCalculator.precisionAtK(retrieved, Set.of(), 5);
+
+            assertThat(precision).isEqualTo(1.0);
+        }
+
+        @Test
+        @DisplayName("K=1 单条 — 命中时 Precision@1 = 1.0")
+        void precisionAtK_shouldReturnOne_whenSingleResultHit() {
+            List<String> retrieved = List.of("doc-a", "doc-b");
+            Set<String> relevant = Set.of("doc-a");
+
+            double precision = EvalMetricsCalculator.precisionAtK(retrieved, relevant, 1);
+
+            assertThat(precision).isEqualTo(1.0);
+        }
+
+        @Test
+        @DisplayName("K=1 单条 — 未命中时 Precision@1 = 0.0")
+        void precisionAtK_shouldReturnZero_whenSingleResultMiss() {
+            List<String> retrieved = List.of("doc-a", "doc-b");
+            Set<String> relevant = Set.of("doc-x");
+
+            double precision = EvalMetricsCalculator.precisionAtK(retrieved, relevant, 1);
+
+            assertThat(precision).isEqualTo(0.0);
+        }
+
+        @Test
+        @DisplayName("检索结果为空 — Precision@5 = 0.0")
+        void precisionAtK_shouldReturnZero_whenEmptyResults() {
+            double precision = EvalMetricsCalculator.precisionAtK(List.of(), Set.of("doc-a"), 5);
+
+            assertThat(precision).isEqualTo(0.0);
+        }
+
+        @Test
+        @DisplayName("K 截断 — 只算 top-K 内的命中比例")
+        void precisionAtK_shouldRespectKLimit() {
+            // top-3: doc-a(命中), doc-x, doc-x → 1/3
+            // 但 doc-b 在第 5 位，不算入 Precision@3
+            List<String> retrieved = List.of("doc-a", "doc-x", "doc-x", "doc-x", "doc-b");
+            Set<String> relevant = Set.of("doc-a", "doc-b");
+
+            double precision3 = EvalMetricsCalculator.precisionAtK(retrieved, relevant, 3);
+            double precision5 = EvalMetricsCalculator.precisionAtK(retrieved, relevant, 5);
+
+            assertThat(precision3).isCloseTo(1.0 / 3.0, org.assertj.core.data.Offset.offset(1e-9));
+            assertThat(precision5).isCloseTo(2.0 / 5.0, org.assertj.core.data.Offset.offset(1e-9));
+        }
     }
 }

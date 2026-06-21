@@ -14,8 +14,8 @@ import java.util.stream.Collectors;
  * 检索评测报告生成器。
  *
  * <p>生成三层 JSON 报告结构：
- * 1. 整体汇总层 — Recall@5、MRR、HitRate@5、总查询数、平均检索耗时
- * 2. 分类型统计层 — 按 QueryType 分组，每类的三项指标均值
+ * 1. 整体汇总层 — Recall@5、MRR、HitRate@5、NDCG@5、MAP@5、Precision@5、总查询数、平均检索耗时
+ * 2. 分类型统计层 — 按 QueryType 分组，每类的六项指标均值
  * 3. 单条详情层 — 查询内容、query_type、检索返回 ID 列表、标注 ID 列表、命中标记、单条指标</p>
  *
  * @author spike
@@ -118,6 +118,9 @@ class EvalReportGenerator {
         summary.put("recall_at_5", avg(results, EvalResult::recall));
         summary.put("mrr", avg(results, EvalResult::mrr));
         summary.put("hit_rate_at_5", avg(results, EvalResult::hitRate));
+        summary.put("ndcg_at_5", avg(results, EvalResult::ndcg));
+        summary.put("map_at_5", avg(results, EvalResult::map));
+        summary.put("precision_at_5", avg(results, EvalResult::precision));
         summary.put("avg_latency_ms", avgLong(results, EvalResult::latencyMs));
         return summary;
     }
@@ -134,6 +137,9 @@ class EvalReportGenerator {
         stats.put("recall_at_5", avg(filtered, EvalResult::recall));
         stats.put("mrr", avg(filtered, EvalResult::mrr));
         stats.put("hit_rate_at_5", avg(filtered, EvalResult::hitRate));
+        stats.put("ndcg_at_5", avg(filtered, EvalResult::ndcg));
+        stats.put("map_at_5", avg(filtered, EvalResult::map));
+        stats.put("precision_at_5", avg(filtered, EvalResult::precision));
         return stats;
     }
 
@@ -169,6 +175,9 @@ class EvalReportGenerator {
             detail.put("recall", r.recall());
             detail.put("mrr", r.mrr());
             detail.put("hit_rate", r.hitRate());
+            detail.put("ndcg", r.ndcg());
+            detail.put("map", r.map());
+            detail.put("precision", r.precision());
             detail.put("latency_ms", r.latencyMs());
             details.add(detail);
         }
@@ -212,6 +221,9 @@ class EvalReportGenerator {
         detail.put("recall", r.recall());
         detail.put("mrr", r.mrr());
         detail.put("hit_rate", r.hitRate());
+        detail.put("ndcg", r.ndcg());
+        detail.put("map", r.map());
+        detail.put("precision", r.precision());
         detail.put("latency_ms", r.latencyMs());
         return detail;
     }

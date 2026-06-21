@@ -29,11 +29,11 @@ class RetrievalEvalDatasetLoaderTest {
     // === 正常加载 ===
 
     @Test
-    @DisplayName("加载有效的评测数据集 — 20 条 QA pairs 全部正确解析")
+    @DisplayName("加载有效的评测数据集 — 26 条 QA pairs 全部正确解析")
     void load_shouldReturnAllSamples_whenValidDataset() {
         List<EvalSample> samples = loader.load("eval/retrieval-qa-pairs.json");
 
-        assertThat(samples).hasSize(20);
+        assertThat(samples).hasSize(26);
     }
 
     @Test
@@ -41,12 +41,15 @@ class RetrievalEvalDatasetLoaderTest {
     void load_shouldMapFieldsCorrectly_whenProceduralSample() {
         List<EvalSample> samples = loader.load("eval/retrieval-qa-pairs.json");
 
-        EvalSample first = samples.get(0);
-        assertThat(first.question()).isEqualTo("Spring Boot 如何配置 Flyway 数据库迁移");
+        EvalSample first = samples.stream()
+                .filter(s -> s.queryType() == QueryType.PROCEDURAL)
+                .findFirst()
+                .orElseThrow();
+        assertThat(first.question()).isEqualTo("我该怎么配置PGVector数据库环境");
         assertThat(first.queryType()).isEqualTo(QueryType.PROCEDURAL);
-        assertThat(first.relevantDocIds()).containsExactly("doc-flyway-config", "doc-spring-boot-setup");
-        assertThat(first.relevanceLevels()).containsEntry("doc-flyway-config", RelevanceLevel.STRONG);
-        assertThat(first.relevanceLevels()).containsEntry("doc-spring-boot-setup", RelevanceLevel.WEAK);
+        assertThat(first.relevantDocIds()).containsExactly("05e0c0ef-93f5-4ada-904b-512cff2d2a4e", "62b4dea7-b0a4-4c76-b923-9886e86a3553");
+        assertThat(first.relevanceLevels()).containsEntry("05e0c0ef-93f5-4ada-904b-512cff2d2a4e", RelevanceLevel.STRONG);
+        assertThat(first.relevanceLevels()).containsEntry("62b4dea7-b0a4-4c76-b923-9886e86a3553", RelevanceLevel.WEAK);
     }
 
     @Test
