@@ -1,7 +1,9 @@
 services:
 
   postgres:
-    image: pgvector/pgvector:pg16
+    build:
+      context: ./postgres/  # 指向 postgres 文件夹作为构建上下文
+      dockerfile: Dockerfile
     container_name: myai-pg
     environment:
       POSTGRES_DB: myai

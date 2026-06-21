@@ -45,7 +45,7 @@ public class SparseRetrievalAdapter implements ChunkRetrievalPort {
     /** 初始文档版本号（用于 legacy splitVersion 兼容解析）。 */
     private static final int INITIAL_DOCUMENT_VERSION_NUMBER = 1;
 
-    /** 基础检索 SQL — 不含 scope 过滤，从 metadata JSON 中直接提取字段。 */
+    /** 基础检索 SQL — 不含 scope 过滤，使用 zhparser 中文分词配置。 */
     private static final String BASE_SQL = """
             SELECT id, content,
                    metadata->>'documentId' AS document_id,
@@ -56,7 +56,7 @@ public class SparseRetrievalAdapter implements ChunkRetrievalPort {
                    metadata->>'sourceFile' AS source_file,
                    metadata->>'sourceUpdatedAt' AS source_updated_at,
                    ts_rank(content_tsv, query) AS rank
-            FROM vector_store, plainto_tsquery('simple', ?) query
+            FROM vector_store, plainto_tsquery('chinese', ?) query
             WHERE content_tsv @@ query""";
 
     /** 排序与分页子句。 */
