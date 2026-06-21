@@ -1,54 +1,134 @@
 {
-  "doc-embedding-003.md": {
-    "documentId": "e83ffd96-9435-4d48-8fcc-af16179a5c39",
-    "status": "INDEXED"
-  },
-  "doc-embedding-002.md": {
-    "documentId": "004a8908-972d-4ad4-b4f7-0239dc32b93e",
-    "status": "INDEXED"
-  },
-  "doc-embedding-004.md": {
-    "documentId": "55bff994-3e2c-4181-94dc-72343bed5f95",
-    "status": "INDEXED"
-  },
-  "doc-rank-001.md": {
-    "documentId": "10104d3a-8538-4325-9444-ea5a6f648bfe",
-    "status": "INDEXED"
-  },
-  "doc-embedding-005.md": {
-    "documentId": "73615d1f-2090-4b1c-9ada-08b648930c24",
-    "status": "INDEXED"
+  "doc-recall-001.md": {
+    "status": "INDEXED",
+    "documentId": "4649649c-733b-48e0-85da-162e9c337180"
   },
   "doc-rank-003.md": {
-    "documentId": "33c5c6d9-e4ef-4641-bcda-a825ae4e352f",
-    "status": "INDEXED"
+    "status": "INDEXED",
+    "documentId": "c43f62de-4cfe-4e45-a018-be9a0f5ef0ca"
   },
-  "doc-dense-001.md": {
-    "documentId": "97887163-3673-48f8-8f21-c92747aac24e",
-    "status": "INDEXED"
+  "doc-rank-001.md": {
+    "status": "INDEXED",
+    "documentId": "86621068-face-406c-946f-b0d282937c86"
   },
-  "2307.03172v3.pdf": {
-    "documentId": "9fcd09df-1957-448c-9669-7425b51a6ef9",
-    "status": "INDEXED"
+  "doc-split-001.md": {
+    "status": "INDEXED",
+    "documentId": "b6ee762f-f023-4874-8818-d68711c9b013"
   },
-  "doc-rag-base-002.md": {
-    "documentId": "1be79668-a9f6-47c1-8ec3-c36191870d5e",
-    "status": "INDEXED"
+  "doc-rank-002.md": {
+    "status": "INDEXED",
+    "documentId": "9d283343-0464-43c4-ab70-4611b2074dae"
   },
-  "doc-rag-base-001.md": {
-    "documentId": "8f9c39e9-4a46-4ae5-a7f2-3fe80c6bcb4f",
-    "status": "INDEXED"
+  "doc-faiss-001.md": {
+    "status": "INDEXED",
+    "documentId": "fcb5df20-6c5a-4009-90e3-1938c902481e"
   },
-  "doc-env-001.md": {
-    "documentId": "62b4dea7-b0a4-4c76-b923-9886e86a3553",
-    "status": "INDEXED"
+  "doc-vector-001.md": {
+    "status": "INDEXED",
+    "documentId": "34f7bd12-fda0-40fa-99cd-e6708339d5ff"
   },
-  "Embedding 嵌入模型.md": {
-    "documentId": "0b12442f-28b6-4e27-80f2-96d6007b20f8",
-    "status": "INDEXED"
+  "doc-metric-001.md": {
+    "status": "INDEXED",
+    "documentId": "11202032-6180-41bd-b3a8-342a4f3cab21"
   },
   "doc-embedding-001.md": {
-    "documentId": "c88089f6-2bb1-4889-b01e-07594b2b3a01",
-    "status": "INDEXED"
+    "status": "INDEXED",
+    "documentId": "1e04d33e-e1bf-45a8-8e5f-cea1b5b389ff"
+  },
+  "doc-split-002.md": {
+    "status": "INDEXED",
+    "documentId": "c7589d9c-0a79-44f6-b1d3-42ba3f94d70c"
+  },
+  "doc-vector-002.md": {
+    "status": "INDEXED",
+    "documentId": "b7bc21a8-a298-40a0-aac8-b11296cff5eb"
+  },
+  "doc-update-001.md": {
+    "status": "INDEXED",
+    "documentId": "5474e96b-bc5f-452a-b25a-7d6d0ad15287"
+  },
+  "doc-embedding-003.md": {
+    "status": "INDEXED",
+    "documentId": "e4b64dc3-b8fc-407e-a3fe-95f549631152"
+  },
+  "doc-optimize-001.md": {
+    "status": "INDEXED",
+    "documentId": "39e0969f-41e6-41a6-9db4-4510080516da"
+  },
+  "doc-dense-001.md": {
+    "status": "INDEXED",
+    "documentId": "9f8dfeac-29db-4dee-b273-aa236cfbb794"
+  },
+  "doc-eval-001.md": {
+    "status": "INDEXED",
+    "documentId": "a4f9933c-57d8-461f-a044-32da0d2472c3"
+  },
+  "doc-vector-003.md": {
+    "status": "INDEXED",
+    "documentId": "71278537-100b-4c59-b987-ee46893f8717"
+  },
+  "doc-rag-build-001.md": {
+    "status": "INDEXED",
+    "documentId": "4a00f8b8-f813-4845-bfee-2076a68d7baa"
+  },
+  "doc-eval-002.md": {
+    "status": "INDEXED",
+    "documentId": "fc46aa19-ede6-4e11-8cb1-5a2436ddfa42"
+  },
+  "doc-vector-006.md": {
+    "status": "INDEXED",
+    "documentId": "79875a2a-9d14-4857-b68b-ae9f7a7cee0a"
+  },
+  "doc-vector-005.md": {
+    "status": "INDEXED",
+    "documentId": "0682ac24-8a1a-47f1-b582-9425221d3fe1"
+  },
+  "doc-rag-base-001.md": {
+    "status": "INDEXED",
+    "documentId": "32bcab13-99cc-4718-885b-f8a643676f0b"
+  },
+  "doc-update-002.md": {
+    "status": "INDEXED",
+    "documentId": "f41dc972-ef42-4bf1-86d7-696cb3a31c3f"
+  },
+  "doc-sparse-001.md": {
+    "status": "INDEXED",
+    "documentId": "9006b315-0ff8-4565-8904-59799687e7b9"
+  },
+  "doc-embedding-005.md": {
+    "status": "INDEXED",
+    "documentId": "d51ea99a-8f1b-4f36-8068-89c695bdfdaa"
+  },
+  "doc-rag-base-002.md": {
+    "status": "INDEXED",
+    "documentId": "b1079285-0bb4-4f1e-8189-95a687475991"
+  },
+  "doc-rag-build-003.md": {
+    "status": "INDEXED",
+    "documentId": "1614fca9-09b1-4e76-8be8-76dd49506769"
+  },
+  "doc-rag-build-002.md": {
+    "status": "INDEXED",
+    "documentId": "fa1c5394-d271-4ce1-b1cf-b078f5000190"
+  },
+  "doc-vector-004.md": {
+    "status": "INDEXED",
+    "documentId": "99e774b5-b524-44a7-85d8-d714288b7368"
+  },
+  "doc-keyword-001.md": {
+    "status": "INDEXED",
+    "documentId": "b4d814a9-8981-4886-b881-772aa2de329e"
+  },
+  "doc-embedding-002.md": {
+    "status": "INDEXED",
+    "documentId": "38576a25-0b5f-4ae0-9c3d-66bab1d9194d"
+  },
+  "doc-embedding-004.md": {
+    "status": "INDEXED",
+    "documentId": "e1e503fc-9256-4b0a-b761-0172ee595c45"
+  },
+  "doc-env-001.md": {
+    "status": "INDEXED",
+    "documentId": "246b75e4-9f59-44b7-8d74-41f230912e5c"
   }
 }
