@@ -23,6 +23,8 @@ my-AI 是一个基于 Spring Boot + Spring AI 的 RAG 文档入库与检索系�
 | 数据模型 | `docs/data/models.md` | 12 张表 + Flyway V1-V8 迁移历史 |
 | README | `README.md` | 项目说明、快速开始、完整 API 摘要 |
 | UI 设计系统 | `DESIGN.md` | 设计 Token、颜色、字体、组件规范 |
+| RAG 检索评测指南 | `docs/guides/retrieval-eval-guide.md` | 评测运行、指标解读、数据集维护 |
+| ADR-0008 zhparser 词性映射 | `docs/adr/ADR-0008-zhparser-pos-mapping.md` | 中文分词策略决策与踩坑记录 |
 
 ## 常用命令
 

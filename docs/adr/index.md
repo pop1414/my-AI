@@ -15,6 +15,7 @@ graph LR
     A --> E[ADR-0005<br/>RAG 权限体系]
     A --> F[ADR-0006<br/>文档版本读取边界]
     A --> G[ADR-0007<br/>S3 兼容存储]
+    A --> H[ADR-0008<br/>zhparser 词性映射]
 
     style B fill:#f5f5f5,stroke:#999,stroke-dasharray: 5 5
     style D fill:#f5f5f5,stroke:#999,stroke-dasharray: 5 5
@@ -32,6 +33,7 @@ graph LR
 | [ADR-0005](ADR-0005-rag-access-control-foundation.md) | RAG 权限体系基础决策 | 2026-05-08 | 2026-05-08 |
 | [ADR-0006](ADR-0006-document-version-read-boundary.md) | 文档版本读取边界 | 2026-05-13 | 2026-05-13 |
 | [ADR-0007](ADR-0007-s3-compatible-document-asset-storage.md) | 采用 S3 兼容文档资产存储 | 2026-05-19 | 2026-05-20 |
+| [ADR-0008](ADR-0008-zhparser-pos-mapping.md) | zhparser 中文分词词性映射策略 | 2026-06-21 | 2026-06-21 |
 
 ### Superseded / Deprecated
 
