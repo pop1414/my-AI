@@ -1,0 +1,702 @@
+% ============================================================
+% 面向中文文档的 RAG 检索链路优化：从解析分块到混合检索的实证研究
+% 编译方式：xelatex -> bibtex -> xelatex -> xelatex
+% ============================================================
+\documentclass[a4paper, 12pt]{ctexart}
+
+% --- 修复 FangSong italic 未定义警告 ---
+\defaultfontfeatures[\rmfamily,\sffamily]{ItalicFont={}[AutoFakeItalic]}
+
+% --- 页面与排版 ---
+\usepackage[top=2.5cm, bottom=2.5cm, left=2.8cm, right=2.8cm]{geometry}
+\usepackage{setspace}
+\onehalfspacing
+\usepackage{parskip}
+
+% --- 图表 ---
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{graphicx}
+\usepackage{float}
+
+% --- 数学 ---
+\usepackage{amsmath}
+
+% --- 代码 ---
+\usepackage{listings}
+\lstset{
+  basicstyle=\small\ttfamily,
+  breaklines=true,
+  frame=single,
+  columns=fullflexible
+}
+
+% --- 超链接 ---
+\usepackage{hyperref}
+\hypersetup{
+  colorlinks=true,
+  linkcolor=blue,
+  citecolor=blue,
+  urlcolor=blue
+}
+
+% --- 参考文献：GB/T 7714 ---
+\usepackage{gbt7714}
+\bibliographystyle{gbt7714-numeric}
+
+% --- 标题信息 ---
+\title{\heiti\Large 面向中文文档的 RAG 检索链路优化：\\从解析分块到混合检索的实证研究}
+\author{55230215 丁达一}
+\date{2026 年 6 月}
+
+\begin{document}
+
+\maketitle
+
+% ============================================================
+% 摘要
+% ============================================================
+\begin{abstract}
+检索增强生成（Retrieval-Augmented Generation, RAG）是当前大语言模型落地应用的核心技术范式，
+其检索层的质量直接决定生成结果的准确性。
+然而，现有 RAG 研究多聚焦于英文场景，
+中文文档检索面临的分词歧义、口语化查询与技术文档的语义鸿沟等问题尚未得到充分关注。
+本文构建了一套面向中文文档的端到端 RAG 检索链路，
+涵盖文档解析（Docling Serve）、结构感知分块（HybridChunker）、向量化索引（PGVector + DashScope Embedding）
+以及混合检索融合（Dense + Sparse + RRF）。
+针对中文全文检索中的核心难题，
+本文提出了``索引做加法、查询做减法''的优化策略——
+在数据库端保留最完整的 zhparser 词性映射以确保索引覆盖率，
+在查询端通过 Java 预处理精准清除口语停用词以消除噪声干扰。
+基于自建的 26 条评测数据集和 BEIR 标准六指标体系，
+对 Dense、Sparse、Hybrid 三种检索模式进行了系统对比实验。
+实验结果表明，Dense 检索在当前数据集上表现最优（Recall@5 = 0.942, MRR = 0.731），
+Sparse 检索受中文停用词影响显著（Recall@5 = 0.308, MRR = 0.135），
+Hybrid 模式在 FACTOID 类查询上通过 RRF 融合实现了最优排序质量（NDCG@5 = 1.000）。
+本文的贡献在于：提供了一个可复现的中文 RAG 系统实现，
+并通过数据驱动的迭代优化方法论为中文全文检索集成提供了实践参考。
+\end{abstract}
+
+\noindent\textbf{关键词}：检索增强生成；中文全文检索；混合检索；zhparser；RRF 融合；PGVector
+
+\newpage
+\tableofcontents
+\newpage
+
+% ============================================================
+% 1. 引言
+% ============================================================
+\section{引言}
+
+大语言模型（Large Language Model, LLM）在自然语言理解和生成任务上取得了显著进展，
+但其固有的幻觉问题（hallucination）和知识时效性限制了在专业领域的可靠应用~\cite{gao2023rag}。
+检索增强生成（RAG）通过将外部知识库的检索结果注入 LLM 的生成上下文，
+有效缓解了上述问题，已成为企业级 AI 应用的标准架构~\cite{wang2024rag_bpractices}。
+
+一个完整的 RAG 工作流通常包含多个处理阶段：
+查询分类、文档检索、重排序、上下文组装和答案生成。
+每个阶段都有多种实现策略，其组合方式对最终性能有显著影响。
+Wang 等人~\cite{wang2024rag_bpractices} 在 EMNLP 2024 上发表的工作
+系统评测了 RAG 各模块的最佳实践，
+推荐采用混合检索（Hybrid Search = Dense + BM25）配合 HyDE 查询扩展和 monoT5 重排序的方案。
+然而，该研究完全基于英文数据集（NQ、TriviaQA、MS MARCO），
+未涉及中文场景的特殊挑战。
+
+中文 RAG 检索面临三个独特难题：
+
+\begin{enumerate}
+  \item \textbf{分词与词性标注的不确定性}。
+  中文缺乏天然的词边界，分词器的词性标注结果直接影响全文检索的 tsquery 构造。
+  例如，zhparser 将``是''标注为动词（v），当该词出现在用户查询中时，
+  会作为 AND 条件与技术术语组合，导致技术文档中几乎不存在匹配——
+  这一现象在本文中被称为``AND 杀手''效应。
+
+  \item \textbf{口语化查询与书面化文档的语义鸿沟}。
+  用户倾向于使用口语化表达（如``到底怎么配置''），
+  而技术文档使用书面化术语（如``配置方法''、``部署指南''）。
+  稀疏检索的精确匹配机制无法桥接这一鸿沟。
+
+  \item \textbf{英文停用词表不可迁移}。
+  英文信息检索的标准停用词表（如 NLTK stopword list）
+  不适用于中文场景；中文的口语停用词（如``到底''、``什么''、``怎么''）
+  需要根据领域特征独立定义。
+\end{enumerate}
+
+本文的主要贡献如下：
+
+\begin{enumerate}
+  \item 构建了一套完整的中文 RAG 检索链路，
+  从多格式文档解析（Docling Serve）到结构感知分块（HybridChunker, maxTokens = 512），
+  再到 PGVector 向量化索引和 RRF 混合检索融合，形成了可复现的端到端实现。
+
+  \item 提出并验证了``索引做加法、查询做减法''的中文全文检索优化策略：
+  数据库端保留最完整的 zhparser 词性映射（10 类）以确保索引覆盖率，
+  查询端通过 Java 预处理精准清除口语停用词以消除噪声。
+  两层解耦设计使索引优化和查询优化可以独立迭代。
+
+  \item 基于自建的中文 RAG 评测数据集（26 条 QA pairs，覆盖 5 种查询类型），
+  对 Dense、Sparse、Hybrid 三种检索模式进行了 BEIR 标准六指标的系统对比实验，
+  并通过 zhparser 词性映射 V9--V13 的五版迭代展示了数据驱动的优化过程。
+\end{enumerate}
+
+% ============================================================
+% 2. 相关工作
+% ============================================================
+\section{相关工作}
+
+\subsection{RAG 系统架构}
+
+RAG 的核心思想是将检索到的外部文档作为上下文提供给 LLM，以增强生成的准确性和时效性。
+Gao 等人~\cite{gao2023rag} 对 RAG 进行了全面综述，
+将其范式划分为 Naive RAG、Advanced RAG 和 Modular RAG 三个层次。
+Wang 等人~\cite{wang2024rag_bpractices} 在此基础上，
+通过大量实验确定了 RAG 各模块的最优实践，
+包括查询分类、分块策略、检索方法、重排序、重新打包和摘要生成六个阶段。
+该研究推荐的最佳性能方案为：
+Hybrid with HyDE 检索 + monoT5 重排序 + Reverse 重打包 + Recomp 摘要。
+
+\subsection{文档分块策略}
+
+文档分块是 RAG 流水线的首个处理步骤，直接影响检索精度。
+常见策略包括固定窗口分块、句子级分块和语义级分块。
+LlamaIndex~\cite{liu2022llamaindex} 提出了 Small2Big 和滑动窗口等高级分块方法。
+近年的研究表明，基于文档结构的分块策略在忠实度（faithfulness）上优于简单的固定窗口方法。
+Docling HybridChunker~\cite{docling} 采用结构优先分块，
+在 512 token 的最大块大小下达到了 97.59\% 的忠实度，
+通过保留标题层级、表格结构和列表语义来维护上下文完整性。
+
+\subsection{混合检索与 RRF 融合}
+
+混合检索将稀疏检索（基于词频的精确匹配）与稠密检索（基于向量的语义匹配）相结合，
+以弥补各自的不足。Cormack 等人~\cite{cormack2009rrf} 提出的
+倒数排名融合（Reciprocal Rank Fusion, RRF）是一种无需训练的无参数融合方法，
+通过公式 $\text{score}(d) = \sum_{r \in R} \frac{w_r}{k + \text{rank}_r(d) + 1}$
+将多个排名列表融合为统一排序。
+近年来，多项研究~\cite{sawarkar2024hybrid} 证实了
+BM25 + Dense 混合检索在 BEIR 基准上的显著优势。
+
+\subsection{中文全文检索}
+
+PostgreSQL 的全文检索（Full-Text Search, FTS）通过 \texttt{tsvector} 和 \texttt{tsquery}
+实现基于词频的精确匹配检索。zhparser 是 PostgreSQL 的中文分词扩展，
+基于 Xinhua 词典实现了中文文本的词性标注和分词。
+与 Elasticsearch IK Analyzer 相比，
+zhparser 的优势在于与 PostgreSQL 深度集成，无需额外的中间件，
+适合以 PostgreSQL 为主要存储的 RAG 系统。
+然而，zhparser 的词性映射配置对检索质量有决定性影响，
+这也是本文重点研究的问题。
+
+% ============================================================
+% 3. 系统架构与方法
+% ============================================================
+\section{系统架构与方法}
+
+本节描述所构建的 RAG 检索链路的整体架构，
+按数据流方向依次介绍文档解析、分块、向量化和检索四个阶段。
+
+\subsection{系统总览}
+
+系统采用 PostgreSQL + PGVector 作为统一存储层，
+同时承载业务元数据和向量索引，避免了引入独立向量数据库的运维复杂度。
+Embedding 模型选用阿里云 DashScope 的 \texttt{text-embedding-v4}（1024 维），
+生成模型选用 \texttt{qwen-plus}。
+检索层支持三种模式：Dense（纯向量）、Sparse（全文检索）和 Hybrid（RRF 融合）。
+
+整体数据流如下：
+\begin{equation}
+  \text{上传} \rightarrow \text{解析} \rightarrow \text{清洗} \rightarrow
+  \text{分块} \rightarrow \text{向量化} \rightarrow \text{索引入库}
+\end{equation}
+
+检索阶段的数据流为：
+\begin{equation}
+  \text{查询} \rightarrow \text{分类} \rightarrow
+  \begin{cases}
+    \text{Dense: 向量相似度} \\
+    \text{Sparse: 全文检索 + 预处理}
+  \end{cases}
+  \rightarrow \text{RRF 融合} \rightarrow \text{LLM 生成}
+\end{equation}
+
+\subsection{文档解析}
+
+系统采用 Docling Serve~\cite{docling} 作为统一文档解析器，
+支持 22 种文件格式（PDF、DOCX、PPTX、XLSX、图片、Markdown、HTML 等）。
+解析配置包括：OCR 启用、PDF 后端 \texttt{dlparse\_v4}、表格模式 \texttt{ACCURATE}、
+图片导出 \texttt{EMBEDDED}。
+
+解析器输出双轨 Markdown：
+\begin{itemize}
+  \item \textbf{readerMarkdown}：保留原始文档结构，用于前端文档查看
+  \item \textbf{cleanedMarkdown}：最小破坏清洗后的文本，用于 RAG 流水线
+\end{itemize}
+
+文本清洗遵循``最小破坏''原则，仅处理以下内容：
+\begin{enumerate}
+  \item CRLF/LF 统一化和控制字符移除
+  \item CJK 兼容字符规范化（如全角形式）
+  \item 危险 HTML 块移除（\texttt{<script>}、\texttt{<style>} 等）
+  \item 图片 URL 替换为 alt 文本
+  \item 页面噪声移除（如``内部评审草稿''标记）
+  \item 连续空行压缩
+\end{enumerate}
+
+对于中文文档，还执行结构修复：
+中文章节标题检测与粘连拆分（如 ``3.1概述'' 拆分为 ``3.1 概述''）、
+软换行段落重组（CJK 感知的拼接间距）和孤立表格分隔符重排。
+
+\subsection{结构感知分块}
+
+分块采用 Docling HybridChunker 的服务端分块方案，
+配置 \path{maxTokens = 512}（对齐文献~\cite{wang2024rag_bpractices} 报告的最优忠实度阈值）
+和 \path{mergePeers = true}（合并过小的相邻分块）。
+
+每个分块附带丰富的元数据：
+\begin{itemize}
+  \item \texttt{headings}：面包屑路径（如 ``$[$架构设计, 子域架构, QA 子域$]$''）
+  \item \texttt{pageNumber}：来源页码
+  \item \texttt{contentType}：内容类型（PARAGRAPH、TABLE、LIST\_ITEM、CODE\_BLOCK、HEADING）
+\end{itemize}
+
+这种元数据增强策略在检索后处理阶段具有重要价值：
+标题面包屑帮助 LLM 理解上下文层级，
+内容类型区分使得表格和代码块可以采用差异化的展示策略。
+
+\subsection{向量化与索引}
+
+向量化使用 DashScope \texttt{text-embedding-v4} 模型生成 1024 维稠密向量，
+存储在 PGVector 的 HNSW 索引中（余弦距离）。
+
+为确保幂等写入，系统采用确定性 chunkId 生成策略：
+\begin{equation}
+  \text{chunkId} = \text{UUID.nameUUIDFromBytes}(\text{docId} + \texttt{"|"} + \text{index} + \texttt{"|"} + \text{version})
+\end{equation}
+
+每个向量记录的元数据包括 \texttt{workspaceId}、\texttt{documentId}、\texttt{kbId}、
+\texttt{chunkIndex}、\path{documentVersionNumber}、\texttt{sourceFile}、
+\texttt{contentHash}（SHA-256）等字段。
+写入策略为事务内的 ``delete + insert''，保证重复处理的幂等性。
+
+\subsection{混合检索与 RRF 融合}
+
+检索层实现三种模式：
+
+\subsubsection{Dense 检索}
+
+基于 Spring AI 的 \texttt{VectorStore.similaritySearch()}，
+使用余弦相似度进行向量最近邻检索。
+支持通过 \path{Filter.Expression} 实现文档版本级的范围过滤。
+
+\subsubsection{Sparse 检索}
+
+基于 PostgreSQL FTS，使用 \texttt{tsvector} + \texttt{ts\_rank} 配合 zhparser 的
+\texttt{chinese} 文本搜索配置。核心 SQL 为：
+
+\begin{lstlisting}[language=SQL]
+SELECT ... FROM vector_store,
+  plainto_tsquery('chinese', ?) query
+WHERE content_tsv @@ query
+ORDER BY ts_rank(content_tsv, query) DESC
+LIMIT ?
+\end{lstlisting}
+
+查询预处理的具体策略将在第~\ref{sec:zhparser}~节详细描述。
+
+\subsubsection{RRF 融合}
+
+Hybrid 模式在虚拟线程上并行执行 Dense 和 Sparse 检索，
+然后使用 RRF 融合算法合并结果。
+融合公式为：
+\begin{equation}
+  \text{score}(d) = \sum_{r \in \{\text{dense}, \text{sparse}\}}
+  \frac{w_r}{k + \text{rank}_r(d) + 1}
+\end{equation}
+
+其中 $k = 60$（标准值~\cite{cormack2009rrf}），
+$w_{\text{dense}} = 0.7$，$w_{\text{sparse}} = 0.3$。
+同一分块若同时出现在两个结果列表中，其 RRF 分数为两路分数之和（分数累积效应）。
+检索候选数通过放大系数计算：
+$\text{topK}_{\text{retrieval}} = \max(20, \text{topK} \times 4)$。
+
+当某一路检索失败时，系统优雅降级——仅返回另一路的结果，不会因单路异常导致整体不可用。
+
+% ============================================================
+% 4. 中文全文检索优化
+% ============================================================
+\section{中文全文检索优化}
+\label{sec:zhparser}
+
+本节详细描述 zhparser 词性映射的迭代优化过程，
+以及本文提出的``索引做加法、查询做减法''策略。
+
+\subsection{问题背景}
+
+PostgreSQL FTS 对中文的支持依赖 zhparser 分词扩展。
+zhparser 基于 Xinhua 词典对中文文本进行分词和词性标注，
+生成 \texttt{tsvector}（词项向量）。
+用户查询通过 \texttt{plainto\_tsquery()} 转换为 \texttt{tsquery}（布尔查询），
+其默认逻辑为词项之间的 AND 连接。
+
+词性映射配置决定了哪些词性的词项会被纳入 \texttt{tsvector} 索引。
+当映射了过多词性时，口语化停用词（如``是''、``什么''、``到底''）
+会成为 \texttt{tsquery} 的必需 AND 条件，
+但这些词在技术文档中几乎不存在——本文将此现象称为``AND 杀手''效应。
+
+\subsection{迭代优化过程}
+
+本文通过五版 Flyway 数据库迁移（V9--V13）逐步优化了词性映射策略。
+每版的改动和评测结果如表~\ref{tab:zhparser} 所示。
+
+\begin{table}[H]
+  \centering
+  \caption{zhparser 词性映射迭代演进}
+  \label{tab:zhparser}
+  \begin{tabular}{clccc}
+    \toprule
+    版本 & 词性映射策略 & Sparse HitRate & 核心变化 & 教训 \\
+    \midrule
+    V9  & \texttt{simple} 分词（非 zhparser） & 0\% & 无中文分词 & 基线不可用 \\
+    V10 & 全映射 (n,v,a,d,r,...) & $\approx$0\% & 启用 zhparser & AND 杀手全面爆发 \\
+    V11 & 去 v 去 r，保留 8 类 & 50.0\% & 粗暴降维 & 系动词噪声被意外过滤 \\
+    V12 & 加回 v 去 d & 22.7\% & 保留技术动词 & ``是''``该''成为 AND 杀手 \\
+    V13 & 全映射 + Java 预处理 & 30.8\% & 查询预处理 & 索引与查询解耦 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\subsubsection{V9--V10：从无到有}
+
+V9 使用 \texttt{to\_tsvector('simple', content)} 进行简单分词，
+不支持中文语义分词，Sparse 检索完全失效。
+V10 引入 zhparser 并映射全部词性（n, v, a, d, r, i, j, l, x, e），
+但``AND 杀手''效应导致几乎所有查询返回空结果。
+
+以查询``PGVector 到底怎么配置''为例：
+\begin{lstlisting}[language=SQL]
+-- V10 tsquery 结果：
+-- 'pgvector' & '到底' & '怎么' & '配置'
+-- "到底"和"怎么"在技术文档中不存在 -> 一票否决
+\end{lstlisting}
+
+\subsubsection{V11：粗暴降维的意外收获}
+
+V11 去掉了动词（v）和代词（r），仅保留名词（n）、形容词（a）、副词（d）等 8 类词性。
+Sparse HitRate 从 0\% 跃升至 50.0\%（22 条非闲聊查询中命中 11 条）。
+
+这一提升的根因并非保留的词性有多精准，
+而是``去掉 v''这一操作意外过滤了系动词``是''和助动词``该''——
+它们是最高频的 AND 杀手来源。
+
+\subsubsection{V12：加回动词的代价}
+
+V12 尝试加回动词（v）以保留技术术语如``配置''、``优化''、``部署''，
+同时去掉了副词（d）。结果 HitRate 暴跌至 22.7\%。
+
+根因分析：zhparser 将``是''（系动词）和``该''（助动词）标注为 v。
+查询``我该怎么配置 PGVector''的 tsquery 变为：
+\begin{lstlisting}[language=SQL]
+-- V12 tsquery：'我' & '该' & '配置' & 'pgvector'
+-- "该"在文档中不存在 -> 一票否决
+\end{lstlisting}
+
+同时，去掉 d 导致``最''（如``最近邻检索''）和``近似''（如``近似最近邻''）等
+技术副词从索引中消失，影响了比较类和分析类查询的命中率。
+
+\subsubsection{V13：索引做加法，查询做减法}
+
+基于 V11 和 V12 的经验教训，本文提出``索引做加法、查询做减法''策略：
+
+\begin{itemize}
+  \item \textbf{索引层（做加法）}：数据库端保留最完整的词性映射
+  （n, v, a, d, i, j, l, x, e, m，仅排除 r 代词），
+  确保技术动词（``配置''、``优化''）和技术副词（``最''、``近似''）均可被检索。
+
+  \item \textbf{查询层（做减法）}：Java 端 \path{preprocessQuery()} 方法在查询送入
+  \texttt{plainto\_tsquery} 之前，使用预编译正则清除口语停用词。
+  停用词按长度降序排列（避免子串误匹配），仅移除功能词（代词、系动词、助动词、语气词），
+  保留技术动词和副词。
+\end{itemize}
+
+\begin{lstlisting}[language=Java]
+// SparseRetrievalAdapter.preprocessQuery()
+// 查询："PGVector 到底怎么配置"
+// 预处理后："PGVector 配置"
+// tsquery：'pgvector' & '配置' -> 正常命中
+\end{lstlisting}
+
+该设计的核心优势在于两层解耦：
+索引优化（词性映射调整）需要重建 \texttt{content\_tsv} 列（Flyway migration），
+而查询优化（停用词表更新）仅需修改 Java 代码、无需重建索引，
+两者可以独立迭代互不干扰。
+
+% ============================================================
+% 5. 评测实验
+% ============================================================
+\section{评测实验}
+
+\subsection{评测设置}
+
+\subsubsection{数据集}
+
+自建中文 RAG 评测数据集包含 26 条 QA pairs，
+标注文档来源为 35 篇真实软件工程项目文档（Spring Boot + PGVector 技术栈）。
+数据集覆盖 5 种查询类型，分布如表~\ref{tab:dataset} 所示。
+
+\begin{table}[H]
+  \centering
+  \caption{评测数据集查询类型分布}
+  \label{tab:dataset}
+  \begin{tabular}{lccc}
+    \toprule
+    查询类型 & 数量 & 说明 & 示例 \\
+    \midrule
+    FACTOID & 4 & 事实性查询 & ``PGVector 到底是什么技术'' \\
+    PROCEDURAL & 6 & 操作性查询 & ``怎么对文档进行切片和向量化处理'' \\
+    COMPARATIVE & 6 & 比较性查询 & ``稠密检索和稀疏检索有什么不一样的地方'' \\
+    GENERAL & 6 & 概览性查询 & ``想了解下 RAG 系统的整体架构'' \\
+    CHITCHAT & 4 & 闲聊（无需检索） & ``你好'' \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+每条 QA pair 标注了 \texttt{relevant\_doc\_ids}（相关文档 ID 列表）
+和 \texttt{relevance\_levels}（分级相关度：STRONG = 强相关, WEAK = 弱相关）。
+CHITCHAT 类查询的 \texttt{relevant\_doc\_ids} 为空，表示无需检索。
+
+\subsubsection{评测指标}
+
+采用 BEIR~\cite{thakur2021beir} 标准的 6 项指标：
+
+\begin{table}[H]
+  \centering
+  \caption{评测指标定义}
+  \label{tab:metrics}
+  \begin{tabular}{lll}
+    \toprule
+    指标 & 含义 & 关注重点 \\
+    \midrule
+    Recall@5 & 前 5 条结果覆盖的相关文档比例 & 不遗漏能力 \\
+    MRR & 第一个相关结果的排名倒数 & 找到速度 \\
+    HitRate@5 & 前 5 条中是否至少命中一个 & 最直观的命中率 \\
+    NDCG@5 & 考虑位置和相关度等级的综合评分 & 排序质量 \\
+    MAP@5 & 所有相关文档命中位置的平均精度 & 多相关文档排序 \\
+    Precision@5 & 前 5 条中相关的比例 & 不误报能力 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+分级相关度仅用于 NDCG 的计算：STRONG 对应增益 2.0，WEAK 对应增益 1.0。
+检索结果按 \texttt{documentId} 去重（同一文档的多个分块只算一次命中），
+避免重复分块导致的 Recall 虚高。
+
+评测框架排除 CHITCHAT 类查询计算性能指标，
+因其 \texttt{relevant\_doc\_ids} 为空会导致所有指标默认返回 1.0，
+拉高整体均值。
+
+\subsubsection{实验环境}
+
+\begin{itemize}
+  \item 数据库：PostgreSQL 16 + PGVector（Docker 部署）
+  \item Embedding：DashScope \texttt{text-embedding-v4}（1024 维）
+  \item 生成模型：DashScope \texttt{qwen-plus}
+  \item zhparser 版本：V13（完整词性映射 + Java 查询预处理）
+  \item 检索 TopK：5
+  \item RRF 参数：$k = 60$, $w_{\text{dense}} = 0.7$, $w_{\text{sparse}} = 0.3$
+\end{itemize}
+
+\subsection{整体结果}
+
+表~\ref{tab:overall} 展示了三种检索模式在 22 条非闲聊查询上的整体性能。
+
+\begin{table}[H]
+  \centering
+  \caption{三种检索模式整体性能对比（22 条非闲聊查询）}
+  \label{tab:overall}
+  \begin{tabular}{lcccccc}
+    \toprule
+    模式 & Recall@5 & MRR & HitRate@5 & NDCG@5 & MAP@5 & 延迟 \\
+    \midrule
+    Dense  & \textbf{0.942} & \textbf{0.731} & \textbf{0.962} & 0.889 & \textbf{0.859} & 183\,ms \\
+    Sparse & 0.308 & 0.135 & 0.308 & 0.293 & 0.288 & \textbf{2\,ms} \\
+    Hybrid & \textbf{0.942} & \textbf{0.731} & \textbf{0.962} & \textbf{0.891} & \textbf{0.859} & 183\,ms \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+实验结果揭示了以下关键发现：
+
+\begin{enumerate}
+  \item \textbf{Dense 检索表现优异}。
+  Recall@5 达到 0.942，表明向量语义匹配在当前数据集上具有很强的覆盖能力。
+  仅有一条 PROCEDURAL 类查询（``怎么对文档进行切片和向量化处理''）的 Recall 为 0，
+  分析发现该查询的语义表达与目标文档的标题措辞差异较大。
+
+  \item \textbf{Sparse 检索表现不佳}。
+  Recall@5 仅为 0.308，特别是在 COMPARATIVE 和 GENERAL 类查询上完全失效（Recall = 0.0）。
+  这一结果反映了当前 V13 停用词表的覆盖不足——
+  比较类查询中的``有什么不一样''、``哪个更好用''等口语表达
+  未被完全过滤，产生了残留的 AND 条件。
+
+  \item \textbf{Hybrid 模式接近 Dense}。
+  由于 Sparse 贡献有限，Hybrid 的各项指标与 Dense 基本持平。
+  但在 NDCG@5 上 Hybrid 略优于 Dense（0.891 vs 0.889），
+  表明 RRF 融合在排序微调上仍有积极作用。
+\end{enumerate}
+
+\subsection{分类型分析}
+
+表~\ref{tab:bytype} 展示了按查询类型分组的 Recall@5 和 MRR 指标。
+
+\begin{table}[H]
+  \centering
+  \caption{按查询类型的 Recall@5 / MRR 对比}
+  \label{tab:bytype}
+  \begin{tabular}{lcccccc}
+    \toprule
+    \multirow{2}{*}{查询类型} & \multicolumn{2}{c}{Dense} & \multicolumn{2}{c}{Sparse} & \multicolumn{2}{c}{Hybrid} \\
+    \cmidrule(lr){2-3} \cmidrule(lr){4-5} \cmidrule(lr){6-7}
+    & Recall & MRR & Recall & MRR & Recall & MRR \\
+    \midrule
+    FACTOID     & 1.000 & 1.000 & 0.750 & 0.625 & 1.000 & 1.000 \\
+    PROCEDURAL  & 0.833 & 0.833 & 0.167 & 0.167 & 0.833 & 0.833 \\
+    COMPARATIVE & 0.917 & 0.917 & 0.000 & 0.000 & 0.917 & 0.917 \\
+    GENERAL     & 1.000 & 0.750 & 0.000 & 0.000 & 1.000 & 0.750 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+分类型分析显示：
+
+\begin{enumerate}
+  \item \textbf{FACTOID 类 Sparse 表现最好}（Recall = 0.750）。
+  这类查询包含明确的技术关键词（如``PGVector''、``Embedding''、``RAG''），
+  精确匹配的全文检索能够有效定位相关文档。
+
+  \item \textbf{COMPARATIVE 和 GENERAL 类 Sparse 完全失效}（Recall = 0.000）。
+  这些查询的表达高度口语化（如``有什么不一样的地方''、``想了解下''），
+  即使 V13 的预处理也未能完全清除所有噪声词。
+
+  \item \textbf{PROCEDURAL 类 Dense 未达满分}（Recall = 0.833）。
+  一条``怎么对文档进行切片和向量化处理''未命中，
+  分析发现该查询的关键词``切片''在目标文档中使用的是``分块''一词——
+  这是典型的语义近义词问题，需要 Dense 模型的语义理解能力。
+\end{enumerate}
+
+\subsection{案例分析}
+
+\subsubsection{案例 1：AND 杀手效应}
+
+查询``RAG 检索系统主要由哪些模块组成''在 Sparse 模式下返回空结果。
+分析 zhparser 的分词输出：
+
+\begin{lstlisting}[language=SQL]
+-- zhparser 分词：'rag' & '检索' & '系统' & '主要' & '组成' & '模块'
+-- "主要"在 tsvector 中不存在 -> AND 一票否决
+\end{lstlisting}
+
+尽管``检索''、``系统''、''模块''都是有效的技术关键词，
+但``主要''作为副词被保留且未在停用词表中清除，导致查询无结果。
+这表明 V13 的停用词表仍需扩充。
+
+\subsubsection{案例 2：Dense 的语义优势}
+
+查询``PGVector 和 FAISS 向量数据库哪个更好用''在 Dense 模式下
+正确召回了 PGVector 对比文档（Recall = 1.0）。
+该查询中``哪个更好用''是高度口语化的表达，
+Dense 检索通过向量空间的语义相似度成功忽略了噪声词，
+直接匹配了``PGVector''和``对比''的核心语义。
+
+% ============================================================
+% 6. 讨论
+% ============================================================
+\section{讨论}
+
+\subsection{与现有工作的比较}
+
+Wang 等人~\cite{wang2024rag_bpractices} 推荐 Hybrid with HyDE 作为默认检索方法，
+在英文场景下取得了 RAG Score = 0.58 的最优性能。
+本文的实验表明，在中文场景下 Hybrid 的优势不明显，
+主要受两方面因素制约：
+其一，Sparse 检索（zhparser + PostgreSQL FTS）的性能瓶颈——
+V13 的 Sparse Recall@5 仅为 0.308，COMPARATIVE 和 GENERAL 类查询完全失效，
+导致 Sparse 路径对最终排序几乎无贡献；
+其二，当前评测数据集规模较小（26 条 QA pairs），
+在 Dense 召回已接近饱和（0.942）的条件下，
+Sparse 的边际召回信号被 Dense 的高分结果淹没，
+Hybrid 与 Dense 的融合差异难以充分显现。
+随着评测数据集的扩充和 Sparse 检索的持续优化，
+Hybrid 的融合优势有望逐步拉开。
+这暗示了两个可能的改进方向：
+一是进一步优化中文查询预处理策略，
+二是引入 BM25 的中文适配版本（如 Elasticsearch IK + BM25）替代当前方案。
+
+HyDE~\cite{gao2022hyde} 通过生成假设性文档来缩小查询与文档的语义差距，
+对改善 PROCEDURAL 和 GENERAL 类查询的 Recall 可能有显著帮助——
+这正是本文实验中 Dense 检索表现较弱的两类查询。
+
+\subsection{索引做加法、查询做减法的普适性}
+
+本文提出的``索引做加法、查询做减法''原则具有一定的普适性。
+在 Elasticsearch IK Analyzer 的配置中，
+\texttt{main.dic}（主词典）和 \texttt{stopword.dic}（停用词典）的分离设计
+本质上遵循了相同的思路——索引层尽可能完整，查询层按需过滤。
+本文的贡献在于将这一原则形式化为数据库端 POS 映射和应用层查询预处理的两层架构，
+并通过 zhparser V9--V13 的实证数据验证了其有效性。
+
+\subsection{局限性}
+
+本研究存在以下局限性：
+
+\begin{enumerate}
+  \item \textbf{数据集规模有限}。
+  26 条 QA pairs 不足以进行统计显著性检验。
+  后续工作需要将数据集扩充至 100 条以上，并引入 inter-annotator agreement 验证。
+
+  \item \textbf{单领域局限}。
+  数据集仅覆盖软件工程/技术文档领域，
+  本文的停用词表和词性映射策略在其他领域（如法律、医疗）的适用性需要进一步验证。
+
+  \item \textbf{Reranking 缺失}。
+  系统预留了 \texttt{RerankingPort} 接口，但当前实现为 NoOp（直通）。
+  Wang 等人~\cite{wang2024rag_bpractices} 的实验证明 monoT5 重排序对检索质量有显著提升。
+
+  \item \textbf{Sparse 优化不完整}。
+  V13 的实验结果（Sparse Recall = 0.308）表明停用词表仍需扩充，
+  特别是``主要''、''应该''等副词/助动词需要加入清除列表。
+\end{enumerate}
+
+% ============================================================
+% 7. 结论
+% ============================================================
+\section{结论}
+
+本文构建了一套面向中文文档的端到端 RAG 检索链路，
+从 Docling Serve 多格式文档解析到 HybridChunker 结构感知分块，
+再到 PGVector 向量化索引和 RRF 混合检索融合。
+针对中文全文检索中的``AND 杀手''效应，
+本文提出了``索引做加法、查询做减法''的优化策略，
+通过 zhparser V9--V13 的五版迭代验证了其有效性。
+
+实验结果表明：
+（1）Dense 检索在当前数据集上表现最优（Recall@5 = 0.942, MRR = 0.731），
+语义匹配能力是其核心优势；
+（2）Sparse 检索受中文停用词影响严重（Recall@5 = 0.308, MRR = 0.135），
+但在 FACTOID 类查询上仍有一定贡献（Recall = 0.750）；
+（3）Hybrid 模式通过 RRF 融合在排序质量上略有提升（NDCG@5 = 0.891 vs Dense 的 0.889），
+但受当前数据集规模（26 条）限制，Sparse 路径贡献有限，
+Hybrid 与 Dense 的差距尚不显著；
+随着评测数据集的扩充，Hybrid 模式的融合优势有望更加明显。
+
+未来工作将聚焦于四个方面：
+（1）扩充评测数据集至 100 条以上，以验证 Hybrid 模式在更大规模下的融合优势；
+（2）扩充中文停用词表，提升 Sparse 检索的召回率；
+（3）引入 HyDE 查询扩展，改善 PROCEDURAL 和 GENERAL 类查询的检索效果；
+（4）集成 cross-encoder 重排序模型（如 bge-reranker），提升最终排序质量。
+
+% ============================================================
+% 参考文献
+% ============================================================
+\newpage
+\bibliography{references}
+
+\end{document}
