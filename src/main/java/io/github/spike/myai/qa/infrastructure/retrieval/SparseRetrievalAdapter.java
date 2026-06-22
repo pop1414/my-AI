@@ -7,6 +7,7 @@ import java.time.Instant;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.regex.Pattern;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -62,6 +63,23 @@ public class SparseRetrievalAdapter implements ChunkRetrievalPort {
     /** 排序与分页子句。 */
     private static final String ORDER_AND_LIMIT = " ORDER BY rank DESC LIMIT ?";
 
+    /**
+     * 中文口语停用词正则 —— 在送入 plainto_tsquery 前清除，避免 AND 语义下的"一票否决"。
+     *
+     * <p>设计原则：
+     * <ul>
+     *   <li>按长度降序排列，保证"什么"先于"什""么"匹配；</li>
+     *   <li>仅清除口语功能词（代词、系动词、助动词、语气词）；</li>
+     *   <li>保留技术动词（"配置""优化""部署"）和副词（"最""近似"），它们有检索价值。</li>
+     * </ul>
+     *
+     * @see <a href="docs/adr/ADR-0008-zhparser-pos-mapping.md">ADR-0008：词性映射策略演进</a>
+     */
+    private static final Pattern STOPWORDS_PATTERN = Pattern.compile(
+            "到底|什么|怎么|怎样|如何|为啥|为何|哪个|哪些|"
+            + "是否|可是|但是|而是|不是|也是|就是|还是|"
+            + "该|有|要|是|的|得|这|那|哪|我|你|他|她|它|们|吗|呢|吧|啊|哦|嗯");
+
     /** JdbcTemplate 用于直接 SQL 查询。 */
     private final JdbcTemplate jdbcTemplate;
 
@@ -102,9 +120,12 @@ public class SparseRetrievalAdapter implements ChunkRetrievalPort {
 
         SqlScopeCondition scopeCondition = ScopeFilterBuilder.toSqlCondition(scope);
 
+        String processed = preprocessQuery(question);
+        log.debug("Sparse query: raw=[{}], processed=[{}]", question, processed);
+
         StringBuilder sql = new StringBuilder(BASE_SQL);
         List<Object> params = new ArrayList<>();
-        params.add(question);
+        params.add(processed);
 
         if (!scopeCondition.whereClause().isEmpty()) {
             sql.append(" AND ").append(scopeCondition.whereClause());
@@ -209,5 +230,31 @@ public class SparseRetrievalAdapter implements ChunkRetrievalPort {
         } catch (DateTimeParseException ex) {
             return null;
         }
+    }
+
+    /**
+     * 查询预处理 —— 清除中文口语停用词，保留技术术语。
+     *
+     * <p>配合 V13 的完整词性映射（v + d 均保留），在查询端做减法：
+     * 数据库索引覆盖全部有价值的词性，但查询时过滤掉系动词、代词、语气词等
+     * 会在 plainto_tsquery 的 AND 语义下导致"一票否决"的噪声词。</p>
+     *
+     * <p>典型示例：
+     * <pre>
+     * "我该怎么配置PGVector数据库环境" → "配置PGVector数据库环境"
+     * "PGVector到底是什么技术"         → "PGVector 技术"
+     * "向量检索的核心原理是什么"       → "向量检索 核心原理"
+     * </pre>
+     *
+     * @param query 用户原始查询文本
+     * @return 清除停用词后的查询文本，多余空白已压缩
+     */
+    static String preprocessQuery(String query) {
+        if (query == null || query.isBlank()) {
+            return "";
+        }
+        return STOPWORDS_PATTERN.matcher(query).replaceAll(" ")
+                .trim()
+                .replaceAll("\\s+", " ");
     }
 }

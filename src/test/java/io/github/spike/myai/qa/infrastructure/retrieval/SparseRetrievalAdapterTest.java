@@ -13,8 +13,12 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Instant;
 import java.util.List;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.Mockito;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
@@ -57,6 +61,64 @@ class SparseRetrievalAdapterTest {
         List<RetrievedChunk> result = adapter.similaritySearch("   ", 5);
 
         assertTrue(result.isEmpty());
+    }
+
+    // === 查询预处理（preprocessQuery 停用词清除）===
+
+    @ParameterizedTest(name = "[{index}] \"{0}\" → \"{1}\"")
+    @MethodSource("preprocessQueryCases")
+    @DisplayName("preprocessQuery 应正确清除口语停用词并保留技术术语")
+    void preprocessQuery_shouldStripStopwordsAndKeepTechnicalTerms(String input, String expected) {
+        assertEquals(expected, SparseRetrievalAdapter.preprocessQuery(input));
+    }
+
+    static Stream<Arguments> preprocessQueryCases() {
+        return Stream.of(
+                // —— 核心场景：评测集中暴跌的 6 条查询 ——
+                Arguments.of(
+                        "我该怎么配置PGVector数据库环境",
+                        "配置PGVector数据库环境"),
+                Arguments.of(
+                        "稠密检索和稀疏检索有什么不一样的地方",
+                        "稠密检索和稀疏检索 不一样 地方"),
+                Arguments.of(
+                        "PGVector和FAISS向量数据库哪个更好用",
+                        "PGVector和FAISS向量数据库 更好用"),
+                Arguments.of(
+                        "小模型和大模型做Embedding各有什么优缺点",
+                        "小模型和大模型做Embedding各 优缺点"),
+                Arguments.of(
+                        "关键词检索和向量检索的适用场景区别",
+                        "关键词检索和向量检索 适用场景区别"),
+                Arguments.of(
+                        "文档向量化处理的相关流程",
+                        "文档向量化处理 相关流程"),
+                // —— 边界场景 ——
+                Arguments.of(
+                        "PGVector到底是什么技术",
+                        "PGVector 技术"),
+                Arguments.of(
+                        "向量检索的核心原理是什么",
+                        "向量检索 核心原理"),
+                Arguments.of(
+                        "RAG系统检索结果怎么优化排序",
+                        "RAG系统检索结果 优化排序"),
+                Arguments.of(
+                        "召回阶段和重排阶段的工作逻辑区别",
+                        "召回阶段和重排阶段 工作逻辑区别"),
+                Arguments.of(
+                        "想了解下RAG系统的整体架构",
+                        "想了解下RAG系统 整体架构"),
+                // —— 保留技术动词"配置""优化" ——
+                Arguments.of(
+                        "如何配置Spring Boot的数据库连接池",
+                        "配置Spring Boot 数据库连接池"),
+                // —— null/blank 防御 ——
+                Arguments.of(null, ""),
+                Arguments.of("   ", ""),
+                // —— 无停用词时原样返回 ——
+                Arguments.of("Flyway migration", "Flyway migration")
+        );
     }
 
     // === RowMapper 直接测试（不 mock JdbcTemplate）===
