@@ -326,6 +326,9 @@ class AskQuestionApplicationServiceTest {
         RetrievalConfigPort properties = new RetrievalConfigPort() {
             @Override public int getMinCandidates() { return 10; }
             @Override public int getCandidateMultiplier() { return 2; }
+            @Override public int getRrfK() { return 60; }
+            @Override public double getDenseWeight() { return 0.7; }
+            @Override public double getSparseWeight() { return 0.3; }
         };
         AskQuestionApplicationService service =
                 new AskQuestionApplicationService(
@@ -545,6 +548,12 @@ class AskQuestionApplicationServiceTest {
             public int getMinCandidates() { return 20; }
             @Override
             public int getCandidateMultiplier() { return 4; }
+            @Override
+            public int getRrfK() { return 60; }
+            @Override
+            public double getDenseWeight() { return 0.7; }
+            @Override
+            public double getSparseWeight() { return 0.3; }
         };
     }
 }

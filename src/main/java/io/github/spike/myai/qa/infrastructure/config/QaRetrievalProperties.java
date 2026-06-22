@@ -35,4 +35,19 @@ public class QaRetrievalProperties implements RetrievalConfigPort {
     @Min(1)
     @Max(100)
     private int candidateMultiplier = 4;
+
+    /** RRF 平滑常数（k），标准值 60；小数据集可适当降低以放大头部优势 */
+    @Min(1)
+    @Max(500)
+    private int rrfK = 60;
+
+    /** Dense（向量检索）路径权重，值越大 Dense 对融合排名影响越大 */
+    @Min(0)
+    @Max(1)
+    private double denseWeight = 0.7;
+
+    /** Sparse（全文检索）路径权重，值越大 Sparse 对融合排名影响越大 */
+    @Min(0)
+    @Max(1)
+    private double sparseWeight = 0.3;
 }

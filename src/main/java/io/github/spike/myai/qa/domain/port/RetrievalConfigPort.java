@@ -31,4 +31,34 @@ public interface RetrievalConfigPort {
      * @return 候选放大倍率
      */
     int getCandidateMultiplier();
+
+    /**
+     * RRF 平滑常数（k）。
+     *
+     * <p>控制排名靠前与靠后文档的分值差距：k 越小，头部文档优势越明显；
+     * 标准值 60（Cormack et al., 2009），小数据集可适当降低。
+     *
+     * @return RRF 平滑常数
+     */
+    int getRrfK();
+
+    /**
+     * Dense（向量检索）路径权重。
+     *
+     * <p>与 {@link #getSparseWeight()} 配合控制 RRF 融合时
+     * 两路检索的贡献占比。权重越大，该路对最终排名的影响越大。
+     *
+     * @return Dense 路径权重
+     */
+    double getDenseWeight();
+
+    /**
+     * Sparse（全文检索）路径权重。
+     *
+     * <p>与 {@link #getDenseWeight()} 配合控制 RRF 融合时
+     * 两路检索的贡献占比。权重越大，该路对最终排名的影响越大。
+     *
+     * @return Sparse 路径权重
+     */
+    double getSparseWeight();
 }

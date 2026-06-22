@@ -3,6 +3,7 @@ package io.github.spike.myai.qa.infrastructure.retrieval;
 import io.github.spike.myai.qa.domain.model.AskableDocumentVersion;
 import io.github.spike.myai.qa.domain.model.RetrievedChunk;
 import io.github.spike.myai.qa.domain.port.ChunkRetrievalPort;
+import io.github.spike.myai.qa.domain.port.RetrievalConfigPort;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -32,7 +33,7 @@ import org.springframework.stereotype.Component;
  * <ul>
  *   <li>标注 {@code @Primary}，替代 {@link PgVectorChunkRetrievalAdapter} 作为默认 {@link ChunkRetrievalPort} 实现；</li>
  *   <li>Dense/Sparse 并行执行，总延迟 ≈ max(Dense, Sparse) + RRF(&lt;1ms)，满足 NFR-1 ≤200ms 增量约束；</li>
- *   <li>RRF 常量（k、权重）作为类内 private static final，不放配置文件（AD-9）。</li>
+ *   <li>RRF 常量（k、权重）通过 {@link RetrievalConfigPort} 从 YAML 配置读取，支持运行时调整。</li>
  * </ul>
  *
  * @author spike
@@ -45,20 +46,14 @@ public class HybridChunkRetrievalAdapter implements ChunkRetrievalPort {
     /** 当前适配器使用的日志记录器。 */
     private static final Logger log = LoggerFactory.getLogger(HybridChunkRetrievalAdapter.class);
 
-    /** RRF 平滑常数，标准值 60（Cormack et al., 2009）。 */
-    private static final int RRF_K = 60;
-
-    /** Dense 路径权重（等权重）。 */
-    private static final double DENSE_WEIGHT = 0.5;
-
-    /** Sparse 路径权重（等权重）。 */
-    private static final double SPARSE_WEIGHT = 0.5;
-
     /** Dense 检索适配器（PGVector 向量相似度）。 */
     private final PgVectorChunkRetrievalAdapter denseAdapter;
 
     /** Sparse 检索适配器（BM25 全文检索）。 */
     private final SparseRetrievalAdapter sparseAdapter;
+
+    /** 检索参数配置端口：RRF k 值与 Dense/Sparse 权重。 */
+    private final RetrievalConfigPort retrievalConfig;
 
     /** 异步执行器：用于并行调度 Dense/Sparse 两路阻塞 JDBC 调用，避免 ForkJoinPool 线程饥饿。 */
     private final Executor executor;
@@ -68,14 +63,17 @@ public class HybridChunkRetrievalAdapter implements ChunkRetrievalPort {
      *
      * @param denseAdapter Dense 检索适配器，由 Spring 容器注入
      * @param sparseAdapter Sparse 检索适配器，由 Spring 容器注入
+     * @param retrievalConfig 检索参数配置端口，提供 RRF k 值与路径权重
      * @param executor 异步执行器，推荐使用虚拟线程（{@code Executors.newVirtualThreadPerTaskExecutor()}）
      */
     public HybridChunkRetrievalAdapter(
             PgVectorChunkRetrievalAdapter denseAdapter,
             SparseRetrievalAdapter sparseAdapter,
+            RetrievalConfigPort retrievalConfig,
             @Qualifier("virtualThreadExecutor") Executor executor) {
         this.denseAdapter = denseAdapter;
         this.sparseAdapter = sparseAdapter;
+        this.retrievalConfig = retrievalConfig;
         this.executor = executor;
     }
 
@@ -152,20 +150,24 @@ public class HybridChunkRetrievalAdapter implements ChunkRetrievalPort {
             List<RetrievedChunk> sparseResults,
             int topK) {
 
+        int rrfK = retrievalConfig.getRrfK();
+        double denseWeight = retrievalConfig.getDenseWeight();
+        double sparseWeight = retrievalConfig.getSparseWeight();
+
         Map<String, Double> rrfScores = new LinkedHashMap<>();
         Map<String, RetrievedChunk> representativeChunks = new LinkedHashMap<>();
 
         for (int rank = 0; rank < denseResults.size(); rank++) {
             RetrievedChunk chunk = denseResults.get(rank);
             String key = chunkKey(chunk);
-            rrfScores.merge(key, DENSE_WEIGHT / (RRF_K + rank + 1), Double::sum);
+            rrfScores.merge(key, denseWeight / (rrfK + rank + 1), Double::sum);
             representativeChunks.putIfAbsent(key, chunk);
         }
 
         for (int rank = 0; rank < sparseResults.size(); rank++) {
             RetrievedChunk chunk = sparseResults.get(rank);
             String key = chunkKey(chunk);
-            rrfScores.merge(key, SPARSE_WEIGHT / (RRF_K + rank + 1), Double::sum);
+            rrfScores.merge(key, sparseWeight / (rrfK + rank + 1), Double::sum);
             representativeChunks.putIfAbsent(key, chunk);
         }
 

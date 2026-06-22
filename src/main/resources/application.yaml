@@ -103,6 +103,12 @@ myai:
       min-candidates: ${APP_QA_RETRIEVAL_MIN_CANDIDATES:20}
       # 检索候选放大倍率：先粗召回 topK×N 条，再按 kbId 精过滤
       candidate-multiplier: ${APP_QA_RETRIEVAL_CANDIDATE_MULTIPLIER:4}
+      # RRF 平滑常数（k），标准值 60；小数据集可适当降低以放大头部优势
+      rrf-k: ${APP_QA_RETRIEVAL_RRF_K:60}
+      # Dense（向量检索）路径权重，值越大 Dense 对融合排名影响越大
+      dense-weight: ${APP_QA_RETRIEVAL_DENSE_WEIGHT:0.7}
+      # Sparse（全文检索）路径权重，值越大 Sparse 对融合排名影响越大
+      sparse-weight: ${APP_QA_RETRIEVAL_SPARSE_WEIGHT:0.3}
 
 management:
   endpoint:

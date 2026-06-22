@@ -10,6 +10,7 @@ import static org.mockito.Mockito.when;
 
 import io.github.spike.myai.qa.domain.model.AskableDocumentVersion;
 import io.github.spike.myai.qa.domain.model.RetrievedChunk;
+import io.github.spike.myai.qa.domain.port.RetrievalConfigPort;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -25,14 +26,26 @@ class HybridChunkRetrievalAdapterTest {
 
     private PgVectorChunkRetrievalAdapter denseAdapter;
     private SparseRetrievalAdapter sparseAdapter;
+    private RetrievalConfigPort retrievalConfig;
     private HybridChunkRetrievalAdapter adapter;
+
+    /** 测试用默认 RRF k 值 */
+    private static final int DEFAULT_RRF_K = 60;
+    /** 测试用默认 Dense 权重 */
+    private static final double DEFAULT_DENSE_WEIGHT = 0.7;
+    /** 测试用默认 Sparse 权重 */
+    private static final double DEFAULT_SPARSE_WEIGHT = 0.3;
 
     @BeforeEach
     void setUp() {
         denseAdapter = Mockito.mock(PgVectorChunkRetrievalAdapter.class);
         sparseAdapter = Mockito.mock(SparseRetrievalAdapter.class);
+        retrievalConfig = Mockito.mock(RetrievalConfigPort.class);
+        when(retrievalConfig.getRrfK()).thenReturn(DEFAULT_RRF_K);
+        when(retrievalConfig.getDenseWeight()).thenReturn(DEFAULT_DENSE_WEIGHT);
+        when(retrievalConfig.getSparseWeight()).thenReturn(DEFAULT_SPARSE_WEIGHT);
         // 同步执行器：测试中直接在调用线程执行，确保确定性
-        adapter = new HybridChunkRetrievalAdapter(denseAdapter, sparseAdapter, Runnable::run);
+        adapter = new HybridChunkRetrievalAdapter(denseAdapter, sparseAdapter, retrievalConfig, Runnable::run);
     }
 
     @Test
@@ -54,13 +67,12 @@ class HybridChunkRetrievalAdapterTest {
 
         assertEquals(2, results.size());
 
-        // chunkA: 0.5/(60+1) + 0.5/(60+2) = 0.008197 + 0.008065 = 0.016262
-        // chunkB: 0.5/(60+2) + 0.5/(60+1) = 0.008065 + 0.008197 = 0.016262
-        // 两者相等，顺序可互换
-        double expectedA = 0.5 / (60 + 1) + 0.5 / (60 + 2);
-        double expectedB = 0.5 / (60 + 2) + 0.5 / (60 + 1);
-        // chunkA 和 chunkB 分数相等
-        assertEquals(expectedA, expectedB, 1e-10, "对称权重下 A 和 B 的 RRF 分应相等");
+        // chunkA: 0.7/(60+1) + 0.3/(60+2) = 0.011475 + 0.004839 = 0.016314
+        // chunkB: 0.7/(60+2) + 0.3/(60+1) = 0.011290 + 0.004918 = 0.016208
+        double expectedA = 0.7 / (60 + 1) + 0.3 / (60 + 2);
+        double expectedB = 0.7 / (60 + 2) + 0.3 / (60 + 1);
+        // chunkA 和 chunkB 分数不相等（权重不对称时排名影响大小不同）
+        assertTrue(expectedA > expectedB, "Dense 权重更高时，Dense rank=1 的 chunkA 应得分更高");
         assertEquals(expectedA, results.get(0).score(), 1e-10, "RRF 分数应精确匹配公式");
         assertEquals(expectedB, results.get(1).score(), 1e-10, "RRF 分数应精确匹配公式");
     }
@@ -79,8 +91,8 @@ class HybridChunkRetrievalAdapterTest {
 
         assertEquals(1, results.size());
         assertEquals("doc-1", results.get(0).documentId());
-        // 仅 Dense rank=1: 0.5/(60+1) = 0.008197
-        assertEquals(0.5 / (60 + 1), results.get(0).score(), 1e-10);
+        // 仅 Dense rank=1: 0.7/(60+1) = 0.011475
+        assertEquals(0.7 / (60 + 1), results.get(0).score(), 1e-10);
     }
 
     @Test
@@ -97,8 +109,8 @@ class HybridChunkRetrievalAdapterTest {
 
         assertEquals(1, results.size());
         assertEquals("doc-1", results.get(0).documentId());
-        // 仅 Sparse rank=1: 0.5/(60+1) = 0.008197
-        assertEquals(0.5 / (60 + 1), results.get(0).score(), 1e-10);
+        // 仅 Sparse rank=1: 0.3/(60+1) = 0.004918
+        assertEquals(0.3 / (60 + 1), results.get(0).score(), 1e-10);
     }
 
     @Test
@@ -128,7 +140,8 @@ class HybridChunkRetrievalAdapterTest {
 
         assertEquals(1, results.size());
         assertEquals("doc-1", results.get(0).documentId());
-        assertEquals(0.5 / (60 + 1), results.get(0).score(), 1e-10);
+        // Sparse-only 降级 rank=1: 0.3/(60+1) = 0.004918
+        assertEquals(0.3 / (60 + 1), results.get(0).score(), 1e-10);
     }
 
     @Test
@@ -145,7 +158,8 @@ class HybridChunkRetrievalAdapterTest {
 
         assertEquals(1, results.size());
         assertEquals("doc-1", results.get(0).documentId());
-        assertEquals(0.5 / (60 + 1), results.get(0).score(), 1e-10);
+        // Dense-only 降级 rank=1: 0.7/(60+1) = 0.011475
+        assertEquals(0.7 / (60 + 1), results.get(0).score(), 1e-10);
     }
 
     @Test
@@ -196,10 +210,10 @@ class HybridChunkRetrievalAdapterTest {
         List<RetrievedChunk> results = adapter.similaritySearch("查询", 10, List.of());
 
         assertEquals(3, results.size());
-        // doc-1: 0.5/61 = 0.008197
-        // doc-2: 0.5/62 = 0.008065
-        // doc-3: 0.5/61 = 0.008197
-        // doc-1 和 doc-3 分数相等（各自在某一路 rank=1），都 > doc-2
+        // doc-1: 0.7/61 = 0.011475
+        // doc-2: 0.7/62 = 0.011290
+        // doc-3: 0.3/61 = 0.004918
+        // doc-1 > doc-2 > doc-3（Dense 权重更高，Dense 路径的头部结果优势更大）
         double scoreDoc1 = results.get(0).score();
         double scoreDoc2 = results.get(results.size() - 1).score();
         assertTrue(scoreDoc1 >= scoreDoc2, "结果应按 RRF 分降序");
@@ -222,8 +236,8 @@ class HybridChunkRetrievalAdapterTest {
         List<RetrievedChunk> results = adapter.similaritySearch("查询", 10, List.of());
 
         assertEquals(2, results.size());
-        // shared: 0.5/61 + 0.5/61 = 1.0/61 = 0.016393...
-        // denseOnly: 0.5/62 = 0.008065...
+        // shared: 0.7/61 + 0.3/61 = 1.0/61 = 0.016393...
+        // denseOnly: 0.7/62 = 0.011290...
         RetrievedChunk sharedResult = results.stream()
                 .filter(c -> "doc-shared".equals(c.documentId()))
                 .findFirst().orElseThrow();
@@ -231,8 +245,8 @@ class HybridChunkRetrievalAdapterTest {
                 .filter(c -> "doc-dense".equals(c.documentId()))
                 .findFirst().orElseThrow();
 
-        double expectedShared = 0.5 / (60 + 1) + 0.5 / (60 + 1);
-        double expectedDenseOnly = 0.5 / (60 + 2);
+        double expectedShared = 0.7 / (60 + 1) + 0.3 / (60 + 1);
+        double expectedDenseOnly = 0.7 / (60 + 2);
         assertEquals(expectedShared, sharedResult.score(), 1e-10, "双路命中应叠加 RRF 分");
         assertEquals(expectedDenseOnly, denseOnlyResult.score(), 1e-10, "单路命中应只计该路 RRF 分");
         assertTrue(sharedResult.score() > denseOnlyResult.score(), "双路命中分数应大于单路");
